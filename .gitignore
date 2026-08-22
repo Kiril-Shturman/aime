@@ -21,3 +21,7 @@ memory/telegram-business.jsonl
 
 memory/telegram-business-outbox.jsonl
 memory/telegram-business-results.jsonl
+tasks-board/data.json
+tasks-board/data.json.tmp
+tasks-board/static/avatars/
+__pycache__/
