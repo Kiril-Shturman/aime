@@ -232,6 +232,10 @@
   .task .report{font-size:13px; color:#9aa0a8; margin-top:4px; padding-left:10px;
     border-left:2px solid rgba(255,255,255,.12)}
   .task .tx{cursor:pointer}
+  .task.sub-task{padding-left:34px}
+  .task.sub-task::before{content:''; position:absolute; left:20px; top:18px; width:8px; height:1px;
+    background:var(--sep)}
+  .task{position:relative}
 
   .donehead{background:none; color:var(--blue); padding:0 4px; min-height:auto; margin-top:22px}
 
@@ -396,6 +400,32 @@
         <span class="body"><span class="name">Исполнитель</span></span>
         <span class="count" id="tf-member-name">Не выбран</span><span class="chev">›</span>
       </button>
+    </div>
+  </div>
+</div>
+
+<!-- ЛИСТ: ЦЕЛЬ -->
+<div class="sheet" id="sheet-goal">
+  <div class="box">
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    <h3>Новая цель</h3>
+    <div class="hint" style="margin:0 6px 12px">Опиши словами, что нужно получить.
+      Разложить на задачи — забота агента.</div>
+    <div class="card pad">
+      <textarea class="line last" id="gf-text" rows="4"
+        placeholder="Например: доделать доску задач — пустые экраны, анимация, расписание"></textarea>
+    </div>
+    <div class="card" style="margin-top:10px">
+      <button class="row" onclick="openPicker('goal-project')">
+        <span class="glyph" id="gf-glyph"></span>
+        <span class="body"><span class="name">Проект</span></span>
+        <span class="count" id="gf-project-name">Входящие</span><span class="chev">›</span>
+      </button>
+    </div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeSheet('sheet-goal')">Отмена</button>
+      <button class="btn-ok" onclick="saveGoal()">Поставить цель</button>
     </div>
   </div>
 </div>
@@ -678,7 +708,7 @@ function taskRow(t){
   const parts = [view.kind === 'filter' ? project(t.project)?.name : null,
                  m ? (m.handle || m.name) : null, when || null].filter(Boolean);
   return `
-    <div class="task ${t.done ? 'done' : ''}">
+    <div class="task ${t.done ? 'done' : ''} ${t.parent ? 'sub-task' : ''}">
       <div class="cb ${t.done ? 'on' : ''}" onclick="toggle('${t.id}')"></div>
       <div class="tx" onclick="openEdit('${t.id}')">${esc(t.title)}
         ${t.status === 'doing' ? '<div class="badge-doing">В работе</div>' : ''}
@@ -706,6 +736,32 @@ async function cycleStage(sid){
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({status: STATUS_NEXT[st.status]})});
   await load();
+}
+
+function openGoalSheet(p){
+  form.goalProject = p ? p.id : (view.kind === 'project' ? view.id : 'inbox');
+  document.getElementById('gf-text').value = '';
+  renderGoalProject();
+  openSheet('sheet-goal');
+}
+
+function renderGoalProject(){
+  const p = project(form.goalProject);
+  document.getElementById('gf-project-name').textContent = p ? p.name : 'Входящие';
+  const g = document.getElementById('gf-glyph');
+  g.innerHTML = ICONS.folder;
+  g.style.background = p ? p.color : 'var(--card-2)';
+}
+
+async function saveGoal(){
+  const text = document.getElementById('gf-text').value.trim();
+  if (!text) return;
+  const out = await api('/api/goal', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({text, project: form.goalProject})});
+  closeSheet('sheet-goal');
+  haptic('success');
+  await load();
+  openProject(out.project);
 }
 
 function openStageSheet(){
@@ -770,6 +826,7 @@ function openMenu(anchor, items){
 }
 
 document.getElementById('btn-home-menu').onclick = e => openMenu(e.currentTarget, [
+  {label: 'Поставить цель', icon: 'flagged', run: () => openGoalSheet(null)},
   {label: 'Обновить', icon: 'refresh', run: () => load()},
   {label: 'Показать выполненные', icon: 'done', run: () => {
     view = {kind: 'filter', id: 'done', title: 'Завершено', member: null};
@@ -782,6 +839,7 @@ document.getElementById('btn-project-menu').onclick = e => {
   const p = project(view.id);
   if (!p) return;
   const items = [
+    {label: 'Поставить цель', icon: 'flagged', run: () => openGoalSheet(p)},
     {label: 'Изменить проект', icon: 'pencil', run: () => openProjectSheet(p)},
     {label: 'Добавить участника', icon: 'human', run: () => openMemberSheet()},
     {label: 'Добавить этап', icon: 'flagged', run: () => openStageSheet()},
@@ -1029,11 +1087,19 @@ async function deleteTask(){
 
 function openPicker(what, forEdit){
   picking = {what, forEdit: !!forEdit};
-  const title = what === 'project' ? 'Проект' : what === 'stage' ? 'Этап' : 'Исполнитель';
+  const title = what === 'stage' ? 'Этап'
+    : what === 'member' ? 'Исполнитель' : 'Проект';
   document.getElementById('picker-title').textContent = title;
   const list = document.getElementById('picker-list');
 
-  if (what === 'stage'){
+  if (what === 'goal-project'){
+    list.innerHTML = S.projects.map(p => `
+      <button class="row" onclick="pick('goal-project','${p.id}')">
+        <span class="glyph" style="background:${p.color}">${ICONS.folder}</span>
+        <span class="body"><span class="name">${esc(p.name)}</span></span>
+        ${p.id === form.goalProject ? '<span class="count accent">✓</span>' : ''}
+      </button>`).join('');
+  } else if (what === 'stage'){
     const p = project(editing.project);
     list.innerHTML = `<button class="row" onclick="pick('stage','')">
         <span class="glyph">${ICONS.flagged}</span>
@@ -1072,7 +1138,14 @@ function openPicker(what, forEdit){
 }
 
 function pick(what, id){
-  if (what === 'stage'){
+  if (what === 'goal-project'){
+    list.innerHTML = S.projects.map(p => `
+      <button class="row" onclick="pick('goal-project','${p.id}')">
+        <span class="glyph" style="background:${p.color}">${ICONS.folder}</span>
+        <span class="body"><span class="name">${esc(p.name)}</span></span>
+        ${p.id === form.goalProject ? '<span class="count accent">✓</span>' : ''}
+      </button>`).join('');
+  } else if (what === 'stage'){
     const p = project(editing.project);
     list.innerHTML = `<button class="row" onclick="pick('stage','')">
         <span class="glyph">${ICONS.flagged}</span>
