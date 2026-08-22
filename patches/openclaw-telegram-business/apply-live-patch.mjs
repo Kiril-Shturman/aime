@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { copyFile, readFile, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
-import { dirname, join } from "node:path";
+import { execFileSync } from "node:child_process";
+import { join } from "node:path";
 
-const require = createRequire(import.meta.url);
-const pkg = require.resolve("openclaw/package.json");
-const dist = join(dirname(pkg), "dist");
+const globalRoot = execFileSync("npm", ["root", "-g"], { encoding: "utf8" }).trim();
+const packageRoot = process.env.OPENCLAW_PACKAGE_ROOT ?? join(globalRoot, "openclaw");
+const dist = join(packageRoot, "dist");
 const file = join(dist, "telegram-ingress-spool-Dd3cDhXe.js");
 const marker = "AIME_TELEGRAM_BUSINESS_OBSERVER_V1";
 let source = await readFile(file, "utf8");
