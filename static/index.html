@@ -82,6 +82,42 @@
     stroke-linecap:round; stroke-linejoin:round; margin-top:2px}
   .empty{color:var(--dim); padding:20px 14px}
 
+  /* панель в углу: поиск, новый проект, три точки — как в «Напоминаниях» */
+  .toolbar{display:flex; align-items:center; justify-content:flex-end; gap:0;
+    background:var(--card); border-radius:999px; padding:4px; margin:0 0 14px auto;
+    width:fit-content}
+  .tb{width:40px; height:34px; border:0; background:none; color:#fff; padding:0;
+    display:flex; align-items:center; justify-content:center; border-radius:999px}
+  .tb:active{background:rgba(255,255,255,.08)}
+  .tb svg{width:19px; height:19px; stroke:#fff; stroke-width:2; fill:none;
+    stroke-linecap:round; stroke-linejoin:round}
+  .tb-sep{width:1px; height:18px; background:rgba(255,255,255,.12)}
+  .tb.solo{background:var(--card); width:34px}
+  .pagehead{display:flex; align-items:flex-start; justify-content:space-between; gap:12px}
+
+  /* выпадающее меню под три точки */
+  .menu{position:fixed; inset:0; z-index:210; display:none}
+  .menu.on{display:block}
+  .menu .items{position:absolute; right:var(--pad); min-width:230px; background:#232326;
+    border-radius:14px; overflow:hidden; box-shadow:0 18px 40px rgba(0,0,0,.5);
+    transform-origin:top right; animation:pop .16s ease-out}
+  @keyframes pop{from{opacity:0; transform:scale(.94)} to{opacity:1; transform:scale(1)}}
+  .menu button{display:flex; align-items:center; justify-content:space-between; gap:14px;
+    width:100%; padding:13px 16px; border:0; background:none; color:#fff; font-size:16px;
+    text-align:left}
+  .menu button + button{box-shadow:inset 0 .5px 0 rgba(255,255,255,.1)}
+  .menu button:active{background:rgba(255,255,255,.07)}
+  .menu button.red{color:#ff453a}
+  .menu svg{width:17px; height:17px; stroke:currentColor; stroke-width:2; fill:none;
+    stroke-linecap:round; stroke-linejoin:round; flex:none}
+
+  /* поиск */
+  .searchbar{display:none; margin:0 0 14px}
+  .searchbar.on{display:block}
+  .searchbar input{width:100%; background:var(--card); border:0; border-radius:12px;
+    padding:11px 14px; color:#fff; font:inherit; outline:none}
+  .found-label{font-size:13px; color:var(--dim); margin:0 4px 8px}
+
   /* --- шапки --- */
   .toprow{display:flex; align-items:center; justify-content:space-between; margin:24px 2px 10px}
   .iconbtn{width:30px; height:30px; border-radius:50%; background:var(--card); border:0;
@@ -191,8 +227,8 @@
   .stage .frac{font-size:12px; color:var(--dim); white-space:nowrap}
 
   .group-label{font-size:13px; color:var(--dim); margin:16px 4px 6px}
-  .task .badge-doing{font-size:11px; padding:2px 8px; border-radius:999px; margin-top:3px;
-    background:rgba(42,139,255,.2); color:#5ab0ff; align-self:flex-start}
+  .task .badge-doing{display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px;
+    margin-top:4px; background:rgba(42,139,255,.2); color:#5ab0ff}
   .task .report{font-size:13px; color:#9aa0a8; margin-top:4px; padding-left:10px;
     border-left:2px solid rgba(255,255,255,.12)}
   .task .tx{cursor:pointer}
@@ -217,7 +253,18 @@
 
 <!-- ГЛАВНЫЙ ЭКРАН -->
 <div id="home" class="screen on">
-  <div class="tiles">
+  <div class="toolbar">
+    <button class="tb" id="btn-search" aria-label="Поиск"></button>
+    <span class="tb-sep"></span>
+    <button class="tb" id="btn-add-project" aria-label="Новый проект"></button>
+    <span class="tb-sep"></span>
+    <button class="tb" id="btn-home-menu" aria-label="Ещё"></button>
+  </div>
+
+  <div class="searchbar" id="searchbar"><input id="q" placeholder="Поиск по задачам"></div>
+  <div id="found"></div>
+
+  <div class="tiles" id="tiles">
     <button class="tile t-today"   data-f="today"><span class="ic" data-i="today"></span><span class="n" id="c-today">0</span><span class="t">Сегодня</span></button>
     <button class="tile t-planned" data-f="planned"><span class="ic" data-i="planned"></span><span class="n" id="c-planned">0</span><span class="t">В планах</span></button>
     <button class="tile t-all"     data-f="all"><span class="ic" data-i="all"></span><span class="n" id="c-all">0</span><span class="t">Все</span></button>
@@ -225,16 +272,16 @@
     <button class="tile t-done"    data-f="done"><span class="ic" data-i="done"></span><span class="n" id="c-done">0</span><span class="t">Завершено</span></button>
   </div>
 
-  <div class="toprow">
-    <div class="h2">Проекты</div>
-    <button class="iconbtn" id="btn-add-project" title="Новый проект"></button>
-  </div>
+  <div class="sect">Мои проекты</div>
   <div class="card" id="projects"></div>
 </div>
 
 <!-- ЭКРАН ПРОЕКТА -->
 <div id="project" class="screen">
-  <div class="h1" id="p-title">Проект</div>
+  <div class="pagehead">
+    <div class="h1" id="p-title">Проект</div>
+    <button class="tb solo" id="btn-project-menu" aria-label="Ещё"></button>
+  </div>
   <div class="sub" id="p-note" style="margin:-8px 2px 12px"></div>
 
   <div id="p-team-wrap">
@@ -255,10 +302,11 @@
     <div class="card" id="p-done" style="margin-top:8px"></div>
   </div>
 
-  <button class="danger" id="p-delete">Удалить проект</button>
 </div>
 
 <button class="fab" onclick="openTaskSheet()">+</button>
+
+<div class="menu" id="menu"><div class="items" id="menu-items"></div></div>
 
 <!-- ЛИСТ: ПРОЕКТ -->
 <div class="sheet" id="sheet-project">
@@ -268,6 +316,7 @@
     <h3>Новый проект</h3>
     <div class="field"><label>Название</label><input id="pf-name" placeholder="Например, Коридор"></div>
     <div class="field"><label>Описание</label><textarea id="pf-note" rows="2" placeholder="Пара слов, о чём проект"></textarea></div>
+    <div class="field"><label>Репозиторий</label><input id="pf-repo" placeholder="git@github.com:… или ссылка"></div>
     <div class="swatches" id="pf-colors"></div>
     <div class="actions">
       <button class="btn-cancel" onclick="closeSheet('sheet-project')">Отмена</button>
@@ -359,7 +408,6 @@
     <h3>Этап роудмапа</h3>
     <div class="field"><label>Название</label><input id="sf-title" placeholder="Например, Закрытая бета"></div>
     <div class="field"><label>Срок</label><input id="sf-date" type="date"></div>
-    <div class="segment" id="sf-status"></div>
     <div class="actions">
       <button class="btn-cancel" onclick="closeSheet('sheet-stage')">Отмена</button>
       <button class="btn-ok" onclick="saveStage()">Добавить</button>
@@ -464,6 +512,12 @@ const ICONS = {
   clock: svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
   alarm: svg('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/>'),
   link: svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+  search: svg('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
+  dots: svg('<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'),
+  pencil: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
+  trash: svg('<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>'),
+  refresh: svg('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>'),
+  git: svg('<circle cx="12" cy="12" r="3"/><path d="M12 3v6"/><path d="M12 15v6"/>'),
   human: svg('<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
 };
 const KINDS = [
@@ -476,6 +530,9 @@ const COLORS = ['#0a84ff','#30d158','#bf5af2','#ff9f0a','#ff375f','#64d2ff','#a2
 
 document.querySelectorAll('.ic[data-i]').forEach(el => el.innerHTML = ICONS[el.dataset.i] || '');
 document.getElementById('btn-add-project').innerHTML = ICONS.plus;
+document.getElementById('btn-search').innerHTML = ICONS.search;
+document.getElementById('btn-home-menu').innerHTML = ICONS.dots;
+document.getElementById('btn-project-menu').innerHTML = ICONS.dots;
 document.querySelectorAll('[data-i2]').forEach(el => el.innerHTML = ICONS[el.dataset.i2] || '');
 
 let S = {projects: [], tasks: [], counts: {}};
@@ -534,9 +591,12 @@ function memberOf(task){
 function render(){
   const p = view.kind === 'project' ? project(view.id) : null;
   document.getElementById('p-title').textContent = p ? p.name : view.title;
-  document.getElementById('p-note').textContent = p ? (p.note || '') : '';
+  const noteEl = document.getElementById('p-note');
+  if (p && p.repo)
+    noteEl.innerHTML = `${esc(p.note || '')}${p.note ? ' · ' : ''}` +
+      `<a class="accent" href="${esc(repoUrl(p.repo))}" target="_blank" rel="noreferrer">репозиторий</a>`;
+  else noteEl.textContent = p ? (p.note || '') : '';
   document.getElementById('p-team-wrap').style.display = p ? 'block' : 'none';
-  document.getElementById('p-delete').style.display = p && p.id !== 'inbox' ? 'block' : 'none';
 
   if (p){
     const open = S.tasks.filter(t => !t.done && t.project === p.id);
@@ -551,10 +611,7 @@ function render(){
           </span>
           <span class="count">${open.filter(t => t.member === m.id).length}</span>
         </button>`).join('')
-      + `<button class="row" onclick="openMemberSheet()">
-           <span class="glyph">${ICONS.plus}</span>
-           <span class="body"><span class="name accent">Добавить участника</span></span>
-         </button>`;
+;
   }
 
   // роудмап проекта
@@ -575,10 +632,7 @@ function render(){
           </span>
           <span class="badge ${st.status}">${STATUS_LABEL[st.status]}</span>
         </button>`).join('')
-      + `<button class="row" onclick="openStageSheet()">
-           <span class="glyph">${ICONS.plus}</span>
-           <span class="body"><span class="name accent">Добавить этап</span></span>
-         </button>`;
+;
   }
 
   // выполненные задачи проекта — под списком, сворачиваются
@@ -655,19 +709,10 @@ async function cycleStage(sid){
 }
 
 function openStageSheet(){
-  form.status = 'planned';
+  form.status = 'planned';   // новый этап всегда запланирован, статус двигается тапом по нему
   document.getElementById('sf-title').value = '';
   document.getElementById('sf-date').value = '';
-  renderStatuses();
   openSheet('sheet-stage');
-}
-
-function renderStatuses(){
-  document.getElementById('sf-status').innerHTML = Object.keys(STATUS_LABEL).map(k =>
-    `<button class="${k === form.status ? 'on' : ''}" data-s="${k}">${STATUS_LABEL[k]}</button>`).join('');
-  document.querySelectorAll('#sf-status button').forEach(b => b.onclick = () => {
-    form.status = b.dataset.s; renderStatuses();
-  });
 }
 
 async function saveStage(){
@@ -705,6 +750,79 @@ async function toggle(id){
   haptic('light');
   await api('/api/task/' + id + '/toggle', {method: 'POST'});
   await load();
+}
+
+/* ---------- выпадающее меню под три точки ---------- */
+function openMenu(anchor, items){
+  const menu = document.getElementById('menu');
+  const box = document.getElementById('menu-items');
+  box.innerHTML = items.map((it, i) =>
+    `<button data-i="${i}" class="${it.red ? 'red' : ''}">${esc(it.label)}${ICONS[it.icon] || ''}</button>`).join('');
+  const rect = anchor.getBoundingClientRect();
+  box.style.top = (rect.bottom + 8) + 'px';
+  menu.classList.add('on');
+  haptic('light');
+  box.querySelectorAll('button').forEach(b => b.onclick = () => {
+    menu.classList.remove('on');
+    items[+b.dataset.i].run();
+  });
+  menu.onclick = e => { if (e.target === menu) menu.classList.remove('on'); };
+}
+
+document.getElementById('btn-home-menu').onclick = e => openMenu(e.currentTarget, [
+  {label: 'Обновить', icon: 'refresh', run: () => load()},
+  {label: 'Показать выполненные', icon: 'done', run: () => {
+    view = {kind: 'filter', id: 'done', title: 'Завершено', member: null};
+    render(); go('project');
+  }},
+  {label: 'Данные доски (JSON)', icon: 'all', run: () => window.open('/api/state', '_blank')},
+]);
+
+document.getElementById('btn-project-menu').onclick = e => {
+  const p = project(view.id);
+  if (!p) return;
+  const items = [
+    {label: 'Изменить проект', icon: 'pencil', run: () => openProjectSheet(p)},
+    {label: 'Добавить участника', icon: 'human', run: () => openMemberSheet()},
+    {label: 'Добавить этап', icon: 'flagged', run: () => openStageSheet()},
+  ];
+  if (p.repo) items.push({label: 'Открыть репозиторий', icon: 'git',
+    run: () => window.open(repoUrl(p.repo), '_blank')});
+  if (p.id !== 'inbox') items.push({label: 'Удалить проект', icon: 'trash', red: true,
+    run: () => deleteProject()});
+  openMenu(e.currentTarget, items);
+};
+
+// git@github.com:user/repo.git → https://github.com/user/repo
+function repoUrl(repo){
+  const m = repo.match(/^git@([^:]+):(.+?)(\.git)?$/);
+  return m ? `https://${m[1]}/${m[2]}` : repo;
+}
+
+/* ---------- поиск ---------- */
+document.getElementById('btn-search').onclick = () => {
+  const bar = document.getElementById('searchbar');
+  bar.classList.toggle('on');
+  const q = document.getElementById('q');
+  if (bar.classList.contains('on')) q.focus(); else { q.value = ''; renderSearch(); }
+};
+document.getElementById('q').addEventListener('input', renderSearch);
+
+function renderSearch(){
+  const q = document.getElementById('q').value.trim().toLowerCase();
+  const found = document.getElementById('found');
+  const tiles = document.getElementById('tiles');
+  const projects = document.getElementById('projects');
+  const label = projects.previousElementSibling;
+  const hide = q.length > 0;
+  [tiles, projects, label].forEach(el => el && (el.style.display = hide ? 'none' : ''));
+  if (!hide){ found.innerHTML = ''; return; }
+  const hits = S.tasks.filter(t => (t.title + ' ' + (t.note || '') + ' ' + (t.report || ''))
+    .toLowerCase().includes(q));
+  view = {kind: 'filter', id: 'all', title: 'Поиск', member: null};
+  found.innerHTML = hits.length
+    ? `<div class="found-label">Найдено: ${hits.length}</div><div class="card">${hits.map(taskRow).join('')}</div>`
+    : '<div class="empty">Ничего не нашлось</div>';
 }
 
 /* ---------- листы ---------- */
@@ -752,10 +870,16 @@ function attachDrag(sheet){
   handle.addEventListener('pointercancel', end);
 }
 
-document.getElementById('btn-add-project').onclick = () => {
-  form.color = COLORS[S.projects.length % COLORS.length];
-  document.getElementById('pf-name').value = '';
-  document.getElementById('pf-note').value = '';
+document.getElementById('btn-add-project').onclick = () => openProjectSheet(null);
+
+function openProjectSheet(p){
+  form.editProject = p ? p.id : null;
+  form.color = p ? p.color : COLORS[S.projects.length % COLORS.length];
+  document.querySelector('#sheet-project h3').textContent = p ? 'Изменить проект' : 'Новый проект';
+  document.querySelector('#sheet-project .btn-ok').textContent = p ? 'Сохранить' : 'Создать';
+  document.getElementById('pf-name').value = p ? p.name : '';
+  document.getElementById('pf-note').value = p ? (p.note || '') : '';
+  document.getElementById('pf-repo').value = p ? (p.repo || '') : '';
   document.getElementById('pf-colors').innerHTML = COLORS.map(c =>
     `<div class="sw ${c === form.color ? 'on' : ''}" style="background:${c}" data-c="${c}"></div>`).join('');
   document.querySelectorAll('#pf-colors .sw').forEach(el => el.onclick = () => {
@@ -763,16 +887,32 @@ document.getElementById('btn-add-project').onclick = () => {
     document.querySelectorAll('#pf-colors .sw').forEach(x => x.classList.toggle('on', x === el));
   });
   openSheet('sheet-project');
-};
+}
 
 async function saveProject(){
   const name = document.getElementById('pf-name').value.trim();
   if (!name) return;
+  const body = {name, color: form.color,
+    note: document.getElementById('pf-note').value.trim(),
+    repo: document.getElementById('pf-repo').value.trim()};
+  if (form.editProject){
+    await api('/api/project/' + form.editProject, {method:'PATCH',
+      headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+    closeSheet('sheet-project');
+    await load();
+    return;
+  }
   const p = await api('/api/project', {method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({name, color: form.color, note: document.getElementById('pf-note').value.trim()})});
+    body: JSON.stringify(body)});
   closeSheet('sheet-project');
   await load();
   openProject(p.id);
+}
+
+async function deleteProject(){
+  if (!confirm('Удалить проект вместе с задачами?')) return;
+  await fetch('/api/project/' + view.id, {method: 'DELETE'});
+  go('home'); await load();
 }
 
 function openMemberSheet(){
@@ -969,12 +1109,6 @@ async function saveTask(){
   closeSheet('sheet-task');
   await load();
 }
-
-document.getElementById('p-delete').onclick = async () => {
-  if (view.kind !== 'project' || !confirm('Удалить проект вместе с задачами?')) return;
-  await fetch('/api/project/' + view.id, {method: 'DELETE'});
-  go('home'); await load();
-};
 
 load();
 syncBackButton();

@@ -13,8 +13,8 @@ API минимальный, чтобы им мог пользоваться аг
   PATCH  /api/task/<id>                — {title, note, status, member, stage, report, due, time, flagged}
   POST   /api/task/<id>/toggle         — отметить/снять отметку
   DELETE /api/task/<id>
-  POST   /api/project                  — {name, color, note, members:[…]}
-  PATCH  /api/project/<id>             — {name, color, note}
+  POST   /api/project                  — {name, color, note, repo, members:[…]}
+  PATCH  /api/project/<id>             — {name, color, note, repo}
   DELETE /api/project/<id>
   POST   /api/project/<id>/member      — {name, handle, role, kind}
   DELETE /api/project/<id>/member/<mid>
@@ -39,7 +39,7 @@ TASK_STATUS = ("todo", "doing", "done")
 
 DEFAULT = {
     "projects": [
-        {"id": "inbox", "name": "Входящие", "color": "#0a84ff", "note": "",
+        {"id": "inbox", "name": "Входящие", "color": "#0a84ff", "note": "", "repo": "",
          "members": [], "roadmap": []},
     ],
     "tasks": [],
@@ -64,6 +64,7 @@ def migrate(state):
         changed = True
     for p in state["projects"]:
         p.setdefault("note", "")
+        p.setdefault("repo", "")   # ссылка на репозиторий проекта
         if "bots" in p:
             p["members"] = [
                 dict(b, role=b.get("role", ""), kind=b.get("kind", "bot"))
@@ -247,6 +248,7 @@ async def add_project(request):
         "name": name,
         "color": body.get("color") or "#ff9f0a",
         "note": (body.get("note") or "").strip(),
+        "repo": (body.get("repo") or "").strip(),
         "members": [make_member(m) for m in body.get("members", [])],
         "roadmap": [],
     }
@@ -259,7 +261,7 @@ async def patch_project(request):
     body = await request.json()
     state = load()
     p = find_project(state, request.match_info["pid"])
-    for key in ("name", "color", "note"):
+    for key in ("name", "color", "note", "repo"):
         if key in body:
             p[key] = (body[key] or "").strip() if isinstance(body[key], str) else body[key]
     save(state)
