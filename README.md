@@ -25,7 +25,7 @@ python3 avatars.py           # подтянуть аватарки участн�
 проект   { id, name, color, note, repo, members[], roadmap[] }
 участник { id, name, handle, role, kind: bot|agent|service|human, avatar }
 этап     { id, title, date, status: planned|active|done, progress {done,total} }
-задача   { id, title, note, report, url, project, stage, member,
+задача   { id, title, note, report, url, project, stage, parent, member,
            status: todo|doing|done, due, time, flagged, done }
 ```
 
@@ -40,6 +40,8 @@ python3 avatars.py           # подтянуть аватарки участн�
 | Метод | Путь | Что делает |
 |---|---|---|
 | GET | `/api/state` | сводка, проекты, задачи одним ответом |
+| POST | `/api/goal` | `{text, project}` — цель словами, заводит активный этап |
+| POST | `/api/tasks` | `{project, stage, parent, items[]}` — разбор пачкой |
 | POST | `/api/task` | `{title, note, url, project, stage, member, due, time, flagged}` |
 | PATCH | `/api/task/<id>` | `{title, note, status, stage, member, report, due, time, flagged}` |
 | POST | `/api/task/<id>/toggle` | отметить выполненной и обратно |
@@ -75,6 +77,8 @@ openclaw mcp probe        # должно показать: board: 6 tools
 | `board_take` | взять задачу в работу, чтобы второй проход её не подобрал |
 | `board_report` | записать отчёт и при необходимости закрыть |
 | `board_add_task` | завести задачу, при желании под этапом |
+| `board_set_goal` | принять цель, сформулированную словами |
+| `board_split_goal` | разложить цель на задачи и завести их пачкой |
 | `board_stage_status` | двинуть этап роудмапа |
 
 ## Чего пока нет

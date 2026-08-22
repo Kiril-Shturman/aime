@@ -144,6 +144,28 @@ def tool_add_task(args):
     return f"Добавлено в {where}: {t['title']} [id {t['id']}]"
 
 
+def tool_set_goal(args):
+    """Цель, поставленная человеком словами: заводим активный этап."""
+    out = call("/api/goal", "POST", {"text": args["text"], "project": args.get("project")})
+    return f"Цель принята: «{out['stage']['title']}» (этап {out['stage']['id']})"
+
+
+def tool_split_goal(args):
+    """Разбор цели на задачи: заводим пачкой, чтобы не дёргать по одной."""
+    st = state()
+    p = find_project(st, args.get("project", "")) or st["projects"][0]
+    stage = find_stage(p, args.get("stage")) if args.get("stage") else None
+    items = [{"title": t} if isinstance(t, str) else t for t in args["items"]]
+    out = call("/api/tasks", "POST", {
+        "project": p["id"],
+        "stage": stage["id"] if stage else None,
+        "parent": args.get("parent"),
+        "items": items,
+    })
+    where = p["name"] + (f" → {stage['title']}" if stage else "")
+    return f"Заведено задач: {out['created']} в {where}"
+
+
 def tool_stage_status(args):
     st = state()
     p = find_project(st, args["project"])
@@ -199,6 +221,26 @@ TOOLS = [
             "flagged": {"type": "boolean"}},
             "required": ["title"]},
         "run": tool_add_task,
+    },
+    {
+        "name": "board_set_goal",
+        "description": "Принять цель, сформулированную словами, и завести её активным этапом.",
+        "inputSchema": {"type": "object", "properties": {
+            "text": {"type": "string", "description": "Первая строка — заголовок, остальное примечание"},
+            "project": {"type": "string"}}, "required": ["text"]},
+        "run": tool_set_goal,
+    },
+    {
+        "name": "board_split_goal",
+        "description": "Разложить цель на конкретные задачи и завести их пачкой под этапом.",
+        "inputSchema": {"type": "object", "properties": {
+            "project": {"type": "string"},
+            "stage": {"type": "string", "description": "Этап-цель, к которому крепим задачи"},
+            "parent": {"type": "string", "description": "Родительская задача, если дробим её"},
+            "items": {"type": "array", "items": {"type": "object", "properties": {
+                "title": {"type": "string"}, "note": {"type": "string"}}}}},
+            "required": ["items"]},
+        "run": tool_split_goal,
     },
     {
         "name": "board_stage_status",

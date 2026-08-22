@@ -18,6 +18,8 @@ API минимальный, чтобы им мог пользоваться аг
   DELETE /api/project/<id>
   POST   /api/project/<id>/member      — {name, handle, role, kind}
   DELETE /api/project/<id>/member/<mid>
+  POST   /api/goal                     — {text, project} — цель словами: заводит активный этап
+  POST   /api/tasks                    — {project, stage, parent, items:[{title,…}]} — пачкой
   POST   /api/project/<id>/stage       — {title, date, status, note}
   PATCH  /api/project/<id>/stage/<sid> — {title, date, status, note}
   DELETE /api/project/<id>/stage/<sid>
@@ -83,6 +85,7 @@ def migrate(state):
             t["status"] = "done" if t.get("done") else "todo"
             changed = True
         t.setdefault("stage", None)
+        t.setdefault("parent", None)
         t.setdefault("report", "")
     if changed:
         save(state)
@@ -178,6 +181,7 @@ async def add_task(request):
         "project": project,
         "member": body.get("member") if body.get("member") in members else None,
         "stage": body.get("stage") or None,
+        "parent": body.get("parent") or None,
         "status": body.get("status") if body.get("status") in TASK_STATUS else "todo",
         "report": (body.get("report") or "").strip(),
         "url": (body.get("url") or "").strip(),
@@ -201,7 +205,7 @@ async def patch_task(request):
         for key in ("title", "note", "report", "url"):
             if key in body:
                 t[key] = (body[key] or "").strip()
-        for key in ("due", "time", "stage", "member"):
+        for key in ("due", "time", "stage", "member", "parent"):
             if key in body:
                 t[key] = body[key] or None
         if "flagged" in body:
@@ -304,6 +308,69 @@ async def delete_member(request):
     return web.json_response({"ok": True})
 
 
+async def add_goal(request):
+    """Цель ставится текстом. Заголовок — первая строка, остальное в примечание."""
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise web.HTTPBadRequest(text="text required")
+    head, _, rest = text.partition("\n")
+    state = load()
+    project = None
+    if body.get("project"):
+        project = next((p for p in state["projects"]
+                        if p["id"] == body["project"]
+                        or p["name"].lower() == body["project"].strip().lower()), None)
+    project = project or state["projects"][0]
+    stage = {
+        "id": uuid.uuid4().hex[:8],
+        "title": head.strip()[:120],
+        "note": rest.strip(),
+        "date": body.get("date") or None,
+        "status": "active",   # цель ставят, чтобы её делали, а не откладывали
+    }
+    project["roadmap"].append(stage)
+    save(state)
+    return web.json_response({"project": project["id"], "stage": stage})
+
+
+async def add_tasks(request):
+    """Разбор цели: заводим сразу пачку задач одним запросом."""
+    body = await request.json()
+    items = body.get("items") or []
+    if not items:
+        raise web.HTTPBadRequest(text="items required")
+    state = load()
+    known = {p["id"] for p in state["projects"]}
+    project = body.get("project") if body.get("project") in known else "inbox"
+    created = []
+    for item in items[:20]:
+        title = (item.get("title") or "").strip() if isinstance(item, dict) else str(item).strip()
+        if not title:
+            continue
+        task = {
+            "id": uuid.uuid4().hex[:12],
+            "title": title,
+            "note": (item.get("note") if isinstance(item, dict) else "") or "",
+            "project": project,
+            "stage": body.get("stage") or None,
+            "parent": body.get("parent") or None,
+            "member": body.get("member") or None,
+            "status": "todo",
+            "report": "",
+            "url": "",
+            "due": None,
+            "time": None,
+            "flagged": False,
+            "done": False,
+            "created": int(time.time()),
+        }
+        state["tasks"].insert(0, task)
+        created.append(task)
+    save(state)
+    return web.json_response({"created": len(created), "tasks": created})
+
+
 async def add_stage(request):
     body = await request.json()
     state = load()
@@ -373,6 +440,8 @@ def make_app():
     app.router.add_delete("/api/project/{pid}", delete_project)
     app.router.add_post("/api/project/{pid}/member", add_member)
     app.router.add_delete("/api/project/{pid}/member/{mid}", delete_member)
+    app.router.add_post("/api/goal", add_goal)
+    app.router.add_post("/api/tasks", add_tasks)
     app.router.add_post("/api/project/{pid}/stage", add_stage)
     app.router.add_patch("/api/project/{pid}/stage/{sid}", patch_stage)
     app.router.add_delete("/api/project/{pid}/stage/{sid}", delete_stage)
