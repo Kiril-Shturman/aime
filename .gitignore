@@ -1,0 +1,19 @@
+# OpenClaw runtime state and local memory
+openclaw-workspace-state.json
+memory/heartbeat-state.json
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*token*
+*secret*
+
+# Temporary files
+*.log
+*.tmp
+.DS_Store
