@@ -14,6 +14,6 @@ This is an interim patch tied to the current OpenClaw bundle filename. Reapply a
 
 `apply-rich-draft-10-2-patch.mjs` upgrades the normal Telegram DM progress path to the ephemeral Bot API 10.2 `sendRichMessageDraft` transport with an `InputRichBlockThinking` block. Progress Markdown is converted to Telegram `RichText` entities because Markdown is not parsed inside block HTML and a plain `text` string is not formatted. Final replies remain persistent `sendRichMessage` calls.
 
-`apply-clean-rich-output-patch.mjs` suppresses the automatic post-response activity summary and metadata footer, while preserving the temporary native thinking draft.
+`apply-clean-rich-output-patch.mjs` suppresses the automatic post-response activity summary. `apply-thinking-lifecycle-patch.mjs` makes the native thinking draft appear immediately, keeps it ephemeral, and preserves the final native footer.
 
 The script is idempotent, validates OpenClaw `2026.7.1-2`, discovers the relevant hashed bundles from unique function anchors, keeps backups, and fails closed if the installed layout differs. Re-review it after every OpenClaw upgrade.
