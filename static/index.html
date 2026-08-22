@@ -97,13 +97,30 @@
     width:56px; height:56px; border-radius:50%; background:var(--blue); border:0; color:#fff;
     font-size:30px; line-height:1; box-shadow:0 8px 22px rgba(10,132,255,.4)}
 
-  /* --- модальное окно снизу, как системный лист --- */
-  .sheet{position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; z-index:20}
-  .sheet.on{display:block}
-  .sheet .box{position:absolute; left:0; right:0; bottom:0; background:#141416;
-    border-radius:20px 20px 0 0; padding:10px var(--pad) calc(20px + env(safe-area-inset-bottom));
-    max-height:92vh; overflow:auto}
-  .grab{width:36px; height:5px; border-radius:3px; background:#3a3a3c; margin:0 auto 12px}
+  /* --- нижние окна: та же механика, что в «Коридоре» --- */
+  .sheet{position:fixed; inset:0; z-index:200; opacity:0; pointer-events:none;
+    background:rgba(0,0,0,0); backdrop-filter:blur(0); -webkit-backdrop-filter:blur(0);
+    transition:opacity .25s ease, background-color .25s ease, backdrop-filter .25s ease}
+  .sheet.on{opacity:1; background:rgba(0,0,0,.55); backdrop-filter:blur(6px);
+    -webkit-backdrop-filter:blur(6px); pointer-events:auto}
+  .sheet .box{position:fixed; left:50%; bottom:0; width:min(100%,520px);
+    transform:translate(-50%,110%); transition:transform .32s cubic-bezier(.34,1.2,.64,1);
+    background:#15151c; border-top:1px solid rgba(255,255,255,.08);
+    border-radius:28px 28px 0 0; box-shadow:0 -16px 40px rgba(0,0,0,.45);
+    padding:22px 20px calc(env(safe-area-inset-bottom,0px) + 28px);
+    max-height:92dvh; overflow-y:auto}
+  .sheet.on .box{transform:translate(-50%,0)}
+  .sheet .box.dragging{transition:none}
+  .sheet-close{position:absolute; top:14px; right:14px; width:34px; height:34px;
+    border-radius:50%; border:0; background:rgba(255,255,255,.08); color:#fff;
+    display:flex; align-items:center; justify-content:center; padding:0}
+  .sheet-close svg{width:15px; height:15px; stroke:#fff; stroke-width:2; fill:none; stroke-linecap:round}
+  .grab{position:relative; display:block; width:100%; height:28px; margin:-14px 0 6px;
+    background:none; border:0; padding:0; cursor:grab; touch-action:none}
+  .grab::before{content:''; position:absolute; top:8px; left:50%; transform:translateX(-50%);
+    width:44px; height:5px; border-radius:999px; background:rgba(255,255,255,.22);
+    transition:background-color .15s ease}
+  .grab:active::before{background:rgba(255,255,255,.4)}
   .sheet h3{font-size:20px; font-weight:700; margin:0 2px 14px}
   .field{background:var(--card); border-radius:12px; padding:10px 14px; margin-bottom:10px}
   .field label{display:block; font-size:12px; color:var(--dim); margin-bottom:3px}
@@ -194,7 +211,6 @@
 
 <!-- ЭКРАН ПРОЕКТА -->
 <div id="project" class="screen">
-  <button class="back" onclick="go('home')">‹ Проекты</button>
   <div class="h1" id="p-title">Проект</div>
   <div class="sub" id="p-note" style="margin:-8px 2px 12px"></div>
 
@@ -224,7 +240,8 @@
 <!-- ЛИСТ: ПРОЕКТ -->
 <div class="sheet" id="sheet-project">
   <div class="box">
-    <div class="grab"></div>
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     <h3>Новый проект</h3>
     <div class="field"><label>Название</label><input id="pf-name" placeholder="Например, Коридор"></div>
     <div class="field"><label>Описание</label><textarea id="pf-note" rows="2" placeholder="Пара слов, о чём проект"></textarea></div>
@@ -239,7 +256,8 @@
 <!-- ЛИСТ: УЧАСТНИК -->
 <div class="sheet" id="sheet-member">
   <div class="box">
-    <div class="grab"></div>
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     <h3>Участник проекта</h3>
     <div class="segment" id="mf-kind"></div>
     <div class="field"><label>Имя</label><input id="mf-name" placeholder="Как называем"></div>
@@ -255,6 +273,7 @@
 <!-- ЛИСТ: ЗАДАЧА -->
 <div class="sheet" id="sheet-task">
   <div class="box">
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
     <div class="sheet-head">
       <button class="circle" onclick="closeSheet('sheet-task')">✕</button>
       <div class="sheet-title">Новая задача</div>
@@ -312,7 +331,8 @@
 <!-- ЛИСТ: ЭТАП -->
 <div class="sheet" id="sheet-stage">
   <div class="box">
-    <div class="grab"></div>
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     <h3>Этап роудмапа</h3>
     <div class="field"><label>Название</label><input id="sf-title" placeholder="Например, Закрытая бета"></div>
     <div class="field"><label>Срок</label><input id="sf-date" type="date"></div>
@@ -327,7 +347,8 @@
 <!-- ЛИСТ: ВЫБОР -->
 <div class="sheet" id="sheet-picker">
   <div class="box">
-    <div class="grab"></div>
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     <h3 id="picker-title">Выбор</h3>
     <div class="card" id="picker-list"></div>
   </div>
@@ -335,7 +356,32 @@
 
 <script>
 const tg = window.Telegram?.WebApp;
-tg?.ready(); tg?.expand();
+const BG = '#000000';
+try {
+  tg?.ready(); tg?.expand();
+  tg?.setHeaderColor?.(BG); tg?.setBackgroundColor?.(BG); tg?.setBottomBarColor?.(BG);
+  tg?.disableVerticalSwipes?.();  // иначе перетаскивание листа закрывает всю мини-аппу
+} catch { /* открыто в обычном браузере */ }
+
+const haptic = (kind = 'light') => {
+  try {
+    if (kind === 'success' || kind === 'error') tg.HapticFeedback.notificationOccurred(kind);
+    else tg.HapticFeedback.impactOccurred(kind);
+  } catch { /* вне Телеграма */ }
+};
+
+// системная кнопка «назад»: закрывает лист, потом возвращает к списку проектов
+function syncBackButton(){
+  const bb = tg?.BackButton;
+  if (!bb) return;
+  const needed = !!document.querySelector('.sheet.on') || !!view.kind;
+  try { needed ? bb.show() : bb.hide(); } catch { /* старый клиент */ }
+}
+tg?.BackButton?.onClick?.(() => {
+  const open = document.querySelector('.sheet.on');
+  if (open) closeSheet(open.id);
+  else go('home');
+});
 
 // Набор Lucide (лицензия ISC) — контурные иконки в духе SF Symbols.
 const svg = p => `<svg viewBox="0 0 24 24">${p}</svg>`;
@@ -511,7 +557,7 @@ document.getElementById('p-done-head').onclick = () => { view.showDone = !view.s
 async function cycleStage(sid){
   const p = project(view.id);
   const st = p.roadmap.find(x => x.id === sid);
-  tg?.HapticFeedback?.impactOccurred('light');
+  haptic('light');
   await api(`/api/project/${p.id}/stage/${sid}`, {method:'PATCH',
     headers:{'Content-Type':'application/json'},
     body: JSON.stringify({status: STATUS_NEXT[st.status]})});
@@ -548,7 +594,9 @@ async function saveStage(){
 function go(id){
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
   document.getElementById(id).classList.add('on');
-  if (id === 'home') view = {kind: null, id: null, title: '', member: null};
+  if (id === 'home') view = {kind: null, id: null, title: '', member: null, showDone: false};
+  window.scrollTo(0, 0);
+  syncBackButton();
 }
 
 function openProject(id){
@@ -564,17 +612,55 @@ document.querySelectorAll('.tile').forEach(el => el.onclick = () => {
 });
 
 async function toggle(id){
-  tg?.HapticFeedback?.impactOccurred('light');
+  haptic('light');
   await api('/api/task/' + id + '/toggle', {method: 'POST'});
   await load();
 }
 
 /* ---------- листы ---------- */
-const openSheet = id => document.getElementById(id).classList.add('on');
-const closeSheet = id => document.getElementById(id).classList.remove('on');
-document.querySelectorAll('.sheet').forEach(s => s.onclick = e => {
-  if (e.target === s) s.classList.remove('on');
+function openSheet(id){
+  document.getElementById(id).classList.add('on');
+  haptic('light');
+  syncBackButton();
+}
+function closeSheet(id){
+  const el = document.getElementById(id);
+  el.classList.remove('on');
+  el.querySelector('.box').style.transform = '';
+  syncBackButton();
+}
+document.querySelectorAll('.sheet').forEach(sh => {
+  sh.onclick = e => { if (e.target === sh) closeSheet(sh.id); };
+  sh.querySelector('.sheet-close')?.addEventListener('click', () => closeSheet(sh.id));
+  attachDrag(sh);
 });
+
+// «потянуть вниз, чтобы закрыть» — как в «Коридоре»
+function attachDrag(sheet){
+  const handle = sheet.querySelector('.grab');
+  const box = sheet.querySelector('.box');
+  if (!handle || !box) return;
+  let startY = 0, delta = 0, dragging = false;
+  handle.addEventListener('pointerdown', e => {
+    dragging = true; startY = e.clientY; delta = 0;
+    box.classList.add('dragging');
+    handle.setPointerCapture(e.pointerId);
+  });
+  handle.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    delta = Math.max(0, e.clientY - startY);
+    box.style.transform = `translate(-50%, ${delta}px)`;
+  });
+  const end = () => {
+    if (!dragging) return;
+    dragging = false;
+    box.classList.remove('dragging');
+    if (delta > 90){ closeSheet(sheet.id); haptic('light'); }
+    else box.style.transform = '';
+  };
+  handle.addEventListener('pointerup', end);
+  handle.addEventListener('pointercancel', end);
+}
 
 document.getElementById('btn-add-project').onclick = () => {
   form.color = COLORS[S.projects.length % COLORS.length];
@@ -723,6 +809,7 @@ document.getElementById('p-delete').onclick = async () => {
 };
 
 load();
+syncBackButton();
 setInterval(() => { if (!document.querySelector('.sheet.on')) load(); }, 15000);
 </script>
 </body>
