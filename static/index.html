@@ -184,6 +184,19 @@
   .badge.active{background:rgba(10,132,255,.2); color:#5ab0ff}
   .badge.done{background:rgba(48,209,88,.18); color:#4ee07a}
 
+  .stage .progress{display:flex; align-items:center; gap:8px; margin-top:6px}
+  .stage .bar{flex:1; height:4px; border-radius:2px; background:rgba(255,255,255,.1); overflow:hidden}
+  .stage .bar i{display:block; height:100%; background:#2a8bff; border-radius:2px}
+  .stage.done .bar i{background:#30d158}
+  .stage .frac{font-size:12px; color:var(--dim); white-space:nowrap}
+
+  .group-label{font-size:13px; color:var(--dim); margin:16px 4px 6px}
+  .task .badge-doing{font-size:11px; padding:2px 8px; border-radius:999px; margin-top:3px;
+    background:rgba(42,139,255,.2); color:#5ab0ff; align-self:flex-start}
+  .task .report{font-size:13px; color:#9aa0a8; margin-top:4px; padding-left:10px;
+    border-left:2px solid rgba(255,255,255,.12)}
+  .task .tx{cursor:pointer}
+
   .donehead{background:none; color:var(--blue); padding:0 4px; min-height:auto; margin-top:22px}
 
   .actions{display:grid; grid-template-columns:auto 1fr; gap:10px; margin-top:16px}
@@ -354,6 +367,48 @@
   </div>
 </div>
 
+<!-- ЛИСТ: ПРАВКА ЗАДАЧИ -->
+<div class="sheet" id="sheet-edit">
+  <div class="box">
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    <h3 id="ef-heading">Задача</h3>
+
+    <div class="card pad">
+      <input class="line big last" id="ef-title" placeholder="Название">
+    </div>
+
+    <div class="sect">Статус</div>
+    <div class="segment" id="ef-status"></div>
+
+    <div class="sect">Куда относится</div>
+    <div class="card">
+      <button class="row" onclick="openPicker('stage', true)">
+        <span class="glyph" data-i2="flagged"></span>
+        <span class="body"><span class="name">Этап</span></span>
+        <span class="count" id="ef-stage-name">Без этапа</span><span class="chev">›</span>
+      </button>
+      <button class="row" onclick="openPicker('member', true)">
+        <span class="glyph" data-i2="human"></span>
+        <span class="body"><span class="name">Исполнитель</span></span>
+        <span class="count" id="ef-member-name">Не выбран</span><span class="chev">›</span>
+      </button>
+    </div>
+
+    <div class="sect">Отчёт</div>
+    <div class="card pad">
+      <textarea class="line last" id="ef-report" rows="3"
+        placeholder="Что сделано, что осталось, ссылка на результат"></textarea>
+    </div>
+
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeSheet('sheet-edit')">Отмена</button>
+      <button class="btn-ok" onclick="saveEdit()">Сохранить</button>
+    </div>
+    <button class="danger" onclick="deleteTask()">Удалить задачу</button>
+  </div>
+</div>
+
 <!-- ЛИСТ: ВЫБОР -->
 <div class="sheet" id="sheet-picker">
   <div class="box">
@@ -513,6 +568,10 @@ function render(){
           <span class="body">
             <span class="name">${esc(st.title)}</span>
             ${st.date ? `<span class="sub">${esc(st.date)}</span>` : ''}
+            ${st.progress?.total ? `<span class="progress">
+                 <span class="bar"><i style="width:${Math.round(100 * st.progress.done / st.progress.total)}%"></i></span>
+                 <span class="frac">${st.progress.done} из ${st.progress.total}</span>
+               </span>` : ''}
           </span>
           <span class="badge ${st.status}">${STATUS_LABEL[st.status]}</span>
         </button>`).join('')
@@ -536,8 +595,27 @@ function render(){
   document.getElementById('p-tasks-label').textContent = view.member ? 'Задачи участника' : 'Задачи';
 
   const rows = filtered();
-  document.getElementById('tasks').innerHTML =
-    rows.length ? rows.map(t => taskRow(t)).join('') : '<div class="empty">Пусто</div>';
+  const box = document.getElementById('tasks');
+  if (!rows.length){
+    box.className = 'card';
+    box.innerHTML = '<div class="empty">Пусто</div>';
+  } else if (p && (p.roadmap || []).length){
+    // внутри проекта задачи стоят под своими этапами: у одного этапа их бывает десяток
+    const chunks = [];
+    for (const st of p.roadmap){
+      const own = rows.filter(t => t.stage === st.id);
+      if (own.length) chunks.push(`<div class="group-label">${esc(st.title)}</div>
+        <div class="card">${own.map(taskRow).join('')}</div>`);
+    }
+    const loose = rows.filter(t => !t.stage || !p.roadmap.some(st => st.id === t.stage));
+    if (loose.length) chunks.push(`${chunks.length ? '<div class="group-label">Без этапа</div>' : ''}
+      <div class="card">${loose.map(taskRow).join('')}</div>`);
+    box.className = '';
+    box.innerHTML = chunks.join('');
+  } else {
+    box.className = 'card';
+    box.innerHTML = rows.map(taskRow).join('');
+  }
 }
 
 function taskRow(t){
@@ -548,10 +626,12 @@ function taskRow(t){
   return `
     <div class="task ${t.done ? 'done' : ''}">
       <div class="cb ${t.done ? 'on' : ''}" onclick="toggle('${t.id}')"></div>
-      <div class="tx">${esc(t.title)}
+      <div class="tx" onclick="openEdit('${t.id}')">${esc(t.title)}
+        ${t.status === 'doing' ? '<div class="badge-doing">В работе</div>' : ''}
         ${parts.length ? `<div class="sub">${esc(parts.join(' · '))}</div>` : ''}
         ${t.note ? `<div class="sub">${esc(t.note)}</div>` : ''}
         ${t.url ? `<a class="sub accent" href="${esc(t.url)}" target="_blank" rel="noreferrer">${esc(t.url)}</a>` : ''}
+        ${t.report ? `<div class="report">${esc(t.report)}</div>` : ''}
       </div>
       ${t.flagged ? `<div class="flag">${ICONS.flagged}</div>` : ''}
     </div>`;
@@ -756,12 +836,77 @@ function renderTaskParams(){
   document.getElementById('tf-member-name').textContent = m ? m.name : 'Не выбран';
 }
 
-function openPicker(what){
-  const title = what === 'project' ? 'Проект' : 'Исполнитель';
+const TASK_STATUS_LABEL = {todo: 'Не начата', doing: 'В работе', done: 'Готово'};
+let editing = null;   // задача, открытая в листе правки
+let picking = {what: null, forEdit: false};
+
+function openEdit(id){
+  const t = S.tasks.find(x => x.id === id);
+  if (!t) return;
+  editing = {...t};
+  document.getElementById('ef-title').value = t.title;
+  document.getElementById('ef-report').value = t.report || '';
+  renderEditStatus();
+  renderEditParams();
+  openSheet('sheet-edit');
+}
+
+function renderEditStatus(){
+  document.getElementById('ef-status').innerHTML = Object.keys(TASK_STATUS_LABEL).map(k =>
+    `<button class="${k === editing.status ? 'on' : ''}" data-s="${k}">${TASK_STATUS_LABEL[k]}</button>`).join('');
+  document.querySelectorAll('#ef-status button').forEach(b => b.onclick = () => {
+    editing.status = b.dataset.s; renderEditStatus();
+  });
+}
+
+function renderEditParams(){
+  const p = project(editing.project);
+  const st = (p?.roadmap || []).find(x => x.id === editing.stage);
+  document.getElementById('ef-stage-name').textContent = st ? st.title : 'Без этапа';
+  const m = p?.members.find(x => x.id === editing.member);
+  document.getElementById('ef-member-name').textContent = m ? m.name : 'Не выбран';
+}
+
+async function saveEdit(){
+  const body = {
+    title: document.getElementById('ef-title').value.trim() || editing.title,
+    report: document.getElementById('ef-report').value.trim(),
+    status: editing.status, stage: editing.stage, member: editing.member,
+  };
+  await api('/api/task/' + editing.id, {method:'PATCH',
+    headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  closeSheet('sheet-edit');
+  haptic('success');
+  await load();
+}
+
+async function deleteTask(){
+  if (!confirm('Удалить задачу?')) return;
+  await fetch('/api/task/' + editing.id, {method: 'DELETE'});
+  closeSheet('sheet-edit');
+  await load();
+}
+
+function openPicker(what, forEdit){
+  picking = {what, forEdit: !!forEdit};
+  const title = what === 'project' ? 'Проект' : what === 'stage' ? 'Этап' : 'Исполнитель';
   document.getElementById('picker-title').textContent = title;
   const list = document.getElementById('picker-list');
 
-  if (what === 'project'){
+  if (what === 'stage'){
+    const p = project(editing.project);
+    list.innerHTML = `<button class="row" onclick="pick('stage','')">
+        <span class="glyph">${ICONS.flagged}</span>
+        <span class="body"><span class="name">Без этапа</span></span>
+        ${!editing.stage ? '<span class="count accent">✓</span>' : ''}
+      </button>` + (p?.roadmap || []).map(st => `
+      <button class="row" onclick="pick('stage','${st.id}')">
+        <span class="glyph" style="background:${p.color}">${ICONS.flagged}</span>
+        <span class="body"><span class="name">${esc(st.title)}</span>
+          <span class="sub">${STATUS_LABEL[st.status]}</span></span>
+        ${st.id === editing.stage ? '<span class="count accent">✓</span>' : ''}
+      </button>`).join('');
+  } else if (what === 'project'){
     list.innerHTML = S.projects.map(p => `
       <button class="row" onclick="pick('project','${p.id}')">
         <span class="glyph" style="background:${p.color}">${ICONS.folder}</span>
@@ -769,25 +914,38 @@ function openPicker(what){
         ${p.id === form.project ? '<span class="count accent">✓</span>' : ''}
       </button>`).join('');
   } else {
-    const p = project(form.project);
+    const p = project(picking.forEdit ? editing.project : form.project);
     const rows = (p?.members || []).map(m => `
       <button class="row" onclick="pick('member','${m.id}')">
         ${avatar(m, p.color)}
         <span class="body"><span class="name">${esc(m.name)}</span>
           <span class="sub">${esc(m.role || kindLabel(m.kind))}</span></span>
-        ${m.id === form.member ? '<span class="count accent">✓</span>' : ''}
+        ${m.id === (picking.forEdit ? editing.member : form.member) ? '<span class="count accent">✓</span>' : ''}
       </button>`).join('');
     list.innerHTML = `<button class="row" onclick="pick('member','')">
         <span class="glyph">${ICONS.human}</span>
         <span class="body"><span class="name">Не выбран</span></span>
-        ${!form.member ? '<span class="count accent">✓</span>' : ''}
+        ${!(picking.forEdit ? editing.member : form.member) ? '<span class="count accent">✓</span>' : ''}
       </button>` + rows;
   }
   openSheet('sheet-picker');
 }
 
 function pick(what, id){
-  if (what === 'project'){ form.project = id; form.member = null; }
+  if (what === 'stage'){
+    const p = project(editing.project);
+    list.innerHTML = `<button class="row" onclick="pick('stage','')">
+        <span class="glyph">${ICONS.flagged}</span>
+        <span class="body"><span class="name">Без этапа</span></span>
+        ${!editing.stage ? '<span class="count accent">✓</span>' : ''}
+      </button>` + (p?.roadmap || []).map(st => `
+      <button class="row" onclick="pick('stage','${st.id}')">
+        <span class="glyph" style="background:${p.color}">${ICONS.flagged}</span>
+        <span class="body"><span class="name">${esc(st.title)}</span>
+          <span class="sub">${STATUS_LABEL[st.status]}</span></span>
+        ${st.id === editing.stage ? '<span class="count accent">✓</span>' : ''}
+      </button>`).join('');
+  } else if (what === 'project'){ form.project = id; form.member = null; }
   else form.member = id || null;
   closeSheet('sheet-picker');
   renderTaskParams();
