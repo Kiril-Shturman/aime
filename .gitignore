@@ -1,6 +1,7 @@
 # OpenClaw runtime state and local memory
 openclaw-workspace-state.json
 memory/heartbeat-state.json
+memory/telegram-business.jsonl
 
 # Secrets and local environment
 .env
