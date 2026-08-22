@@ -1,0 +1,327 @@
+"""Задачи в стиле «Напоминаний» Apple — мини-аппа Телеграма.
+
+Структура: проект → участники проекта → задачи. Участник это не обязательно
+телеграм-бот: может быть ИИ-агент, сервис или человек, у каждого своя роль.
+Задача принадлежит проекту и может быть закреплена за участником.
+
+Хранилище простое: один JSON-файл. Задач тут сотни, не миллионы,
+поэтому база была бы лишней сложностью.
+
+API минимальный, чтобы им мог пользоваться агент:
+  GET    /api/state                    — всё сразу: сводка, проекты, задачи
+  POST   /api/task                     — {title, note, url, project, member, due, time, flagged}
+  POST   /api/task/<id>/toggle         — отметить/снять отметку
+  DELETE /api/task/<id>
+  POST   /api/project                  — {name, color, note, members:[…]}
+  PATCH  /api/project/<id>             — {name, color, note}
+  DELETE /api/project/<id>
+  POST   /api/project/<id>/member      — {name, handle, role, kind}
+  DELETE /api/project/<id>/member/<mid>
+  POST   /api/project/<id>/stage       — {title, date, status, note}
+  PATCH  /api/project/<id>/stage/<sid> — {title, date, status, note}
+  DELETE /api/project/<id>/stage/<sid>
+"""
+import json
+import os
+import time
+import uuid
+from datetime import date
+
+from aiohttp import web
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+DATA = os.path.join(ROOT, "data.json")
+
+KINDS = ("bot", "agent", "service", "human")
+STAGES = ("planned", "active", "done")
+
+DEFAULT = {
+    "projects": [
+        {"id": "inbox", "name": "Входящие", "color": "#0a84ff", "note": "",
+         "members": [], "roadmap": []},
+    ],
+    "tasks": [],
+}
+
+
+def load():
+    if not os.path.exists(DATA):
+        save(DEFAULT)
+        return json.loads(json.dumps(DEFAULT))
+    with open(DATA, encoding="utf-8") as f:
+        return migrate(json.load(f))
+
+
+def migrate(state):
+    """Ранние версии знали только списки, потом только телеграм-ботов."""
+    changed = False
+    if "projects" not in state:
+        state["projects"] = [dict(l, members=[]) for l in state.pop("lists", [])]
+        for t in state.get("tasks", []):
+            t["project"] = t.pop("list", "inbox")
+        changed = True
+    for p in state["projects"]:
+        p.setdefault("note", "")
+        if "bots" in p:
+            p["members"] = [
+                dict(b, role=b.get("role", ""), kind=b.get("kind", "bot"))
+                for b in p.pop("bots")
+            ]
+            changed = True
+        p.setdefault("members", [])
+        p.setdefault("roadmap", [])
+    for t in state["tasks"]:
+        if "bot" in t:
+            t["member"] = t.pop("bot")
+            changed = True
+        t.setdefault("member", None)
+    if changed:
+        save(state)
+    return state
+
+
+def save(state):
+    tmp = DATA + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(state, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, DATA)
+
+
+def find_project(state, pid):
+    for p in state["projects"]:
+        if p["id"] == pid:
+            return p
+    raise web.HTTPNotFound()
+
+
+def is_today(task):
+    due = task.get("due")
+    return bool(due) and due <= date.today().isoformat()
+
+
+def counts(state):
+    open_tasks = [t for t in state["tasks"] if not t.get("done")]
+    return {
+        "today": sum(1 for t in open_tasks if is_today(t)),
+        "planned": sum(1 for t in open_tasks if t.get("due")),
+        "all": len(open_tasks),
+        "flagged": sum(1 for t in open_tasks if t.get("flagged")),
+        "done": sum(1 for t in state["tasks"] if t.get("done")),
+    }
+
+
+async def get_state(request):
+    state = load()
+    per_project = {}
+    for t in state["tasks"]:
+        if not t.get("done"):
+            per_project[t["project"]] = per_project.get(t["project"], 0) + 1
+    projects = [dict(p, count=per_project.get(p["id"], 0)) for p in state["projects"]]
+    return web.json_response(
+        {"projects": projects, "tasks": state["tasks"], "counts": counts(state)}
+    )
+
+
+def make_member(body):
+    handle = (body.get("handle") or "").strip()
+    if handle and not handle.startswith("@"):
+        handle = "@" + handle
+    name = (body.get("name") or handle or "").strip()
+    kind = body.get("kind") if body.get("kind") in KINDS else ("bot" if handle else "agent")
+    return {
+        "id": uuid.uuid4().hex[:8],
+        "name": name,
+        "handle": handle,
+        "role": (body.get("role") or "").strip(),
+        "kind": kind,
+        "avatar": None,
+    }
+
+
+async def add_task(request):
+    body = await request.json()
+    title = (body.get("title") or "").strip()
+    if not title:
+        raise web.HTTPBadRequest(text="title required")
+    state = load()
+    known = {p["id"] for p in state["projects"]}
+    project = body.get("project") if body.get("project") in known else "inbox"
+    members = {m["id"] for p in state["projects"] if p["id"] == project for m in p["members"]}
+    task = {
+        "id": uuid.uuid4().hex[:12],
+        "title": title,
+        "note": (body.get("note") or "").strip(),
+        "project": project,
+        "member": body.get("member") if body.get("member") in members else None,
+        "url": (body.get("url") or "").strip(),
+        "due": body.get("due") or None,
+        "time": body.get("time") or None,
+        "flagged": bool(body.get("flagged")),
+        "done": False,
+        "created": int(time.time()),
+    }
+    state["tasks"].insert(0, task)
+    save(state)
+    return web.json_response(task)
+
+
+async def toggle_task(request):
+    state = load()
+    for t in state["tasks"]:
+        if t["id"] == request.match_info["tid"]:
+            t["done"] = not t.get("done")
+            t["done_at"] = int(time.time()) if t["done"] else None
+            save(state)
+            return web.json_response(t)
+    raise web.HTTPNotFound()
+
+
+async def delete_task(request):
+    state = load()
+    before = len(state["tasks"])
+    state["tasks"] = [t for t in state["tasks"] if t["id"] != request.match_info["tid"]]
+    if len(state["tasks"]) == before:
+        raise web.HTTPNotFound()
+    save(state)
+    return web.json_response({"ok": True})
+
+
+async def add_project(request):
+    body = await request.json()
+    name = (body.get("name") or "").strip()
+    if not name:
+        raise web.HTTPBadRequest(text="name required")
+    state = load()
+    project = {
+        "id": uuid.uuid4().hex[:8],
+        "name": name,
+        "color": body.get("color") or "#ff9f0a",
+        "note": (body.get("note") or "").strip(),
+        "members": [make_member(m) for m in body.get("members", [])],
+        "roadmap": [],
+    }
+    state["projects"].append(project)
+    save(state)
+    return web.json_response(project)
+
+
+async def patch_project(request):
+    body = await request.json()
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    for key in ("name", "color", "note"):
+        if key in body:
+            p[key] = (body[key] or "").strip() if isinstance(body[key], str) else body[key]
+    save(state)
+    return web.json_response(p)
+
+
+async def delete_project(request):
+    pid = request.match_info["pid"]
+    if pid == "inbox":
+        raise web.HTTPBadRequest(text="inbox is permanent")
+    state = load()
+    find_project(state, pid)
+    state["projects"] = [p for p in state["projects"] if p["id"] != pid]
+    state["tasks"] = [t for t in state["tasks"] if t["project"] != pid]
+    save(state)
+    return web.json_response({"ok": True})
+
+
+async def add_member(request):
+    body = await request.json()
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    member = make_member(body)
+    if not member["name"]:
+        raise web.HTTPBadRequest(text="name required")
+    p["members"].append(member)
+    save(state)
+    return web.json_response(member)
+
+
+async def delete_member(request):
+    mid = request.match_info["mid"]
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    p["members"] = [m for m in p["members"] if m["id"] != mid]
+    for t in state["tasks"]:
+        if t.get("member") == mid:
+            t["member"] = None
+    save(state)
+    return web.json_response({"ok": True})
+
+
+async def add_stage(request):
+    body = await request.json()
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    title = (body.get("title") or "").strip()
+    if not title:
+        raise web.HTTPBadRequest(text="title required")
+    stage = {
+        "id": uuid.uuid4().hex[:8],
+        "title": title,
+        "note": (body.get("note") or "").strip(),
+        "date": body.get("date") or None,
+        "status": body.get("status") if body.get("status") in STAGES else "planned",
+    }
+    p["roadmap"].append(stage)
+    save(state)
+    return web.json_response(stage)
+
+
+async def patch_stage(request):
+    body = await request.json()
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    for st in p["roadmap"]:
+        if st["id"] == request.match_info["sid"]:
+            if "status" in body and body["status"] in STAGES:
+                st["status"] = body["status"]
+            for key in ("title", "note"):
+                if key in body:
+                    st[key] = (body[key] or "").strip()
+            if "date" in body:
+                st["date"] = body["date"] or None
+            save(state)
+            return web.json_response(st)
+    raise web.HTTPNotFound()
+
+
+async def delete_stage(request):
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    before = len(p["roadmap"])
+    p["roadmap"] = [s for s in p["roadmap"] if s["id"] != request.match_info["sid"]]
+    if len(p["roadmap"]) == before:
+        raise web.HTTPNotFound()
+    save(state)
+    return web.json_response({"ok": True})
+
+
+async def index(request):
+    return web.FileResponse(os.path.join(ROOT, "static", "index.html"))
+
+
+def make_app():
+    app = web.Application()
+    app.router.add_get("/", index)
+    app.router.add_get("/api/state", get_state)
+    app.router.add_post("/api/task", add_task)
+    app.router.add_post("/api/task/{tid}/toggle", toggle_task)
+    app.router.add_delete("/api/task/{tid}", delete_task)
+    app.router.add_post("/api/project", add_project)
+    app.router.add_patch("/api/project/{pid}", patch_project)
+    app.router.add_delete("/api/project/{pid}", delete_project)
+    app.router.add_post("/api/project/{pid}/member", add_member)
+    app.router.add_delete("/api/project/{pid}/member/{mid}", delete_member)
+    app.router.add_post("/api/project/{pid}/stage", add_stage)
+    app.router.add_patch("/api/project/{pid}/stage/{sid}", patch_stage)
+    app.router.add_delete("/api/project/{pid}/stage/{sid}", delete_stage)
+    app.router.add_static("/", os.path.join(ROOT, "static"), show_index=False)
+    return app
+
+
+if __name__ == "__main__":
+    web.run_app(make_app(), host="0.0.0.0", port=int(os.environ.get("PORT", 8095)))

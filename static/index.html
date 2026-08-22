@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Задачи</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  /* Единая система: одна сетка отступов, один радиус, три размера текста.
+     Всё, что раньше расходилось между экранами, сведено сюда. */
+  :root{
+    --bg:#000; --card:#1c1c1e; --card-2:#2c2c2e; --sep:#38383a;
+    --text:#fff; --dim:#8e8e93; --blue:#0a84ff; --r:14px; --pad:16px;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; background:var(--bg); color:var(--text);
+    font:400 17px/1.32 -apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Arial,sans-serif}
+  body{padding:14px var(--pad) calc(104px + env(safe-area-inset-bottom))}
+  button{font:inherit}
+
+  /* --- типографика --- */
+  .h1{font-size:30px; font-weight:700; letter-spacing:-.6px; margin:6px 2px 14px}
+  .h2{font-size:22px; font-weight:700; letter-spacing:-.4px; margin:0}
+  .sect{font-size:13px; font-weight:500; color:var(--dim); letter-spacing:.3px;
+    text-transform:uppercase; margin:22px 4px 8px}
+  .sub{font-size:13px; color:var(--dim); margin-top:2px}
+
+  /* --- плитки сводки --- */
+  .tiles{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+  .tile{position:relative; border-radius:var(--r); padding:12px 14px; height:88px; border:0;
+    display:flex; flex-direction:column; justify-content:space-between; overflow:hidden;
+    text-align:left; color:#fff}
+  .tile .ic{width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,.22);
+    display:flex; align-items:center; justify-content:center}
+  .tile .n{position:absolute; right:14px; top:9px; font-size:30px; font-weight:700; letter-spacing:-.5px}
+  .tile .t{font-size:15px; font-weight:600}
+  .t-today{background:linear-gradient(180deg,#3b9bf0,#2b8ae0)}
+  .t-planned{background:linear-gradient(180deg,#f4776f,#e8635c)}
+  .t-all{background:linear-gradient(180deg,#48484a,#3a3a3c)}
+  .t-flag{background:linear-gradient(180deg,#f5b556,#eda344)}
+  .t-done{background:linear-gradient(180deg,#a7a9ae,#8e9196)}
+
+  /* --- иконки: контур, без эмодзи --- */
+  svg{display:block}
+  .ic svg{width:17px; height:17px}
+  .glyph svg{width:16px; height:16px}
+  .ic svg,.glyph svg{stroke:#fff; stroke-width:2.2; fill:none; stroke-linecap:round; stroke-linejoin:round}
+
+  /* --- карточки и строки: одна разметка на все экраны --- */
+  .card{background:var(--card); border-radius:var(--r); overflow:hidden}
+  .row{display:flex; align-items:center; gap:12px; min-height:52px; padding:8px 14px;
+    cursor:pointer; background:none; border:0; width:100%; color:var(--text); text-align:left}
+  .row + .row{box-shadow:inset 0 .5px 0 var(--sep)}
+  .row.on{background:rgba(10,132,255,.14)}
+  .row .body{flex:1; min-width:0}
+  .row .name{display:block; font-size:17px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .row .sub{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .row .count{color:var(--dim); font-size:17px}
+  .row .chev{color:#5a5a5e; font-size:15px}
+  .row .glyph{width:29px; height:29px; border-radius:50%; flex:none;
+    display:flex; align-items:center; justify-content:center; background:var(--card-2)}
+  .row .accent{color:var(--blue)}
+
+  /* --- аватарки --- */
+  .ava,.ava-l{width:29px; height:29px; border-radius:50%; flex:none}
+  .ava{object-fit:cover; display:block}
+  .ava-l{display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600}
+  .stack{display:flex; flex:none}
+  .stack > * + *{margin-left:-10px; box-shadow:0 0 0 2px var(--card)}
+
+  /* --- задачи --- */
+  .task{display:flex; align-items:flex-start; gap:12px; padding:11px 14px}
+  .task + .task{box-shadow:inset 0 .5px 0 var(--sep)}
+  .cb{width:22px; height:22px; border-radius:50%; border:1.5px solid #5a5a5e; flex:none;
+    margin-top:1px; cursor:pointer}
+  .cb.on{border-color:var(--blue); background:var(--blue); position:relative}
+  .cb.on::after{content:'✓'; position:absolute; inset:0; display:flex; align-items:center;
+    justify-content:center; font-size:13px; color:#fff}
+  .task .tx{flex:1; min-width:0}
+  .task.done .tx{color:var(--dim); text-decoration:line-through}
+  .task .flag svg{width:17px; height:17px; stroke:#f5a623; stroke-width:2; fill:none;
+    stroke-linecap:round; stroke-linejoin:round; margin-top:2px}
+  .empty{color:var(--dim); padding:20px 14px}
+
+  /* --- шапки --- */
+  .toprow{display:flex; align-items:center; justify-content:space-between; margin:24px 2px 10px}
+  .iconbtn{width:30px; height:30px; border-radius:50%; background:var(--card); border:0;
+    color:var(--blue); display:flex; align-items:center; justify-content:center; padding:0}
+  .iconbtn svg{width:16px; height:16px; stroke:var(--blue); stroke-width:2.4; fill:none;
+    stroke-linecap:round; stroke-linejoin:round}
+  .back{color:var(--blue); font-size:17px; background:none; border:0; padding:0; margin:2px 0 6px}
+
+  .screen{display:none}
+  .screen.on{display:block}
+
+  .fab{position:fixed; right:var(--pad); bottom:calc(22px + env(safe-area-inset-bottom));
+    width:56px; height:56px; border-radius:50%; background:var(--blue); border:0; color:#fff;
+    font-size:30px; line-height:1; box-shadow:0 8px 22px rgba(10,132,255,.4)}
+
+  /* --- модальное окно снизу, как системный лист --- */
+  .sheet{position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; z-index:20}
+  .sheet.on{display:block}
+  .sheet .box{position:absolute; left:0; right:0; bottom:0; background:#141416;
+    border-radius:20px 20px 0 0; padding:10px var(--pad) calc(20px + env(safe-area-inset-bottom));
+    max-height:92vh; overflow:auto}
+  .grab{width:36px; height:5px; border-radius:3px; background:#3a3a3c; margin:0 auto 12px}
+  .sheet h3{font-size:20px; font-weight:700; margin:0 2px 14px}
+  .field{background:var(--card); border-radius:12px; padding:10px 14px; margin-bottom:10px}
+  .field label{display:block; font-size:12px; color:var(--dim); margin-bottom:3px}
+  .field input,.field textarea{width:100%; background:none; border:0; color:var(--text);
+    font:inherit; padding:0; outline:none; resize:none}
+  .swatches{display:flex; gap:10px; flex-wrap:wrap; padding:12px 14px; background:var(--card);
+    border-radius:12px; margin-bottom:10px}
+  .sw{width:30px; height:30px; border-radius:50%; border:2px solid transparent; cursor:pointer}
+  .sw.on{border-color:#fff}
+  .segment{display:flex; background:var(--card); border-radius:12px; padding:4px; gap:4px; margin-bottom:10px}
+  .segment button{flex:1; padding:8px 0; border-radius:9px; border:0; background:none;
+    color:var(--dim); font-size:14px}
+  .segment button.on{background:var(--card-2); color:var(--text)}
+  /* шапка листа: крестик слева, галочка справа — как в «Напоминаниях» */
+  .sheet-head{display:flex; align-items:center; justify-content:space-between; margin:2px 0 16px}
+  .sheet-title{font-size:17px; font-weight:600}
+  .circle{width:38px; height:38px; border-radius:50%; border:0; background:var(--card-2);
+    color:var(--text); font-size:17px; display:flex; align-items:center; justify-content:center}
+  .circle.ok{background:#3a3a3c}
+
+  .card.pad{padding:2px 14px}
+  .line{width:100%; background:none; border:0; color:var(--text); font:inherit;
+    padding:12px 0; outline:none; resize:none; box-shadow:inset 0 -.5px 0 var(--sep)}
+  .line.big{font-size:19px}
+  .line.last{box-shadow:none}
+  .line::placeholder,textarea::placeholder{color:#6b6b70}
+  .row.static{cursor:default}
+  .row.hidden{display:none}
+  .hint{font-size:13px; color:var(--dim); margin:8px 6px 0; line-height:1.35}
+
+  /* переключатель в системном стиле */
+  .sw-t{position:relative; width:51px; height:31px; flex:none}
+  .sw-t input{opacity:0; width:0; height:0; position:absolute}
+  .sw-t span{position:absolute; inset:0; border-radius:999px; background:#39393d; transition:.18s}
+  .sw-t span::after{content:''; position:absolute; top:2px; left:2px; width:27px; height:27px;
+    border-radius:50%; background:#fff; transition:.18s}
+  .sw-t input:checked + span{background:#30d158}
+  .sw-t input:checked + span::after{transform:translateX(20px)}
+
+  /* роудмап: вертикальная линия с точками этапов */
+  .stage{display:flex; gap:12px; padding:12px 14px; position:relative; cursor:pointer;
+    background:none; border:0; width:100%; text-align:left; color:var(--text)}
+  .stage + .stage{box-shadow:inset 0 .5px 0 var(--sep)}
+  .stage .mark{width:22px; flex:none; display:flex; justify-content:center; position:relative}
+  .stage .mark i{width:11px; height:11px; border-radius:50%; background:#48484a; margin-top:5px;
+    display:block; z-index:1}
+  .stage.done .mark i{background:#30d158}
+  .stage.active .mark i{background:var(--blue); box-shadow:0 0 0 4px rgba(10,132,255,.25)}
+  .stage:not(:last-child) .mark::after{content:''; position:absolute; top:14px; bottom:-24px;
+    left:50%; width:2px; margin-left:-1px; background:var(--sep)}
+  .stage .body{flex:1; min-width:0}
+  .stage .name{display:block; font-size:17px}
+  .stage .sub{display:block}
+  .stage.done .name{color:var(--dim); text-decoration:line-through}
+  .badge{font-size:12px; padding:3px 9px; border-radius:999px; background:var(--card-2);
+    color:var(--dim); white-space:nowrap; align-self:flex-start; margin-top:2px}
+  .badge.active{background:rgba(10,132,255,.2); color:#5ab0ff}
+  .badge.done{background:rgba(48,209,88,.18); color:#4ee07a}
+
+  .donehead{background:none; color:var(--blue); padding:0 4px; min-height:auto; margin-top:22px}
+
+  .actions{display:flex; gap:10px; margin-top:6px}
+  .actions button{flex:1; padding:13px 0; border-radius:12px; border:0; font-size:17px; font-weight:600}
+  .btn-cancel{background:var(--card); color:var(--text)}
+  .btn-ok{background:var(--blue); color:#fff}
+  .danger{width:100%; margin-top:10px; padding:13px 0; border-radius:12px; border:0;
+    background:var(--card); color:#ff453a; font-size:17px}
+</style>
+</head>
+<body>
+
+<!-- ГЛАВНЫЙ ЭКРАН -->
+<div id="home" class="screen on">
+  <div class="tiles">
+    <button class="tile t-today"   data-f="today"><span class="ic" data-i="today"></span><span class="n" id="c-today">0</span><span class="t">Сегодня</span></button>
+    <button class="tile t-planned" data-f="planned"><span class="ic" data-i="planned"></span><span class="n" id="c-planned">0</span><span class="t">В планах</span></button>
+    <button class="tile t-all"     data-f="all"><span class="ic" data-i="all"></span><span class="n" id="c-all">0</span><span class="t">Все</span></button>
+    <button class="tile t-flag"    data-f="flagged"><span class="ic" data-i="flagged"></span><span class="n" id="c-flagged">0</span><span class="t">С флажком</span></button>
+    <button class="tile t-done"    data-f="done"><span class="ic" data-i="done"></span><span class="n" id="c-done">0</span><span class="t">Завершено</span></button>
+  </div>
+
+  <div class="toprow">
+    <div class="h2">Проекты</div>
+    <button class="iconbtn" id="btn-add-project" title="Новый проект"></button>
+  </div>
+  <div class="card" id="projects"></div>
+</div>
+
+<!-- ЭКРАН ПРОЕКТА -->
+<div id="project" class="screen">
+  <button class="back" onclick="go('home')">‹ Проекты</button>
+  <div class="h1" id="p-title">Проект</div>
+  <div class="sub" id="p-note" style="margin:-8px 2px 12px"></div>
+
+  <div id="p-team-wrap">
+    <div class="sect">Команда</div>
+    <div class="card" id="p-team"></div>
+  </div>
+
+  <div id="p-road-wrap">
+    <div class="sect">Роудмап</div>
+    <div class="card" id="p-road"></div>
+  </div>
+
+  <div class="sect" id="p-tasks-label">Задачи</div>
+  <div class="card" id="tasks"></div>
+
+  <div id="p-done-wrap">
+    <button class="row donehead" id="p-done-head"></button>
+    <div class="card" id="p-done" style="margin-top:8px"></div>
+  </div>
+
+  <button class="danger" id="p-delete">Удалить проект</button>
+</div>
+
+<button class="fab" onclick="openTaskSheet()">+</button>
+
+<!-- ЛИСТ: ПРОЕКТ -->
+<div class="sheet" id="sheet-project">
+  <div class="box">
+    <div class="grab"></div>
+    <h3>Новый проект</h3>
+    <div class="field"><label>Название</label><input id="pf-name" placeholder="Например, Коридор"></div>
+    <div class="field"><label>Описание</label><textarea id="pf-note" rows="2" placeholder="Пара слов, о чём проект"></textarea></div>
+    <div class="swatches" id="pf-colors"></div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeSheet('sheet-project')">Отмена</button>
+      <button class="btn-ok" onclick="saveProject()">Создать</button>
+    </div>
+  </div>
+</div>
+
+<!-- ЛИСТ: УЧАСТНИК -->
+<div class="sheet" id="sheet-member">
+  <div class="box">
+    <div class="grab"></div>
+    <h3>Участник проекта</h3>
+    <div class="segment" id="mf-kind"></div>
+    <div class="field"><label>Имя</label><input id="mf-name" placeholder="Как называем"></div>
+    <div class="field"><label>Роль</label><input id="mf-role" placeholder="Например, отвечает за продажи"></div>
+    <div class="field" id="mf-handle-wrap"><label>Ник в Телеграме</label><input id="mf-handle" placeholder="@username"></div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeSheet('sheet-member')">Отмена</button>
+      <button class="btn-ok" onclick="saveMember()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ЛИСТ: ЗАДАЧА -->
+<div class="sheet" id="sheet-task">
+  <div class="box">
+    <div class="sheet-head">
+      <button class="circle" onclick="closeSheet('sheet-task')">✕</button>
+      <div class="sheet-title">Новая задача</div>
+      <button class="circle ok" onclick="saveTask()">✓</button>
+    </div>
+
+    <div class="card pad">
+      <input class="line big" id="tf-title" placeholder="Название">
+      <textarea class="line" id="tf-note" rows="2" placeholder="Заметки"></textarea>
+      <input class="line last" id="tf-url" placeholder="Ссылка">
+    </div>
+
+    <div class="sect">Дата и срочность</div>
+    <div class="card">
+      <div class="row static">
+        <span class="glyph" data-i2="planned"></span>
+        <span class="body"><span class="name">Дата</span></span>
+        <label class="sw-t"><input type="checkbox" id="tg-date"><span></span></label>
+      </div>
+      <div class="row static hidden" id="row-date-val">
+        <span class="body"><input class="line last" type="date" id="tf-due"></span>
+      </div>
+      <div class="row static">
+        <span class="glyph" data-i2="clock"></span>
+        <span class="body"><span class="name">Время</span></span>
+        <label class="sw-t"><input type="checkbox" id="tg-time"><span></span></label>
+      </div>
+      <div class="row static hidden" id="row-time-val">
+        <span class="body"><input class="line last" type="time" id="tf-time"></span>
+      </div>
+      <div class="row static">
+        <span class="glyph" data-i2="alarm"></span>
+        <span class="body"><span class="name">Срочное</span></span>
+        <label class="sw-t"><input type="checkbox" id="tg-flag"><span></span></label>
+      </div>
+    </div>
+    <div class="hint">Срочная задача поднимается наверх и помечается флажком.</div>
+
+    <div class="sect">Другие параметры</div>
+    <div class="card">
+      <button class="row" onclick="openPicker('project')">
+        <span class="glyph" id="tf-project-glyph"></span>
+        <span class="body"><span class="name">Проект</span></span>
+        <span class="count" id="tf-project-name">Входящие</span><span class="chev">›</span>
+      </button>
+      <button class="row" onclick="openPicker('member')">
+        <span class="glyph" data-i2="human"></span>
+        <span class="body"><span class="name">Исполнитель</span></span>
+        <span class="count" id="tf-member-name">Не выбран</span><span class="chev">›</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ЛИСТ: ЭТАП -->
+<div class="sheet" id="sheet-stage">
+  <div class="box">
+    <div class="grab"></div>
+    <h3>Этап роудмапа</h3>
+    <div class="field"><label>Название</label><input id="sf-title" placeholder="Например, Закрытая бета"></div>
+    <div class="field"><label>Срок</label><input id="sf-date" type="date"></div>
+    <div class="segment" id="sf-status"></div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeSheet('sheet-stage')">Отмена</button>
+      <button class="btn-ok" onclick="saveStage()">Добавить</button>
+    </div>
+  </div>
+</div>
+
+<!-- ЛИСТ: ВЫБОР -->
+<div class="sheet" id="sheet-picker">
+  <div class="box">
+    <div class="grab"></div>
+    <h3 id="picker-title">Выбор</h3>
+    <div class="card" id="picker-list"></div>
+  </div>
+</div>
+
+<script>
+const tg = window.Telegram?.WebApp;
+tg?.ready(); tg?.expand();
+
+// Набор Lucide (лицензия ISC) — контурные иконки в духе SF Symbols.
+const svg = p => `<svg viewBox="0 0 24 24">${p}</svg>`;
+const ICONS = {
+  today: svg('<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/>'),
+  planned: svg('<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>'),
+  all: svg('<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>'),
+  flagged: svg('<path d="M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528"/>'),
+  done: svg('<path d="M20 6 9 17l-5-5"/>'),
+  plus: svg('<path d="M5 12h14"/><path d="M12 5v14"/>'),
+  folder: svg('<path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>'),
+  bot: svg('<path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>'),
+  agent: svg('<path d="M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/>'),
+  service: svg('<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/>'),
+  clock: svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
+  alarm: svg('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/>'),
+  link: svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
+  human: svg('<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
+};
+const KINDS = [
+  {id:'bot', label:'Телеграм-бот'},
+  {id:'agent', label:'ИИ-агент'},
+  {id:'service', label:'Сервис'},
+  {id:'human', label:'Человек'},
+];
+const COLORS = ['#0a84ff','#30d158','#bf5af2','#ff9f0a','#ff375f','#64d2ff','#a2845e','#ffd60a'];
+
+document.querySelectorAll('.ic[data-i]').forEach(el => el.innerHTML = ICONS[el.dataset.i] || '');
+document.getElementById('btn-add-project').innerHTML = ICONS.plus;
+document.querySelectorAll('[data-i2]').forEach(el => el.innerHTML = ICONS[el.dataset.i2] || '');
+
+let S = {projects: [], tasks: [], counts: {}};
+let view = {kind: null, id: null, title: '', member: null, showDone: false};
+let form = {color: COLORS[0], kind: 'bot', project: 'inbox', member: null};
+
+const api = (p, o) => fetch(p, o).then(r => r.json());
+const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+const today = () => new Date().toISOString().slice(0, 10);
+const project = id => S.projects.find(p => p.id === id);
+
+// у части участников фото нет — кружок с буквой, как это делает Телеграм
+function avatar(m, color){
+  if (m.avatar) return `<img class="ava" src="${m.avatar}" alt="">`;
+  const letter = (m.name || m.handle || '?').replace('@','').charAt(0).toUpperCase();
+  return `<div class="ava-l" style="background:${color || '#48484a'}">${esc(letter)}</div>`;
+}
+
+async function load(){
+  S = await api('/api/state');
+  for (const k of ['today','planned','all','flagged','done'])
+    document.getElementById('c-' + k).textContent = S.counts[k] ?? 0;
+
+  document.getElementById('projects').innerHTML = S.projects.map(p => `
+    <button class="row" onclick="openProject('${p.id}')">
+      ${p.members.length
+        ? `<span class="stack">${p.members.slice(0,3).map(m => avatar(m, p.color)).join('')}</span>`
+        : `<span class="glyph" style="background:${p.color}">${ICONS.folder}</span>`}
+      <span class="body">
+        <span class="name">${esc(p.name)}</span>
+        ${p.members.length ? `<span class="sub">${p.members.map(m => esc(m.role || m.name)).join(' · ')}</span>` : ''}
+      </span>
+      <span class="count">${p.count}</span><span class="chev">›</span>
+    </button>`).join('');
+
+  if (view.kind) render();
+}
+
+function filtered(){
+  const open = S.tasks.filter(t => !t.done);
+  if (view.kind === 'filter'){
+    if (view.id === 'today')   return open.filter(t => t.due && t.due <= today());
+    if (view.id === 'planned') return open.filter(t => t.due);
+    if (view.id === 'all')     return open;
+    if (view.id === 'flagged') return open.filter(t => t.flagged);
+    if (view.id === 'done')    return S.tasks.filter(t => t.done);
+  }
+  return open.filter(t => t.project === view.id && (!view.member || t.member === view.member));
+}
+
+function memberOf(task){
+  const p = project(task.project);
+  return p?.members.find(m => m.id === task.member) || null;
+}
+
+function render(){
+  const p = view.kind === 'project' ? project(view.id) : null;
+  document.getElementById('p-title').textContent = p ? p.name : view.title;
+  document.getElementById('p-note').textContent = p ? (p.note || '') : '';
+  document.getElementById('p-team-wrap').style.display = p ? 'block' : 'none';
+  document.getElementById('p-delete').style.display = p && p.id !== 'inbox' ? 'block' : 'none';
+
+  if (p){
+    const open = S.tasks.filter(t => !t.done && t.project === p.id);
+    document.getElementById('p-team').innerHTML =
+      p.members.map(m => `
+        <button class="row ${view.member === m.id ? 'on' : ''}"
+                onclick="pickMember('${view.member === m.id ? '' : m.id}')">
+          ${avatar(m, p.color)}
+          <span class="body">
+            <span class="name">${esc(m.name)}</span>
+            <span class="sub">${esc([m.role, m.handle].filter(Boolean).join(' · ') || kindLabel(m.kind))}</span>
+          </span>
+          <span class="count">${open.filter(t => t.member === m.id).length}</span>
+        </button>`).join('')
+      + `<button class="row" onclick="openMemberSheet()">
+           <span class="glyph">${ICONS.plus}</span>
+           <span class="body"><span class="name accent">Добавить участника</span></span>
+         </button>`;
+  }
+
+  // роудмап проекта
+  document.getElementById('p-road-wrap').style.display = p ? 'block' : 'none';
+  if (p){
+    const road = p.roadmap || [];
+    document.getElementById('p-road').innerHTML =
+      road.map(st => `
+        <button class="stage ${st.status}" onclick="cycleStage('${st.id}')">
+          <span class="mark"><i></i></span>
+          <span class="body">
+            <span class="name">${esc(st.title)}</span>
+            ${st.date ? `<span class="sub">${esc(st.date)}</span>` : ''}
+          </span>
+          <span class="badge ${st.status}">${STATUS_LABEL[st.status]}</span>
+        </button>`).join('')
+      + `<button class="row" onclick="openStageSheet()">
+           <span class="glyph">${ICONS.plus}</span>
+           <span class="body"><span class="name accent">Добавить этап</span></span>
+         </button>`;
+  }
+
+  // выполненные задачи проекта — под списком, сворачиваются
+  const doneWrap = document.getElementById('p-done-wrap');
+  const doneTasks = p ? S.tasks.filter(t => t.done && t.project === p.id) : [];
+  doneWrap.style.display = p && doneTasks.length ? 'block' : 'none';
+  if (p && doneTasks.length){
+    document.getElementById('p-done-head').innerHTML =
+      `<span class="body"><span class="name accent">${view.showDone ? 'Скрыть' : 'Показать'} выполненные · ${doneTasks.length}</span></span>`;
+    document.getElementById('p-done').style.display = view.showDone ? 'block' : 'none';
+    document.getElementById('p-done').innerHTML = doneTasks.map(t => taskRow(t, p)).join('');
+  }
+
+  document.getElementById('p-tasks-label').textContent = view.member ? 'Задачи участника' : 'Задачи';
+
+  const rows = filtered();
+  document.getElementById('tasks').innerHTML =
+    rows.length ? rows.map(t => taskRow(t)).join('') : '<div class="empty">Пусто</div>';
+}
+
+function taskRow(t){
+  const m = memberOf(t);
+  const when = [t.due, t.time].filter(Boolean).join(' ');
+  const parts = [view.kind === 'filter' ? project(t.project)?.name : null,
+                 m ? (m.handle || m.name) : null, when || null].filter(Boolean);
+  return `
+    <div class="task ${t.done ? 'done' : ''}">
+      <div class="cb ${t.done ? 'on' : ''}" onclick="toggle('${t.id}')"></div>
+      <div class="tx">${esc(t.title)}
+        ${parts.length ? `<div class="sub">${esc(parts.join(' · '))}</div>` : ''}
+        ${t.note ? `<div class="sub">${esc(t.note)}</div>` : ''}
+        ${t.url ? `<a class="sub accent" href="${esc(t.url)}" target="_blank" rel="noreferrer">${esc(t.url)}</a>` : ''}
+      </div>
+      ${t.flagged ? `<div class="flag">${ICONS.flagged}</div>` : ''}
+    </div>`;
+}
+
+const kindLabel = id => (KINDS.find(k => k.id === id) || {}).label || '';
+
+const STATUS_LABEL = {planned: 'Запланирован', active: 'В работе', done: 'Готово'};
+const STATUS_NEXT = {planned: 'active', active: 'done', done: 'planned'};
+
+document.getElementById('p-done-head').onclick = () => { view.showDone = !view.showDone; render(); };
+
+async function cycleStage(sid){
+  const p = project(view.id);
+  const st = p.roadmap.find(x => x.id === sid);
+  tg?.HapticFeedback?.impactOccurred('light');
+  await api(`/api/project/${p.id}/stage/${sid}`, {method:'PATCH',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({status: STATUS_NEXT[st.status]})});
+  await load();
+}
+
+function openStageSheet(){
+  form.status = 'planned';
+  document.getElementById('sf-title').value = '';
+  document.getElementById('sf-date').value = '';
+  renderStatuses();
+  openSheet('sheet-stage');
+}
+
+function renderStatuses(){
+  document.getElementById('sf-status').innerHTML = Object.keys(STATUS_LABEL).map(k =>
+    `<button class="${k === form.status ? 'on' : ''}" data-s="${k}">${STATUS_LABEL[k]}</button>`).join('');
+  document.querySelectorAll('#sf-status button').forEach(b => b.onclick = () => {
+    form.status = b.dataset.s; renderStatuses();
+  });
+}
+
+async function saveStage(){
+  const title = document.getElementById('sf-title').value.trim();
+  if (!title) return;
+  await api(`/api/project/${view.id}/stage`, {method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({title, date: document.getElementById('sf-date').value || null,
+                          status: form.status})});
+  closeSheet('sheet-stage');
+  await load();
+}
+
+function go(id){
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  if (id === 'home') view = {kind: null, id: null, title: '', member: null};
+}
+
+function openProject(id){
+  view = {kind: 'project', id, title: project(id)?.name || 'Проект', member: null};
+  render(); go('project');
+}
+
+function pickMember(id){ view.member = id || null; render(); }
+
+document.querySelectorAll('.tile').forEach(el => el.onclick = () => {
+  view = {kind: 'filter', id: el.dataset.f, title: el.querySelector('.t').textContent, member: null};
+  render(); go('project');
+});
+
+async function toggle(id){
+  tg?.HapticFeedback?.impactOccurred('light');
+  await api('/api/task/' + id + '/toggle', {method: 'POST'});
+  await load();
+}
+
+/* ---------- листы ---------- */
+const openSheet = id => document.getElementById(id).classList.add('on');
+const closeSheet = id => document.getElementById(id).classList.remove('on');
+document.querySelectorAll('.sheet').forEach(s => s.onclick = e => {
+  if (e.target === s) s.classList.remove('on');
+});
+
+document.getElementById('btn-add-project').onclick = () => {
+  form.color = COLORS[S.projects.length % COLORS.length];
+  document.getElementById('pf-name').value = '';
+  document.getElementById('pf-note').value = '';
+  document.getElementById('pf-colors').innerHTML = COLORS.map(c =>
+    `<div class="sw ${c === form.color ? 'on' : ''}" style="background:${c}" data-c="${c}"></div>`).join('');
+  document.querySelectorAll('#pf-colors .sw').forEach(el => el.onclick = () => {
+    form.color = el.dataset.c;
+    document.querySelectorAll('#pf-colors .sw').forEach(x => x.classList.toggle('on', x === el));
+  });
+  openSheet('sheet-project');
+};
+
+async function saveProject(){
+  const name = document.getElementById('pf-name').value.trim();
+  if (!name) return;
+  const p = await api('/api/project', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, color: form.color, note: document.getElementById('pf-note').value.trim()})});
+  closeSheet('sheet-project');
+  await load();
+  openProject(p.id);
+}
+
+function openMemberSheet(){
+  if (view.kind !== 'project') return;
+  form.kind = 'bot';
+  ['mf-name','mf-role','mf-handle'].forEach(id => document.getElementById(id).value = '');
+  renderKinds();
+  openSheet('sheet-member');
+}
+
+function renderKinds(){
+  document.getElementById('mf-kind').innerHTML = KINDS.map(k =>
+    `<button class="${k.id === form.kind ? 'on' : ''}" data-k="${k.id}">${k.label}</button>`).join('');
+  document.querySelectorAll('#mf-kind button').forEach(b => b.onclick = () => {
+    form.kind = b.dataset.k; renderKinds();
+    document.getElementById('mf-handle-wrap').style.display = form.kind === 'bot' ? 'block' : 'none';
+  });
+  document.getElementById('mf-handle-wrap').style.display = form.kind === 'bot' ? 'block' : 'none';
+}
+
+async function saveMember(){
+  const name = document.getElementById('mf-name').value.trim();
+  const handle = document.getElementById('mf-handle').value.trim();
+  if (!name && !handle) return;
+  await api(`/api/project/${view.id}/member`, {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({name, handle, role: document.getElementById('mf-role').value.trim(), kind: form.kind})});
+  closeSheet('sheet-member');
+  await load();
+}
+
+// экран новой задачи повторяет «Новое напоминание»: поля, переключатели, параметры
+function openTaskSheet(){
+  form.project = view.kind === 'project' ? view.id : 'inbox';
+  form.member = view.kind === 'project' ? view.member : null;
+
+  ['tf-title','tf-note','tf-url','tf-time'].forEach(id => document.getElementById(id).value = '');
+  const wantDate = view.id === 'today' || view.kind === 'filter' && view.id === 'planned';
+  document.getElementById('tf-due').value = wantDate ? today() : '';
+  document.getElementById('tg-date').checked = wantDate;
+  document.getElementById('tg-time').checked = false;
+  document.getElementById('tg-flag').checked = view.id === 'flagged';
+  syncToggles();
+  renderTaskParams();
+  openSheet('sheet-task');
+}
+
+function syncToggles(){
+  document.getElementById('row-date-val').classList.toggle('hidden', !document.getElementById('tg-date').checked);
+  document.getElementById('row-time-val').classList.toggle('hidden', !document.getElementById('tg-time').checked);
+  if (document.getElementById('tg-date').checked && !document.getElementById('tf-due').value)
+    document.getElementById('tf-due').value = today();
+}
+['tg-date','tg-time'].forEach(id => document.getElementById(id).onchange = syncToggles);
+
+function renderTaskParams(){
+  const p = project(form.project);
+  document.getElementById('tf-project-name').textContent = p ? p.name : 'Входящие';
+  document.getElementById('tf-project-glyph').innerHTML = ICONS.folder;
+  document.getElementById('tf-project-glyph').style.background = p ? p.color : 'var(--card-2)';
+  const m = p?.members.find(x => x.id === form.member);
+  document.getElementById('tf-member-name').textContent = m ? m.name : 'Не выбран';
+}
+
+function openPicker(what){
+  const title = what === 'project' ? 'Проект' : 'Исполнитель';
+  document.getElementById('picker-title').textContent = title;
+  const list = document.getElementById('picker-list');
+
+  if (what === 'project'){
+    list.innerHTML = S.projects.map(p => `
+      <button class="row" onclick="pick('project','${p.id}')">
+        <span class="glyph" style="background:${p.color}">${ICONS.folder}</span>
+        <span class="body"><span class="name">${esc(p.name)}</span></span>
+        ${p.id === form.project ? '<span class="count accent">✓</span>' : ''}
+      </button>`).join('');
+  } else {
+    const p = project(form.project);
+    const rows = (p?.members || []).map(m => `
+      <button class="row" onclick="pick('member','${m.id}')">
+        ${avatar(m, p.color)}
+        <span class="body"><span class="name">${esc(m.name)}</span>
+          <span class="sub">${esc(m.role || kindLabel(m.kind))}</span></span>
+        ${m.id === form.member ? '<span class="count accent">✓</span>' : ''}
+      </button>`).join('');
+    list.innerHTML = `<button class="row" onclick="pick('member','')">
+        <span class="glyph">${ICONS.human}</span>
+        <span class="body"><span class="name">Не выбран</span></span>
+        ${!form.member ? '<span class="count accent">✓</span>' : ''}
+      </button>` + rows;
+  }
+  openSheet('sheet-picker');
+}
+
+function pick(what, id){
+  if (what === 'project'){ form.project = id; form.member = null; }
+  else form.member = id || null;
+  closeSheet('sheet-picker');
+  renderTaskParams();
+}
+
+async function saveTask(){
+  const title = document.getElementById('tf-title').value.trim();
+  if (!title) return;
+  const body = {
+    title,
+    note: document.getElementById('tf-note').value.trim(),
+    url: document.getElementById('tf-url').value.trim(),
+    project: form.project,
+    member: form.member,
+    due: document.getElementById('tg-date').checked ? document.getElementById('tf-due').value || null : null,
+    time: document.getElementById('tg-time').checked ? document.getElementById('tf-time').value || null : null,
+    flagged: document.getElementById('tg-flag').checked,
+  };
+  await api('/api/task', {method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(body)});
+  closeSheet('sheet-task');
+  await load();
+}
+
+document.getElementById('p-delete').onclick = async () => {
+  if (view.kind !== 'project' || !confirm('Удалить проект вместе с задачами?')) return;
+  await fetch('/api/project/' + view.id, {method: 'DELETE'});
+  go('home'); await load();
+};
+
+load();
+setInterval(() => { if (!document.querySelector('.sheet.on')) load(); }, 15000);
+</script>
+</body>
+</html>
