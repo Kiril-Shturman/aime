@@ -1,0 +1,17 @@
+{
+  "id": "telegram-business",
+  "name": "Telegram Business Ingress",
+  "description": "Receives Telegram Business Bot API updates, archives normalized events, and queues them for aiMe's next turn.",
+  "activation": {"onStartup": true},
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["secretToken"],
+    "properties": {
+      "secretToken": {"type": "string", "minLength": 16},
+      "sessionKey": {"type": "string", "default": "agent:main:main"},
+      "archivePath": {"type": "string", "default": "memory/telegram-business.jsonl"},
+      "maxBodyBytes": {"type": "integer", "minimum": 1024, "maximum": 1048576, "default": 262144}
+    }
+  }
+}
