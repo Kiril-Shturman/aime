@@ -6,7 +6,7 @@ _Learn about the person you're helping. Update this as you go._
 - **What to call them:**
 - **Pronouns:** _(optional)_
 - **Timezone:**
-- **Notes:**
+- **Notes:** Предпочитает, чтобы ответы в Telegram использовали Rich Messages осмысленно: секции, списки, выделения, таблицы, details и кнопки, когда они улучшают подачу; короткие простые ответы оставлять обычным текстом.
 
 ## Context
 
