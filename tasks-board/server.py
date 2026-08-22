@@ -9,7 +9,8 @@
 
 API минимальный, чтобы им мог пользоваться агент:
   GET    /api/state                    — всё сразу: сводка, проекты, задачи
-  POST   /api/task                     — {title, note, url, project, member, due, time, flagged}
+  POST   /api/task                     — {title, note, url, project, member, stage, due, time, flagged}
+  PATCH  /api/task/<id>                — {title, note, status, member, stage, report, due, time, flagged}
   POST   /api/task/<id>/toggle         — отметить/снять отметку
   DELETE /api/task/<id>
   POST   /api/project                  — {name, color, note, members:[…]}
@@ -34,6 +35,7 @@ DATA = os.path.join(ROOT, "data.json")
 
 KINDS = ("bot", "agent", "service", "human")
 STAGES = ("planned", "active", "done")
+TASK_STATUS = ("todo", "doing", "done")
 
 DEFAULT = {
     "projects": [
@@ -75,6 +77,12 @@ def migrate(state):
             t["member"] = t.pop("bot")
             changed = True
         t.setdefault("member", None)
+        if "status" not in t:
+            # раньше был только флаг «сделано», теперь три состояния
+            t["status"] = "done" if t.get("done") else "todo"
+            changed = True
+        t.setdefault("stage", None)
+        t.setdefault("report", "")
     if changed:
         save(state)
     return state
@@ -116,7 +124,22 @@ async def get_state(request):
     for t in state["tasks"]:
         if not t.get("done"):
             per_project[t["project"]] = per_project.get(t["project"], 0) + 1
-    projects = [dict(p, count=per_project.get(p["id"], 0)) for p in state["projects"]]
+
+    # у каждого этапа считаем, сколько его задач закрыто: «3 из 10»
+    per_stage = {}
+    for t in state["tasks"]:
+        if not t.get("stage"):
+            continue
+        got = per_stage.setdefault(t["stage"], {"done": 0, "total": 0})
+        got["total"] += 1
+        if t.get("done"):
+            got["done"] += 1
+
+    projects = []
+    for p in state["projects"]:
+        roadmap = [dict(st, progress=per_stage.get(st["id"], {"done": 0, "total": 0}))
+                   for st in p["roadmap"]]
+        projects.append(dict(p, roadmap=roadmap, count=per_project.get(p["id"], 0)))
     return web.json_response(
         {"projects": projects, "tasks": state["tasks"], "counts": counts(state)}
     )
@@ -153,6 +176,9 @@ async def add_task(request):
         "note": (body.get("note") or "").strip(),
         "project": project,
         "member": body.get("member") if body.get("member") in members else None,
+        "stage": body.get("stage") or None,
+        "status": body.get("status") if body.get("status") in TASK_STATUS else "todo",
+        "report": (body.get("report") or "").strip(),
         "url": (body.get("url") or "").strip(),
         "due": body.get("due") or None,
         "time": body.get("time") or None,
@@ -165,11 +191,35 @@ async def add_task(request):
     return web.json_response(task)
 
 
+async def patch_task(request):
+    body = await request.json()
+    state = load()
+    for t in state["tasks"]:
+        if t["id"] != request.match_info["tid"]:
+            continue
+        for key in ("title", "note", "report", "url"):
+            if key in body:
+                t[key] = (body[key] or "").strip()
+        for key in ("due", "time", "stage", "member"):
+            if key in body:
+                t[key] = body[key] or None
+        if "flagged" in body:
+            t["flagged"] = bool(body["flagged"])
+        if body.get("status") in TASK_STATUS:
+            t["status"] = body["status"]
+            t["done"] = t["status"] == "done"
+            t["done_at"] = int(time.time()) if t["done"] else None
+        save(state)
+        return web.json_response(t)
+    raise web.HTTPNotFound()
+
+
 async def toggle_task(request):
     state = load()
     for t in state["tasks"]:
         if t["id"] == request.match_info["tid"]:
             t["done"] = not t.get("done")
+            t["status"] = "done" if t["done"] else "todo"
             t["done_at"] = int(time.time()) if t["done"] else None
             save(state)
             return web.json_response(t)
@@ -293,9 +343,13 @@ async def delete_stage(request):
     state = load()
     p = find_project(state, request.match_info["pid"])
     before = len(p["roadmap"])
-    p["roadmap"] = [s for s in p["roadmap"] if s["id"] != request.match_info["sid"]]
+    sid = request.match_info["sid"]
+    p["roadmap"] = [s for s in p["roadmap"] if s["id"] != sid]
     if len(p["roadmap"]) == before:
         raise web.HTTPNotFound()
+    for t in state["tasks"]:
+        if t.get("stage") == sid:
+            t["stage"] = None
     save(state)
     return web.json_response({"ok": True})
 
@@ -309,6 +363,7 @@ def make_app():
     app.router.add_get("/", index)
     app.router.add_get("/api/state", get_state)
     app.router.add_post("/api/task", add_task)
+    app.router.add_patch("/api/task/{tid}", patch_task)
     app.router.add_post("/api/task/{tid}/toggle", toggle_task)
     app.router.add_delete("/api/task/{tid}", delete_task)
     app.router.add_post("/api/project", add_project)
