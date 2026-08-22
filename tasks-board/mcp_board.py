@@ -27,7 +27,8 @@ def call(path, method="GET", body=None):
     req = urllib.request.Request(
         BOARD + path,
         data=json.dumps(body).encode() if body is not None else None,
-        headers={"Content-Type": "application/json"},
+        # помечаемся, чтобы доска не будила агента на его же записи
+        headers={"Content-Type": "application/json", "X-Actor": "agent"},
         method=method,
     )
     with urllib.request.urlopen(req, timeout=20) as resp:

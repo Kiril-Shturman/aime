@@ -26,6 +26,9 @@ API минимальный, чтобы им мог пользоваться аг
 """
 import json
 import os
+import shlex
+import subprocess
+import threading
 import time
 import uuid
 from datetime import date
@@ -34,6 +37,40 @@ from aiohttp import web
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, "data.json")
+
+# Разбудить агента сразу, как только человек поставил цель или задачу.
+# Ждать расписания незачем: работа появилась — иди работай.
+TRIGGER_CMD = os.environ.get("LOOP_TRIGGER_CMD", "")
+TRIGGER_GAP = int(os.environ.get("LOOP_TRIGGER_GAP", "60"))   # не чаще раза в минуту
+_last_trigger = 0.0
+_trigger_lock = threading.Lock()
+
+
+def wake_agent(reason):
+    """Пинок агенту. Тихий: доска не должна падать из-за недоступного сервера."""
+    if not TRIGGER_CMD:
+        return
+    global _last_trigger
+    with _trigger_lock:
+        if time.time() - _last_trigger < TRIGGER_GAP:
+            return
+        _last_trigger = time.time()
+
+    def run():
+        try:
+            subprocess.run(shlex.split(TRIGGER_CMD), timeout=60,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            print(f"[loop] разбудили агента: {reason}", flush=True)
+        except Exception as exc:
+            print(f"[loop] разбудить не вышло: {exc}", flush=True)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
+def by_agent(request):
+    """Записи самого агента не будят его же — иначе получится вечный круг."""
+    return request.headers.get("X-Actor", "").lower() == "agent"
+
 
 KINDS = ("bot", "agent", "service", "human")
 STAGES = ("planned", "active", "done")
@@ -193,6 +230,8 @@ async def add_task(request):
     }
     state["tasks"].insert(0, task)
     save(state)
+    if not by_agent(request):
+        wake_agent(f"новая задача: {task['title']}")
     return web.json_response(task)
 
 
@@ -331,6 +370,8 @@ async def add_goal(request):
     }
     project["roadmap"].append(stage)
     save(state)
+    if not by_agent(request):
+        wake_agent(f"новая цель: {stage['title']}")
     return web.json_response({"project": project["id"], "stage": stage})
 
 
