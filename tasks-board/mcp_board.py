@@ -67,6 +67,10 @@ def tool_overview(args):
             continue
         roles = ", ".join(f"{m['name']} — {m['role'] or 'без роли'}" for m in p["members"])
         lines.append(f"\n{p['name']} ({p['count']} открытых){' · ' + roles if roles else ''}")
+        if p.get("path"):
+            lines.append(f"  исходники: {p['path']}")
+        elif p.get("repo"):
+            lines.append(f"  репозиторий: {p['repo']} (локальной копии нет — клонируй в ~/projects)")
         for stage in p.get("roadmap", []):
             pr = stage.get("progress") or {}
             mark = {"planned": "запланирован", "active": "в работе", "done": "готово"}[stage["status"]]
