@@ -464,6 +464,47 @@ async def delete_stage(request):
     return web.json_response({"ok": True})
 
 
+# Кнопки вместо команд: мини-аппа дёргает те же действия, что раньше
+# набирались в чате как /status и /doctor. Список закрытый — что не здесь,
+# то через кнопку не запустить.
+OPENCLAW = os.environ.get("OPENCLAW_BIN", "/home/ubuntu/.npm-global/bin/openclaw")
+LOOP_JOB = os.environ.get("LOOP_JOB_ID", "")
+
+COMMANDS = {
+    "status":   {"label": "Статус", "argv": [OPENCLAW, "status", "--plain"]},
+    "health":   {"label": "Здоровье", "argv": [OPENCLAW, "health"]},
+    "models":   {"label": "Модель", "argv": [OPENCLAW, "models", "status", "--plain"]},
+    "loop":     {"label": "Прогнать цикл", "argv": [OPENCLAW, "cron", "run", LOOP_JOB]},
+    "cron":     {"label": "Расписание", "argv": [OPENCLAW, "cron", "status"]},
+    "channels": {"label": "Каналы", "argv": [OPENCLAW, "channels", "status"]},
+}
+
+
+async def list_commands(request):
+    return web.json_response({"commands": [{"id": k, "label": v["label"]}
+                                           for k, v in COMMANDS.items()]})
+
+
+async def run_command(request):
+    cmd = COMMANDS.get(request.match_info["cid"])
+    if not cmd or not cmd["argv"][-1]:
+        raise web.HTTPNotFound()
+
+    def run():
+        try:
+            out = subprocess.run(cmd["argv"], capture_output=True, text=True, timeout=120)
+            text = (out.stdout or out.stderr or "").strip()
+        except subprocess.TimeoutExpired:
+            text = "Команда думала слишком долго и была прервана."
+        except Exception as exc:
+            text = f"Не получилось: {exc}"
+        # выбрасываем служебный шум про плагины — человеку он ничего не говорит
+        return "\n".join(l for l in text.splitlines() if "plugins.allow" not in l)[:3000] or "Пусто"
+
+    text = await request.loop.run_in_executor(None, run)
+    return web.json_response({"label": cmd["label"], "text": text})
+
+
 async def index(request):
     return web.FileResponse(os.path.join(ROOT, "static", "index.html"))
 
@@ -472,6 +513,8 @@ def make_app():
     app = web.Application()
     app.router.add_get("/", index)
     app.router.add_get("/api/state", get_state)
+    app.router.add_get("/api/commands", list_commands)
+    app.router.add_post("/api/command/{cid}", run_command)
     app.router.add_post("/api/task", add_task)
     app.router.add_patch("/api/task/{tid}", patch_task)
     app.router.add_post("/api/task/{tid}/toggle", toggle_task)

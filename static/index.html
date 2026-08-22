@@ -116,6 +116,10 @@
   .searchbar.on{display:block}
   .searchbar input{width:100%; background:var(--card); border:0; border-radius:12px;
     padding:11px 14px; color:#fff; font:inherit; outline:none}
+  .out{margin:0; padding:14px; background:var(--card); border-radius:12px;
+    font:400 13px/1.45 ui-monospace,"SF Mono",Menlo,monospace; color:#dfe3ea;
+    white-space:pre-wrap; word-break:break-word; max-height:60vh; overflow:auto}
+
   .found-label{font-size:13px; color:var(--dim); margin:0 4px 8px}
 
   /* --- шапки --- */
@@ -401,6 +405,16 @@
         <span class="count" id="tf-member-name">Не выбран</span><span class="chev">›</span>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- ЛИСТ: ОТВЕТ КОМАНДЫ -->
+<div class="sheet" id="sheet-out">
+  <div class="box">
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    <h3 id="out-title">Агент</h3>
+    <pre class="out" id="out-text">…</pre>
   </div>
 </div>
 
@@ -827,6 +841,9 @@ function openMenu(anchor, items){
 
 document.getElementById('btn-home-menu').onclick = e => openMenu(e.currentTarget, [
   {label: 'Поставить цель', icon: 'flagged', run: () => openGoalSheet(null)},
+  {label: 'Прогнать цикл', icon: 'refresh', run: () => runCommand('loop')},
+  {label: 'Статус агента', icon: 'bot', run: () => runCommand('status')},
+  {label: 'Ещё команды', icon: 'dots', run: () => openCommandsMenu()},
   {label: 'Обновить', icon: 'refresh', run: () => load()},
   {label: 'Показать выполненные', icon: 'done', run: () => {
     view = {kind: 'filter', id: 'done', title: 'Завершено', member: null};
@@ -855,6 +872,28 @@ document.getElementById('btn-project-menu').onclick = e => {
 function repoUrl(repo){
   const m = repo.match(/^git@([^:]+):(.+?)(\.git)?$/);
   return m ? `https://${m[1]}/${m[2]}` : repo;
+}
+
+/* ---------- команды агента вместо списка «слэшей» в чате ---------- */
+async function openCommandsMenu(){
+  const {commands} = await api('/api/commands');
+  openMenu(document.getElementById('btn-home-menu'),
+    commands.map(c => ({label: c.label, icon: 'bot', run: () => runCommand(c.id)})));
+}
+
+async function runCommand(id){
+  document.getElementById('out-title').textContent = 'Выполняю…';
+  document.getElementById('out-text').textContent = '…';
+  openSheet('sheet-out');
+  try {
+    const out = await api('/api/command/' + id, {method: 'POST'});
+    document.getElementById('out-title').textContent = out.label;
+    document.getElementById('out-text').textContent = out.text;
+    haptic('success');
+  } catch (e) {
+    document.getElementById('out-title').textContent = 'Не вышло';
+    document.getElementById('out-text').textContent = String(e);
+  }
 }
 
 /* ---------- поиск ---------- */
