@@ -22,7 +22,7 @@ python3 avatars.py           # подтянуть аватарки участн�
 ## Модель данных
 
 ```
-проект   { id, name, color, note, members[], roadmap[] }
+проект   { id, name, color, note, repo, members[], roadmap[] }
 участник { id, name, handle, role, kind: bot|agent|service|human, avatar }
 этап     { id, title, date, status: planned|active|done, progress {done,total} }
 задача   { id, title, note, report, url, project, stage, member,
@@ -44,8 +44,8 @@ python3 avatars.py           # подтянуть аватарки участн�
 | PATCH | `/api/task/<id>` | `{title, note, status, stage, member, report, due, time, flagged}` |
 | POST | `/api/task/<id>/toggle` | отметить выполненной и обратно |
 | DELETE | `/api/task/<id>` | удалить |
-| POST | `/api/project` | `{name, color, note, members[]}` |
-| PATCH | `/api/project/<id>` | `{name, color, note}` |
+| POST | `/api/project` | `{name, color, note, repo, members[]}` |
+| PATCH | `/api/project/<id>` | `{name, color, note, repo}` |
 | DELETE | `/api/project/<id>` | вместе с задачами |
 | POST | `/api/project/<id>/member` | `{name, handle, role, kind}` |
 | DELETE | `/api/project/<id>/member/<mid>` | убрать участника |
