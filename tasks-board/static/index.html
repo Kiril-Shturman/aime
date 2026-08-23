@@ -261,7 +261,7 @@
 
   .donehead{background:none; color:var(--blue); padding:0 4px; min-height:auto; margin-top:22px}
 
-  .actions{display:grid; grid-template-columns:auto 1fr; gap:10px; margin-top:16px}
+  .actions{display:grid; grid-template-columns:1fr; gap:10px; margin-top:18px}
   .actions button{height:46px; border-radius:999px; border:0; font-size:15px; font-weight:700;
     transition:background .15s, transform .12s}
   .actions button:active{transform:scale(.96)}
@@ -345,7 +345,6 @@
     <div class="field"><label>Репозиторий</label><input id="pf-repo" placeholder="git@github.com:… или ссылка"></div>
     <div class="swatches" id="pf-colors"></div>
     <div class="actions">
-      <button class="btn-cancel" onclick="closeSheet('sheet-project')">Отмена</button>
       <button class="btn-ok" onclick="saveProject()">Создать</button>
     </div>
   </div>
@@ -362,7 +361,6 @@
     <div class="field"><label>Роль</label><input id="mf-role" placeholder="Например, отвечает за продажи"></div>
     <div class="field" id="mf-handle-wrap"><label>Ник в Телеграме</label><input id="mf-handle" placeholder="@username"></div>
     <div class="actions">
-      <button class="btn-cancel" onclick="closeSheet('sheet-member')">Отмена</button>
       <button class="btn-ok" onclick="saveMember()">Добавить</button>
     </div>
   </div>
@@ -444,14 +442,18 @@
     <h3 id="si-title">Этап</h3>
     <div class="sub" id="si-meta" style="margin:-8px 2px 14px"></div>
 
-    <div class="sect">Статус</div>
-    <div class="segment" id="si-status"></div>
+    <div class="card" style="margin-bottom:4px">
+      <button class="row" onclick="openStagePicker()">
+        <span class="glyph" data-i2="flagged"></span>
+        <span class="body"><span class="name">Статус</span></span>
+        <span class="count" id="si-status-name">Запланирован</span><span class="chev">›</span>
+      </button>
+    </div>
 
     <div class="sect">Задачи этапа</div>
     <div class="card" id="si-tasks"></div>
 
     <div class="actions">
-      <button class="btn-cancel" onclick="closeSheet('sheet-stage-info')">Закрыть</button>
       <button class="btn-ok" onclick="saveStageInfo()">Сохранить</button>
     </div>
     <button class="danger" onclick="deleteStage()">Удалить этап</button>
@@ -469,7 +471,6 @@
     <div class="field"><label>Адрес</label><input id="gitf-repo" placeholder="git@github.com:user/repo.git"></div>
     <div class="field"><label>Ветка (необязательно)</label><input id="gitf-branch" placeholder="main"></div>
     <div class="actions">
-      <button class="btn-cancel" onclick="closeSheet('sheet-git')">Отмена</button>
       <button class="btn-ok" id="gitf-ok" onclick="connectGit()">Подключить</button>
     </div>
   </div>
@@ -495,7 +496,6 @@
       </button>
     </div>
     <div class="actions">
-      <button class="btn-cancel" onclick="closeSheet('sheet-goal')">Отмена</button>
       <button class="btn-ok" onclick="saveGoal()">Поставить цель</button>
     </div>
   </div>
@@ -510,7 +510,6 @@
     <div class="field"><label>Название</label><input id="sf-title" placeholder="Например, Закрытая бета"></div>
     <div class="field"><label>Срок</label><input id="sf-date" type="date"></div>
     <div class="actions">
-      <button class="btn-cancel" onclick="closeSheet('sheet-stage')">Отмена</button>
       <button class="btn-ok" onclick="saveStage()">Добавить</button>
     </div>
   </div>
@@ -527,11 +526,13 @@
       <input class="line big last" id="ef-title" placeholder="Название">
     </div>
 
-    <div class="sect">Статус</div>
-    <div class="segment" id="ef-status"></div>
-
     <div class="sect">Куда относится</div>
     <div class="card">
+      <button class="row" onclick="openPicker('status', true)">
+        <span class="glyph" data-i2="done"></span>
+        <span class="body"><span class="name">Статус</span></span>
+        <span class="count" id="ef-status-name">Не начата</span><span class="chev">›</span>
+      </button>
       <button class="row" onclick="openPicker('stage', true)">
         <span class="glyph" data-i2="flagged"></span>
         <span class="body"><span class="name">Этап</span></span>
@@ -556,7 +557,6 @@
     </div>
 
     <div class="actions">
-      <button class="btn-cancel" onclick="closeSheet('sheet-edit')">Отмена</button>
       <button class="btn-ok" onclick="saveEdit()">Сохранить</button>
     </div>
     <button class="danger" onclick="deleteTask()">Удалить задачу</button>
@@ -893,11 +893,24 @@ function openStageInfo(sid){
 }
 
 function renderStageStatus(){
-  document.getElementById('si-status').innerHTML = Object.keys(STATUS_LABEL).map(k =>
-    `<button class="${k === stageOpen.status ? 'on' : ''}" data-s="${k}">${STATUS_LABEL[k]}</button>`).join('');
-  document.querySelectorAll('#si-status button').forEach(b => b.onclick = () => {
-    stageOpen.status = b.dataset.s; renderStageStatus();
-  });
+  document.getElementById('si-status-name').textContent = STATUS_LABEL[stageOpen.status] || '';
+}
+
+function openStagePicker(){
+  document.getElementById('picker-title').textContent = 'Статус этапа';
+  document.getElementById('picker-list').innerHTML = Object.keys(STATUS_LABEL).map(k => `
+    <button class="row" onclick="pickStageStatus('${k}')">
+      <span class="glyph">${k === 'done' ? ICONS.done : k === 'active' ? ICONS.clock : ICONS.planned}</span>
+      <span class="body"><span class="name">${STATUS_LABEL[k]}</span></span>
+      ${k === stageOpen.status ? '<span class="count accent">✓</span>' : ''}
+    </button>`).join('');
+  openSheet('sheet-picker');
+}
+
+function pickStageStatus(k){
+  stageOpen.status = k;
+  closeSheet('sheet-picker');
+  renderStageStatus();
 }
 
 async function saveStageInfo(){
@@ -1264,11 +1277,7 @@ function openEdit(id){
 }
 
 function renderEditStatus(){
-  document.getElementById('ef-status').innerHTML = Object.keys(TASK_STATUS_LABEL).map(k =>
-    `<button class="${k === editing.status ? 'on' : ''}" data-s="${k}">${TASK_STATUS_LABEL[k]}</button>`).join('');
-  document.querySelectorAll('#ef-status button').forEach(b => b.onclick = () => {
-    editing.status = b.dataset.s; renderEditStatus();
-  });
+  document.getElementById('ef-status-name').textContent = TASK_STATUS_LABEL[editing.status] || '';
 }
 
 // у закрытой задачи показываем цену работы: коммит, токены, время
@@ -1339,11 +1348,19 @@ async function deleteTask(){
 function openPicker(what, forEdit){
   picking = {what, forEdit: !!forEdit};
   const title = what === 'stage' ? 'Этап'
-    : what === 'member' ? 'Исполнитель' : 'Проект';
+    : what === 'member' ? 'Исполнитель'
+    : what === 'status' ? 'Статус' : 'Проект';
   document.getElementById('picker-title').textContent = title;
   const list = document.getElementById('picker-list');
 
-  if (what === 'goal-project'){
+  if (what === 'status'){
+    list.innerHTML = Object.keys(TASK_STATUS_LABEL).map(k => `
+      <button class="row" onclick="pick('status','${k}')">
+        <span class="glyph">${k === 'done' ? ICONS.done : k === 'doing' ? ICONS.clock : ICONS.all}</span>
+        <span class="body"><span class="name">${TASK_STATUS_LABEL[k]}</span></span>
+        ${k === editing.status ? '<span class="count accent">✓</span>' : ''}
+      </button>`).join('');
+  } else if (what === 'goal-project'){
     list.innerHTML = S.projects.map(p => `
       <button class="row" onclick="pick('goal-project','${p.id}')">
         <span class="glyph" style="background:${p.color}">${ICONS.folder}</span>
@@ -1389,7 +1406,14 @@ function openPicker(what, forEdit){
 }
 
 function pick(what, id){
-  if (what === 'goal-project'){
+  if (what === 'status'){
+    list.innerHTML = Object.keys(TASK_STATUS_LABEL).map(k => `
+      <button class="row" onclick="pick('status','${k}')">
+        <span class="glyph">${k === 'done' ? ICONS.done : k === 'doing' ? ICONS.clock : ICONS.all}</span>
+        <span class="body"><span class="name">${TASK_STATUS_LABEL[k]}</span></span>
+        ${k === editing.status ? '<span class="count accent">✓</span>' : ''}
+      </button>`).join('');
+  } else if (what === 'goal-project'){
     list.innerHTML = S.projects.map(p => `
       <button class="row" onclick="pick('goal-project','${p.id}')">
         <span class="glyph" style="background:${p.color}">${ICONS.folder}</span>
