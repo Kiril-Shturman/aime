@@ -277,8 +277,6 @@
     background:var(--sep)}
   .task{position:relative}
 
-  .donehead{background:none; color:var(--blue); padding:0 4px; min-height:auto; margin-top:22px}
-
   .actions{display:grid; grid-template-columns:1fr; gap:10px; margin-top:18px}
   /* главная кнопка — как sheet-cta в «Коридоре»: градиент сверху вниз, 54 в высоту */
   .actions button{height:54px; border-radius:999px; border:0; font-size:16px; font-weight:800;
@@ -342,11 +340,6 @@
 
   <div class="sect" id="p-tasks-label">Задачи</div>
   <div class="card" id="tasks"></div>
-
-  <div id="p-done-wrap">
-    <button class="row donehead" id="p-done-head"></button>
-    <div class="card" id="p-done" style="margin-top:8px"></div>
-  </div>
 
 </div>
 
@@ -689,7 +682,7 @@ document.getElementById('btn-project-menu').innerHTML = ICONS.dots;
 document.querySelectorAll('[data-i2]').forEach(el => el.innerHTML = ICONS[el.dataset.i2] || '');
 
 let S = {projects: [], tasks: [], counts: {}};
-let view = {kind: null, id: null, title: '', member: null, showDone: false};
+let view = {kind: null, id: null, title: '', member: null};
 let form = {color: COLORS[0], kind: 'bot', project: 'inbox', member: null};
 
 const api = (p, o) => fetch(p, o).then(r => r.json());
@@ -782,17 +775,6 @@ function render(){
           <span class="badge ${st.status}">${STATUS_LABEL[st.status]}</span>
         </button>`).join('')
 ;
-  }
-
-  // выполненные задачи проекта — под списком, сворачиваются
-  const doneWrap = document.getElementById('p-done-wrap');
-  const doneTasks = p ? S.tasks.filter(t => t.done && t.project === p.id) : [];
-  doneWrap.style.display = p && doneTasks.length ? 'block' : 'none';
-  if (p && doneTasks.length){
-    document.getElementById('p-done-head').innerHTML =
-      `<span class="body"><span class="name accent">${view.showDone ? 'Скрыть' : 'Показать'} выполненные · ${doneTasks.length}</span></span>`;
-    document.getElementById('p-done').style.display = view.showDone ? 'block' : 'none';
-    document.getElementById('p-done').innerHTML = doneTasks.map(t => taskRow(t, p)).join('');
   }
 
   document.getElementById('p-tasks-label').textContent = view.member ? 'Задачи участника' : 'Задачи';
@@ -910,8 +892,6 @@ const kindLabel = id => (KINDS.find(k => k.id === id) || {}).label || '';
 const STATUS_LABEL = {planned: 'Запланирован', active: 'В работе', done: 'Готово'};
 const STATUS_NEXT = {planned: 'active', active: 'done', done: 'planned'};
 
-document.getElementById('p-done-head').onclick = () => { view.showDone = !view.showDone; render(); };
-
 let stageOpen = null;   // этап, открытый в листе
 
 function openStageInfo(sid){
@@ -1023,7 +1003,7 @@ async function saveStage(){
 function go(id){
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
   document.getElementById(id).classList.add('on');
-  if (id === 'home') view = {kind: null, id: null, title: '', member: null, showDone: false};
+  if (id === 'home') view = {kind: null, id: null, title: '', member: null};
   window.scrollTo(0, 0);
   syncBackButton();
 }
