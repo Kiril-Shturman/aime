@@ -1,0 +1,14 @@
+import {openBrowser} from '@remotion/renderer';
+const b = await openBrowser('chrome', {chromiumOptions: {gl: 'angle'}});
+const page = await b.newPage({context: null, logLevel: 'error', indent: false});
+await page.setViewport({width: 390, height: 900, deviceScaleFactor: 2.5});
+await page.goto({url: 'http://localhost:8095/', timeout: 60000});
+const fs = await import('node:fs');
+await new Promise(r => setTimeout(r, 3000));
+await page.evaluate(`openProject(S.projects.find(p=>p.name==='aiMe').id);
+  openEdit(S.tasks.find(t=>t.done && t.commit).id)`);
+await new Promise(r => setTimeout(r, 1200));
+const res = await page._client().send('Page.captureScreenshot', {format: 'png'});
+fs.writeFileSync('outbox/итог.png', Buffer.from(res.value.data, 'base64'));
+await b.close({silent: true});
+console.log('ok');

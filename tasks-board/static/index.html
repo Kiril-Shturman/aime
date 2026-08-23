@@ -122,6 +122,18 @@
   .searchbar.on{display:block}
   .searchbar input{width:100%; background:var(--card); border:0; border-radius:12px;
     padding:11px 14px; color:#fff; font:inherit; outline:none}
+  /* итог закрытой задачи: три числа в строку и коммит отдельной плашкой */
+  #ef-result{background:none; display:flex; flex-direction:column; gap:10px}
+  .stats{display:flex; gap:8px}
+  .stat{flex:1; background:var(--card); border-radius:12px; padding:10px 12px; min-width:0}
+  .stat b{display:block; font-size:17px; font-weight:600; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis}
+  .stat span{display:block; font-size:12px; color:var(--dim); margin-top:2px}
+  .commit{display:inline-flex; align-items:center; gap:8px; align-self:flex-start;
+    background:var(--card); border-radius:999px; padding:8px 14px; color:#fff;
+    text-decoration:none; font:400 14px/1 ui-monospace,"SF Mono",Menlo,monospace}
+  .commit svg{width:15px; height:15px}
+
   .out{margin:0; padding:14px; background:var(--card); border-radius:12px;
     font:400 13px/1.45 ui-monospace,"SF Mono",Menlo,monospace; color:#dfe3ea;
     white-space:pre-wrap; word-break:break-word; max-height:60vh; overflow:auto}
@@ -1267,36 +1279,34 @@ function renderEditResult(){
   wrap.style.display = has ? 'block' : 'none';
   if (!has) return;
   const p = project(t.project);
-  const rows = [];
-  if (t.commit){
-    const url = p?.repo ? `${repoUrl(p.repo)}/commit/${t.commit}` : null;
-    rows.push(`<${url ? 'a' : 'div'} class="row static" ${url ? `href="${esc(url)}" target="_blank" rel="noreferrer"` : ''}>
-        <span class="glyph" style="background:#24292f">${ICONS.git}</span>
-        <span class="body"><span class="name">${esc(t.commit.slice(0, 12))}</span>
-          <span class="sub">коммит${url ? ' · открыть' : ''}</span></span>
-      </${url ? 'a' : 'div'}>`);
-  }
-  if (t.tokens) rows.push(`<div class="row static">
-      <span class="glyph">${ICONS.bot}</span>
-      <span class="body"><span class="name">${fmtNum(t.tokens)}</span>
-        <span class="sub">токенов</span></span></div>`);
-  if (t.seconds) rows.push(`<div class="row static">
-      <span class="glyph">${ICONS.clock}</span>
-      <span class="body"><span class="name">${fmtDur(t.seconds)}</span>
-        <span class="sub">времени</span></span></div>`);
-  if (t.done_at) rows.push(`<div class="row static">
-      <span class="glyph">${ICONS.done}</span>
-      <span class="body"><span class="name">${fmtWhen(t.done_at)}</span>
-        <span class="sub">закрыто</span></span></div>`);
-  document.getElementById('ef-result').innerHTML = rows.join('');
+  const cell = (value, label) => `<div class="stat"><b>${value}</b><span>${label}</span></div>`;
+  const stats = [
+    t.tokens ? cell(fmtNum(t.tokens), 'токенов') : '',
+    t.seconds ? cell(fmtDur(t.seconds), 'времени') : '',
+    t.done_at ? cell(fmtWhen(t.done_at, true), 'закрыто') : '',
+  ].filter(Boolean).join('');
+
+  const commit = t.commit
+    ? (() => {
+        const url = p?.repo ? `${repoUrl(p.repo)}/commit/${t.commit}` : null;
+        const inner = `${ICONS.git}<span>${esc(t.commit.slice(0, 7))}</span>`;
+        return url
+          ? `<a class="commit" href="${esc(url)}" target="_blank" rel="noreferrer">${inner}</a>`
+          : `<span class="commit">${inner}</span>`;
+      })()
+    : '';
+
+  document.getElementById('ef-result').innerHTML =
+    `<div class="stats">${stats}</div>${commit}`;
 }
 
 const fmtNum = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
 const fmtDur = sec => sec < 60 ? `${sec} с`
   : sec < 3600 ? `${Math.round(sec / 60)} мин`
   : `${(sec / 3600).toFixed(1)} ч`;
-const fmtWhen = ts => new Date(ts * 1000).toLocaleString('ru-RU',
-  {day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'});
+const fmtWhen = (ts, short) => new Date(ts * 1000).toLocaleString('ru-RU',
+  short ? {day: 'numeric', month: 'short'}
+        : {day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'});
 
 function renderEditParams(){
   const p = project(editing.project);
