@@ -129,10 +129,18 @@
   .stat b{display:block; font-size:17px; font-weight:600; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis}
   .stat span{display:block; font-size:12px; color:var(--dim); margin-top:2px}
-  .commit{display:inline-flex; align-items:center; gap:8px; align-self:flex-start;
-    background:var(--card); border-radius:999px; padding:8px 14px; color:#fff;
-    text-decoration:none; font:400 14px/1 ui-monospace,"SF Mono",Menlo,monospace}
-  .commit svg{width:15px; height:15px}
+  .commit{display:flex; align-items:center; gap:10px; width:100%;
+    background:var(--card); border-radius:12px; padding:10px 10px 10px 14px; color:#fff}
+  .commit > svg{width:17px; height:17px; flex:none}
+  .commit .hash{font:400 15px/1 ui-monospace,"SF Mono",Menlo,monospace;
+    overflow:hidden; text-overflow:ellipsis}
+  .commit .commit-label{flex:1; font-size:13px; color:var(--dim)}
+  .commit .go{width:34px; height:34px; border-radius:50%; background:var(--card-2);
+    display:flex; align-items:center; justify-content:center; flex:none;
+    transition:transform .12s, background .15s}
+  .commit .go:active{transform:scale(.92); background:#3a3a3c}
+  .commit .go svg{width:16px; height:16px; stroke:#fff; stroke-width:2.2; fill:none;
+    stroke-linecap:round; stroke-linejoin:round}
 
   .out{margin:0; padding:14px; background:var(--card); border-radius:12px;
     font:400 13px/1.45 ui-monospace,"SF Mono",Menlo,monospace; color:#dfe3ea;
@@ -206,7 +214,8 @@
   .card.pad{padding:2px 14px}
   .line{width:100%; background:none; border:0; color:var(--text); font:inherit;
     padding:12px 0; outline:none; resize:none; box-shadow:inset 0 -.5px 0 var(--sep)}
-  .line.big{font-size:19px}
+  .line.big{font-size:20px; line-height:1.3; font-weight:500}
+  #ef-title{min-height:56px; overflow:hidden}
   .line.last{box-shadow:none}
   .line::placeholder,textarea::placeholder{color:#6b6b70}
   .row.static{cursor:default}
@@ -523,7 +532,7 @@
     <h3 id="ef-heading">Задача</h3>
 
     <div class="card pad">
-      <input class="line big last" id="ef-title" placeholder="Название">
+      <textarea class="line big last" id="ef-title" rows="2" placeholder="Название"></textarea>
     </div>
 
     <div class="sect">Куда относится</div>
@@ -616,6 +625,7 @@ const ICONS = {
   service: svg('<rect width="20" height="8" x="2" y="2" rx="2"/><rect width="20" height="8" x="2" y="14" rx="2"/><path d="M6 6h.01"/><path d="M6 18h.01"/>'),
   clock: svg('<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>'),
   alarm: svg('<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M5 3 2 6"/><path d="m22 6-3-3"/>'),
+  arrow: svg('<path d="M7 17 17 7"/><path d="M9 7h8v8"/>'),
   link: svg('<path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>'),
   search: svg('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>'),
   dots: svg('<circle cx="12" cy="5" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="12" cy="19" r="1"/>'),
@@ -1273,7 +1283,20 @@ function openEdit(id){
   renderEditParams();
   renderEditResult();
   openSheet('sheet-edit');
+  requestAnimationFrame(() => {          // высоту считаем, когда лист уже виден
+    autoGrow(document.getElementById('ef-title'));
+    autoGrow(document.getElementById('ef-report'));
+  });
 }
+
+// поле растёт под текст, чтобы длинное название не обрезалось
+function autoGrow(el){
+  if (!el) return;
+  el.style.height = 'auto';
+  el.style.height = el.scrollHeight + 'px';
+}
+document.querySelectorAll('textarea.line').forEach(el =>
+  el.addEventListener('input', () => autoGrow(el)));
 
 function renderEditStatus(){
   document.getElementById('ef-status-name').textContent = TASK_STATUS_LABEL[editing.status] || '';
@@ -1297,10 +1320,13 @@ function renderEditResult(){
   const commit = t.commit
     ? (() => {
         const url = p?.repo ? `${repoUrl(p.repo)}/commit/${t.commit}` : null;
-        const inner = `${ICONS.git}<span>${esc(t.commit.slice(0, 7))}</span>`;
-        return url
-          ? `<a class="commit" href="${esc(url)}" target="_blank" rel="noreferrer">${inner}</a>`
-          : `<span class="commit">${inner}</span>`;
+        const open = url
+          ? `<a class="go" href="${esc(url)}" target="_blank" rel="noreferrer"
+                aria-label="Открыть коммит">${ICONS.arrow}</a>`
+          : '';
+        return `<div class="commit">${ICONS.git}
+            <span class="hash">${esc(t.commit.slice(0, 10))}</span>
+            <span class="commit-label">коммит</span>${open}</div>`;
       })()
     : '';
 
