@@ -30,6 +30,10 @@ python3 avatars.py           # подтянуть аватарки участн�
            status: todo|doing|done, due, time, flagged, done }
 ```
 
+У проекта есть карточка репозитория: подключаешь адресом, доска сама проверяет
+доступ через `git ls-remote`, клонирует в `~/projects/<имя>` и запоминает путь.
+Дальше в карточке видно ветку, последний коммит и число незакоммиченных правок.
+
 Задача привязана к этапу — у одного этапа их бывает десяток. Отсюда прогресс
 этапа «3 из 7» и группировка задач под этапами на экране проекта.
 
@@ -50,6 +54,8 @@ python3 avatars.py           # подтянуть аватарки участн�
 | POST | `/api/project` | `{name, color, note, repo, members[]}` |
 | PATCH | `/api/project/<id>` | `{name, color, note, repo}` |
 | DELETE | `/api/project/<id>` | вместе с задачами |
+| GET | `/api/project/<id>/git` | ветка, последний коммит, сколько правок не закоммичено |
+| POST | `/api/project/<id>/git` | `{repo, branch}` — проверить доступ, склонировать, запомнить путь |
 | POST | `/api/project/<id>/member` | `{name, handle, role, kind}` |
 | DELETE | `/api/project/<id>/member/<mid>` | убрать участника |
 | POST | `/api/project/<id>/stage` | этап роудмапа |

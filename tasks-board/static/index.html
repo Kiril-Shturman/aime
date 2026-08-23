@@ -60,6 +60,7 @@
   .row .glyph{width:29px; height:29px; border-radius:50%; flex:none;
     display:flex; align-items:center; justify-content:center; background:var(--card-2)}
   .row .accent{color:var(--blue)}
+  a.row{text-decoration:none}
 
   /* --- аватарки --- */
   .ava,.ava-l{width:29px; height:29px; border-radius:50%; flex:none}
@@ -110,6 +111,8 @@
   .menu button.red{color:#ff453a}
   .menu svg{width:17px; height:17px; stroke:currentColor; stroke-width:2; fill:none;
     stroke-linecap:round; stroke-linejoin:round; flex:none}
+  svg.filled{fill:currentColor !important; stroke:none !important}
+  .glyph svg.filled,.ic svg.filled{fill:#fff !important}
 
   /* поиск */
   .searchbar{display:none; margin:0 0 14px}
@@ -292,6 +295,11 @@
   </div>
   <div class="sub" id="p-note" style="margin:-8px 2px 12px"></div>
 
+  <div id="p-git-wrap">
+    <div class="sect">Репозиторий</div>
+    <div class="card" id="p-git"></div>
+  </div>
+
   <div id="p-team-wrap">
     <div class="sect">Команда</div>
     <div class="card" id="p-team"></div>
@@ -415,6 +423,23 @@
     <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     <h3 id="out-title">Агент</h3>
     <pre class="out" id="out-text">…</pre>
+  </div>
+</div>
+
+<!-- ЛИСТ: РЕПОЗИТОРИЙ -->
+<div class="sheet" id="sheet-git">
+  <div class="box">
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    <h3>Подключить репозиторий</h3>
+    <div class="hint" style="margin:0 6px 12px">Проверю доступ, склонирую на сервер
+      и запомню путь — руками ничего указывать не нужно.</div>
+    <div class="field"><label>Адрес</label><input id="gitf-repo" placeholder="git@github.com:user/repo.git"></div>
+    <div class="field"><label>Ветка (необязательно)</label><input id="gitf-branch" placeholder="main"></div>
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeSheet('sheet-git')">Отмена</button>
+      <button class="btn-ok" id="gitf-ok" onclick="connectGit()">Подключить</button>
+    </div>
   </div>
 </div>
 
@@ -561,7 +586,7 @@ const ICONS = {
   pencil: svg('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>'),
   trash: svg('<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/>'),
   refresh: svg('<path d="M21 12a9 9 0 1 1-3-6.7"/><path d="M21 3v6h-6"/>'),
-  git: svg('<circle cx="12" cy="12" r="3"/><path d="M12 3v6"/><path d="M12 15v6"/>'),
+  git: '<svg viewBox="0 0 24 24" class="filled"><path d="M12 .3a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.8 1.3 3.5 1 0-.8.4-1.3.7-1.6-2.7-.3-5.5-1.3-5.5-5.9 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0c2.3-1.5 3.3-1.2 3.3-1.2.6 1.7.2 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .3"/></svg>',
   human: svg('<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>'),
 };
 const KINDS = [
@@ -635,11 +660,7 @@ function memberOf(task){
 function render(){
   const p = view.kind === 'project' ? project(view.id) : null;
   document.getElementById('p-title').textContent = p ? p.name : view.title;
-  const noteEl = document.getElementById('p-note');
-  if (p && p.repo)
-    noteEl.innerHTML = `${esc(p.note || '')}${p.note ? ' · ' : ''}` +
-      `<a class="accent" href="${esc(repoUrl(p.repo))}" target="_blank" rel="noreferrer">репозиторий</a>`;
-  else noteEl.textContent = p ? (p.note || '') : '';
+  document.getElementById('p-note').textContent = p ? (p.note || '') : '';
   document.getElementById('p-team-wrap').style.display = p ? 'block' : 'none';
 
   if (p){
@@ -657,6 +678,10 @@ function render(){
         </button>`).join('')
 ;
   }
+
+  // репозиторий проекта: подключён — показываем ветку и последний коммит
+  document.getElementById('p-git-wrap').style.display = p ? 'block' : 'none';
+  if (p) renderGit(p);
 
   // роудмап проекта
   document.getElementById('p-road-wrap').style.display = p ? 'block' : 'none';
@@ -735,6 +760,77 @@ function taskRow(t){
     </div>`;
 }
 
+function renderGit(p){
+  const box = document.getElementById('p-git');
+  if (!p.repo){
+    box.innerHTML = `<button class="row" onclick="openGitSheet()">
+        <span class="glyph">${ICONS.git}</span>
+        <span class="body"><span class="name accent">Подключить репозиторий</span></span>
+      </button>`;
+    return;
+  }
+  const g = gitStatus[p.id];
+  const sub = g
+    ? `${esc(g.branch)}${g.dirty ? ` · правок: ${g.dirty}` : ''}${g.last ? ' · ' + esc(g.last) : ''}`
+    : 'копии на сервере нет — нажми, чтобы склонировать';
+  box.innerHTML = `<button class="row" onclick="openGitSheet()">
+      <span class="glyph" style="background:#24292f">${ICONS.git}</span>
+      <span class="body"><span class="name">${esc(repoShort(p.repo))}</span>
+        <span class="sub">${sub}</span></span>
+      <span class="chev">›</span>
+    </button>
+    <a class="row" href="${esc(repoUrl(p.repo))}" target="_blank" rel="noreferrer">
+      <span class="glyph">${ICONS.link}</span>
+      <span class="body"><span class="name accent">Открыть на GitHub</span></span>
+    </a>`;
+}
+
+// git@github.com:user/repo.git → user/repo
+function repoShort(repo){
+  const m = repo.match(/[:/]([^/:]+\/[^/]+?)(\.git)?$/);
+  return m ? m[1] : repo;
+}
+
+let gitStatus = {};   // состояние рабочих копий, подтягиваем при открытии проекта
+
+async function loadGit(pid){
+  try {
+    const out = await api(`/api/project/${pid}/git`);
+    gitStatus[pid] = out.status;
+  } catch { gitStatus[pid] = null; }
+  const p = project(pid);
+  if (p && view.id === pid) renderGit(p);
+}
+
+function openGitSheet(){
+  const p = project(view.id);
+  document.getElementById('gitf-repo').value = p?.repo || '';
+  document.getElementById('gitf-branch').value = gitStatus[view.id]?.branch || '';
+  document.getElementById('gitf-ok').textContent = 'Подключить';
+  openSheet('sheet-git');
+}
+
+async function connectGit(){
+  const repo = document.getElementById('gitf-repo').value.trim();
+  if (!repo) return;
+  const btn = document.getElementById('gitf-ok');
+  btn.textContent = 'Проверяю…';
+  try {
+    const res = await fetch(`/api/project/${view.id}/git`, {method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({repo, branch: document.getElementById('gitf-branch').value.trim()})});
+    const out = await res.json();
+    if (!res.ok){ btn.textContent = 'Подключить'; alert(out.error || 'Не вышло'); return; }
+    gitStatus[view.id] = out.status;
+    closeSheet('sheet-git');
+    haptic('success');
+    await load();
+  } catch (e) {
+    btn.textContent = 'Подключить';
+    alert(String(e));
+  }
+}
+
 const kindLabel = id => (KINDS.find(k => k.id === id) || {}).label || '';
 
 const STATUS_LABEL = {planned: 'Запланирован', active: 'В работе', done: 'Готово'};
@@ -807,6 +903,7 @@ function go(id){
 function openProject(id){
   view = {kind: 'project', id, title: project(id)?.name || 'Проект', member: null};
   render(); go('project');
+  loadGit(id);
 }
 
 function pickMember(id){ view.member = id || null; render(); }
@@ -861,8 +958,8 @@ document.getElementById('btn-project-menu').onclick = e => {
     {label: 'Добавить участника', icon: 'human', run: () => openMemberSheet()},
     {label: 'Добавить этап', icon: 'flagged', run: () => openStageSheet()},
   ];
-  if (p.repo) items.push({label: 'Открыть репозиторий', icon: 'git',
-    run: () => window.open(repoUrl(p.repo), '_blank')});
+  items.push({label: p.repo ? 'Настроить репозиторий' : 'Подключить репозиторий',
+    icon: 'git', run: () => openGitSheet()});
   if (p.id !== 'inbox') items.push({label: 'Удалить проект', icon: 'trash', red: true,
     run: () => deleteProject()});
   openMenu(e.currentTarget, items);
