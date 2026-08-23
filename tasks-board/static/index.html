@@ -109,6 +109,9 @@
   .menu button + button{box-shadow:inset 0 .5px 0 rgba(255,255,255,.1)}
   .menu button:active{background:rgba(255,255,255,.07)}
   .menu button.red{color:#ff453a}
+  .menu .mi{display:block; min-width:0}
+  .menu .mi-sub{display:block; font-size:12px; color:var(--dim); margin-top:2px;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:200px}
   .menu svg{width:17px; height:17px; stroke:currentColor; stroke-width:2; fill:none;
     stroke-linecap:round; stroke-linejoin:round; flex:none}
   svg.filled{fill:currentColor !important; stroke:none !important}
@@ -294,11 +297,6 @@
     <button class="tb solo" id="btn-project-menu" aria-label="Ещё"></button>
   </div>
   <div class="sub" id="p-note" style="margin:-8px 2px 12px"></div>
-
-  <div id="p-git-wrap">
-    <div class="sect">Репозиторий</div>
-    <div class="card" id="p-git"></div>
-  </div>
 
   <div id="p-team-wrap">
     <div class="sect">Команда</div>
@@ -679,10 +677,6 @@ function render(){
 ;
   }
 
-  // репозиторий проекта: подключён — показываем ветку и последний коммит
-  document.getElementById('p-git-wrap').style.display = p ? 'block' : 'none';
-  if (p) renderGit(p);
-
   // роудмап проекта
   document.getElementById('p-road-wrap').style.display = p ? 'block' : 'none';
   if (p){
@@ -760,31 +754,6 @@ function taskRow(t){
     </div>`;
 }
 
-function renderGit(p){
-  const box = document.getElementById('p-git');
-  if (!p.repo){
-    box.innerHTML = `<button class="row" onclick="openGitSheet()">
-        <span class="glyph">${ICONS.git}</span>
-        <span class="body"><span class="name accent">Подключить репозиторий</span></span>
-      </button>`;
-    return;
-  }
-  const g = gitStatus[p.id];
-  const sub = g
-    ? `${esc(g.branch)}${g.dirty ? ` · правок: ${g.dirty}` : ''}${g.last ? ' · ' + esc(g.last) : ''}`
-    : 'копии на сервере нет — нажми, чтобы склонировать';
-  box.innerHTML = `<button class="row" onclick="openGitSheet()">
-      <span class="glyph" style="background:#24292f">${ICONS.git}</span>
-      <span class="body"><span class="name">${esc(repoShort(p.repo))}</span>
-        <span class="sub">${sub}</span></span>
-      <span class="chev">›</span>
-    </button>
-    <a class="row" href="${esc(repoUrl(p.repo))}" target="_blank" rel="noreferrer">
-      <span class="glyph">${ICONS.link}</span>
-      <span class="body"><span class="name accent">Открыть на GitHub</span></span>
-    </a>`;
-}
-
 // git@github.com:user/repo.git → user/repo
 function repoShort(repo){
   const m = repo.match(/[:/]([^/:]+\/[^/]+?)(\.git)?$/);
@@ -798,8 +767,23 @@ async function loadGit(pid){
     const out = await api(`/api/project/${pid}/git`);
     gitStatus[pid] = out.status;
   } catch { gitStatus[pid] = null; }
-  const p = project(pid);
-  if (p && view.id === pid) renderGit(p);
+}
+
+// коротко о состоянии копии — этой строкой подписан пункт меню
+function gitLine(p){
+  const g = gitStatus[p.id];
+  if (!g) return 'копии на сервере нет';
+  return `${g.branch}${g.dirty ? ` · правок: ${g.dirty}` : ''}${g.last ? ' · ' + g.last : ''}`;
+}
+
+async function pullGit(){
+  const p = project(view.id);
+  if (!p?.repo) return;
+  haptic('light');
+  await fetch(`/api/project/${p.id}/git`, {method: 'POST',
+    headers: {'Content-Type': 'application/json'}, body: JSON.stringify({repo: p.repo})});
+  await loadGit(p.id);
+  haptic('success');
 }
 
 function openGitSheet(){
@@ -923,8 +907,11 @@ async function toggle(id){
 function openMenu(anchor, items){
   const menu = document.getElementById('menu');
   const box = document.getElementById('menu-items');
-  box.innerHTML = items.map((it, i) =>
-    `<button data-i="${i}" class="${it.red ? 'red' : ''}">${esc(it.label)}${ICONS[it.icon] || ''}</button>`).join('');
+  box.innerHTML = items.map((it, i) => `
+    <button data-i="${i}" class="${it.red ? 'red' : ''}">
+      <span class="mi">${esc(it.label)}${it.sub ? `<span class="mi-sub">${esc(it.sub)}</span>` : ''}</span>
+      ${ICONS[it.icon] || ''}
+    </button>`).join('');
   const rect = anchor.getBoundingClientRect();
   box.style.top = (rect.bottom + 8) + 'px';
   menu.classList.add('on');
@@ -958,8 +945,14 @@ document.getElementById('btn-project-menu').onclick = e => {
     {label: 'Добавить участника', icon: 'human', run: () => openMemberSheet()},
     {label: 'Добавить этап', icon: 'flagged', run: () => openStageSheet()},
   ];
-  items.push({label: p.repo ? 'Настроить репозиторий' : 'Подключить репозиторий',
-    icon: 'git', run: () => openGitSheet()});
+  if (p.repo){
+    items.push({label: repoShort(p.repo), sub: gitLine(p), icon: 'git', run: () => openGitSheet()});
+    items.push({label: 'Обновить из гита', icon: 'refresh', run: () => pullGit()});
+    items.push({label: 'Открыть на GitHub', icon: 'link',
+      run: () => window.open(repoUrl(p.repo), '_blank')});
+  } else {
+    items.push({label: 'Подключить репозиторий', icon: 'git', run: () => openGitSheet()});
+  }
   if (p.id !== 'inbox') items.push({label: 'Удалить проект', icon: 'trash', red: true,
     run: () => deleteProject()});
   openMenu(e.currentTarget, items);
