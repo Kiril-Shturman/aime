@@ -424,6 +424,28 @@
   </div>
 </div>
 
+<!-- ЛИСТ: ЭТАП (просмотр) -->
+<div class="sheet" id="sheet-stage-info">
+  <div class="box">
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    <h3 id="si-title">Этап</h3>
+    <div class="sub" id="si-meta" style="margin:-8px 2px 14px"></div>
+
+    <div class="sect">Статус</div>
+    <div class="segment" id="si-status"></div>
+
+    <div class="sect">Задачи этапа</div>
+    <div class="card" id="si-tasks"></div>
+
+    <div class="actions">
+      <button class="btn-cancel" onclick="closeSheet('sheet-stage-info')">Закрыть</button>
+      <button class="btn-ok" onclick="saveStageInfo()">Сохранить</button>
+    </div>
+    <button class="danger" onclick="deleteStage()">Удалить этап</button>
+  </div>
+</div>
+
 <!-- ЛИСТ: РЕПОЗИТОРИЙ -->
 <div class="sheet" id="sheet-git">
   <div class="box">
@@ -508,6 +530,11 @@
         <span class="body"><span class="name">Исполнитель</span></span>
         <span class="count" id="ef-member-name">Не выбран</span><span class="chev">›</span>
       </button>
+    </div>
+
+    <div id="ef-result-wrap">
+      <div class="sect">Итог</div>
+      <div class="card" id="ef-result"></div>
     </div>
 
     <div class="sect">Отчёт</div>
@@ -683,7 +710,7 @@ function render(){
     const road = p.roadmap || [];
     document.getElementById('p-road').innerHTML =
       road.map(st => `
-        <button class="stage ${st.status}" onclick="cycleStage('${st.id}')">
+        <button class="stage ${st.status}" onclick="openStageInfo('${st.id}')">
           <span class="mark"><i></i></span>
           <span class="body">
             <span class="name">${esc(st.title)}</span>
@@ -749,6 +776,10 @@ function taskRow(t){
         ${t.note ? `<div class="sub">${esc(t.note)}</div>` : ''}
         ${t.url ? `<a class="sub accent" href="${esc(t.url)}" target="_blank" rel="noreferrer">${esc(t.url)}</a>` : ''}
         ${t.report ? `<div class="report">${esc(t.report)}</div>` : ''}
+        ${t.done && (t.commit || t.tokens || t.seconds) ? `<div class="sub">${
+          [t.commit ? t.commit.slice(0, 7) : null,
+           t.tokens ? fmtNum(t.tokens) + ' токенов' : null,
+           t.seconds ? fmtDur(t.seconds) : null].filter(Boolean).join(' · ')}</div>` : ''}
       </div>
       ${t.flagged ? `<div class="flag">${ICONS.flagged}</div>` : ''}
     </div>`;
@@ -822,13 +853,54 @@ const STATUS_NEXT = {planned: 'active', active: 'done', done: 'planned'};
 
 document.getElementById('p-done-head').onclick = () => { view.showDone = !view.showDone; render(); };
 
-async function cycleStage(sid){
+let stageOpen = null;   // этап, открытый в листе
+
+function openStageInfo(sid){
   const p = project(view.id);
-  const st = p.roadmap.find(x => x.id === sid);
-  haptic('light');
-  await api(`/api/project/${p.id}/stage/${sid}`, {method:'PATCH',
+  const st = (p?.roadmap || []).find(x => x.id === sid);
+  if (!st) return;
+  stageOpen = {...st};
+  const pr = st.progress || {done: 0, total: 0};
+  document.getElementById('si-title').textContent = st.title;
+  document.getElementById('si-meta').textContent =
+    [st.date ? 'срок ' + st.date : null,
+     pr.total ? `задач ${pr.done} из ${pr.total}` : 'задач пока нет',
+     st.note || null].filter(Boolean).join(' · ');
+
+  const own = S.tasks.filter(t => t.stage === sid);
+  document.getElementById('si-tasks').innerHTML = own.length
+    ? own.map(t => `<div class="row static">
+         <span class="cb ${t.done ? 'on' : ''}" onclick="toggle('${t.id}')"></span>
+         <span class="body"><span class="name">${esc(t.title)}</span>
+           <span class="sub">${TASK_STATUS_LABEL[t.status] || ''}${t.commit ? ' · ' + esc(t.commit.slice(0,7)) : ''}</span></span>
+       </div>`).join('')
+    : '<div class="empty">Задач нет — попроси агента разложить цель</div>';
+
+  renderStageStatus();
+  openSheet('sheet-stage-info');
+}
+
+function renderStageStatus(){
+  document.getElementById('si-status').innerHTML = Object.keys(STATUS_LABEL).map(k =>
+    `<button class="${k === stageOpen.status ? 'on' : ''}" data-s="${k}">${STATUS_LABEL[k]}</button>`).join('');
+  document.querySelectorAll('#si-status button').forEach(b => b.onclick = () => {
+    stageOpen.status = b.dataset.s; renderStageStatus();
+  });
+}
+
+async function saveStageInfo(){
+  await api(`/api/project/${view.id}/stage/${stageOpen.id}`, {method:'PATCH',
     headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({status: STATUS_NEXT[st.status]})});
+    body: JSON.stringify({status: stageOpen.status})});
+  closeSheet('sheet-stage-info');
+  haptic('success');
+  await load();
+}
+
+async function deleteStage(){
+  if (!confirm('Удалить этап? Задачи останутся, но потеряют привязку.')) return;
+  await fetch(`/api/project/${view.id}/stage/${stageOpen.id}`, {method: 'DELETE'});
+  closeSheet('sheet-stage-info');
   await load();
 }
 
@@ -1175,6 +1247,7 @@ function openEdit(id){
   document.getElementById('ef-report').value = t.report || '';
   renderEditStatus();
   renderEditParams();
+  renderEditResult();
   openSheet('sheet-edit');
 }
 
@@ -1185,6 +1258,45 @@ function renderEditStatus(){
     editing.status = b.dataset.s; renderEditStatus();
   });
 }
+
+// у закрытой задачи показываем цену работы: коммит, токены, время
+function renderEditResult(){
+  const wrap = document.getElementById('ef-result-wrap');
+  const t = editing;
+  const has = t.commit || t.tokens || t.seconds || t.done_at;
+  wrap.style.display = has ? 'block' : 'none';
+  if (!has) return;
+  const p = project(t.project);
+  const rows = [];
+  if (t.commit){
+    const url = p?.repo ? `${repoUrl(p.repo)}/commit/${t.commit}` : null;
+    rows.push(`<${url ? 'a' : 'div'} class="row static" ${url ? `href="${esc(url)}" target="_blank" rel="noreferrer"` : ''}>
+        <span class="glyph" style="background:#24292f">${ICONS.git}</span>
+        <span class="body"><span class="name">${esc(t.commit.slice(0, 12))}</span>
+          <span class="sub">коммит${url ? ' · открыть' : ''}</span></span>
+      </${url ? 'a' : 'div'}>`);
+  }
+  if (t.tokens) rows.push(`<div class="row static">
+      <span class="glyph">${ICONS.bot}</span>
+      <span class="body"><span class="name">${fmtNum(t.tokens)}</span>
+        <span class="sub">токенов</span></span></div>`);
+  if (t.seconds) rows.push(`<div class="row static">
+      <span class="glyph">${ICONS.clock}</span>
+      <span class="body"><span class="name">${fmtDur(t.seconds)}</span>
+        <span class="sub">времени</span></span></div>`);
+  if (t.done_at) rows.push(`<div class="row static">
+      <span class="glyph">${ICONS.done}</span>
+      <span class="body"><span class="name">${fmtWhen(t.done_at)}</span>
+        <span class="sub">закрыто</span></span></div>`);
+  document.getElementById('ef-result').innerHTML = rows.join('');
+}
+
+const fmtNum = n => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+const fmtDur = sec => sec < 60 ? `${sec} с`
+  : sec < 3600 ? `${Math.round(sec / 60)} мин`
+  : `${(sec / 3600).toFixed(1)} ч`;
+const fmtWhen = ts => new Date(ts * 1000).toLocaleString('ru-RU',
+  {day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit'});
 
 function renderEditParams(){
   const p = project(editing.project);

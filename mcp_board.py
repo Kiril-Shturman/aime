@@ -125,8 +125,14 @@ def tool_take(args):
 
 
 def tool_report(args):
-    """Записать отчёт и, если работа закончена, закрыть задачу."""
+    """Записать отчёт и, если работа закончена, закрыть задачу.
+
+    Заодно фиксируем цену работы: коммит, токены, потраченные минуты.
+    Время посчитается само, если не передать."""
     body = {"report": args["report"]}
+    for key in ("commit", "tokens", "seconds"):
+        if args.get(key) is not None:
+            body[key] = args[key]
     if args.get("done"):
         body["status"] = "done"
     t = call(f"/api/task/{args['id']}", "PATCH", body)
@@ -210,6 +216,9 @@ TOOLS = [
         "inputSchema": {"type": "object", "properties": {
             "id": {"type": "string"},
             "report": {"type": "string", "description": "Что сделано, что осталось, ссылка"},
+            "commit": {"type": "string", "description": "Хеш коммита, если работа в коде"},
+            "tokens": {"type": "integer", "description": "Сколько токенов ушло на задачу"},
+            "seconds": {"type": "integer", "description": "Сколько секунд заняло; можно не слать"},
             "done": {"type": "boolean", "description": "true — закрыть задачу"}},
             "required": ["id", "report"]},
         "run": tool_report,
