@@ -443,7 +443,7 @@
       <button class="row" onclick="openPicker('project')">
         <span class="glyph" id="tf-project-glyph"></span>
         <span class="body"><span class="name">Проект</span></span>
-        <span class="count" id="tf-project-name">Входящие</span><span class="chev">›</span>
+        <span class="count" id="tf-project-name">—</span><span class="chev">›</span>
       </button>
       <button class="row" onclick="openPicker('member')">
         <span class="glyph" data-i2="human"></span>
@@ -549,7 +549,7 @@
       <button class="row" onclick="openPicker('goal-project')">
         <span class="glyph" id="gf-glyph"></span>
         <span class="body"><span class="name">Проект</span></span>
-        <span class="count" id="gf-project-name">Входящие</span><span class="chev">›</span>
+        <span class="count" id="gf-project-name">—</span><span class="chev">›</span>
       </button>
     </div>
     <div class="actions">
@@ -700,12 +700,13 @@ document.querySelectorAll('[data-i2]').forEach(el => el.innerHTML = ICONS[el.dat
 
 let S = {projects: [], tasks: [], counts: {}};
 let view = {kind: null, id: null, title: '', member: null};
-let form = {color: COLORS[0], kind: 'bot', project: 'inbox', member: null};
+let form = {color: COLORS[0], kind: 'bot', project: null, member: null};
 
 const api = (p, o) => fetch(p, o).then(r => r.json());
 const esc = s => String(s ?? '').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
 const today = () => new Date().toISOString().slice(0, 10);
 const project = id => S.projects.find(p => p.id === id);
+const someProject = () => (S.projects[0] || {}).id || null;
 
 // у части участников фото нет — кружок с буквой, как это делает Телеграм
 function avatar(m, color){
@@ -974,7 +975,7 @@ async function deleteStage(){
 }
 
 function openGoalSheet(p){
-  form.goalProject = p ? p.id : (view.kind === 'project' ? view.id : 'inbox');
+  form.goalProject = p ? p.id : (view.kind === 'project' ? view.id : someProject());
   document.getElementById('gf-text').value = '';
   renderGoalProject();
   openSheet('sheet-goal');
@@ -982,7 +983,7 @@ function openGoalSheet(p){
 
 function renderGoalProject(){
   const p = project(form.goalProject);
-  document.getElementById('gf-project-name').textContent = p ? p.name : 'Входящие';
+  document.getElementById('gf-project-name').textContent = p ? p.name : '—';
   const g = document.getElementById('gf-glyph');
   g.innerHTML = ICONS.folder;
   g.style.background = p ? p.color : 'var(--card-2)';
@@ -1163,7 +1164,7 @@ document.getElementById('btn-project-menu').onclick = e => {
   } else {
     items.push({label: 'Подключить репозиторий', icon: 'git', run: () => openGitSheet()});
   }
-  if (p.id !== 'inbox') items.push({label: 'Удалить проект', icon: 'trash', red: true,
+  items.push({label: 'Удалить проект', icon: 'trash', red: true,
     run: () => deleteProject()});
   openMenu(e.currentTarget, items);
 };
@@ -1342,7 +1343,7 @@ async function saveMember(){
 
 // экран новой задачи повторяет «Новое напоминание»: поля, переключатели, параметры
 function openTaskSheet(){
-  form.project = view.kind === 'project' ? view.id : 'inbox';
+  form.project = view.kind === 'project' ? view.id : someProject();
   form.member = view.kind === 'project' ? view.member : null;
 
   ['tf-title','tf-note','tf-url','tf-time'].forEach(id => document.getElementById(id).value = '');
@@ -1366,7 +1367,7 @@ function syncToggles(){
 
 function renderTaskParams(){
   const p = project(form.project);
-  document.getElementById('tf-project-name').textContent = p ? p.name : 'Входящие';
+  document.getElementById('tf-project-name').textContent = p ? p.name : '—';
   document.getElementById('tf-project-glyph').innerHTML = ICONS.folder;
   document.getElementById('tf-project-glyph').style.background = p ? p.color : 'var(--card-2)';
   const m = p?.members.find(x => x.id === form.member);

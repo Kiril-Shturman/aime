@@ -141,7 +141,9 @@ def tool_report(args):
 
 def tool_add_task(args):
     st = state()
-    p = find_project(st, args.get("project", "")) or find_project(st, "Входящие")
+    p = find_project(st, args.get("project", "")) or (st["projects"][0] if st["projects"] else None)
+    if not p:
+        return "На доске нет ни одного проекта — задачу некуда класть."
     stage = find_stage(p, args.get("stage")) if args.get("stage") else None
     t = call("/api/task", "POST", {
         "title": args["title"],

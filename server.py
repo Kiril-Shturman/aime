@@ -80,13 +80,12 @@ KINDS = ("bot", "agent", "service", "human")
 STAGES = ("planned", "active", "done")
 TASK_STATUS = ("todo", "doing", "done")
 
-DEFAULT = {
-    "projects": [
-        {"id": "inbox", "name": "Входящие", "color": "#0a84ff", "note": "", "repo": "",
-         "members": [], "roadmap": []},
-    ],
-    "tasks": [],
-}
+DEFAULT = {"projects": [], "tasks": []}
+
+
+def fallback_project(state):
+    """Куда падает задача, если проект не указан: первый в списке."""
+    return state["projects"][0]["id"] if state["projects"] else None
 
 
 def load():
@@ -218,7 +217,9 @@ async def add_task(request):
         raise web.HTTPBadRequest(text="title required")
     state = load()
     known = {p["id"] for p in state["projects"]}
-    project = body.get("project") if body.get("project") in known else "inbox"
+    project = body.get("project") if body.get("project") in known else fallback_project(state)
+    if not project:
+        raise web.HTTPBadRequest(text="сначала заведи проект")
     members = {m["id"] for p in state["projects"] if p["id"] == project for m in p["members"]}
     task = {
         "id": uuid.uuid4().hex[:12],
@@ -339,8 +340,6 @@ async def patch_project(request):
 
 async def delete_project(request):
     pid = request.match_info["pid"]
-    if pid == "inbox":
-        raise web.HTTPBadRequest(text="inbox is permanent")
     state = load()
     find_project(state, pid)
     state["projects"] = [p for p in state["projects"] if p["id"] != pid]
@@ -431,7 +430,9 @@ async def add_tasks(request):
         raise web.HTTPBadRequest(text="items required")
     state = load()
     known = {p["id"] for p in state["projects"]}
-    project = body.get("project") if body.get("project") in known else "inbox"
+    project = body.get("project") if body.get("project") in known else fallback_project(state)
+    if not project:
+        raise web.HTTPBadRequest(text="сначала заведи проект")
     created = []
     for item in items[:20]:
         title = (item.get("title") or "").strip() if isinstance(item, dict) else str(item).strip()
