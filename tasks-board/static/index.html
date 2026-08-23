@@ -10,7 +10,7 @@
      Всё, что раньше расходилось между экранами, сведено сюда. */
   :root{
     --bg:#000; --card:#1c1c1e; --card-2:#2c2c2e; --sep:#38383a;
-    --text:#fff; --dim:#8e8e93; --blue:#0a84ff; --r:14px; --pad:16px;
+    --text:#fff; --dim:#8e8e93; --blue:#2a8bff; --blue-bright:#4ea3ff; --r:14px; --pad:16px;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
   html,body{margin:0; background:var(--bg); color:var(--text);
@@ -34,7 +34,7 @@
     display:flex; align-items:center; justify-content:center}
   .tile .n{position:absolute; right:14px; top:9px; font-size:30px; font-weight:700; letter-spacing:-.5px}
   .tile .t{font-size:15px; font-weight:600}
-  .t-today{background:linear-gradient(180deg,#3b9bf0,#2b8ae0)}
+  .t-today{background:linear-gradient(180deg,var(--blue-bright),var(--blue))}
   .t-planned{background:linear-gradient(180deg,#f4776f,#e8635c)}
   .t-all{background:linear-gradient(180deg,#48484a,#3a3a3c)}
   .t-flag{background:linear-gradient(180deg,#f5b556,#eda344)}
@@ -51,7 +51,7 @@
   .row{display:flex; align-items:center; gap:12px; min-height:52px; padding:8px 14px;
     cursor:pointer; background:none; border:0; width:100%; color:var(--text); text-align:left}
   .row + .row{box-shadow:inset 0 .5px 0 var(--sep)}
-  .row.on{background:rgba(10,132,255,.14)}
+  .row.on{background:rgba(42,139,255,.14)}
   .row .body{flex:1; min-width:0}
   .row .name{display:block; font-size:17px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .row .sub{display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
@@ -161,7 +161,7 @@
 
   .fab{position:fixed; right:var(--pad); bottom:calc(22px + env(safe-area-inset-bottom));
     width:56px; height:56px; border-radius:50%; border:0; color:#fff;
-    background:linear-gradient(180deg,#4ea3ff 0%,#2a8bff 100%);
+    background:linear-gradient(180deg,var(--blue-bright) 0%,var(--blue) 100%);
     font-size:30px; line-height:1; box-shadow:0 10px 24px rgba(42,139,255,.42);
     transition:transform .12s}
   .fab:active{transform:scale(.94)}
@@ -205,7 +205,7 @@
   .segment{display:flex; background:var(--card); border-radius:12px; padding:4px; gap:4px; margin-bottom:10px}
   .segment button{flex:1; padding:9px 0; border-radius:999px; white-space:nowrap; border:0; background:none;
     color:var(--dim); font-size:14px; transition:background .15s, color .15s}
-  .segment button.on{background:#2a8bff; color:#fff; font-weight:600}
+  .segment button.on{background:var(--blue); color:#fff; font-weight:600}
   /* шапка листа: крестик слева, галочка справа — как в «Напоминаниях» */
   .sheet-head{display:flex; align-items:center; justify-content:space-between; margin:2px 0 16px}
   .sheet-title{font-size:17px; font-weight:600}
@@ -213,7 +213,7 @@
     color:#fff; font-size:17px; display:flex; align-items:center; justify-content:center;
     transition:transform .12s, background .15s}
   .circle:active{transform:scale(.94)}
-  .circle.ok{background:#2a8bff; box-shadow:0 8px 18px rgba(42,139,255,.35)}
+  .circle.ok{background:var(--blue); box-shadow:0 8px 18px rgba(42,139,255,.35)}
 
   .card.pad{padding:2px 14px}
   .line{width:100%; background:none; border:0; color:var(--text); font:inherit;
@@ -243,7 +243,7 @@
   .stage .mark i{width:11px; height:11px; border-radius:50%; background:#48484a; margin-top:5px;
     display:block; z-index:1}
   .stage.done .mark i{background:#30d158}
-  .stage.active .mark i{background:var(--blue); box-shadow:0 0 0 4px rgba(10,132,255,.25)}
+  .stage.active .mark i{background:var(--blue); box-shadow:0 0 0 4px rgba(42,139,255,.25)}
   .stage:not(:last-child) .mark::after{content:''; position:absolute; top:14px; bottom:-24px;
     left:50%; width:2px; margin-left:-1px; background:var(--sep)}
   .stage .body{flex:1; min-width:0}
@@ -252,18 +252,18 @@
   .stage.done .name{color:var(--dim); text-decoration:line-through}
   .badge{font-size:12px; padding:3px 9px; border-radius:999px; background:var(--card-2);
     color:var(--dim); white-space:nowrap; align-self:flex-start; margin-top:2px}
-  .badge.active{background:rgba(10,132,255,.2); color:#5ab0ff}
+  .badge.active{background:rgba(42,139,255,.2); color:var(--blue-bright)}
   .badge.done{background:rgba(48,209,88,.18); color:#4ee07a}
 
   .stage .progress{display:flex; align-items:center; gap:8px; margin-top:6px}
   .stage .bar{flex:1; height:4px; border-radius:2px; background:rgba(255,255,255,.1); overflow:hidden}
-  .stage .bar i{display:block; height:100%; background:#2a8bff; border-radius:2px}
+  .stage .bar i{display:block; height:100%; background:var(--blue); border-radius:2px}
   .stage.done .bar i{background:#30d158}
   .stage .frac{font-size:12px; color:var(--dim); white-space:nowrap}
 
   .group-label{font-size:13px; color:var(--dim); margin:16px 4px 6px}
   .task .badge-doing{display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px;
-    margin-top:4px; background:rgba(42,139,255,.2); color:#5ab0ff}
+    margin-top:4px; background:rgba(42,139,255,.2); color:var(--blue-bright)}
   .task .report{font-size:13px; color:#9aa0a8; margin-top:4px; padding-left:10px;
     border-left:2px solid rgba(255,255,255,.12)}
   .task .tx{cursor:pointer}
@@ -282,7 +282,7 @@
   .actions button:active{transform:scale(.98); filter:brightness(.92)}
   .btn-cancel{padding:0 20px; background:rgba(255,255,255,.06); color:#fff;
     border:1px solid rgba(255,255,255,.07) !important; font-weight:600 !important}
-  .btn-ok{background:linear-gradient(180deg,#4ea3ff 0%,#2a8bff 100%); color:#fff;
+  .btn-ok{background:linear-gradient(180deg,var(--blue-bright) 0%,var(--blue) 100%); color:#fff;
     box-shadow:0 8px 20px rgba(42,139,255,.4)}
   /* удаление — тихой текстовой строкой, а не красной плитой */
   .danger{display:block; width:100%; margin:26px 0 0; padding:12px 0; border:0;
@@ -647,7 +647,7 @@ const KINDS = [
   {id:'service', label:'Сервис'},
   {id:'human', label:'Человек'},
 ];
-const COLORS = ['#0a84ff','#30d158','#bf5af2','#ff9f0a','#ff375f','#64d2ff','#a2845e','#ffd60a'];
+const COLORS = ['#2a8bff','#30d158','#bf5af2','#ff9f0a','#ff375f','#64d2ff','#a2845e','#ffd60a'];
 
 document.querySelectorAll('.ic[data-i]').forEach(el => el.innerHTML = ICONS[el.dataset.i] || '');
 document.getElementById('btn-add-project').innerHTML = ICONS.plus;
