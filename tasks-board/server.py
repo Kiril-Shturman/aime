@@ -10,7 +10,8 @@
 API минимальный, чтобы им мог пользоваться агент:
   GET    /api/state                    — всё сразу: сводка, проекты, задачи
   POST   /api/task                     — {title, note, url, project, member, stage, due, time, flagged}
-  PATCH  /api/task/<id>                — {title, note, status, member, stage, report, due, time, flagged}
+  PATCH  /api/task/<id>                — {title, note, status, member, stage, report, commit,
+                                          tokens, seconds, due, time, flagged}
   POST   /api/task/<id>/toggle         — отметить/снять отметку
   DELETE /api/task/<id>
   POST   /api/project                  — {name, color, note, repo, path, members:[…]}
@@ -127,6 +128,10 @@ def migrate(state):
         t.setdefault("stage", None)
         t.setdefault("parent", None)
         t.setdefault("report", "")
+        t.setdefault("commit", "")     # чем закончилась работа
+        t.setdefault("tokens", 0)      # сколько токенов ушло
+        t.setdefault("seconds", 0)     # сколько времени заняло
+        t.setdefault("started_at", None)
     if changed:
         save(state)
     return state
@@ -224,6 +229,10 @@ async def add_task(request):
         "parent": body.get("parent") or None,
         "status": body.get("status") if body.get("status") in TASK_STATUS else "todo",
         "report": (body.get("report") or "").strip(),
+        "commit": "",
+        "tokens": 0,
+        "seconds": 0,
+        "started_at": None,
         "url": (body.get("url") or "").strip(),
         "due": body.get("due") or None,
         "time": body.get("time") or None,
@@ -244,9 +253,15 @@ async def patch_task(request):
     for t in state["tasks"]:
         if t["id"] != request.match_info["tid"]:
             continue
-        for key in ("title", "note", "report", "url"):
+        for key in ("title", "note", "report", "url", "commit"):
             if key in body:
                 t[key] = (body[key] or "").strip()
+        for key in ("tokens", "seconds"):
+            if key in body and body[key] is not None:
+                try:
+                    t[key] = max(0, int(body[key]))
+                except (TypeError, ValueError):
+                    pass
         for key in ("due", "time", "stage", "member", "parent"):
             if key in body:
                 t[key] = body[key] or None
@@ -255,7 +270,13 @@ async def patch_task(request):
         if body.get("status") in TASK_STATUS:
             t["status"] = body["status"]
             t["done"] = t["status"] == "done"
-            t["done_at"] = int(time.time()) if t["done"] else None
+            now = int(time.time())
+            if t["status"] == "doing" and not t.get("started_at"):
+                t["started_at"] = now          # засекаем, когда взяли в работу
+            t["done_at"] = now if t["done"] else None
+            # если исполнитель не сказал, сколько заняло, считаем сами
+            if t["done"] and not t.get("seconds") and t.get("started_at"):
+                t["seconds"] = max(0, now - t["started_at"])
         save(state)
         return web.json_response(t)
     raise web.HTTPNotFound()

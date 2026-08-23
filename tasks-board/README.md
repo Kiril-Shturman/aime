@@ -27,7 +27,8 @@ python3 avatars.py           # подтянуть аватарки участн�
 участник { id, name, handle, role, kind: bot|agent|service|human, avatar }
 этап     { id, title, date, status: planned|active|done, progress {done,total} }
 задача   { id, title, note, report, url, project, stage, parent, member,
-           status: todo|doing|done, due, time, flagged, done }
+           status: todo|doing|done, commit, tokens, seconds,
+           started_at, done_at, due, time, flagged, done }
 ```
 
 У проекта есть карточка репозитория: подключаешь адресом, доска сама проверяет
@@ -48,7 +49,7 @@ python3 avatars.py           # подтянуть аватарки участн�
 | POST | `/api/goal` | `{text, project}` — цель словами, заводит активный этап |
 | POST | `/api/tasks` | `{project, stage, parent, items[]}` — разбор пачкой |
 | POST | `/api/task` | `{title, note, url, project, stage, member, due, time, flagged}` |
-| PATCH | `/api/task/<id>` | `{title, note, status, stage, member, report, due, time, flagged}` |
+| PATCH | `/api/task/<id>` | `{title, note, status, stage, member, report, commit, tokens, seconds, …}` |
 | POST | `/api/task/<id>/toggle` | отметить выполненной и обратно |
 | DELETE | `/api/task/<id>` | удалить |
 | POST | `/api/project` | `{name, color, note, repo, members[]}` |
