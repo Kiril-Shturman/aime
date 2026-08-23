@@ -20,6 +20,8 @@ API минимальный, чтобы им мог пользоваться аг
   DELETE /api/project/<id>/member/<mid>
   POST   /api/goal                     — {text, project} — цель словами: заводит активный этап
   POST   /api/tasks                    — {project, stage, parent, items:[{title,…}]} — пачкой
+  POST   /api/project/<id>/git         — {repo, branch} — подключить репозиторий
+  GET    /api/project/<id>/git         — ветка, последний коммит, есть ли правки
   POST   /api/project/<id>/stage       — {title, date, status, note}
   PATCH  /api/project/<id>/stage/<sid> — {title, date, status, note}
   DELETE /api/project/<id>/stage/<sid>
@@ -466,6 +468,90 @@ async def delete_stage(request):
     return web.json_response({"ok": True})
 
 
+# ---------------------------------------------------------------- git
+
+PROJECTS_DIR = os.environ.get("PROJECTS_DIR", os.path.expanduser("~/projects"))
+
+
+def git(args, cwd=None, timeout=120):
+    """Запуск git с понятным результатом: (получилось, текст)."""
+    try:
+        out = subprocess.run(["git"] + args, cwd=cwd, capture_output=True,
+                             text=True, timeout=timeout)
+        return out.returncode == 0, (out.stdout or out.stderr).strip()
+    except subprocess.TimeoutExpired:
+        return False, "git думал слишком долго"
+    except FileNotFoundError:
+        return False, "git на этой машине не установлен"
+
+
+def repo_slug(repo):
+    """git@github.com:user/aime.git → aime"""
+    name = repo.rstrip("/").split("/")[-1]
+    return name[:-4] if name.endswith(".git") else name
+
+
+def git_status(path):
+    """Что происходит в рабочей копии: ветка, последний коммит, правки."""
+    if not path or not os.path.isdir(os.path.join(path, ".git")):
+        return None
+    ok, branch = git(["rev-parse", "--abbrev-ref", "HEAD"], cwd=path)
+    ok2, last = git(["log", "-1", "--pretty=%h %s (%cr)"], cwd=path)
+    ok3, dirty = git(["status", "--porcelain"], cwd=path)
+    return {
+        "path": path,
+        "branch": branch if ok else "?",
+        "last": last if ok2 else "",
+        "dirty": len([l for l in dirty.splitlines() if l.strip()]) if ok3 else 0,
+    }
+
+
+async def get_git(request):
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    return web.json_response({"repo": p.get("repo", ""), "status": git_status(p.get("path"))})
+
+
+async def connect_git(request):
+    """Подключение репозитория «по-нормальному»: проверяем доступ, клонируем,
+    запоминаем путь. Никаких «укажи путь руками»."""
+    body = await request.json()
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    repo = (body.get("repo") or p.get("repo") or "").strip()
+    branch = (body.get("branch") or "").strip()
+    if not repo:
+        raise web.HTTPBadRequest(text="repo required")
+
+    def work():
+        ok, out = git(["ls-remote", "--heads", repo], timeout=60)
+        if not ok:
+            return {"ok": False, "error": f"Нет доступа к репозиторию: {out.splitlines()[-1][:200]}"}
+        heads = [l.split("refs/heads/")[-1] for l in out.splitlines() if "refs/heads/" in l]
+        target = branch or ("main" if "main" in heads else heads[0] if heads else "")
+        os.makedirs(PROJECTS_DIR, exist_ok=True)
+        path = os.path.join(PROJECTS_DIR, repo_slug(repo))
+        if os.path.isdir(os.path.join(path, ".git")):
+            git(["fetch", "--quiet", "origin"], cwd=path)
+            git(["checkout", target], cwd=path)
+            git(["pull", "--quiet", "--ff-only"], cwd=path)
+        else:
+            ok, out = git(["clone", "--quiet", "--branch", target, repo, path], timeout=300)
+            if not ok:
+                return {"ok": False, "error": f"Клонировать не вышло: {out[:200]}"}
+        return {"ok": True, "path": path, "branch": target, "branches": heads}
+
+    result = await request.loop.run_in_executor(None, work)
+    if not result.get("ok"):
+        return web.json_response(result, status=400)
+
+    p["repo"] = repo
+    p["path"] = result["path"]
+    save(state)
+    return web.json_response({"ok": True, "repo": repo, "status": git_status(p["path"]),
+                              "branches": result["branches"]})
+
+
 # Кнопки вместо команд: мини-аппа дёргает те же действия, что раньше
 # набирались в чате как /status и /doctor. Список закрытый — что не здесь,
 # то через кнопку не запустить.
@@ -528,6 +614,8 @@ def make_app():
     app.router.add_delete("/api/project/{pid}/member/{mid}", delete_member)
     app.router.add_post("/api/goal", add_goal)
     app.router.add_post("/api/tasks", add_tasks)
+    app.router.add_get("/api/project/{pid}/git", get_git)
+    app.router.add_post("/api/project/{pid}/git", connect_git)
     app.router.add_post("/api/project/{pid}/stage", add_stage)
     app.router.add_patch("/api/project/{pid}/stage/{sid}", patch_stage)
     app.router.add_delete("/api/project/{pid}/stage/{sid}", delete_stage)
