@@ -18,6 +18,7 @@ API минимальный, чтобы им мог пользоваться аг
   PATCH  /api/project/<id>             — {name, color, note, repo, path}
   DELETE /api/project/<id>
   POST   /api/project/<id>/member      — {name, handle, role, kind}
+  PATCH  /api/project/<id>/member/<mid> — {name, handle, role, kind}
   DELETE /api/project/<id>/member/<mid>
   POST   /api/goal                     — {text, project} — цель словами: заводит активный этап
   POST   /api/tasks                    — {project, stage, parent, items:[{title,…}]} — пачкой
@@ -360,6 +361,28 @@ async def add_member(request):
     return web.json_response(member)
 
 
+async def patch_member(request):
+    body = await request.json()
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    for m in p["members"]:
+        if m["id"] != request.match_info["mid"]:
+            continue
+        if "handle" in body:
+            handle = (body["handle"] or "").strip()
+            if handle and not handle.startswith("@"):
+                handle = "@" + handle
+            m["handle"] = handle
+        for key in ("name", "role"):
+            if key in body:
+                m[key] = (body[key] or "").strip()
+        if body.get("kind") in KINDS:
+            m["kind"] = body["kind"]
+        save(state)
+        return web.json_response(m)
+    raise web.HTTPNotFound()
+
+
 async def delete_member(request):
     mid = request.match_info["mid"]
     state = load()
@@ -632,6 +655,7 @@ def make_app():
     app.router.add_patch("/api/project/{pid}", patch_project)
     app.router.add_delete("/api/project/{pid}", delete_project)
     app.router.add_post("/api/project/{pid}/member", add_member)
+    app.router.add_patch("/api/project/{pid}/member/{mid}", patch_member)
     app.router.add_delete("/api/project/{pid}/member/{mid}", delete_member)
     app.router.add_post("/api/goal", add_goal)
     app.router.add_post("/api/tasks", add_tasks)

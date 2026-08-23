@@ -21,6 +21,11 @@
   /* --- типографика --- */
   .h1{font-size:30px; font-weight:700; letter-spacing:-.6px; margin:6px 2px 14px}
   .h2{font-size:22px; font-weight:700; letter-spacing:-.4px; margin:0}
+  .member-head{display:flex; flex-direction:column; align-items:center; gap:8px; margin-bottom:16px}
+  .member-head .ava,.member-head .ava-l{width:64px; height:64px; font-size:26px}
+  .member-head b{font-size:20px; font-weight:700}
+  .member-head span{font-size:14px; color:var(--dim)}
+
   .sect{font-size:13px; font-weight:500; color:var(--dim); letter-spacing:.3px;
     text-transform:uppercase; margin:22px 4px 8px}
   .sub{font-size:13px; color:var(--dim); margin-top:2px}
@@ -449,6 +454,33 @@
   </div>
 </div>
 
+<!-- ЛИСТ: УЧАСТНИК (просмотр) -->
+<div class="sheet" id="sheet-member-info">
+  <div class="box">
+    <button class="grab" aria-label="Потяните, чтобы закрыть"></button>
+    <button class="sheet-close" aria-label="Закрыть"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+    <div class="member-head" id="mi-head"></div>
+
+    <div class="stats" id="mi-stats"></div>
+
+    <div class="sect">Кто это</div>
+    <div class="segment" id="mi-kind"></div>
+    <div class="card pad">
+      <input class="line" id="mi-name" placeholder="Имя">
+      <input class="line" id="mi-role" placeholder="Роль — за что отвечает">
+      <input class="line last" id="mi-handle" placeholder="@username">
+    </div>
+
+    <div class="sect" id="mi-tasks-label">Задачи участника</div>
+    <div class="card" id="mi-tasks"></div>
+
+    <div class="actions">
+      <button class="btn-ok" onclick="saveMemberInfo()">Сохранить</button>
+    </div>
+    <button class="danger" onclick="removeMember()">Убрать из проекта</button>
+  </div>
+</div>
+
 <!-- ЛИСТ: ЭТАП (просмотр) -->
 <div class="sheet" id="sheet-stage-info">
   <div class="box">
@@ -720,7 +752,7 @@ function render(){
     document.getElementById('p-team').innerHTML =
       p.members.map(m => `
         <button class="row ${view.member === m.id ? 'on' : ''}"
-                onclick="pickMember('${view.member === m.id ? '' : m.id}')">
+                onclick="openMemberInfo('${m.id}')">
           ${avatar(m, p.color)}
           <span class="body">
             <span class="name">${esc(m.name)}</span>
@@ -1003,6 +1035,75 @@ function openProject(id){
 }
 
 function pickMember(id){ view.member = id || null; render(); }
+
+let memberOpen = null;   // участник, открытый в листе
+
+function openMemberInfo(mid){
+  const p = project(view.id);
+  const m = (p?.members || []).find(x => x.id === mid);
+  if (!m) return;
+  memberOpen = {...m};
+  form.kind = m.kind || 'bot';
+
+  document.getElementById('mi-head').innerHTML =
+    `${avatar(m, p.color)}<b>${esc(m.name)}</b>
+     <span>${esc(m.role || kindLabel(m.kind))}</span>`;
+
+  const own = S.tasks.filter(t => t.member === mid);
+  const done = own.filter(t => t.done);
+  const tokens = own.reduce((sum, t) => sum + (t.tokens || 0), 0);
+  document.getElementById('mi-stats').innerHTML =
+    `<div class="stat"><b>${own.length - done.length}</b><span>в работе</span></div>
+     <div class="stat"><b>${done.length}</b><span>закрыто</span></div>
+     <div class="stat"><b>${tokens ? fmtNum(tokens) : '—'}</b><span>токенов</span></div>`;
+
+  document.getElementById('mi-name').value = m.name || '';
+  document.getElementById('mi-role').value = m.role || '';
+  document.getElementById('mi-handle').value = m.handle || '';
+  renderMemberKind();
+
+  document.getElementById('mi-tasks').innerHTML = own.length
+    ? own.slice(0, 6).map(t => `<div class="row static">
+        <span class="cb ${t.done ? 'on' : ''}" onclick="toggle('${t.id}')"></span>
+        <span class="body"><span class="name">${esc(t.title)}</span>
+          <span class="sub">${TASK_STATUS_LABEL[t.status] || ''}</span></span>
+      </div>`).join('')
+    : `<button class="row" onclick="closeSheet('sheet-member-info'); pickMember('${mid}')">
+         <span class="glyph">${ICONS.all}</span>
+         <span class="body"><span class="name accent">Задач пока нет — показать фильтр</span></span>
+       </button>`;
+
+  openSheet('sheet-member-info');
+}
+
+function renderMemberKind(){
+  document.getElementById('mi-kind').innerHTML = KINDS.map(k =>
+    `<button class="${k.id === form.kind ? 'on' : ''}" data-k="${k.id}">${k.label}</button>`).join('');
+  document.querySelectorAll('#mi-kind button').forEach(b => b.onclick = () => {
+    form.kind = b.dataset.k; renderMemberKind();
+  });
+}
+
+async function saveMemberInfo(){
+  await api(`/api/project/${view.id}/member/${memberOpen.id}`, {method:'PATCH',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name: document.getElementById('mi-name').value.trim(),
+      role: document.getElementById('mi-role').value.trim(),
+      handle: document.getElementById('mi-handle').value.trim(),
+      kind: form.kind,
+    })});
+  closeSheet('sheet-member-info');
+  haptic('success');
+  await load();
+}
+
+async function removeMember(){
+  if (!confirm('Убрать участника из проекта? Его задачи останутся.')) return;
+  await fetch(`/api/project/${view.id}/member/${memberOpen.id}`, {method: 'DELETE'});
+  closeSheet('sheet-member-info');
+  await load();
+}
 
 document.querySelectorAll('.tile').forEach(el => el.onclick = () => {
   view = {kind: 'filter', id: el.dataset.f, title: el.querySelector('.t').textContent, member: null};
