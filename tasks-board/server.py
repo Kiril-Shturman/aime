@@ -22,6 +22,10 @@ API минимальный, чтобы им мог пользоваться аг
   DELETE /api/project/<id>/member/<mid>/bot   — отключить
   GET    /api/bots                     — кем из ботов можно управлять
   POST   /api/bot/<mid>/call           — {method, params} — вызов Bot API от его имени
+  POST   /api/dm/ask                   — {to, text, wait} — написать боту от имени
+                                          владельца и дождаться ответа
+  POST   /api/dm/send                  — {to, text} — просто отправить
+  GET    /api/dm?to=&n=                — последние сообщения переписки
   PATCH  /api/project/<id>/member/<mid> — {name, handle, role, kind}
   DELETE /api/project/<id>/member/<mid>
   POST   /api/goal                     — {text, project} — цель словами: заводит активный этап
@@ -44,6 +48,7 @@ import urllib.parse
 import urllib.request
 import shlex
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -1072,6 +1077,79 @@ async def call_bot(request):
         raise web.HTTPBadRequest(text="params: объект с полями метода")
     return web.json_response({"result": await tg_async(rec["token"], method, params)})
 
+# ------------------------------------------ личные сообщения от имени хозяина
+#
+# Бот боту написать не может: Телеграм отвечает USER_BOT_TO_BOT_DISABLED.
+# Единственный, кто заводит разговор с ботом, — живой аккаунт. Поэтому промты
+# отправляет userbot.py от имени владельца, а доска только зовёт его и ждёт.
+# Работа долгая (нейросети думают), поэтому всё через отдельный процесс.
+
+USERBOT = os.path.join(ROOT, "userbot.py")
+
+
+async def dm_call(args, timeout):
+    """Позвать userbot.py и разобрать его ответ. Он отвечает одной строкой JSON."""
+    def run():
+        try:
+            proc = subprocess.run(
+                [sys.executable, USERBOT, *[str(a) for a in args]],
+                capture_output=True, text=True, timeout=timeout, cwd=ROOT,
+            )
+        except subprocess.TimeoutExpired:
+            raise web.HTTPGatewayTimeout(text="аккаунт не ответил вовремя")
+        lines = [l for l in (proc.stdout or "").splitlines() if l.strip()]
+        try:
+            data = json.loads(lines[-1])
+        except (IndexError, json.JSONDecodeError):
+            raise web.HTTPBadGateway(
+                text=((proc.stderr or proc.stdout or "userbot молчит").strip())[-300:])
+        if not data.get("ok"):
+            raise web.HTTPBadRequest(text=data.get("error") or "не вышло")
+        return data
+
+    return await asyncio.get_running_loop().run_in_executor(None, run)
+
+
+def dm_target(body):
+    to = (body.get("to") or "").strip()
+    text = (body.get("text") or "").strip()
+    if not to:
+        raise web.HTTPBadRequest(text="to: @ник бота или id чата")
+    if not text:
+        raise web.HTTPBadRequest(text="text: что написать")
+    return to, text
+
+
+async def dm_who(request):
+    deny_guests(request)
+    return web.json_response(await dm_call(["who"], 60))
+
+
+async def dm_send(request):
+    deny_guests(request)
+    to, text = dm_target(await request.json())
+    return web.json_response(await dm_call(["send", to, text], 60))
+
+
+async def dm_ask(request):
+    """Написать боту и дождаться, пока он допишет ответ."""
+    deny_guests(request)
+    body = await request.json()
+    to, text = dm_target(body)
+    try:
+        wait = min(max(int(body.get("wait") or 90), 5), 300)
+    except (TypeError, ValueError):
+        wait = 90
+    return web.json_response(await dm_call(["ask", to, text, wait], wait + 30))
+
+
+async def dm_read(request):
+    deny_guests(request)
+    to = (request.query.get("to") or "").strip()
+    if not to:
+        raise web.HTTPBadRequest(text="to: @ник бота или id чата")
+    return web.json_response(await dm_call(["read", to, request.query.get("n", "5")], 60))
+
 # ------------------------------------------------------------ бот в личке
 
 async def get_assistant(request):
@@ -1168,6 +1246,10 @@ def make_app():
     app.router.add_delete("/api/project/{pid}/member/{mid}/bot", disconnect_bot)
     app.router.add_get("/api/bots", list_bots)
     app.router.add_post("/api/bot/{mid}/call", call_bot)
+    app.router.add_get("/api/dm/who", dm_who)
+    app.router.add_get("/api/dm", dm_read)
+    app.router.add_post("/api/dm/send", dm_send)
+    app.router.add_post("/api/dm/ask", dm_ask)
     app.router.add_post("/api/goal", add_goal)
     app.router.add_post("/api/tasks", add_tasks)
     app.router.add_get("/api/project/{pid}/git", get_git)

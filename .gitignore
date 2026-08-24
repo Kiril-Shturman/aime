@@ -41,3 +41,8 @@ tasks-board/owner.key
 # токены подключённых ботов — их место на сервере, не в гите
 tasks-board/bots.json
 tasks-board/bots.json.tmp
+
+# сессия и ключи личного аккаунта — это доступ к Телеграму владельца
+tasks-board/userbot.session
+tasks-board/userbot.session-journal
+tasks-board/userbot.env
