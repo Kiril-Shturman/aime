@@ -25,8 +25,8 @@ export default function Popup({
   }, [open])
 
   return (
-    <KPopup opened={open} onBackdropClick={onClose} className="!bg-black">
-      <Page className="!bg-black">
+    <KPopup opened={open} onBackdropClick={onClose}>
+      <Page>
         <Navbar
           title={title}
           left={
