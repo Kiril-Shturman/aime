@@ -3,6 +3,24 @@
 
 @source '../node_modules/konsta';
 
+/* telegram-ui берёт цвета не из своего пропа appearance, а из темы Телеграма:
+   --tgui--text_color объявлен как var(--tg-theme-text-color, …). У владельца
+   светлой темы получался чёрный текст на нашем чёрном фоне. Мини-аппа у нас
+   всегда тёмная, поэтому прибиваем переменные темы к своей палитре. */
+.tg-dark {
+  --tg-theme-text-color: #ffffff;
+  --tg-theme-hint-color: rgba(255, 255, 255, 0.45);
+  --tg-theme-subtitle-text-color: rgba(255, 255, 255, 0.45);
+  --tg-theme-link-color: #2a8bff;
+  --tg-theme-accent-text-color: #2a8bff;
+  --tg-theme-bg-color: #000000;
+  --tg-theme-secondary-bg-color: #000000;
+  --tg-theme-section-bg-color: #1c1c1e;
+  --tg-theme-section-separator-color: rgba(255, 255, 255, 0.12);
+  --tg-theme-header-bg-color: #000000;
+  --tg-theme-destructive-text-color: #ff453a;
+}
+
 /* активный сегмент — белый текст (по умолчанию Konsta делает чёрный) */
 .dark .k-segmented-strong-button-active {
   color: #fff;

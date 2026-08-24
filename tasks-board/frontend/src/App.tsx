@@ -16,7 +16,7 @@ export default function App() {
   }, [])
 
   return (
-<AppRoot appearance="dark" platform="ios">
+<AppRoot appearance="dark" platform="ios" className="tg-dark">
       <KonstaApp theme="ios" dark>
         <AppStoreProvider>
           <Gate>
