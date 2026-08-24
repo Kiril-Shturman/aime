@@ -1,3 +1,13 @@
+export interface TgUser {
+  id: number
+  first_name: string
+  last_name?: string
+  username?: string
+  photo_url?: string
+  language_code?: string
+  is_premium?: boolean
+}
+
 interface TG {
   ready?: () => void
   expand?: () => void
@@ -5,6 +15,7 @@ interface TG {
   setBackgroundColor?: (c: string) => void
   setBottomBarColor?: (c: string) => void
   disableVerticalSwipes?: () => void
+  initDataUnsafe?: { user?: TgUser }
   HapticFeedback?: {
     impactOccurred: (kind: 'light' | 'medium' | 'heavy') => void
     notificationOccurred: (kind: 'success' | 'error' | 'warning') => void
@@ -19,6 +30,10 @@ declare global {
 }
 
 export const tg = (): TG | undefined => window.Telegram?.WebApp
+
+export function getUser(): TgUser | null {
+  return tg()?.initDataUnsafe?.user ?? null
+}
 
 export function haptic(kind: 'light' | 'medium' | 'heavy' | 'success' | 'error' = 'light') {
   try {

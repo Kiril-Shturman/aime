@@ -4,6 +4,7 @@ import { App as KonstaApp } from 'konsta/react'
 import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
 import FilterPage from './pages/FilterPage'
+import ProfilePage from './pages/ProfilePage'
 import { AppStoreProvider } from './store/AppStore'
 import { initTelegram } from './lib/telegram'
 
@@ -20,6 +21,7 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/project/:id" element={<ProjectPage />} />
             <Route path="/filter/:kind" element={<FilterPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Routes>
         </BrowserRouter>
       </AppStoreProvider>
