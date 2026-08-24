@@ -32,7 +32,6 @@ import Pill from '../components/Pill'
 import TaskRow from '../components/TaskRow'
 import {
   PROCESS_KINDS,
-  STAGE_STATUS_LABEL,
   kindLabel,
   processKindLabel,
   repoShort,
@@ -46,15 +45,11 @@ import MemberSheet from '../sheets/MemberSheet'
 import MemberInfoSheet from '../sheets/MemberInfoSheet'
 import StageSheet from '../sheets/StageSheet'
 import StageInfoSheet from '../sheets/StageInfoSheet'
+import ModuleRoadmapPopup from '../components/ModuleRoadmapPopup'
 import GitSheet from '../sheets/GitSheet'
 import GoalSheet from '../sheets/GoalSheet'
 import type { Member, Stage, Task } from '../api/types'
-import {
-  ModuleIcon,
-  ProjectIcon,
-  StageIcon,
-  TaskIcon,
-} from '../components/WorkItemIcons'
+import { ModuleIcon, ProjectIcon } from '../components/WorkItemIcons'
 
 export default function ProjectPage() {
   const { id = '' } = useParams()
@@ -75,6 +70,7 @@ export default function ProjectPage() {
   const [memberInfo, setMemberInfo] = useState<Member | null>(null)
   const [stageOpen, setStageOpen] = useState(false)
   const [stageInfo, setStageInfo] = useState<Stage | null>(null)
+  const [moduleOpen, setModuleOpen] = useState(false)
   const [gitOpen, setGitOpen] = useState(false)
   const [goalOpen, setGoalOpen] = useState(false)
 
@@ -227,9 +223,6 @@ export default function ProjectPage() {
   }
 
   const visibleTasks = [...openTasks, ...doneTasks]
-  const looseTasks = visibleTasks.filter(
-    (t) => !t.stage || !project.roadmap.some((s) => s.id === t.stage),
-  )
   const projectTasks = state?.tasks.filter((t) => t.project === id) ?? []
   const projectDone = projectTasks.filter((t) => t.done).length
   const projectProgress = projectTasks.length
@@ -241,6 +234,34 @@ export default function ProjectPage() {
     moduleMap.set(moduleName, [...(moduleMap.get(moduleName) ?? []), stage])
   })
   const modules = Array.from(moduleMap, ([name, stages]) => ({ name, stages }))
+  const currentModule =
+    modules.find((module) =>
+      module.stages.some((stage) => stage.status === 'active'),
+    ) ??
+    modules.find((module) =>
+      module.stages.some((stage) => stage.status !== 'done'),
+    ) ??
+    modules.at(-1) ??
+    null
+  const currentModuleTasks = currentModule
+    ? projectTasks.filter((task) =>
+        currentModule.stages.some((stage) => stage.id === task.stage),
+      )
+    : []
+  const currentModuleDone = currentModuleTasks.filter((task) => task.done).length
+  const currentModuleProgress = currentModuleTasks.length
+    ? currentModuleDone / currentModuleTasks.length
+    : currentModule?.stages.length
+      ? currentModule.stages.reduce((sum, stage) => {
+          if (stage.status === 'done') return sum + 1
+          if (stage.progress.total) {
+            return sum + stage.progress.done / stage.progress.total
+          }
+          return sum
+        }, 0) / currentModule.stages.length
+      : 0
+  const currentTask =
+    openTasks.find((task) => task.status === 'doing') ?? openTasks[0] ?? null
 
   const openTaskSheet = (stage: string | null = null) => {
     setTaskStage(stage)
@@ -312,9 +333,9 @@ export default function ProjectPage() {
 
       {project.type !== 'process' && (
         <>
-          <BlockTitle>{memberFilter ? 'План участника' : 'План проекта'}</BlockTitle>
+          <BlockTitle>Роудмап</BlockTitle>
 
-          {modules.length === 0 ? (
+          {!currentModule ? (
             <List strong inset>
               <ListItem
                 link
@@ -325,136 +346,65 @@ export default function ProjectPage() {
               />
             </List>
           ) : (
-            modules.map((module) => {
-              const moduleTasks = visibleTasks.filter((task) =>
-                module.stages.some((stage) => stage.id === task.stage),
-              )
-              const moduleDone = moduleTasks.filter((task) => task.done).length
+            <button
+              type="button"
+              onClick={() => setModuleOpen(true)}
+              className="relative mx-safe-4 mb-6 w-[calc(100%-2rem)] min-h-36 overflow-hidden rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 text-left active:opacity-75"
+            >
+              <span className="block py-5 pl-5 pr-20">
+                <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">
+                  Текущий модуль
+                </span>
+                <span className="block mt-1 text-[20px] leading-tight font-semibold text-black dark:text-white">
+                  {currentModule.name}
+                </span>
+                <span className="block mt-2 text-[13px] text-black/50 dark:text-white/50">
+                  {currentModule.stages.length} этапов · {currentModuleDone} из {currentModuleTasks.length} задач готово
+                </span>
+                <span className="flex items-center gap-2 mt-4">
+                  <Progressbar progress={currentModuleProgress} className="flex-1" />
+                  <span className="text-[12px] font-medium text-primary shrink-0">
+                    {Math.round(currentModuleProgress * 100)}%
+                  </span>
+                </span>
+                <span className="block mt-3 text-[13px] text-primary">
+                  Открыть этапы
+                </span>
+              </span>
 
-              return (
-                <section
-                  key={module.name}
-                  className="mx-safe-4 mb-5 rounded-3xl overflow-hidden bg-ios-light-surface-1 dark:bg-ios-dark-surface-1"
-                >
-                  <div className="flex items-center gap-3 px-4 py-4 bg-primary/[.07] dark:bg-primary/[.10]">
-                    <span className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
-                      <ModuleIcon size={25} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                        Модуль
-                      </div>
-                      <div className="text-[18px] font-semibold text-black dark:text-white truncate">
-                        {module.name}
-                      </div>
-                      <div className="text-[13px] text-black/50 dark:text-white/50">
-                        {module.stages.length} этапов · {moduleDone} из {moduleTasks.length} задач готово
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="divide-y divide-black/[.08] dark:divide-white/[.08]">
-                    {module.stages.map((stage) => {
-                      const stageTasks = visibleTasks.filter(
-                        (task) => task.stage === stage.id,
-                      )
-                      const stageProgress = stage.progress.total
-                        ? stage.progress.done / stage.progress.total
-                        : 0
-
-                      return (
-                        <div key={stage.id}>
-                          <button
-                            type="button"
-                            onClick={() => setStageInfo(stage)}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-black/[.05] dark:active:bg-white/[.06]"
-                          >
-                            <span className="w-9 h-9 rounded-xl bg-black/[.04] dark:bg-white/[.06] text-primary flex items-center justify-center shrink-0">
-                              <StageIcon size={22} />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="flex items-center gap-2">
-                                <span className="text-[11px] font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">
-                                  Этап
-                                </span>
-                                {stage.date && (
-                                  <span className="text-[11px] text-black/40 dark:text-white/40">
-                                    {stage.date}
-                                  </span>
-                                )}
-                              </span>
-                              <span className="block text-[16px] font-semibold text-black dark:text-white truncate">
-                                {stage.title}
-                              </span>
-                              {stage.progress.total > 0 && (
-                                <span className="flex items-center gap-2 mt-1.5">
-                                  <Progressbar progress={stageProgress} className="flex-1" />
-                                  <span className="text-[11px] text-black/45 dark:text-white/45 shrink-0">
-                                    {stage.progress.done}/{stage.progress.total}
-                                  </span>
-                                </span>
-                              )}
-                            </span>
-                            <span
-                              className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
-                                stage.status === 'done'
-                                  ? 'bg-[#30d158]/20 text-[#248a3d] dark:text-[#30d158]'
-                                  : stage.status === 'active'
-                                    ? 'bg-primary/15 text-primary'
-                                    : 'bg-black/[.06] text-black/55 dark:bg-white/10 dark:text-white/55'
-                              }`}
-                            >
-                              {STAGE_STATUS_LABEL[stage.status]}
-                            </span>
-                          </button>
-
-                          <div className="bg-black/[.015] dark:bg-white/[.015] border-t border-black/[.05] dark:border-white/[.05]">
-                            {stageTasks.length > 0 ? (
-                              <List nested dividers>
-                                {stageTasks.map((task) => (
-                                  <TaskRow key={task.id} task={task} onEdit={setEditTask} />
-                                ))}
-                              </List>
-                            ) : (
-                              <div className="px-4 py-3 flex items-center gap-3 text-[14px] text-black/45 dark:text-white/45">
-                                <TaskIcon size={20} className="text-primary/60" />
-                                Задач пока нет
-                              </div>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => openTaskSheet(stage.id)}
-                              className="w-full px-4 py-3 flex items-center gap-3 text-[14px] text-primary border-t border-black/[.05] dark:border-white/[.05] active:bg-primary/[.06]"
-                            >
-                              <Plus size={20} />
-                              Добавить задачу
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </section>
-              )
-            })
+              <span className="absolute right-8 top-0 bottom-0 w-px bg-black/[.08] dark:bg-white/[.10]" />
+              <span className="absolute right-[17px] top-1/2 -translate-y-1/2 w-[31px] h-[31px] rounded-full bg-primary text-white ring-4 ring-ios-light-surface-1 dark:ring-ios-dark-surface-1 flex items-center justify-center shadow-sm">
+                <ModuleIcon size={18} />
+              </span>
+            </button>
           )}
 
-          {looseTasks.length > 0 && (
-            <>
-              <BlockTitle>Без этапа</BlockTitle>
-              <List strong inset>
-                {looseTasks.map((task) => (
-                  <TaskRow key={task.id} task={task} onEdit={setEditTask} />
-                ))}
-                <ListItem
-                  link
-                  onClick={() => openTaskSheet()}
-                  media={<Plus size={20} className="text-primary" />}
-                  title="Добавить задачу"
-                />
-              </List>
-            </>
-          )}
+          <BlockTitle>Задачи</BlockTitle>
+          <List strong inset dividers>
+            <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">
+              Сейчас
+            </div>
+            {currentTask ? (
+              <TaskRow task={currentTask} onEdit={setEditTask} />
+            ) : (
+              <ListItem title="Сейчас задач нет" />
+            )}
+
+            {doneTasks.length > 0 && (
+              <div className="px-4 pt-4 pb-1 border-t border-black/[.08] dark:border-white/[.08] text-[11px] font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">
+                Завершено
+              </div>
+            )}
+            {doneTasks.map((task) => (
+              <TaskRow key={task.id} task={task} onEdit={setEditTask} />
+            ))}
+            <ListItem
+              link
+              onClick={() => openTaskSheet(currentTask?.stage ?? null)}
+              media={<Plus size={20} className="text-primary" />}
+              title="Добавить задачу"
+            />
+          </List>
         </>
       )}
 
@@ -567,6 +517,16 @@ export default function ProjectPage() {
         projectId={id}
         stage={stageInfo}
       />
+      {currentModule && (
+        <ModuleRoadmapPopup
+          open={moduleOpen}
+          onClose={() => setModuleOpen(false)}
+          moduleName={currentModule.name}
+          stages={currentModule.stages}
+          tasks={projectTasks}
+          onStageClick={(stage) => setStageInfo(stage)}
+        />
+      )}
       <GitSheet
         open={gitOpen}
         onClose={() => setGitOpen(false)}
