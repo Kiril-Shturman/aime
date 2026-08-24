@@ -71,7 +71,10 @@ export default function TabPill() {
     <Tabbar
       labels
       icons
-      className="!fixed !left-0 !right-0 !bottom-0 !w-full z-30"
+      // Konsta кладёт снизу safe-area плюс целый rem — на телефоне под
+      // панелью зияет дыра. Оставляем только вырез и четыре пикселя.
+      className="!fixed !left-0 !right-0 !bottom-0 !w-full z-30
+                 !pb-[calc(env(safe-area-inset-bottom)+4px)]"
     >
       <ToolbarPane>
         <TabbarLink
