@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Check, GitBranch, Palette, Plus, Trash2, Rocket } from 'lucide-react'
+import { Bot, BookOpen, Check, CheckSquare, GitBranch, Palette, Plus, Rocket } from 'lucide-react'
 import {
   Block,
   BlockFooter,
@@ -8,20 +8,20 @@ import {
   List,
   ListInput,
   ListItem,
-  Segmented,
-  SegmentedButton,
   Toggle,
 } from 'konsta/react'
 import { Cell, IconContainer } from '@telegram-apps/telegram-ui'
 import Popup from '../components/Popup'
 import Sheet from '../components/Sheet'
-import { Avatar } from '../components/Avatar'
 import { api } from '../api/client'
-import { COLORS, KINDS, kindLabel } from '../lib/constants'
+import { COLORS } from '../lib/constants'
 import { WORKSPACE_KINDS, workspaceKindFor } from '../lib/workspace-kinds'
+import { CONTEXT_SOURCES } from '../lib/context-sources'
+import ContextSourceSheet from './ContextSourceSheet'
+import ContextInfoSheet from './ContextInfoSheet'
 import { haptic } from '../lib/telegram'
 import { useApp } from '../store/AppStore'
-import type { Member, MemberKind, Project } from '../api/types'
+import type { Project } from '../api/types'
 
 interface Props {
   open: boolean
@@ -29,7 +29,48 @@ interface Props {
   project?: Project | null
 }
 
-type Draft = { kind: MemberKind; name: string; handle?: string; role?: string }
+// Ключевые понятия, из которых состоит работа в этом инструменте.
+// Показываются в шапке при создании — чтобы человек с ходу понял,
+// куда попал.
+// Ключевые понятия, из которых состоит работа в этом инструменте.
+// Показываются в шапке при создании — чтобы человек с ходу понял,
+// куда попал.
+export const CONCEPTS = [
+  {
+    id: 'project',
+    label: 'Проект',
+    Icon: Rocket,
+    hint: 'Отдельное пространство, где агент выполняет связанную работу, хранит контекст и управляет задачами.',
+    details:
+      'У проекта есть два режима:\n\n• Целевой — работа идёт по этапам до конкретного результата.\n• Постоянный — работа выполняется непрерывно по правилам или расписанию.',
+  },
+  {
+    id: 'agent',
+    label: 'ИИ-агент',
+    Icon: Bot,
+    hint: 'Самостоятельный исполнитель, который понимает контекст, выполняет задачи, использует инструменты и накапливает опыт.',
+    details:
+      'Получает роль и задачи внутри проекта, самостоятельно планирует действия и сообщает о результате. Может работать с файлами, Git, интернетом, базами знаний и другими подключёнными инструментами.',
+  },
+  {
+    id: 'context',
+    label: 'Контекст',
+    Icon: BookOpen,
+    hint: 'Вся информация о проекте, которая помогает агенту понимать цели, учитывать историю и принимать решения.',
+    details:
+      'Формируется из описания проекта, документов, переписки, задач, Git-репозиториев, баз знаний и других источников. Контекст обновляется по мере работы, чтобы агент понимал текущее состояние проекта.',
+  },
+  {
+    id: 'task',
+    label: 'Задача',
+    Icon: CheckSquare,
+    hint: 'Отдельная единица работы с понятной целью и ожидаемым результатом, из которой складывается план проекта.',
+    details:
+      'Содержит описание работы, исполнителя, приоритет, срок и текущий статус. Агент может взять задачу, выполнить её с помощью доступных инструментов и оставить отчёт о результате.',
+  },
+] as const
+
+export type Concept = (typeof CONCEPTS)[number]
 
 function repoShort(url: string) {
   const m = url.match(/[:/]([^/:]+\/[^/]+?)(\.git)?$/)
@@ -45,16 +86,20 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
   const [kindId, setKindId] = useState<string>('project')
   const [repo, setRepo] = useState('')
 
-  // общее
-  const [drafts, setDrafts] = useState<Draft[]>([])
-  const [addOpen, setAddOpen] = useState(false)
+  // источники контекста: id → значения полей
+  const [sources, setSources] = useState<Record<string, Record<string, string>>>(
+    {},
+  )
+  const [editSource, setEditSource] = useState<string | null>(null)
+  const [infoOpen, setInfoOpen] = useState(false)
   const [sub, setSub] = useState<null | 'color' | 'repo'>(null)
   const [repoDraft, setRepoDraft] = useState('')
 
   useEffect(() => {
     if (!open) return
     setSub(null)
-    setDrafts([])
+    setSources({})
+    setEditSource(null)
     if (project) {
       const base = project.name
       const nt = project.note ?? ''
@@ -91,22 +136,44 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
     if (project) {
       await api.patchProject(project.id, payload)
     } else {
-      const created = await api.addProject(payload)
-      for (const d of drafts) {
-        try {
-          await api.addMember(created.id, d)
-        } catch {
-          /* пропускаем */
-        }
-      }
+      // выбранные источники агент разберёт после создания. Пока сериализуем
+      // в note — API расширим позже.
+      const summary = Object.entries(sources)
+        .map(([id, fields]) => {
+          const parts = Object.entries(fields)
+            .filter(([, v]) => v.trim())
+            .map(([k, v]) => `${k}: ${v.trim()}`)
+            .join('; ')
+          return `- ${id}${parts ? ` (${parts})` : ''}`
+        })
+        .join('\n')
+      const withSources = summary
+        ? {
+            ...payload,
+            note: [payload.note, `Источники контекста:\n${summary}`]
+              .filter(Boolean)
+              .join('\n\n'),
+          }
+        : payload
+      await api.addProject(withSources)
     }
     haptic('success')
     onClose()
     await refresh()
   }
 
-  const removeDraft = (i: number) =>
-    setDrafts((ds) => ds.filter((_, j) => j !== i))
+  const saveSource = (id: string, values: Record<string, string>) => {
+    setSources((s) => ({ ...s, [id]: values }))
+    setEditSource(null)
+  }
+  const removeSource = (id: string) => {
+    setSources((s) => {
+      const next = { ...s }
+      delete next[id]
+      return next
+    })
+    setEditSource(null)
+  }
 
   const togglePro = () => setPro((v) => !v)
 
@@ -119,7 +186,7 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
         onSave={save}
         canSave={canSave}
       >
-        {/* Хедер + переключатель проф-режима — в одной карточке, всегда виден */}
+        {/* Проект + все источники контекста — одним стеком Cell'ов */}
         <Block strong inset className="!p-0 overflow-hidden">
           <Cell
             multiline
@@ -130,11 +197,14 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
             }
             description={
               <>
-                Проект — это отдельное пространство, где агент выполняет
-                связанную работу, хранит контекст и управляет задачами.{' '}
+                Отдельное пространство, где агент выполняет связанную работу,
+                хранит контекст и управляет задачами.{' '}
                 <a
                   href="#"
-                  onClick={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    setInfoOpen(true)
+                  }}
                   className="text-[#4ea3ff]"
                 >
                   Что это
@@ -144,6 +214,41 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
           >
             Проект
           </Cell>
+
+          {!project &&
+            CONCEPTS.map((c) => {
+              const Icon = c.Icon
+              return (
+                <div key={c.id}>
+                  <div className="border-t border-white/[.08]" />
+                  <Cell
+                    multiline
+                    before={
+                      <IconContainer style={{ padding: '0 6px' }}>
+                        <Icon size={34} strokeWidth={1.7} />
+                      </IconContainer>
+                    }
+                    description={
+                      <>
+                        {c.hint}{' '}
+                        <a
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            setInfoOpen(true)
+                          }}
+                          className="text-[#4ea3ff]"
+                        >
+                          Что это
+                        </a>
+                      </>
+                    }
+                  >
+                    {c.label}
+                  </Cell>
+                </div>
+              )
+            })}
 
           <div className="border-t border-white/[.08]" />
           <label className="flex items-center px-4 py-3 cursor-pointer">
@@ -171,58 +276,41 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
           />
         </Block>
 
+
         {!project && (
           <>
-            <BlockTitle>Команда</BlockTitle>
+            <BlockTitle>Настройки</BlockTitle>
             <List strong inset>
-              {drafts.map((d, i) => (
-                <ListItem
-                  key={i}
-                  media={
-                    <Avatar
-                      member={
-                        {
-                          id: `d${i}`,
-                          name: d.name,
-                          handle: d.handle,
-                          kind: d.kind,
-                        } as Member
-                      }
-                    />
-                  }
-                  title={d.name}
-                  subtitle={
-                    [d.handle, kindLabel(d.kind)].filter(Boolean).join(' · ')
-                  }
-                  after={
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        removeDraft(i)
-                      }}
-                      className="w-8 h-8 flex items-center justify-center text-red-400 active:opacity-60"
-                      aria-label="Убрать"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  }
-                />
-              ))}
-              <ListItem
-                onClick={() => setAddOpen(true)}
-                media={
-                  <span className="w-9 h-9 rounded-full bg-white/10 text-white flex items-center justify-center">
-                    <Plus size={18} />
-                  </span>
-                }
-                title="Добавить участника"
-                subtitle="бот, ИИ-агент, сервис или человек"
-                chevron
-              />
+              {CONTEXT_SOURCES.map((s) => {
+                const active = !!sources[s.id]
+                return (
+                  <ListItem
+                    key={s.id}
+                    onClick={() => setEditSource(s.id)}
+                    media={<IconContainer>{s.renderColored()}</IconContainer>}
+                    title={s.label}
+                    subtitle={
+                      <span className="text-white/45">{s.hint}</span>
+                    }
+                    after={
+                      active ? (
+                        <span className="text-[12px] text-white/45 font-medium translate-y-[9px]">
+                          Добавлено
+                        </span>
+                      ) : (
+                        <span className="pl-1.5 pr-2.5 h-6 inline-flex items-center gap-0.5 rounded-full bg-[#2a8bff] text-white text-[12px] font-semibold active:opacity-70 leading-none translate-y-[9px]">
+                          <Plus size={12} strokeWidth={3} />
+                          Добавить
+                        </span>
+                      )
+                    }
+                  />
+                )
+              })}
             </List>
             <BlockFooter inset className="!text-[13px]">
-              Если добавишь бота — агент допросит его о проекте сам.
+              Отметь, откуда агенту взять контекст о проекте. Настроим по
+              каждому источнику после создания.
             </BlockFooter>
           </>
         )}
@@ -301,10 +389,22 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
 
       </Popup>
 
-      <MemberDraftSheet
-        open={addOpen}
-        onClose={() => setAddOpen(false)}
-        onAdd={(d) => setDrafts((ds) => [...ds, d])}
+      <ContextSourceSheet
+        open={editSource !== null}
+        sourceId={editSource}
+        initial={editSource ? sources[editSource] ?? {} : {}}
+        onClose={() => setEditSource(null)}
+        onSave={(v) => editSource && saveSource(editSource, v)}
+        onRemove={
+          editSource && sources[editSource]
+            ? () => removeSource(editSource)
+            : undefined
+        }
+      />
+
+      <ContextInfoSheet
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
       />
 
       {/* Sub-sheet: Repo URL */}
@@ -368,85 +468,3 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
   )
 }
 
-function MemberDraftSheet({
-  open,
-  onClose,
-  onAdd,
-}: {
-  open: boolean
-  onClose: () => void
-  onAdd: (d: Draft) => void
-}) {
-  const [kind, setKind] = useState<MemberKind>('bot')
-  const [name, setName] = useState('')
-  const [role, setRole] = useState('')
-  const [handle, setHandle] = useState('')
-
-  useEffect(() => {
-    if (!open) return
-    setKind('bot')
-    setName('')
-    setRole('')
-    setHandle('')
-  }, [open])
-
-  const add = () => {
-    const nm = name.trim() || handle.trim().replace(/^@/, '')
-    if (!nm) return
-    onAdd({
-      kind,
-      name: nm,
-      handle: handle.trim() || undefined,
-      role: role.trim() || undefined,
-    })
-    onClose()
-  }
-
-  return (
-    <Sheet open={open} onClose={onClose} title="Участник">
-      <Block>
-        <Segmented strong rounded>
-          {KINDS.map((k) => (
-            <SegmentedButton
-              key={k.id}
-              active={kind === k.id}
-              onClick={() => setKind(k.id as MemberKind)}
-            >
-              {k.label}
-            </SegmentedButton>
-          ))}
-        </Segmented>
-      </Block>
-
-      <List strong inset>
-        <ListInput
-          label="Имя"
-          type="text"
-          placeholder="Как называем"
-          value={name}
-          onChange={(e) => setName((e.target as HTMLInputElement).value)}
-        />
-        <ListInput
-          label="Роль"
-          type="text"
-          placeholder="За что отвечает"
-          value={role}
-          onChange={(e) => setRole((e.target as HTMLInputElement).value)}
-        />
-        <ListInput
-          label="Telegram"
-          type="text"
-          placeholder="@handle"
-          value={handle}
-          onChange={(e) => setHandle((e.target as HTMLInputElement).value)}
-        />
-      </List>
-
-      <Block>
-        <Button large rounded onClick={add}>
-          Добавить
-        </Button>
-      </Block>
-    </Sheet>
-  )
-}

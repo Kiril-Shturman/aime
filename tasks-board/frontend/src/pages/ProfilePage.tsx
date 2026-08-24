@@ -12,6 +12,7 @@ import {
   Toggle,
 } from 'konsta/react'
 import { useApp } from '../store/AppStore'
+import { useTheme } from '../store/ThemeStore'
 import { getUser, haptic } from '../lib/telegram'
 import { api } from '../api/client'
 import type { Assistant } from '../api/types'
@@ -325,6 +326,11 @@ export default function ProfilePage() {
         </>
       )}
 
+      <BlockTitle>Оформление</BlockTitle>
+      <List strong inset>
+        <ThemeRow />
+      </List>
+
       {user && (
         <>
           <BlockTitle>Данные Telegram</BlockTitle>
@@ -391,5 +397,15 @@ function Stat({
       </div>
       <div className="text-white/60 text-[12px] mt-0.5">{label}</div>
     </div>
+  )
+}
+
+function ThemeRow() {
+  const { theme, toggle } = useTheme()
+  return (
+    <ListItem
+      title="Тёмная тема"
+      after={<Toggle checked={theme === 'dark'} onChange={toggle} />}
+    />
   )
 }

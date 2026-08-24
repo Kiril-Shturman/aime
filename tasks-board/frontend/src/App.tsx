@@ -8,6 +8,7 @@ import ProjectPage from './pages/ProjectPage'
 import FilterPage from './pages/FilterPage'
 import ProfilePage from './pages/ProfilePage'
 import { AppStoreProvider, useApp } from './store/AppStore'
+import { ThemeProvider, useTheme } from './store/ThemeStore'
 import { initTelegram } from './lib/telegram'
 
 export default function App() {
@@ -16,8 +17,22 @@ export default function App() {
   }, [])
 
   return (
-<AppRoot appearance="dark" platform="ios" className="tg-dark">
-      <KonstaApp theme="ios" dark>
+    <ThemeProvider>
+      <Themed />
+    </ThemeProvider>
+  )
+}
+
+function Themed() {
+  const { theme } = useTheme()
+  const dark = theme === 'dark'
+  return (
+    <AppRoot
+      appearance={dark ? 'dark' : 'light'}
+      platform="ios"
+      className={dark ? 'tg-dark' : ''}
+    >
+      <KonstaApp theme="ios" dark={dark}>
         <AppStoreProvider>
           <Gate>
             <BrowserRouter>
@@ -44,7 +59,7 @@ function Gate({ children }: { children: React.ReactNode }) {
     <div className="h-full flex items-center justify-center px-8 text-center">
       <div>
         <div className="text-[19px] font-semibold">Доска закрыта</div>
-        <p className="text-white/50 text-[15px] mt-2 leading-snug">
+        <p className="opacity-60 text-[15px] mt-2 leading-snug">
           Открой её из бота в Телеграме. Если нужен обычный браузер, добавь
           к адресу ?key= и свой ключ.
         </p>
