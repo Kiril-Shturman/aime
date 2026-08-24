@@ -80,3 +80,11 @@ export function boardKey(): string {
 export function initData(): string {
   return tg()?.initData ?? ''
 }
+
+export function forgetBoardKey() {
+  try {
+    localStorage.removeItem(KEY_STORE)
+  } catch {
+    /* памяти нет — и ладно */
+  }
+}
