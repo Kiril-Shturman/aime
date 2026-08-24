@@ -46,3 +46,4 @@ tasks-board/bots.json.tmp
 tasks-board/userbot.session
 tasks-board/userbot.session-journal
 tasks-board/userbot.env
+tasks-board/userbot.pending

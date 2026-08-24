@@ -8,7 +8,8 @@ Telethon: доска отдаёт ему промт, он отправляет �
 приносит ответ обратно.
 
 Команды:
-  python3 userbot.py login                  — вход по телефону, один раз
+  python3 userbot.py code +79990000000      — запросить код входа
+  python3 userbot.py enter 12345 [пароль]   — ввести код (и пароль двухфакторки)
   python3 userbot.py who                    — кто залогинен
   python3 userbot.py send @bot "текст"
   python3 userbot.py read @bot [сколько]
@@ -25,6 +26,7 @@ import time
 ROOT = os.path.dirname(os.path.abspath(__file__))
 SESSION = os.path.join(ROOT, "userbot.session")
 ENV = os.path.join(ROOT, "userbot.env")
+PENDING = os.path.join(ROOT, "userbot.pending")
 
 
 def creds():
@@ -68,14 +70,46 @@ def client():
     return cl
 
 
-def cmd_login():
-    """Вход интерактивный: телефон, код из Телеграма, при нужде пароль."""
+def fresh_client():
+    """Клиент без проверки авторизации — им и логинимся."""
     from telethon.sync import TelegramClient
     api_id, api_hash = creds()
-    with TelegramClient(SESSION, api_id, api_hash) as cl:
-        me = cl.get_me()
-        os.chmod(SESSION, 0o600)
-        print(f"вошли как {me.first_name} @{me.username or me.id}")
+    cl = TelegramClient(SESSION, api_id, api_hash)
+    cl.connect()
+    return cl
+
+
+def cmd_code(phone):
+    """Шаг первый: попросить Телеграм прислать код."""
+    cl = fresh_client()
+    sent = cl.send_code_request(phone)
+    with open(PENDING, "w", encoding="utf-8") as f:
+        json.dump({"phone": phone, "hash": sent.phone_code_hash}, f)
+    os.chmod(PENDING, 0o600)
+    out(sent=True, note="код ушёл в Телеграм")
+
+
+def cmd_enter(code, password=None):
+    """Шаг второй: ввести код. Пробелы внутри кода не мешают —
+    их специально ставят, чтобы Телеграм не аннулировал код, замеченный
+    в переписке."""
+    from telethon.errors import SessionPasswordNeededError
+    if not os.path.exists(PENDING):
+        die("сначала запроси код: userbot.py code +7…")
+    with open(PENDING, encoding="utf-8") as f:
+        pending = json.load(f)
+    cl = fresh_client()
+    try:
+        cl.sign_in(pending["phone"], "".join(ch for ch in code if ch.isdigit()),
+                   phone_code_hash=pending["hash"])
+    except SessionPasswordNeededError:
+        if not password:
+            die("включена двухфакторка: userbot.py enter <код> <пароль>")
+        cl.sign_in(password=password)
+    me = cl.get_me()
+    os.chmod(SESSION, 0o600)
+    os.remove(PENDING)
+    out(id=me.id, name=me.first_name, username=me.username)
 
 
 def cmd_who():
@@ -140,8 +174,10 @@ def main():
         print(__doc__)
         return
     cmd, rest = args[0], args[1:]
-    if cmd == "login":
-        cmd_login()
+    if cmd == "code" and rest:
+        cmd_code(rest[0])
+    elif cmd == "enter" and rest:
+        cmd_enter(rest[0], rest[1] if len(rest) > 1 else None)
     elif cmd == "who":
         cmd_who()
     elif cmd == "send" and len(rest) >= 2:
