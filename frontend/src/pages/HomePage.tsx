@@ -279,7 +279,7 @@ export default function HomePage() {
             {state?.projects.map((p) => (
               <ListItem
                 key={p.id}
-                chevron
+                link
                 onClick={() => nav(`/project/${p.id}`)}
                 title={p.name}
                 subtitle={
