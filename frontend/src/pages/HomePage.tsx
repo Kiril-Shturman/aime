@@ -246,14 +246,18 @@ export default function HomePage() {
         }
       />
 
-      {/* Поиск-оверлей: разворачивается/сворачивается в правый верхний угол
-          (в иконку поиска), перекрывает navbar по высоте */}
+      {/* Поиск-оверлей: разворачивается из иконки поиска (правый верх)
+          и опускается сверху. Плавная iOS-подобная кривая. */}
       <div
-        className={`fixed top-0 left-0 right-0 z-[100] bg-black origin-top-right transition-all duration-300 ease-out ${
-          searchOn ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
-        }`}
+        className={`fixed top-0 left-0 right-0 z-[100] origin-top-right
+                   transition-all duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)]
+                   ${
+                     searchOn
+                       ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
+                       : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
+                   }`}
       >
-        <div className="pt-[max(16px,env(safe-area-inset-top))] px-4">
+        <div className="bg-white dark:bg-black pt-[max(16px,env(safe-area-inset-top))] px-4 pb-2">
           <Searchbar
             value={q}
             onInput={(e) => setQ((e.target as HTMLInputElement).value)}
@@ -272,7 +276,7 @@ export default function HomePage() {
         <>
           <BlockTitle>Найдено: {searchHits.length}</BlockTitle>
           {searchHits.length === 0 ? (
-            <div className="text-white/50 text-center py-8">Ничего не нашлось</div>
+            <div className="text-black/55 dark:text-white/50 text-center py-8">Ничего не нашлось</div>
           ) : (
             <List strong inset>
               {searchHits.map((t) => (

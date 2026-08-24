@@ -88,7 +88,7 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
             </span>
           )}
           {task.note && (
-            <span className="block text-white/50 text-[13px] mt-0.5 truncate">
+            <span className="block text-black/55 dark:text-white/50 text-[13px] mt-0.5 truncate">
               {task.note}
             </span>
           )}
@@ -104,12 +104,12 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
             </a>
           )}
           {task.report && (
-            <span className="block text-white/70 text-[13px] mt-1 bg-white/[.04] rounded-lg px-2 py-1.5 whitespace-pre-wrap">
+            <span className="block text-black/70 dark:text-white/70 text-[13px] mt-1 bg-black/[.04] dark:bg-white/[.04] rounded-lg px-2 py-1.5 whitespace-pre-wrap">
               {task.report}
             </span>
           )}
           {task.done && (task.commit || task.tokens || task.seconds) && (
-            <span className="block text-white/50 text-[12px] mt-1">
+            <span className="block text-black/55 dark:text-white/50 text-[12px] mt-1">
               {[
                 task.commit ? task.commit.slice(0, 7) : null,
                 task.tokens ? `${fmtNum(task.tokens)} токенов` : null,

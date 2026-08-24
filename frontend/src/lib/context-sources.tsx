@@ -92,9 +92,13 @@ export const CONTEXT_SOURCES: ContextSource[] = [
     id: 'git',
     label: 'Git-репозиторий',
     hint: 'Изучить README, код, историю изменений, issues и документацию.',
-    color: '#ffffff',
+    color: '#000000',
     render: plain(GitBranch),
-    renderColored: brand(SiGithub, '#ffffff'),
+    // GitHub-логотип монохромный — тонируем currentColor,
+    // чтобы в светлой теме он был чёрным, в тёмной — белым.
+    renderColored: () => (
+      <SiGithub size={26} className="text-black dark:text-white" />
+    ),
     fields: [
       {
         key: 'repo',

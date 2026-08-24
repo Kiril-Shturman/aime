@@ -258,7 +258,7 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
 
           <div className="border-t border-white/[.08]" />
           <label className="flex items-center px-4 py-3 cursor-pointer">
-            <span className="flex-1 text-white text-[17px]">
+            <span className="flex-1 text-black dark:text-white text-[17px]">
               Профессиональный режим
             </span>
             <Toggle checked={pro} onChange={togglePro} />
@@ -278,7 +278,7 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
             placeholder="Например: сделать посадку под новую услугу, собрать 20 заявок за неделю"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-full bg-transparent text-white text-[17px] outline-none resize-none placeholder:text-white/40"
+            className="w-full bg-transparent text-black dark:text-white text-[17px] outline-none resize-none placeholder:text-black/40 dark:placeholder:text-white/40"
           />
         </Block>
 
@@ -296,11 +296,11 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
                     media={<IconContainer>{s.renderColored()}</IconContainer>}
                     title={s.label}
                     subtitle={
-                      <span className="text-white/45">{s.hint}</span>
+                      <span className="text-black/55 dark:text-white/45">{s.hint}</span>
                     }
                     after={
                       active ? (
-                        <span className="text-[12px] text-white/45 font-medium translate-y-[9px]">
+                        <span className="text-[12px] text-black/55 dark:text-white/45 font-medium translate-y-[9px]">
                           Добавлено
                         </span>
                       ) : (

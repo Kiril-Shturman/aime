@@ -11,7 +11,7 @@ import GeneratePage from './pages/GeneratePage'
 import ChatPage from './pages/ChatPage'
 import { AppStoreProvider, useApp } from './store/AppStore'
 import { ThemeProvider, useTheme } from './store/ThemeStore'
-import { initTelegram } from './lib/telegram'
+import { applyTgTheme, initTelegram } from './lib/telegram'
 
 export default function App() {
   useEffect(() => {
@@ -28,6 +28,12 @@ export default function App() {
 function Themed() {
   const { theme } = useTheme()
   const dark = theme === 'dark'
+
+  // Перекрашиваем шапку/фон ТГ-мини-аппы под нашу тему.
+  useEffect(() => {
+    applyTgTheme(theme)
+  }, [theme])
+
   return (
     <AppRoot
       appearance={dark ? 'dark' : 'light'}

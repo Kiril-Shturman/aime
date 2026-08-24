@@ -143,7 +143,7 @@ export default function TaskSheet({
             placeholder="Что нужно сделать?"
             value={text}
             onChange={(e) => setText(e.target.value)}
-            className="w-full bg-transparent text-white text-[17px] outline-none resize-none placeholder:text-white/40"
+            className="w-full bg-transparent text-black dark:text-white text-[17px] outline-none resize-none placeholder:text-black/40 dark:placeholder:text-white/40"
           />
         </Block>
 
@@ -337,7 +337,7 @@ function InlineTimePicker({
   return (
     <div className="w-full p-2 grid grid-cols-2 gap-3">
       <div>
-        <div className="text-white/50 text-[13px] mb-1.5 px-1">Часы</div>
+        <div className="text-black/55 dark:text-white/50 text-[13px] mb-1.5 px-1">Часы</div>
         <div className="grid grid-cols-6 gap-1">
           {hours.map((hh) => (
             <button
@@ -347,7 +347,7 @@ function InlineTimePicker({
               className={`h-9 rounded-full text-[14px] transition-colors ${
                 h === hh
                   ? 'bg-[#2a8bff] text-white font-semibold'
-                  : 'text-white/90 active:bg-white/10'
+                  : 'text-black/90 dark:text-white/90 active:bg-black/5 dark:active:bg-white/10'
               }`}
             >
               {String(hh).padStart(2, '0')}
@@ -356,7 +356,7 @@ function InlineTimePicker({
         </div>
       </div>
       <div>
-        <div className="text-white/50 text-[13px] mb-1.5 px-1">Минуты</div>
+        <div className="text-black/55 dark:text-white/50 text-[13px] mb-1.5 px-1">Минуты</div>
         <div className="grid grid-cols-6 gap-1">
           {minutes.map((mm) => (
             <button
@@ -366,7 +366,7 @@ function InlineTimePicker({
               className={`h-9 rounded-full text-[14px] transition-colors ${
                 m === mm
                   ? 'bg-[#2a8bff] text-white font-semibold'
-                  : 'text-white/90 active:bg-white/10'
+                  : 'text-black/90 dark:text-white/90 active:bg-black/5 dark:active:bg-white/10'
               }`}
             >
               {String(mm).padStart(2, '0')}

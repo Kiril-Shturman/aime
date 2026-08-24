@@ -126,11 +126,11 @@ export default function ProfilePage() {
             </div>
           )}
           <div className="text-center">
-            <div className="text-white text-[24px] font-semibold">
+            <div className="text-black dark:text-white text-[24px] font-semibold">
               {fullName}
             </div>
             {user?.username && (
-              <div className="text-white/60 text-[15px] mt-0.5">
+              <div className="text-black/60 dark:text-black/60 dark:text-white/60 text-[15px] mt-0.5">
                 @{user.username}
               </div>
             )}
@@ -297,7 +297,7 @@ export default function ProfilePage() {
                 subtitle={r.text}
                 after={
                   <button
-                    className="p-2 -mr-2 text-white/35"
+                    className="p-2 -mr-2 text-black/45 dark:text-white/35"
                     onClick={async (e) => {
                       e.stopPropagation()
                       haptic('light')
@@ -320,7 +320,7 @@ export default function ProfilePage() {
 
           {!bot.business.connected && (
             <Block>
-              <p className="text-white/45 text-[14px] leading-snug">
+              <p className="text-black/55 dark:text-white/45 text-[14px] leading-snug">
                 Пока бот в личку не подключён, настройки просто хранятся.
                 Подключается он в Телеграме: Настройки → Telegram для бизнеса →
                 Чат-боты. Нужен Премиум.
@@ -349,7 +349,7 @@ export default function ProfilePage() {
 
       {!user && (
         <Block>
-          <p className="text-white/60 text-[15px]">
+          <p className="text-black/60 dark:text-white/60 text-[15px]">
             Открой миниаппу из бота — там будут твои Telegram-данные.
           </p>
         </Block>
@@ -401,7 +401,7 @@ function Stat({
       >
         {value}
       </div>
-      <div className="text-white/60 text-[12px] mt-0.5">{label}</div>
+      <div className="text-black/60 dark:text-white/60 text-[12px] mt-0.5">{label}</div>
     </div>
   )
 }

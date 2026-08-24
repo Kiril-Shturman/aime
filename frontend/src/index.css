@@ -35,8 +35,11 @@
   --rdp-day_button-border-radius: 999px;
   --rdp-selected-border: 0;
   width: 100%;
-  color: #fff;
+  color: #000;
   font-family: inherit;
+}
+.dark .rdp-tasks {
+  color: #fff;
 }
 .rdp-tasks .rdp-months,
 .rdp-tasks .rdp-month {
@@ -70,19 +73,31 @@
   text-transform: capitalize;
 }
 .rdp-tasks .rdp-weekday {
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(0, 0, 0, 0.5);
   font-weight: 500;
   text-transform: lowercase;
 }
+.dark .rdp-tasks .rdp-weekday {
+  color: rgba(255, 255, 255, 0.5);
+}
 .rdp-tasks .rdp-day_button {
+  color: #000;
+}
+.dark .rdp-tasks .rdp-day_button {
   color: #fff;
 }
 .rdp-tasks .rdp-day_button:hover:not(.rdp-selected .rdp-day_button) {
+  background: rgba(0, 0, 0, 0.06);
+}
+.dark .rdp-tasks .rdp-day_button:hover:not(.rdp-selected .rdp-day_button) {
   background: rgba(255, 255, 255, 0.08);
 }
 .rdp-tasks .rdp-today .rdp-day_button {
-  color: #4ea3ff;
+  color: #2a8bff;
   font-weight: 700;
+}
+.dark .rdp-tasks .rdp-today .rdp-day_button {
+  color: #4ea3ff;
 }
 .rdp-tasks .rdp-selected .rdp-day_button {
   background: #2a8bff;
@@ -90,14 +105,17 @@
   font-weight: 600;
 }
 .rdp-tasks .rdp-outside .rdp-day_button {
+  color: rgba(0, 0, 0, 0.25);
+}
+.dark .rdp-tasks .rdp-outside .rdp-day_button {
   color: rgba(255, 255, 255, 0.25);
 }
 .rdp-tasks .rdp-chevron {
-  fill: #4ea3ff;
+  fill: #2a8bff;
 }
 .rdp-tasks .rdp-button_previous,
 .rdp-tasks .rdp-button_next {
-  color: #4ea3ff;
+  color: #2a8bff;
 }
 
 @variant dark (&:where(.dark, .dark *));
