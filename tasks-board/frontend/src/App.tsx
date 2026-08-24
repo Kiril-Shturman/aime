@@ -1,6 +1,8 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { App as KonstaApp } from 'konsta/react'
+import { AppRoot } from '@telegram-apps/telegram-ui'
+import '@telegram-apps/telegram-ui/dist/styles.css'
 import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
 import FilterPage from './pages/FilterPage'
@@ -14,17 +16,19 @@ export default function App() {
   }, [])
 
   return (
-    <KonstaApp theme="ios" dark>
-      <AppStoreProvider>
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<HomePage />} />
-            <Route path="/project/:id" element={<ProjectPage />} />
-            <Route path="/filter/:kind" element={<FilterPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-          </Routes>
-        </BrowserRouter>
-      </AppStoreProvider>
-    </KonstaApp>
+    <AppRoot appearance="dark" platform="ios">
+      <KonstaApp theme="ios" dark>
+        <AppStoreProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<HomePage />} />
+              <Route path="/project/:id" element={<ProjectPage />} />
+              <Route path="/filter/:kind" element={<FilterPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+            </Routes>
+          </BrowserRouter>
+        </AppStoreProvider>
+      </KonstaApp>
+    </AppRoot>
   )
 }

@@ -3,6 +3,11 @@
 
 @source '../node_modules/konsta';
 
+/* активный сегмент — белый текст (по умолчанию Konsta делает чёрный) */
+.dark .k-segmented-strong-button-active {
+  color: #fff;
+}
+
 .rdp-tasks {
   --rdp-accent-color: #2a8bff;
   --rdp-accent-background-color: rgba(42, 139, 255, 0.15);

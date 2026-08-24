@@ -51,7 +51,7 @@ export default function MemberSheet({ open, onClose, projectId }: Props) {
   return (
     <Sheet open={open} onClose={onClose} title="Участник проекта">
       <Block>
-        <Segmented strong>
+        <Segmented strong rounded>
           {KINDS.map((k) => (
             <SegmentedButton
               key={k.id}
