@@ -248,6 +248,57 @@ def tool_stage_status(args):
     return f"Этап «{stage['title']}» теперь {args['status']}"
 
 
+# ------------------------------------------------------------ телеграм-боты
+#
+# Бот, подключённый к доске токеном, слушается через неё: доска знает токен,
+# агент — только имя участника. Так токен не разъезжается по конфигам.
+
+def find_bot(name):
+    """Подключённый бот по имени участника, нику или id."""
+    bots = call("/api/bots").get("bots", [])
+    key = (name or "").strip().lower().lstrip("@")
+    if not key:
+        return bots[0] if len(bots) == 1 else None
+    for b in bots:
+        if key in (b["member"], b["title"].lower(), (b.get("username") or "").lower()):
+            return b
+    return None
+
+
+def tool_bot_list(_args):
+    bots = call("/api/bots").get("bots", [])
+    if not bots:
+        return ("Ни один бот не подключён. Владелец добавляет их на доске: "
+                "участник → «Управление ботом» → токен от @BotFather.")
+    return "\n".join(
+        f"• {b['title']} @{b.get('username', '')} — {b['project']}"
+        + (f", {b['role']}" if b.get("role") else "")
+        for b in bots
+    )
+
+
+def tool_bot_send(args):
+    bot = find_bot(args.get("bot"))
+    if not bot:
+        return "Не понял, от какого бота писать. Список — board_bot_list."
+    params = {"chat_id": args["chat"], "text": args["text"]}
+    if args.get("html"):
+        params["parse_mode"] = "HTML"
+    out = call(f"/api/bot/{bot['member']}/call", "POST",
+               {"method": "sendMessage", "params": params})
+    mid = (out.get("result") or {}).get("message_id")
+    return f"@{bot.get('username', '')} написал в {args['chat']} (сообщение {mid})"
+
+
+def tool_bot_call(args):
+    bot = find_bot(args.get("bot"))
+    if not bot:
+        return "Не понял, каким ботом рулить. Список — board_bot_list."
+    out = call(f"/api/bot/{bot['member']}/call", "POST",
+               {"method": args["method"], "params": args.get("params") or {}})
+    return json.dumps(out.get("result"), ensure_ascii=False, indent=2)[:3000]
+
+
 TOOLS = [
     {
         "name": "board_overview",
@@ -327,6 +378,35 @@ TOOLS = [
             "status": {"type": "string", "enum": ["planned", "active", "done"]}},
             "required": ["project", "stage", "status"]},
         "run": tool_stage_status,
+    },
+    {
+        "name": "board_bot_list",
+        "description": "Какими телеграм-ботами доска умеет управлять прямо сейчас.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "run": tool_bot_list,
+    },
+    {
+        "name": "board_bot_send",
+        "description": "Написать сообщение от имени подключённого бота.",
+        "inputSchema": {"type": "object", "properties": {
+            "bot": {"type": "string", "description": "Имя участника, ник бота или id; можно опустить, если бот один"},
+            "chat": {"type": "string", "description": "id чата или @канал"},
+            "text": {"type": "string"},
+            "html": {"type": "boolean", "description": "Разметка HTML"}},
+            "required": ["chat", "text"]},
+        "run": tool_bot_send,
+    },
+    {
+        "name": "board_bot_call",
+        "description": ("Любой метод Bot API от имени подключённого бота: setMyCommands, "
+                        "sendPhoto, setChatMenuButton и прочее. Входящие не читаем — "
+                        "getUpdates и вебхуки доска не отдаёт."),
+        "inputSchema": {"type": "object", "properties": {
+            "bot": {"type": "string"},
+            "method": {"type": "string", "description": "Например sendPhoto"},
+            "params": {"type": "object", "description": "Поля метода как в документации Bot API"}},
+            "required": ["method"]},
+        "run": tool_bot_call,
     },
 ]
 

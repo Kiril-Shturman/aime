@@ -37,3 +37,7 @@ tasks-board/static/
 
 # ключ владельца доски
 tasks-board/owner.key
+
+# токены подключённых ботов — их место на сервере, не в гите
+tasks-board/bots.json
+tasks-board/bots.json.tmp

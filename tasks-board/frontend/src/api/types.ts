@@ -2,6 +2,15 @@ export type MemberKind = 'bot' | 'agent' | 'service' | 'human'
 export type StageStatus = 'planned' | 'active' | 'done'
 export type TaskStatus = 'todo' | 'doing' | 'done'
 
+// бот, которым доска реально управляет: токен лежит на сервере, сюда не едет
+export interface BotLink {
+  connected: boolean
+  username: string
+  name: string
+  bot_id?: number
+  since?: number
+}
+
 export interface Member {
   id: string
   name: string
@@ -9,7 +18,8 @@ export interface Member {
   role?: string
   kind: MemberKind
   avatar?: string
-  key?: string   // личный ключ исполнителя
+  key?: string   // личный ключ исполнителя, виден только владельцу
+  bot?: BotLink | null
 }
 
 export interface Stage {

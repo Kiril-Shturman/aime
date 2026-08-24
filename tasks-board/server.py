@@ -18,6 +18,10 @@ API минимальный, чтобы им мог пользоваться аг
   PATCH  /api/project/<id>             — {name, color, note, repo, path}
   DELETE /api/project/<id>
   POST   /api/project/<id>/member      — {name, handle, role, kind}
+  POST   /api/project/<id>/member/<mid>/bot   — {ref} — подключить телеграм-бота
+  DELETE /api/project/<id>/member/<mid>/bot   — отключить
+  GET    /api/bots                     — кем из ботов можно управлять
+  POST   /api/bot/<mid>/call           — {method, params} — вызов Bot API от его имени
   PATCH  /api/project/<id>/member/<mid> — {name, handle, role, kind}
   DELETE /api/project/<id>/member/<mid>
   POST   /api/goal                     — {text, project} — цель словами: заводит активный этап
@@ -28,11 +32,14 @@ API минимальный, чтобы им мог пользоваться аг
   PATCH  /api/project/<id>/stage/<sid> — {title, date, status, note}
   DELETE /api/project/<id>/stage/<sid>
 """
+import asyncio
 import hashlib
 import hmac
 import json
 import os
+import re
 import secrets
+import urllib.error
 import urllib.parse
 import urllib.request
 import shlex
@@ -229,11 +236,21 @@ async def get_state(request):
         if t.get("done"):
             got["done"] += 1
 
+    bots = load_bots()
+    owner = (request.get("who") or {}).get("kind") == "owner"
     projects = []
     for p in state["projects"]:
         roadmap = [dict(st, progress=per_stage.get(st["id"], {"done": 0, "total": 0}))
                    for st in p["roadmap"]]
-        projects.append(dict(p, roadmap=roadmap, count=per_project.get(p["id"], 0)))
+        members = []
+        for m in p["members"]:
+            m = dict(m, bot=bot_card(m["id"], bots))
+            # личный ключ исполнителя пускает на доску, поэтому он только хозяину
+            if not owner:
+                m.pop("key", None)
+            members.append(m)
+        projects.append(dict(p, members=members, roadmap=roadmap,
+                             count=per_project.get(p["id"], 0)))
     return web.json_response(
         {"projects": projects, "tasks": state["tasks"], "counts": counts(state)}
     )
@@ -830,6 +847,231 @@ async def patch_access(request):
     return web.json_response(state["access"])
 
 
+# ------------------------------------------------- подключённые телеграм-боты
+#
+# Участник-бот сам по себе просто запись на доске. Чтобы им можно было
+# управлять, нужен токен от BotFather: по нему доска ходит в Bot API от имени
+# этого бота. Токен лежит отдельно от data.json — состояние доски уезжает
+# наружу целиком, и токену там не место.
+#
+# Входящие сообщения доска не читает и не собирается: getUpdates и вебхук у
+# бота ровно один, и если забрать его себе, у живого бота отвалится его
+# собственный опрос. Наше дело — исходящие вызовы.
+
+BOTS_FILE = os.path.join(ROOT, "bots.json")
+# методы, которые перехватывают входящие: живого бота ими можно уронить
+FORBIDDEN_METHODS = {"getupdates", "setwebhook", "deletewebhook", "close", "logout"}
+
+
+def load_bots():
+    if not os.path.exists(BOTS_FILE):
+        return {}
+    try:
+        with open(BOTS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_bots(bots):
+    tmp = BOTS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(bots, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, BOTS_FILE)
+    os.chmod(BOTS_FILE, 0o600)
+
+
+def tg(token, method, params=None):
+    """Вызов Bot API. Отказ Телеграма показываем словами, как он их прислал."""
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/{method}",
+        data=json.dumps(params or {}).encode(),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            body = json.load(resp)
+    except urllib.error.HTTPError as exc:
+        try:
+            body = json.load(exc)
+        except Exception:
+            raise web.HTTPBadGateway(text=f"Телеграм ответил {exc.code}")
+    except Exception as exc:
+        raise web.HTTPBadGateway(text=f"не достучались до Телеграма: {exc}")
+    if not body.get("ok"):
+        raise web.HTTPBadRequest(text=body.get("description") or "Телеграм отказал")
+    return body.get("result")
+
+
+async def tg_async(token, method, params=None):
+    """То же самое, но не запирая доску: на неверный токен Телеграм просто
+    молчит до таймаута, а сервер у нас однопоточный."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, lambda: tg(token, method, params))
+
+
+def parse_bot_ref(text):
+    """Что кинули в поле: токен от BotFather или просто ссылка на бота."""
+    ref = (text or "").strip()
+    if not ref:
+        return None, None
+    if re.fullmatch(r"\d{5,}:[\w-]{30,}", ref):
+        return "token", ref
+    name = ref
+    for prefix in ("https://", "http://"):
+        if name.startswith(prefix):
+            name = name[len(prefix):]
+    name = name.split("?")[0].rstrip("/")
+    for host in ("t.me/", "telegram.me/", "telegram.dog/"):
+        if name.startswith(host):
+            name = name[len(host):]
+    name = name.lstrip("@")
+    if re.fullmatch(r"[A-Za-z0-9_]{4,32}", name):
+        return "username", name
+    return None, None
+
+
+def bot_card(mid, bots=None):
+    """Что рассказываем про бота наружу: всё, кроме токена."""
+    rec = (load_bots() if bots is None else bots).get(mid)
+    if not rec:
+        return None
+    return {
+        "connected": True,
+        "username": rec.get("username", ""),
+        "name": rec.get("name", ""),
+        "bot_id": rec.get("bot_id"),
+        "since": rec.get("since"),
+    }
+
+
+def find_member_anywhere(state, mid):
+    for p in state["projects"]:
+        for m in p["members"]:
+            if m["id"] == mid:
+                return p, m
+    return None, None
+
+
+def grab_avatar(token, bot_id, username):
+    """Аватарка бота, если Телеграм её отдаёт. Не отдаёт — переживём."""
+    try:
+        photos = tg(token, "getUserProfilePhotos", {"user_id": bot_id, "limit": 1})
+        sizes = (photos.get("photos") or [[]])[0]
+        if not sizes:
+            return None
+        path = tg(token, "getFile", {"file_id": sizes[-1]["file_id"]})["file_path"]
+        name = f"{username or bot_id}{os.path.splitext(path)[1] or '.jpg'}"
+        dest = os.path.join(ROOT, "avatars", name)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        url = f"https://api.telegram.org/file/bot{token}/{path}"
+        with urllib.request.urlopen(url, timeout=20) as resp, open(dest, "wb") as f:
+            f.write(resp.read())
+        return "/avatars/" + name
+    except Exception:
+        return None
+
+
+def deny_guests(request):
+    """Гость смотрит доску, но чужими ботами не распоряжается."""
+    who = request.get("who") or {}
+    if who.get("kind") == "guest":
+        raise web.HTTPForbidden(text="боты — только для своих")
+    return who
+
+
+async def connect_bot(request):
+    """Подключить бота к участнику: ссылка запоминает имя, токен даёт управление."""
+    only_owner(request)
+    body = await request.json()
+    mid = request.match_info["mid"]
+    kind, value = parse_bot_ref(body.get("ref"))
+    if not kind:
+        raise web.HTTPBadRequest(text="нужна ссылка t.me/бот или токен от @BotFather")
+
+    state = load()
+    _, member = find_member_anywhere(state, mid)
+    if not member:
+        raise web.HTTPNotFound(text="нет такого участника")
+
+    if kind == "username":
+        member["kind"] = "bot"
+        member["handle"] = "@" + value
+        if not member.get("name"):
+            member["name"] = value
+        save(state)
+        return web.json_response({
+            "member": member,
+            "bot": None,
+            "hint": "Имя запомнил. Управлять сможем, когда пришлёшь токен от @BotFather.",
+        })
+
+    who = await tg_async(value, "getMe")
+    bots = load_bots()
+    bots[mid] = {
+        "token": value,
+        "bot_id": who["id"],
+        "username": who.get("username", ""),
+        "name": who.get("first_name", ""),
+        "since": int(time.time()),
+    }
+    save_bots(bots)
+
+    member["kind"] = "bot"
+    member["handle"] = "@" + who.get("username", "")
+    if not member.get("name"):
+        member["name"] = who.get("first_name") or who.get("username", "")
+    avatar = await asyncio.get_running_loop().run_in_executor(
+        None, grab_avatar, value, who["id"], who.get("username", ""))
+    if avatar:
+        member["avatar"] = avatar
+    save(state)
+    wake_agent(f"подключили бота @{who.get('username', '')}")
+    return web.json_response({"member": member, "bot": bot_card(mid, bots)})
+
+
+async def disconnect_bot(request):
+    only_owner(request)
+    bots = load_bots()
+    if bots.pop(request.match_info["mid"], None) is None:
+        raise web.HTTPNotFound(text="этот участник и не был подключён")
+    save_bots(bots)
+    return web.json_response({"bot": None})
+
+
+async def list_bots(request):
+    """Кем из ботов доска умеет управлять — для агента и для интерфейса."""
+    deny_guests(request)
+    state, bots = load(), load_bots()
+    out = []
+    for p in state["projects"]:
+        for m in p["members"]:
+            card = bot_card(m["id"], bots)
+            if card:
+                out.append({**card, "member": m["id"], "title": m["name"],
+                            "project": p["name"], "role": m.get("role", "")})
+    return web.json_response({"bots": out})
+
+
+async def call_bot(request):
+    """Любой метод Bot API от имени подключённого бота — этим агент им и рулит."""
+    deny_guests(request)
+    body = await request.json()
+    method = (body.get("method") or "").strip()
+    if not method.isalnum():
+        raise web.HTTPBadRequest(text="method: имя метода Bot API, например sendMessage")
+    if method.lower() in FORBIDDEN_METHODS:
+        raise web.HTTPBadRequest(
+            text="этот метод забирает входящие и ломает собственный опрос бота")
+    rec = load_bots().get(request.match_info["mid"])
+    if not rec:
+        raise web.HTTPNotFound(text="бот не подключён: нужен токен от @BotFather")
+    params = body.get("params") or {}
+    if not isinstance(params, dict):
+        raise web.HTTPBadRequest(text="params: объект с полями метода")
+    return web.json_response({"result": await tg_async(rec["token"], method, params)})
+
 # ------------------------------------------------------------ бот в личке
 
 async def get_assistant(request):
@@ -922,6 +1164,10 @@ def make_app():
     app.router.add_post("/api/project/{pid}/member", add_member)
     app.router.add_patch("/api/project/{pid}/member/{mid}", patch_member)
     app.router.add_delete("/api/project/{pid}/member/{mid}", delete_member)
+    app.router.add_post("/api/project/{pid}/member/{mid}/bot", connect_bot)
+    app.router.add_delete("/api/project/{pid}/member/{mid}/bot", disconnect_bot)
+    app.router.add_get("/api/bots", list_bots)
+    app.router.add_post("/api/bot/{mid}/call", call_bot)
     app.router.add_post("/api/goal", add_goal)
     app.router.add_post("/api/tasks", add_tasks)
     app.router.add_get("/api/project/{pid}/git", get_git)
