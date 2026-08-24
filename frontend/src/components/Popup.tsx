@@ -7,6 +7,7 @@ interface Props {
   open: boolean
   onClose: () => void
   title: string
+  pageClassName?: string
   onSave?: () => void
   canSave?: boolean
   children: ReactNode
@@ -16,6 +17,7 @@ export default function Popup({
   open,
   onClose,
   title,
+  pageClassName,
   onSave,
   canSave,
   children,
@@ -26,7 +28,7 @@ export default function Popup({
 
   return (
     <KPopup opened={open} onBackdropClick={onClose}>
-      <Page>
+      <Page className={pageClassName}>
         <Navbar
           title={title}
           left={
