@@ -32,8 +32,8 @@ export default function ConceptInfoSheet({ open, concept, onClose }: Props) {
           <List strong inset>
             <ListItem
               media={
-                <span className="w-10 h-10 flex items-center justify-center shrink-0">
-                  <concept.Icon size={34} strokeWidth={1.7} />
+                <span className="w-10 h-10 flex items-center justify-center shrink-0 text-primary">
+                  <concept.Icon size={30} />
                 </span>
               }
               title={concept.label}

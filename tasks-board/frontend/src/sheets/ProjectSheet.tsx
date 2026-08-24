@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bot, BookOpen, Check, CheckSquare, GitBranch, Palette, Plus, Rocket } from 'lucide-react'
+import { Check, GitBranch, Palette, Plus } from 'lucide-react'
 import {
   Block,
   BlockFooter,
@@ -22,6 +22,12 @@ import ContextInfoSheet from './ContextInfoSheet'
 import { haptic } from '../lib/telegram'
 import { useApp } from '../store/AppStore'
 import type { Project } from '../api/types'
+import {
+  ModuleIcon,
+  ProjectIcon,
+  StageIcon,
+  TaskIcon,
+} from '../components/WorkItemIcons'
 
 interface Props {
   open: boolean
@@ -36,34 +42,34 @@ export const CONCEPTS = [
   {
     id: 'project',
     label: 'Проект',
-    Icon: Rocket,
-    hint: 'Отдельное пространство, где агент выполняет связанную работу, хранит контекст и управляет задачами.',
+    Icon: ProjectIcon,
+    hint: 'Вся работа над одной большой целью: от замысла до готового результата.',
     details:
-      'У проекта есть два режима:\n\n• Целевой — работа идёт по этапам до конкретного результата.\n• Постоянный — работа выполняется непрерывно по правилам или расписанию.',
+      'Проект — верхний уровень работы. Внутри него находятся модули, этапы и задачи. Здесь хранятся общая цель, команда, контекст и весь прогресс.',
   },
   {
-    id: 'agent',
-    label: 'ИИ-агент',
-    Icon: Bot,
-    hint: 'Самостоятельный исполнитель, который понимает контекст, выполняет задачи, использует инструменты и накапливает опыт.',
+    id: 'module',
+    label: 'Модуль',
+    Icon: ModuleIcon,
+    hint: 'Крупная самостоятельная часть проекта, которую удобно развивать отдельно.',
     details:
-      'Получает роль и задачи внутри проекта, самостоятельно планирует действия и сообщает о результате. Может работать с файлами, Git, интернетом, базами знаний и другими подключёнными инструментами.',
+      'Модуль объединяет связанные этапы и задачи по одному направлению. Например, в приложении это могут быть «Авторизация», «Оплата» или «Аналитика».',
   },
   {
-    id: 'context',
-    label: 'Контекст',
-    Icon: BookOpen,
-    hint: 'Вся информация о проекте, которая помогает агенту понимать цели, учитывать историю и принимать решения.',
+    id: 'stage',
+    label: 'Этап',
+    Icon: StageIcon,
+    hint: 'Понятный отрезок пути с собственным результатом и сроком.',
     details:
-      'Формируется из описания проекта, документов, переписки, задач, Git-репозиториев, баз знаний и других источников. Контекст обновляется по мере работы, чтобы агент понимал текущее состояние проекта.',
+      'Этап показывает, что должно быть достигнуто следующим. Он объединяет задачи в логическую часть плана и помогает видеть движение проекта по порядку.',
   },
   {
     id: 'task',
     label: 'Задача',
-    Icon: CheckSquare,
-    hint: 'Отдельная единица работы с понятной целью и ожидаемым результатом, из которой складывается план проекта.',
+    Icon: TaskIcon,
+    hint: 'Конкретное действие с исполнителем и проверяемым результатом.',
     details:
-      'Содержит описание работы, исполнителя, приоритет, срок и текущий статус. Агент может взять задачу, выполнить её с помощью доступных инструментов и оставить отчёт о результате.',
+      'Задача — минимальная единица работы. У неё есть понятный результат, статус, исполнитель и при необходимости срок. Из выполненных задач складывается прогресс этапа.',
   },
 ] as const
 
@@ -185,12 +191,13 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
         onSave={save}
         canSave={canSave}
       >
+        {!project && <BlockTitle>Как устроена работа</BlockTitle>}
         <List strong inset dividers>
           {project && (
             <ListItem
               media={
                 <span className="w-10 h-10 flex items-center justify-center shrink-0 text-primary">
-                  <Rocket size={34} strokeWidth={1.7} />
+                  <ProjectIcon size={30} />
                 </span>
               }
               title="Проект"
@@ -220,7 +227,7 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
                   key={c.id}
                   media={
                     <span className="w-10 h-10 flex items-center justify-center shrink-0 text-primary">
-                      <Icon size={34} strokeWidth={1.7} />
+                      <Icon size={30} />
                     </span>
                   }
                   title={c.label}
@@ -243,6 +250,16 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
               )
             })}
 
+        </List>
+        {!project && (
+          <BlockFooter inset className="!text-[13px]">
+            Проект → модуль → этап → задача. Каждый уровень делает большую
+            работу понятнее и управляемее.
+          </BlockFooter>
+        )}
+
+        <BlockTitle>Режим</BlockTitle>
+        <List strong inset>
           <ListItem
             title="Профессиональный режим"
             after={<Toggle checked={pro} onChange={togglePro} />}
