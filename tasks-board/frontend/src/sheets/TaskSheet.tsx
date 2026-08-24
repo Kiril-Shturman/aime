@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, X, Calendar, Clock, AlarmClock, User, Folder } from 'lucide-react'
+import { Calendar, Clock, AlarmClock, User, Folder, Link as LinkIcon } from 'lucide-react'
 import {
   Block,
   BlockTitle,
@@ -8,7 +8,7 @@ import {
   ListItem,
   Toggle,
 } from 'konsta/react'
-import Sheet from '../components/Sheet'
+import Popup from '../components/Popup'
 import PickerSheet, { type PickerOption } from './PickerSheet'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
@@ -101,47 +101,24 @@ export default function TaskSheet({
 
   return (
     <>
-      <Sheet
-        open={open}
-        onClose={onClose}
-        title="Новая задача"
-        headerLeft={
-          <button
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center active:opacity-70"
-          >
-            <X size={16} />
-          </button>
-        }
-        headerRight={
-          <button
-            onClick={save}
-            className="w-8 h-8 rounded-full bg-[#2a8bff] flex items-center justify-center text-white active:bg-[#1f7de6]"
-          >
-            <Check size={18} strokeWidth={3} />
-          </button>
-        }
-      >
-        <List strong inset>
-          <ListInput
+      <Popup open={open} onClose={onClose} title="Новая задача" onSave={save} saveLabel="Готово">
+        <Block strong inset className="!mt-3">
+          <input
+            autoFocus
             type="text"
-            placeholder="Название"
+            placeholder=""
             value={title}
-            onChange={(e) => setTitle((e.target as HTMLInputElement).value)}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full bg-transparent text-white text-[22px] font-semibold outline-none placeholder:text-white/40"
           />
-          <ListInput
-            type="textarea"
+          <textarea
+            rows={3}
             placeholder="Заметки"
             value={note}
-            onChange={(e) => setNote((e.target as HTMLTextAreaElement).value)}
+            onChange={(e) => setNote(e.target.value)}
+            className="mt-3 w-full bg-transparent text-white text-[17px] outline-none resize-none placeholder:text-white/40"
           />
-          <ListInput
-            type="text"
-            placeholder="Ссылка"
-            value={url}
-            onChange={(e) => setUrl((e.target as HTMLInputElement).value)}
-          />
-        </List>
+        </Block>
 
         <BlockTitle>Дата и срочность</BlockTitle>
         <List strong inset>
@@ -218,8 +195,15 @@ export default function TaskSheet({
             after={member?.name ?? 'Не выбран'}
             chevron
           />
+          <ListInput
+            media={<LinkIcon size={20} />}
+            type="text"
+            placeholder="Ссылка"
+            value={url}
+            onChange={(e) => setUrl((e.target as HTMLInputElement).value)}
+          />
         </List>
-      </Sheet>
+      </Popup>
 
       <PickerSheet
         open={picker === 'project'}
