@@ -28,3 +28,6 @@ __pycache__/
 
 # какую ветку тянет прод
 .deploy-branch
+
+# JetBrains IDE workspace
+.idea/

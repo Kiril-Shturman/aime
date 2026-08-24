@@ -638,13 +638,21 @@ async def run_command(request):
     return web.json_response({"label": cmd["label"], "text": text})
 
 
-async def index(request):
+async def spa(request):
+    # Отдаёт статику из static/ если файл существует, иначе index.html
+    # (SPA-фолбэк для клиентского роутера).
+    tail = request.match_info.get("tail", "")
+    if tail:
+        path = os.path.join(ROOT, "static", tail)
+        # Не выпускаем за пределы static/
+        if os.path.commonpath([os.path.abspath(path), os.path.abspath(os.path.join(ROOT, "static"))]) == os.path.abspath(os.path.join(ROOT, "static")):
+            if os.path.isfile(path):
+                return web.FileResponse(path)
     return web.FileResponse(os.path.join(ROOT, "static", "index.html"))
 
 
 def make_app():
     app = web.Application()
-    app.router.add_get("/", index)
     app.router.add_get("/api/state", get_state)
     app.router.add_get("/api/commands", list_commands)
     app.router.add_post("/api/command/{cid}", run_command)
@@ -665,7 +673,7 @@ def make_app():
     app.router.add_post("/api/project/{pid}/stage", add_stage)
     app.router.add_patch("/api/project/{pid}/stage/{sid}", patch_stage)
     app.router.add_delete("/api/project/{pid}/stage/{sid}", delete_stage)
-    app.router.add_static("/", os.path.join(ROOT, "static"), show_index=False)
+    app.router.add_get("/{tail:.*}", spa)
     return app
 
 
