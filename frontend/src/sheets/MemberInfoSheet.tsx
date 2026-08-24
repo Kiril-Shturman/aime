@@ -94,7 +94,7 @@ export default function MemberInfoSheet({
 
       <BlockTitle>Кто это</BlockTitle>
       <Block>
-        <Segmented strong>
+        <Segmented strong rounded>
           {KINDS.map((k) => (
             <SegmentedButton
               key={k.id}
