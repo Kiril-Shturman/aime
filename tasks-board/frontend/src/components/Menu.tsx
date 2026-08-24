@@ -27,7 +27,7 @@ export default function Menu({ open, onClose, items, target }: Props) {
       opened={open}
       target={target.current}
       onBackdropClick={onClose}
-      className="!w-64"
+      className="!w-64 !mt-3"
     >
       <div className="py-1">
         {items.map((it, i) => {

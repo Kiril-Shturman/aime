@@ -13,6 +13,8 @@ import {
   Bot,
   RefreshCw,
   Database,
+  CheckSquare,
+  FolderPlus,
 } from 'lucide-react'
 import {
   BlockTitle,
@@ -27,7 +29,6 @@ import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { Avatar } from '../components/Avatar'
 import { getUser } from '../lib/telegram'
-import Fab from '../components/Fab'
 import TabPill from '../components/TabPill'
 import Menu, { type MenuItem } from '../components/Menu'
 import TaskRow from '../components/TaskRow'
@@ -124,6 +125,9 @@ export default function HomePage() {
 
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBtnRef = useRef<HTMLAnchorElement>(null)
+
+  const [plusOpen, setPlusOpen] = useState(false)
+  const plusBtnRef = useRef<HTMLAnchorElement>(null)
 
   const [taskOpen, setTaskOpen] = useState(false)
   const [projectOpen, setProjectOpen] = useState(false)
@@ -224,7 +228,11 @@ export default function HomePage() {
             <KLink iconOnly onClick={() => setSearchOn(true)}>
               <Search size={22} />
             </KLink>
-            <KLink iconOnly onClick={() => setProjectOpen(true)}>
+            <KLink
+              iconOnly
+              ref={plusBtnRef}
+              onClick={() => setPlusOpen(true)}
+            >
               <Plus size={22} />
             </KLink>
             <KLink
@@ -280,7 +288,7 @@ export default function HomePage() {
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 px-4 mt-2">
+          <div className="grid grid-cols-2 gap-3 px-4 mt-6">
             {TILES.map((t) => (
               <Tile
                 key={t.key}
@@ -329,13 +337,30 @@ export default function HomePage() {
       )}
 
       <TabPill />
-      <Fab label="Новая задача" onClick={() => setTaskOpen(true)} />
 
       <Menu
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         items={menuItems}
         target={menuBtnRef}
+      />
+
+      <Menu
+        open={plusOpen}
+        onClose={() => setPlusOpen(false)}
+        target={plusBtnRef}
+        items={[
+          {
+            label: 'Создать задачу',
+            icon: CheckSquare,
+            onSelect: () => setTaskOpen(true),
+          },
+          {
+            label: 'Создать проект',
+            icon: FolderPlus,
+            onSelect: () => setProjectOpen(true),
+          },
+        ]}
       />
 
       <TaskSheet open={taskOpen} onClose={() => setTaskOpen(false)} />

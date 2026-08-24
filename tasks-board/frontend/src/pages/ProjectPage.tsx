@@ -28,7 +28,6 @@ import { useApp } from '../store/AppStore'
 import { Avatar } from '../components/Avatar'
 import Menu, { type MenuItem } from '../components/Menu'
 import Pill from '../components/Pill'
-import Fab from '../components/Fab'
 import TabPill from '../components/TabPill'
 import TaskRow from '../components/TaskRow'
 import {
@@ -406,7 +405,6 @@ export default function ProjectPage() {
       )}
 
       <TabPill />
-      <Fab label="Новая задача" onClick={() => setTaskOpen(true)} />
 
       <Menu
         open={menuOpen}
