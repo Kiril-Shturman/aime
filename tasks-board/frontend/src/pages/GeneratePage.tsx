@@ -170,14 +170,13 @@ export default function GeneratePage() {
         title="Генерация"
         right={
           <>
-            <KLink navbar iconOnly onClick={() => haptic('light')}>
+            <KLink iconOnly onClick={() => haptic('light')}>
               <Search size={22} />
             </KLink>
-            <KLink navbar iconOnly onClick={() => haptic('light')}>
+            <KLink iconOnly onClick={() => haptic('light')}>
               <History size={22} />
             </KLink>
             <KLink
-              navbar
               iconOnly
               ref={menuBtnRef}
               onClick={() => setMenuOpen(true)}
