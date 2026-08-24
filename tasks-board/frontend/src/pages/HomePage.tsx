@@ -200,7 +200,7 @@ export default function HomePage() {
     : []
 
   return (
-    <Page className="pb-safe-24 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <Page className="pb-safe-20 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Navbar
         title="Задачи"
         left={(() => {

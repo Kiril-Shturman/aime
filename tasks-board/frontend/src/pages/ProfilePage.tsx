@@ -106,7 +106,7 @@ export default function ProfilePage() {
   } as const
 
   return (
-    <Page className="pb-safe-24 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+    <Page className="pb-safe-20 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Navbar
         title="Профиль"
         left={<NavbarBackLink text="Задачи" onClick={() => navigate('/')} />}
