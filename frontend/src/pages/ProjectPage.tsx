@@ -206,8 +206,6 @@ export default function ProjectPage() {
     <Page>
       <Navbar
         title={project.name}
-        large
-        transparent
         left={
           <NavbarBackLink
             text="Назад"
@@ -222,7 +220,7 @@ export default function ProjectPage() {
             ref={menuBtnRef}
             onClick={() => setMenuOpen(true)}
           >
-            <MoreHorizontal size={22} />
+            <MoreHorizontal size={24} />
           </KLink>
         }
       />
@@ -360,9 +358,7 @@ export default function ProjectPage() {
         </>
       )}
 
-      <Fab label="Новая задача" onClick={() => setTaskOpen(true)}>
-        +
-      </Fab>
+      <Fab label="Новая задача" onClick={() => setTaskOpen(true)} />
 
       <Menu
         open={menuOpen}

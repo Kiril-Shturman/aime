@@ -42,8 +42,6 @@ export default function FilterPage() {
     <Page>
       <Navbar
         title={TITLES[kind] ?? 'Задачи'}
-        large
-        transparent
         left={
           <NavbarBackLink
             text="Задачи"

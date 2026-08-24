@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ComponentType, type RefObject } from 'react'
+import { useEffect, type ComponentType, type RefObject } from 'react'
 import { Popover } from 'konsta/react'
 import { haptic } from '../lib/telegram'
 
@@ -18,19 +18,14 @@ interface Props {
 }
 
 export default function Menu({ open, onClose, items, target }: Props) {
-  const setRef = useRef<HTMLElement | null>(null)
-
   useEffect(() => {
-    if (open) {
-      setRef.current = target.current
-      haptic('light')
-    }
-  }, [open, target])
+    if (open) haptic('light')
+  }, [open])
 
   return (
     <Popover
       opened={open}
-      target={setRef.current}
+      target={target.current}
       onBackdropClick={onClose}
       className="!w-64"
     >

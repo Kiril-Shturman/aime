@@ -70,7 +70,7 @@ export default function Sheet({
     <KSheet
       opened={open}
       onBackdropClick={onClose}
-      className="max-h-[92dvh] overflow-y-auto pb-[env(safe-area-inset-bottom)]"
+      className="max-h-[92dvh] overflow-y-auto pb-[env(safe-area-inset-bottom)] !bg-black"
     >
       <div ref={boxRef}>
         <button
