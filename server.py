@@ -734,12 +734,17 @@ def whoami(request):
     return None
 
 
+# «Кто я» отвечает всем: по нему интерфейс понимает, пускают его или нет
+OPEN_PATHS = ("/api/whoami",)
+
+
 @web.middleware
 async def guard(request, handler):
-    """Читать можно всем, менять — только своим."""
+    """К данным пускаем только своих — и на чтение, и на запись."""
     who = whoami(request)
     request["who"] = who
-    if request.method != "GET" and request.path.startswith("/api/") and not who:
+    closed = request.path.startswith("/api/") and request.path not in OPEN_PATHS
+    if closed and not who:
         return web.json_response(
             {"error": "нужен ключ: заголовок X-Board-Key или запуск из мини-аппы"},
             status=401,
