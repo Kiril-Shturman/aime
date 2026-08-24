@@ -29,7 +29,7 @@ import { Avatar } from '../components/Avatar'
 import Menu, { type MenuItem } from '../components/Menu'
 import Pill from '../components/Pill'
 import Fab from '../components/Fab'
-import SwitchPill from '../components/SwitchPill'
+import TabPill from '../components/TabPill'
 import TaskRow from '../components/TaskRow'
 import {
   PROCESS_KINDS,
@@ -405,7 +405,7 @@ export default function ProjectPage() {
         </>
       )}
 
-      <SwitchPill current={id} />
+      <TabPill />
       <Fab label="Новая задача" onClick={() => setTaskOpen(true)} />
 
       <Menu

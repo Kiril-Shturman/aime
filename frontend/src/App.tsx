@@ -7,6 +7,7 @@ import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
 import FilterPage from './pages/FilterPage'
 import ProfilePage from './pages/ProfilePage'
+import GeneratePage from './pages/GeneratePage'
 import { AppStoreProvider, useApp } from './store/AppStore'
 import { ThemeProvider, useTheme } from './store/ThemeStore'
 import { initTelegram } from './lib/telegram'
@@ -41,6 +42,7 @@ function Themed() {
                 <Route path="/project/:id" element={<ProjectPage />} />
                 <Route path="/filter/:kind" element={<FilterPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
+                <Route path="/generate" element={<GeneratePage />} />
               </Routes>
             </BrowserRouter>
           </Gate>
