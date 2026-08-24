@@ -102,7 +102,12 @@ export default function StageInfoSheet({ open, onClose, projectId, stage }: Prop
             large
             rounded
             clear
-            colors={{ text: 'text-red-500', activeBg: 'active:bg-red-500/10' }}
+            colors={{
+            textIos: 'text-red-500',
+            textMaterial: 'text-red-500',
+            clearBgIos: 'bg-transparent active:bg-red-500/15',
+            clearBgMaterial: 'bg-transparent',
+          }}
             onClick={remove}
           >
             <Trash2 size={18} className="mr-2" /> Удалить этап
