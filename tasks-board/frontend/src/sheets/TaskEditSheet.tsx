@@ -1,5 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Flag, User, ListChecks, Trash2 } from 'lucide-react'
+import {
+  CircleCheck,
+  Clock3,
+  Coins,
+  ExternalLink,
+  Flag,
+  GitCommit,
+  ListChecks,
+  Play,
+  Trash2,
+  User,
+} from 'lucide-react'
 import {
   Block,
   BlockTitle,
@@ -24,6 +35,43 @@ interface Props {
 
 type Picker = null | 'status' | 'stage' | 'member'
 
+function timestamp(value?: string | number) {
+  if (value == null || value === '') return null
+  const numeric = typeof value === 'number' ? value : Number(value)
+  const date = Number.isFinite(numeric)
+    ? new Date(numeric < 1_000_000_000_000 ? numeric * 1000 : numeric)
+    : new Date(value)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function formatDateTime(value?: string | number) {
+  const date = timestamp(value)
+  if (!date) return '—'
+  return date.toLocaleString('ru-RU', {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
+function formatDuration(seconds: number) {
+  const total = Math.max(0, Math.round(seconds))
+  if (total < 60) return `${total} сек`
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  if (!hours) return `${minutes} мин`
+  return minutes ? `${hours} ч ${minutes} мин` : `${hours} ч`
+}
+
+function taskDuration(task: Task) {
+  if (task.seconds && task.seconds > 0) return task.seconds
+  const started = timestamp(task.started_at)
+  if (!started) return null
+  const finished = timestamp(task.done_at)
+  return Math.max(0, ((finished?.getTime() ?? Date.now()) - started.getTime()) / 1000)
+}
+
 export default function TaskEditSheet({ open, onClose, task }: Props) {
   const { state, refresh } = useApp()
 
@@ -46,6 +94,7 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
   const project = state?.projects.find((p) => p.id === task?.project) ?? null
   const stage = project?.roadmap.find((s) => s.id === stageId) ?? null
   const member = project?.members.find((m) => m.id === memberId) ?? null
+  const duration = task ? taskDuration(task) : null
 
   const stageOptions: PickerOption[] = useMemo(
     () => project?.roadmap.map((s) => ({ id: s.id, label: s.title })) ?? [],
@@ -139,22 +188,49 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
           />
         </List>
 
-        {task.done && (task.commit || task.tokens || task.seconds) && (
-          <>
-            <BlockTitle>Итог</BlockTitle>
-            <List strong inset>
-              {task.commit && (
-                <ListItem title="Коммит" after={task.commit.slice(0, 12)} />
-              )}
-              {task.tokens != null && (
-                <ListItem title="Токены" after={String(task.tokens)} />
-              )}
-              {task.seconds != null && (
-                <ListItem title="Секунды" after={String(task.seconds)} />
-              )}
-            </List>
-          </>
-        )}
+        <BlockTitle>Статистика</BlockTitle>
+        <List strong inset dividers>
+          <ListItem
+            media={<Clock3 size={20} />}
+            title="Время работы"
+            after={duration == null ? 'Ещё не начата' : formatDuration(duration)}
+          />
+          <ListItem
+            media={<Coins size={20} />}
+            title="Потрачено токенов"
+            after={new Intl.NumberFormat('ru-RU').format(task.tokens ?? 0)}
+          />
+          {task.started_at && (
+            <ListItem
+              media={<Play size={20} />}
+              title="Начали"
+              after={formatDateTime(task.started_at)}
+            />
+          )}
+          {task.done_at && (
+            <ListItem
+              media={<CircleCheck size={20} />}
+              title="Завершили"
+              after={formatDateTime(task.done_at)}
+            />
+          )}
+          {task.commit && (
+            <ListItem
+              media={<GitCommit size={20} />}
+              title="Коммит"
+              after={task.commit.slice(0, 12)}
+            />
+          )}
+          {task.url && (
+            <ListItem
+              link
+              media={<ExternalLink size={20} />}
+              title="Результат"
+              after="Открыть"
+              onClick={() => window.open(task.url, '_blank')}
+            />
+          )}
+        </List>
 
         <BlockTitle>Отчёт</BlockTitle>
         <List strong inset>

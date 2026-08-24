@@ -55,8 +55,8 @@ export interface Task {
   commit?: string
   tokens?: number
   seconds?: number
-  started_at?: string
-  done_at?: string
+  started_at?: string | number
+  done_at?: string | number
   due?: string
   time?: string
   flagged?: boolean
