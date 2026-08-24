@@ -25,3 +25,6 @@ tasks-board/data.json
 tasks-board/data.json.tmp
 tasks-board/static/avatars/
 __pycache__/
+
+# какую ветку тянет прод
+.deploy-branch
