@@ -254,16 +254,15 @@ export default function ProjectPage() {
                     {m.kind && <Pill tone={m.kind}>{kindLabel(m.kind)}</Pill>}
                   </span>
                 }
-                text={[m.role, m.handle].filter(Boolean).join(' · ') || undefined}
                 // стрелка живёт в строке заголовка, поэтому у многострочного
                 // элемента она уезжает вверх — ставим свою по центру
                 chevronIcon={
                   <ChevronRight
                     size={18}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 text-white/25"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-white/25"
                   />
                 }
-                innerClassName="pr-6"
+                innerClassName="pr-10"
                 className={memberFilter === m.id ? 'bg-black/[.04] dark:bg-white/[.06]' : ''}
               />
             ))}
