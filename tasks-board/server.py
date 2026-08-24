@@ -34,6 +34,7 @@ import json
 import os
 import secrets
 import urllib.parse
+import urllib.request
 import shlex
 import subprocess
 import threading
@@ -86,6 +87,10 @@ TASK_STATUS = ("todo", "doing", "done")
 
 DEFAULT = {"projects": [], "tasks": []}
 
+# Кого пускать на доску кроме владельца. Гость входит из Телеграма по
+# одноразовой ссылке и дальше узнаётся по своему telegram id.
+ACCESS = {"open": False, "guests": [], "invites": []}
+
 # Настройки бота, который сидит у владельца в личке. Сама доска их только
 # хранит и показывает — исполняет бот, когда его подключат к личке через
 # режим «Бизнес» в Телеграме.
@@ -121,6 +126,11 @@ def migrate(state):
         for t in state.get("tasks", []):
             t["project"] = t.pop("list", "inbox")
         changed = True
+    if "access" not in state:
+        state["access"] = json.loads(json.dumps(ACCESS))
+        changed = True
+    for key, value in ACCESS.items():
+        state["access"].setdefault(key, json.loads(json.dumps(value)))
     if "assistant" not in state:
         state["assistant"] = json.loads(json.dumps(ASSISTANT))
         changed = True
@@ -700,7 +710,8 @@ def owner_key():
 
 
 def check_init_data(raw):
-    """Проверка подписи мини-аппы по алгоритму Телеграма."""
+    """Проверка подписи мини-аппы. Возвращает данные Телеграма как есть —
+    кто владелец, а кто гость, решаем дальше."""
     if not BOT_TOKEN or not raw:
         return None
     pairs = [p.split("=", 1) for p in raw.split("&") if "=" in p]
@@ -715,14 +726,43 @@ def check_init_data(raw):
         user = json.loads(data.get("user", "{}"))
     except json.JSONDecodeError:
         return None
-    uid = str(user.get("id", ""))
-    if OWNERS and uid not in OWNERS:
+    if not user.get("id"):
         return None
-    return user.get("first_name") or uid
+    return {"user": user, "start_param": data.get("start_param", "")}
+
+
+def guest_by_id(state, uid):
+    for g in state["access"]["guests"]:
+        if g["id"] == uid:
+            return g
+    return None
+
+
+def redeem_invite(state, code, user):
+    """Гость пришёл по одноразовой ссылке — впускаем и запоминаем."""
+    if not code:
+        return None
+    for inv in state["access"]["invites"]:
+        if inv["code"] == code and not inv.get("used_by"):
+            guest = {
+                "id": str(user["id"]),
+                "name": " ".join(x for x in (user.get("first_name"),
+                                             user.get("last_name")) if x) or str(user["id"]),
+                "handle": ("@" + user["username"]) if user.get("username") else "",
+                "added": int(time.time()),
+            }
+            inv["used_by"] = guest["id"]
+            state["access"]["guests"].append(guest)
+            save(state)
+            return guest
+    return None
 
 
 def whoami(request):
-    """Возвращает {kind, id, name} или None, если пришли без ключа."""
+    """Возвращает {kind, id, name} или None, если пришли без ключа.
+
+    kind: owner — хозяин доски, member — исполнитель с ключом,
+    guest — приглашённый человек из Телеграма."""
     key = request.headers.get("X-Board-Key", "").strip()
     if key:
         if hmac.compare_digest(key, owner_key()):
@@ -732,9 +772,23 @@ def whoami(request):
                 if m.get("key") and hmac.compare_digest(key, m["key"]):
                     return {"kind": "member", "id": m["id"], "name": m["name"]}
         return None
-    name = check_init_data(request.headers.get("X-Telegram-Init-Data", ""))
-    if name:
+
+    signed = check_init_data(request.headers.get("X-Telegram-Init-Data", ""))
+    if not signed:
+        return None
+    user = signed["user"]
+    uid = str(user["id"])
+    name = user.get("first_name") or uid
+    if not OWNERS or uid in OWNERS:
         return {"kind": "owner", "id": "owner", "name": name}
+
+    # дальше — чужой аккаунт: пускаем, только если гостевой вход включён
+    state = load()
+    if not state["access"].get("open"):
+        return None
+    guest = guest_by_id(state, uid) or redeem_invite(state, signed["start_param"], user)
+    if guest:
+        return {"kind": "guest", "id": guest["id"], "name": guest["name"]}
     return None
 
 
@@ -759,6 +813,77 @@ async def guard(request, handler):
 async def get_whoami(request):
     who = request.get("who")
     return web.json_response({"who": who, "can_write": bool(who)})
+
+
+# ---------------------------------------------------------- доступ к доске
+
+_bot_username = {}
+
+
+def bot_username():
+    """Имя бота нужно для ссылки-приглашения; спрашиваем один раз."""
+    if not _bot_username and BOT_TOKEN:
+        try:
+            with urllib.request.urlopen(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/getMe", timeout=10
+            ) as resp:
+                _bot_username["name"] = json.load(resp)["result"]["username"]
+        except Exception:
+            _bot_username["name"] = ""
+    return _bot_username.get("name", "")
+
+
+def only_owner(request):
+    who = request.get("who") or {}
+    if who.get("kind") != "owner":
+        raise web.HTTPForbidden(text="только владелец")
+
+
+async def get_access(request):
+    only_owner(request)
+    state = load()
+    return web.json_response({**state["access"], "bot": bot_username()})
+
+
+async def patch_access(request):
+    only_owner(request)
+    body = await request.json()
+    state = load()
+    if "open" in body:
+        state["access"]["open"] = bool(body["open"])
+    save(state)
+    return web.json_response(state["access"])
+
+
+async def add_invite(request):
+    """Одноразовая ссылка: открывший её из Телеграма становится гостем."""
+    only_owner(request)
+    state = load()
+    invite = {"code": secrets.token_hex(6), "created": int(time.time()), "used_by": None}
+    state["access"]["invites"].append(invite)
+    state["access"]["open"] = True     # приглашать при выключенном входе бессмысленно
+    save(state)
+    return web.json_response({**invite, "bot": bot_username()})
+
+
+async def delete_invite(request):
+    only_owner(request)
+    state = load()
+    code = request.match_info["code"]
+    state["access"]["invites"] = [i for i in state["access"]["invites"] if i["code"] != code]
+    save(state)
+    return web.json_response({"ok": True})
+
+
+async def delete_guest(request):
+    only_owner(request)
+    state = load()
+    gid = request.match_info["gid"]
+    state["access"]["guests"] = [g for g in state["access"]["guests"] if g["id"] != gid]
+    # заодно убираем его приглашение, чтобы по той же ссылке не вернулся
+    state["access"]["invites"] = [i for i in state["access"]["invites"] if i.get("used_by") != gid]
+    save(state)
+    return web.json_response({"ok": True})
 
 
 # ------------------------------------------------------------ бот в личке
@@ -835,6 +960,11 @@ def make_app():
     app = web.Application(middlewares=[guard])
     app.router.add_get("/api/state", get_state)
     app.router.add_get("/api/whoami", get_whoami)
+    app.router.add_get("/api/access", get_access)
+    app.router.add_patch("/api/access", patch_access)
+    app.router.add_post("/api/access/invite", add_invite)
+    app.router.add_delete("/api/access/invite/{code}", delete_invite)
+    app.router.add_delete("/api/access/guest/{gid}", delete_guest)
     app.router.add_get("/api/assistant", get_assistant)
     app.router.add_patch("/api/assistant", patch_assistant)
     app.router.add_post("/api/assistant/reply", add_reply)
