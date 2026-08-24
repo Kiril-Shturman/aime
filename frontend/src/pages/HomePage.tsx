@@ -117,8 +117,8 @@ export default function HomePage() {
   const { state, refresh } = useApp()
   const nav = useNavigate()
 
-  const [searchOn, setSearchOn] = useState(false)
   const [q, setQ] = useState('')
+  const [searchOn, setSearchOn] = useState(false)
 
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBtnRef = useRef<HTMLAnchorElement>(null)
@@ -201,13 +201,14 @@ export default function HomePage() {
         transparent
         right={
           <div className="flex items-center gap-2 pr-2">
-            <KLink iconOnly onClick={() => setSearchOn((v) => !v)}>
+            <KLink navbar iconOnly onClick={() => setSearchOn(true)}>
               <Search size={20} />
             </KLink>
-            <KLink iconOnly onClick={() => setProjectOpen(true)}>
+            <KLink navbar iconOnly onClick={() => setProjectOpen(true)}>
               <Plus size={22} />
             </KLink>
             <KLink
+              navbar
               iconOnly
               ref={menuBtnRef}
               onClick={() => setMenuOpen(true)}
@@ -218,15 +219,27 @@ export default function HomePage() {
         }
       />
 
-      {searchOn && (
-        <Searchbar
-          value={q}
-          onInput={(e) => setQ((e.target as HTMLInputElement).value)}
-          onClear={() => setQ('')}
-          disableButton
-          placeholder="Поиск по задачам"
-        />
-      )}
+      {/* Поиск-оверлей: растягивается справа налево из тройки иконок */}
+      <div
+        className={`fixed top-0 left-0 right-0 z-[100] origin-right transition-transform duration-300 ease-out ${
+          searchOn ? 'scale-x-100' : 'scale-x-0'
+        }`}
+      >
+        <div className="bg-black/95 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
+          <Searchbar
+            value={q}
+            onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+            onClear={() => setQ('')}
+            disableButton
+            disableButtonText="Готово"
+            onDisable={() => {
+              setSearchOn(false)
+              setQ('')
+            }}
+            placeholder="Поиск по задачам"
+          />
+        </div>
+      </div>
 
       {query ? (
         <>
@@ -297,7 +310,9 @@ export default function HomePage() {
         </>
       )}
 
-      <Fab label="Новая задача" onClick={() => setTaskOpen(true)} />
+      <Fab label="Новая задача" onClick={() => setTaskOpen(true)}>
+        +
+      </Fab>
 
       <Menu
         open={menuOpen}

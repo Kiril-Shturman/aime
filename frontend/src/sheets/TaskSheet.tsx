@@ -31,8 +31,7 @@ export default function TaskSheet({
 }: Props) {
   const { state, refresh } = useApp()
 
-  const [title, setTitle] = useState('')
-  const [note, setNote] = useState('')
+  const [text, setText] = useState('')
   const [url, setUrl] = useState('')
   const [projectId, setProjectId] = useState<string | null>(defaultProject)
   const [stageId, setStageId] = useState<string | null>(defaultStage)
@@ -46,8 +45,7 @@ export default function TaskSheet({
 
   useEffect(() => {
     if (!open) return
-    setTitle('')
-    setNote('')
+    setText('')
     setUrl('')
     setProjectId(defaultProject ?? state?.projects[0]?.id ?? null)
     setStageId(defaultStage)
@@ -82,10 +80,14 @@ export default function TaskSheet({
   )
 
   const save = async () => {
-    if (!title.trim()) return
+    const trimmed = text.trim()
+    if (!trimmed) return
+    const [firstLine, ...rest] = trimmed.split('\n')
+    const title = firstLine.trim()
+    const note = rest.join('\n').trim()
     await api.addTask({
-      title: title.trim(),
-      note: note.trim() || undefined,
+      title,
+      note: note || undefined,
       url: url.trim() || undefined,
       project: projectId ?? undefined,
       stage: stageId ?? undefined,
@@ -103,20 +105,13 @@ export default function TaskSheet({
     <>
       <Popup open={open} onClose={onClose} title="Новая задача" onSave={save} saveLabel="Готово">
         <Block strong inset className="!mt-3">
-          <input
-            autoFocus
-            type="text"
-            placeholder=""
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="w-full bg-transparent text-white text-[22px] font-semibold outline-none placeholder:text-white/40"
-          />
           <textarea
-            rows={3}
-            placeholder="Заметки"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="mt-3 w-full bg-transparent text-white text-[17px] outline-none resize-none placeholder:text-white/40"
+            autoFocus
+            rows={6}
+            placeholder="Что нужно сделать?"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="w-full bg-transparent text-white text-[17px] outline-none resize-none placeholder:text-white/40"
           />
         </Block>
 
