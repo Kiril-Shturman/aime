@@ -52,16 +52,11 @@ export default function ModuleRoadmapPopup({
   onStageClick,
   onTaskClick,
 }: Props) {
-  const currentStage = modules
-    .flatMap((module) => module.stages)
-    .find((stage) => stage.status === 'active')
   const [expandedModules, setExpandedModules] = useState<Set<string>>(
     () => new Set(currentModuleName ? [currentModuleName] : []),
   )
-  const [expandedStages, setExpandedStages] = useState<Set<string>>(
-    () => new Set(currentStage ? [currentStage.id] : []),
-  )
-  const [scale, setScale] = useState(0.72)
+  const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set())
+  const [scale, setScale] = useState(0.84)
   const [offset, setOffset] = useState({ x: 0, y: 28 })
   const pointers = useRef(new Map<number, { x: number; y: number }>())
   const lastPinchDistance = useRef<number | null>(null)
@@ -79,25 +74,43 @@ export default function ModuleRoadmapPopup({
   }, [modules, tasks])
 
   const toggleModule = (name: string) => {
+    const opening = !expandedModules.has(name)
     setExpandedModules((previous) => {
       const next = new Set(previous)
       if (next.has(name)) next.delete(name)
       else next.add(name)
       return next
     })
+    if (opening) {
+      setScale(0.88)
+      setOffset({ x: 0, y: 28 })
+    }
   }
 
-  const toggleStage = (id: string) => {
+  const toggleStage = (
+    id: string,
+    index: number,
+    onLeft: boolean,
+    centered: boolean,
+  ) => {
+    const opening = !expandedStages.has(id)
     setExpandedStages((previous) => {
       const next = new Set(previous)
       if (next.has(id)) next.delete(id)
       else next.add(id)
       return next
     })
+    if (opening) {
+      setScale(1.05)
+      setOffset({
+        x: centered ? 0 : onLeft ? 145 : -145,
+        y: 40 - Math.floor(index / 2) * 190,
+      })
+    }
   }
 
   const resetView = () => {
-    setScale(0.72)
+    setScale(0.84)
     setOffset({ x: 0, y: 28 })
   }
 
@@ -165,6 +178,11 @@ export default function ModuleRoadmapPopup({
     >
       <div
         className="relative h-[calc(100dvh-56px)] touch-none overflow-hidden bg-ios-light-surface-2 dark:bg-ios-dark-surface-2"
+        style={{
+          backgroundImage:
+            'radial-gradient(circle, color-mix(in srgb, currentColor 16%, transparent) 1px, transparent 1px)',
+          backgroundSize: '22px 22px',
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={releasePointer}
@@ -227,17 +245,20 @@ export default function ModuleRoadmapPopup({
                     <div className="relative mt-7 grid grid-cols-2 gap-x-20 gap-y-8">
                       <span className="absolute left-1/2 -top-7 bottom-8 w-1 -translate-x-1/2 bg-primary/35" />
                       {moduleStages.map(({ stage, stageTasks, done, total, progress: stageDone }, index) => {
-                        const onLeft = index % 2 === 0
+                        const centered = moduleStages.length === 1
+                        const onLeft = !centered && index % 2 === 0
                         const stageExpanded = expandedStages.has(stage.id)
                         return (
-                          <div key={stage.id} className={`relative z-10 ${onLeft ? 'col-start-1' : 'col-start-2'}`}>
-                            <span className={`absolute top-16 h-1 w-10 -translate-y-1/2 bg-primary/35 ${onLeft ? '-right-10' : '-left-10'}`} />
+                          <div key={stage.id} className={`relative z-10 ${centered ? 'col-span-2 w-[220px] justify-self-center' : onLeft ? 'col-start-1' : 'col-start-2'}`}>
+                            {!centered && (
+                              <span className={`absolute top-16 h-1 w-10 -translate-y-1/2 bg-primary/35 ${onLeft ? '-right-10' : '-left-10'}`} />
+                            )}
                             <div className="relative rounded-2xl bg-ios-light-surface-1 p-3 text-center shadow-lg dark:bg-ios-dark-surface-1">
-                              <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => toggleStage(stage.id)} className="flex w-full flex-col items-center active:opacity-70" aria-expanded={stageExpanded}>
+                              <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => toggleStage(stage.id, index, onLeft, centered)} className="flex w-full flex-col items-center active:opacity-70" aria-expanded={stageExpanded}>
                                 <StageProgressIcon progress={stageDone} size={54} />
                                 <span className="mt-2 line-clamp-2 text-[14px] font-semibold leading-tight text-black dark:text-white">{stage.title}</span>
                                 <span className="mt-1 text-[11px] text-black/45 dark:text-white/45">{STAGE_STATUS_LABEL[stage.status]}{total ? ` · ${done} из ${total}` : ''}</span>
-                                <span className="mt-2 text-[11px] font-medium text-primary">{stageExpanded ? 'Скрыть задачи' : 'Показать задачи'}</span>
+                                <span className="mt-2 text-[11px] font-medium text-primary">{stageExpanded ? 'Свернуть задачи' : 'Приблизить к задачам'}</span>
                               </button>
                               <button type="button" onPointerDown={(event) => event.stopPropagation()} onClick={() => onStageClick(stage)} className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded-full bg-black/[.05] text-black/45 active:opacity-60 dark:bg-white/[.08] dark:text-white/45" aria-label={`Информация об этапе ${stage.title}`}>
                                 <Info size={15} />

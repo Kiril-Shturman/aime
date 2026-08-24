@@ -342,9 +342,9 @@ export default function ProjectPage() {
             <button
               type="button"
               onClick={() => setModuleOpen(true)}
-              className="relative mx-safe-4 mb-10 w-[calc(100%-2rem)] min-h-24 overflow-hidden rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 text-left active:opacity-75"
+              className="relative mx-safe-4 mb-10 w-[calc(100%-2rem)] min-h-32 overflow-hidden rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 text-left active:opacity-75"
             >
-              <span className="flex min-h-24 items-center py-4 pl-5 pr-20">
+              <span className="flex min-h-32 items-center py-5 pl-5 pr-20">
                 <span className="min-w-0">
                   <span className="block truncate text-[19px] leading-tight font-semibold text-black dark:text-white">
                   {currentModule.name}
