@@ -5,10 +5,11 @@ import { api } from '../api/client'
 import type { Access } from '../api/types'
 import { haptic } from '../lib/telegram'
 
-// Ссылка ведёт в саму мини-аппу с кодом приглашения: Телеграм передаст его
-// как start_param, доска сверит и запомнит гостя по его id.
-function inviteLink(bot: string, code: string) {
-  return bot ? `https://t.me/${bot}/app?startapp=${code}` : code
+// Обычная ссылка на доску с ключом приглашения: открывается где угодно —
+// в браузере, в Телеграме, на чужом телефоне. Вариант через t.me со
+// start_param красивее, но требует настроенного Mini App у бота.
+function inviteLink(key: string) {
+  return `${location.origin}/?key=${key}`
 }
 
 export default function BoardAccess() {
@@ -31,7 +32,7 @@ export default function BoardAccess() {
   const invite = async () => {
     haptic('success')
     const inv = await api.addInvite()
-    await copy(inviteLink(inv.bot || access.bot, inv.code))
+    await copy(inviteLink(inv.key))
     load()
   }
 
@@ -53,7 +54,7 @@ export default function BoardAccess() {
           title="Пускать других"
           subtitle={
             access.open
-              ? 'Гости заходят по ссылке из Телеграма'
+              ? 'Гости заходят по ссылке'
               : 'Доску вижу только я'
           }
           after={<Toggle checked={access.open} onChange={toggle} />}
@@ -62,7 +63,7 @@ export default function BoardAccess() {
           <ListItem
             link
             title="Позвать человека"
-            subtitle="Одноразовая ссылка, копируется сразу"
+            subtitle="Ссылка на доску, копируется сразу"
             media={<UserPlus size={20} className="text-[#2a8bff]" />}
             onClick={invite}
           />
@@ -74,12 +75,12 @@ export default function BoardAccess() {
           <BlockTitle>Ссылки ждут</BlockTitle>
           <List strong inset dividers>
             {pending.map((i) => {
-              const link = inviteLink(access.bot, i.code)
+              const link = inviteLink(i.key)
               return (
                 <ListItem
                   key={i.code}
                   title={i.code}
-                  subtitle="ещё не использована"
+                  subtitle="ссылка ещё не открыта"
                   after={
                     <span className="flex items-center gap-1">
                       <button

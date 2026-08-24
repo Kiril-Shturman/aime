@@ -103,6 +103,7 @@ export interface Guest {
 
 export interface Invite {
   code: string
+  key: string
   created: number
   used_by: string | null
 }
