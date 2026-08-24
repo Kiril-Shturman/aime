@@ -1,4 +1,4 @@
-import type { Member, Project, Stage, State, Task } from './types'
+import type { Assistant, Member, Project, QuickReply, Stage, State, Task } from './types'
 
 async function request<T>(
   path: string,
@@ -89,6 +89,17 @@ export const api = {
       method: 'POST',
       json: { repo, branch },
     }),
+
+  getAssistant: () => request<Assistant>('/api/assistant'),
+  patchAssistant: (patch: Partial<Assistant>) =>
+    request<Assistant>('/api/assistant', { method: 'PATCH', json: patch }),
+  addReply: (title: string, text: string) =>
+    request<QuickReply>('/api/assistant/reply', {
+      method: 'POST',
+      json: { title, text },
+    }),
+  deleteReply: (rid: string) =>
+    request<void>(`/api/assistant/reply/${rid}`, { method: 'DELETE' }),
 
   listCommands: () =>
     request<{ commands: Command[] }>('/api/commands'),

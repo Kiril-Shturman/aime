@@ -64,3 +64,20 @@ export interface State {
   tasks: Task[]
   counts: Counts
 }
+
+// настройки бота, который висит у владельца в личке
+export interface QuickReply {
+  id: string
+  title: string
+  text: string
+}
+
+export interface Assistant {
+  mode: 'personal' | 'support'
+  business: { connected: boolean; account: string; since: number | null }
+  autoreply: { on: boolean; text: string; away_after: number }
+  watch: { deleted: boolean; edited: boolean }
+  digest: { on: boolean; at: string }
+  replies: QuickReply[]
+  support: { hours: string; sla: number; escalate: string }
+}
