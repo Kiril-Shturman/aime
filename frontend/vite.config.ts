@@ -13,6 +13,7 @@ export default defineConfig({
   },
   build: {
     outDir: path.resolve(import.meta.dirname, '../static'),
-    emptyOutDir: true,
+    // папку не чистим: при неудачной сборке прод останется на прошлой
+    emptyOutDir: false,
   },
 })

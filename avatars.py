@@ -1,7 +1,7 @@
 """Скачивает аватарки ботов с их публичных страниц t.me.
 
 Токены ботов для этого не нужны: t.me отдаёт картинку в og:image.
-Файлы кладём в static/avatars/<handle>.jpg и прописываем путь в data.json,
+Файлы кладём в avatars/<handle>.jpg и прописываем путь в data.json,
 чтобы мини-аппа не ходила в сеть на каждом открытии.
 """
 import json
@@ -11,7 +11,7 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, "data.json")
-AVA = os.path.join(ROOT, "static", "avatars")
+AVA = os.path.join(ROOT, "avatars")
 UA = {"User-Agent": "Mozilla/5.0"}
 
 
