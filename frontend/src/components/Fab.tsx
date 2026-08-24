@@ -14,7 +14,7 @@ export default function Fab({
       aria-label={label}
       icon={<Plus size={24} strokeWidth={2} />}
       component="button"
-      className="!fixed right-4 z-30"
+      className="!fixed left-4 z-30 !w-16 !h-16"
       style={{ bottom: 'calc(22px + env(safe-area-inset-bottom))' }}
     />
   )

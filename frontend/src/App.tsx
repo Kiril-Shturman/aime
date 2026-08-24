@@ -8,6 +8,7 @@ import ProjectPage from './pages/ProjectPage'
 import FilterPage from './pages/FilterPage'
 import ProfilePage from './pages/ProfilePage'
 import GeneratePage from './pages/GeneratePage'
+import ChatPage from './pages/ChatPage'
 import { AppStoreProvider, useApp } from './store/AppStore'
 import { ThemeProvider, useTheme } from './store/ThemeStore'
 import { initTelegram } from './lib/telegram'
@@ -43,6 +44,7 @@ function Themed() {
                 <Route path="/filter/:kind" element={<FilterPage />} />
                 <Route path="/profile" element={<ProfilePage />} />
                 <Route path="/generate" element={<GeneratePage />} />
+                <Route path="/chat/:id" element={<ChatPage />} />
               </Routes>
             </BrowserRouter>
           </Gate>
