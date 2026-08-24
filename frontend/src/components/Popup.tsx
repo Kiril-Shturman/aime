@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react'
 import { X, Check } from 'lucide-react'
-import { Popup as KPopup, Navbar, Link as KLink, Page } from 'konsta/react'
+import { Popup as KPopup, Navbar, Page, Link as KLink } from 'konsta/react'
 import { haptic } from '../lib/telegram'
 
 interface Props {
@@ -8,7 +8,7 @@ interface Props {
   onClose: () => void
   title: string
   onSave?: () => void
-  saveLabel?: string
+  canSave?: boolean
   children: ReactNode
 }
 
@@ -17,7 +17,7 @@ export default function Popup({
   onClose,
   title,
   onSave,
-  saveLabel,
+  canSave,
   children,
 }: Props) {
   useEffect(() => {
@@ -25,23 +25,26 @@ export default function Popup({
   }, [open])
 
   return (
-    <KPopup
-      opened={open}
-      onBackdropClick={onClose}
-      className="!bg-black"
-    >
+    <KPopup opened={open} onBackdropClick={onClose} className="!bg-black">
       <Page className="!bg-black">
         <Navbar
           title={title}
           left={
-            <KLink onClick={onClose}>
-              <X size={22} />
+            <KLink navbar iconOnly onClick={onClose}>
+              <X size={22} strokeWidth={2.5} />
             </KLink>
           }
           right={
             onSave ? (
-              <KLink onClick={onSave}>
-                {saveLabel ? saveLabel : <Check size={22} strokeWidth={2.5} />}
+              <KLink
+                navbar
+                iconOnly
+                onClick={canSave ? onSave : undefined}
+                className={
+                  canSave ? '!text-[#4ea3ff]' : '!text-white/30 pointer-events-none'
+                }
+              >
+                <Check size={24} strokeWidth={3} />
               </KLink>
             ) : undefined
           }

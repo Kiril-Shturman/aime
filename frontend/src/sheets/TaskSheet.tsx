@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Calendar, Clock, AlarmClock, User, Folder, Link as LinkIcon } from 'lucide-react'
 import {
   Block,
@@ -8,6 +8,9 @@ import {
   ListItem,
   Toggle,
 } from 'konsta/react'
+import { DayPicker } from 'react-day-picker'
+import { ru } from 'date-fns/locale'
+import 'react-day-picker/style.css'
 import Popup from '../components/Popup'
 import PickerSheet, { type PickerOption } from './PickerSheet'
 import { api } from '../api/client'
@@ -42,6 +45,25 @@ export default function TaskSheet({
   const [time, setTime] = useState('')
   const [flagged, setFlagged] = useState(false)
   const [picker, setPicker] = useState<Picker>(null)
+
+  const dateRef = useRef<HTMLInputElement>(null)
+  const timeRef = useRef<HTMLInputElement>(null)
+
+  const openPicker = (el: HTMLInputElement | null) => {
+    if (!el) return
+    if (typeof el.showPicker === 'function') el.showPicker()
+    else el.click()
+  }
+
+  const fmtDate = (s: string) => {
+    if (!s) return 'Выбрать'
+    const d = new Date(s)
+    return d.toLocaleDateString('ru-RU', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+  }
 
   useEffect(() => {
     if (!open) return
@@ -103,7 +125,13 @@ export default function TaskSheet({
 
   return (
     <>
-      <Popup open={open} onClose={onClose} title="Новая задача" onSave={save} saveLabel="Готово">
+      <Popup
+        open={open}
+        onClose={onClose}
+        title="Новая задача"
+        onSave={save}
+        canSave={!!text.trim()}
+      >
         <Block strong inset className="!mt-3">
           <textarea
             autoFocus
@@ -121,34 +149,42 @@ export default function TaskSheet({
             media={<Calendar size={20} />}
             title="Дата"
             after={
-              <Toggle
-                checked={hasDate}
-                onChange={(e) => setHasDate((e.target as HTMLInputElement).checked)}
-              />
+              <span className="flex items-center gap-3">
+                {hasDate && (
+                  <span className="text-[#4ea3ff] text-[15px]">{fmtDate(due)}</span>
+                )}
+                <Toggle
+                  checked={hasDate}
+                  onChange={(e) => {
+                    const on = (e.target as HTMLInputElement).checked
+                    setHasDate(on)
+                    if (!on) setDue('')
+                  }}
+                />
+              </span>
             }
           />
-          {hasDate && (
-            <ListInput
-              type="date"
-              value={due}
-              onChange={(e) => setDue((e.target as HTMLInputElement).value)}
-            />
-          )}
+          {/* календарь пойдёт отдельным блоком ниже, чтобы растянуться на ширину */}
           <ListItem
             media={<Clock size={20} />}
             title="Время"
             after={
               <Toggle
                 checked={hasTime}
-                onChange={(e) => setHasTime((e.target as HTMLInputElement).checked)}
+                onChange={(e) => {
+                  const on = (e.target as HTMLInputElement).checked
+                  setHasTime(on)
+                  if (on) setTimeout(() => openPicker(timeRef.current), 0)
+                  else setTime('')
+                }}
               />
             }
           />
           {hasTime && (
-            <ListInput
-              type="time"
-              value={time}
-              onChange={(e) => setTime((e.target as HTMLInputElement).value)}
+            <ListItem
+              title={time || 'Выбрать'}
+              onClick={() => openPicker(timeRef.current)}
+              className="!ps-13"
             />
           )}
           <ListItem
@@ -162,6 +198,28 @@ export default function TaskSheet({
             }
           />
         </List>
+
+        {hasDate && (
+          <Block strong inset className="!p-2">
+            <DayPicker
+              mode="single"
+              locale={ru}
+              weekStartsOn={1}
+              selected={due ? new Date(due) : undefined}
+              onSelect={(d) => {
+                if (!d) return
+                const iso = new Date(
+                  d.getTime() - d.getTimezoneOffset() * 60000,
+                )
+                  .toISOString()
+                  .slice(0, 10)
+                setDue(iso)
+              }}
+              className="rdp-tasks"
+            />
+          </Block>
+        )}
+
         <Block className="!mt-2 opacity-60 text-[13px]">
           Срочная задача поднимается наверх и помечается флажком.
         </Block>
@@ -199,6 +257,26 @@ export default function TaskSheet({
           />
         </List>
       </Popup>
+
+      {/* скрытые нативные пикеры даты и времени — их вызываем через showPicker() */}
+      <input
+        ref={dateRef}
+        type="date"
+        value={due}
+        onChange={(e) => setDue(e.target.value)}
+        className="sr-only pointer-events-none"
+        tabIndex={-1}
+        aria-hidden
+      />
+      <input
+        ref={timeRef}
+        type="time"
+        value={time}
+        onChange={(e) => setTime(e.target.value)}
+        className="sr-only pointer-events-none"
+        tabIndex={-1}
+        aria-hidden
+      />
 
       <PickerSheet
         open={picker === 'project'}
