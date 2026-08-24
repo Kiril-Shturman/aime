@@ -131,6 +131,10 @@ def migrate(state):
         changed = True
     for key, value in ACCESS.items():
         state["access"].setdefault(key, json.loads(json.dumps(value)))
+    for inv in state["access"]["invites"]:
+        if not inv.get("key"):
+            inv["key"] = secrets.token_hex(16)
+            changed = True
     if "assistant" not in state:
         state["assistant"] = json.loads(json.dumps(ASSISTANT))
         changed = True
@@ -738,6 +742,28 @@ def guest_by_id(state, uid):
     return None
 
 
+def guest_by_key(state, key):
+    """Гость по ссылке: ключ приглашения работает как пропуск.
+
+    Нужен, потому что ссылка в мини-аппу с кодом требует настроенного
+    Main Mini App у бота, а обычная ссылка работает всегда."""
+    if not state["access"].get("open"):
+        return None
+    for inv in state["access"]["invites"]:
+        if not inv.get("key") or not hmac.compare_digest(key, inv["key"]):
+            continue
+        gid = "link-" + inv["code"]
+        guest = guest_by_id(state, gid)
+        if not guest:
+            guest = {"id": gid, "name": "Гость по ссылке", "handle": "",
+                     "added": int(time.time())}
+            state["access"]["guests"].append(guest)
+            inv["used_by"] = gid
+            save(state)
+        return {"kind": "guest", "id": gid, "name": guest["name"]}
+    return None
+
+
 def redeem_invite(state, code, user):
     """Гость пришёл по одноразовой ссылке — впускаем и запоминаем."""
     if not code:
@@ -767,11 +793,12 @@ def whoami(request):
     if key:
         if hmac.compare_digest(key, owner_key()):
             return {"kind": "owner", "id": "owner", "name": "владелец"}
-        for p in load()["projects"]:
+        state = load()
+        for p in state["projects"]:
             for m in p["members"]:
                 if m.get("key") and hmac.compare_digest(key, m["key"]):
                     return {"kind": "member", "id": m["id"], "name": m["name"]}
-        return None
+        return guest_by_key(state, key)
 
     signed = check_init_data(request.headers.get("X-Telegram-Init-Data", ""))
     if not signed:
@@ -859,7 +886,13 @@ async def add_invite(request):
     """Одноразовая ссылка: открывший её из Телеграма становится гостем."""
     only_owner(request)
     state = load()
-    invite = {"code": secrets.token_hex(6), "created": int(time.time()), "used_by": None}
+    invite = {
+        "code": secrets.token_hex(6),
+        # ключ работает как ссылка: открыл — вошёл, Телеграм не нужен
+        "key": secrets.token_hex(16),
+        "created": int(time.time()),
+        "used_by": None,
+    }
     state["access"]["invites"].append(invite)
     state["access"]["open"] = True     # приглашать при выключенном входе бессмысленно
     save(state)
