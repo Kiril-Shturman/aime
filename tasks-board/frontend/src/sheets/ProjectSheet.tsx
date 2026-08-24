@@ -189,7 +189,7 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
           {project && (
             <ListItem
               media={
-                <span className="w-10 h-10 flex items-center justify-center shrink-0">
+                <span className="w-10 h-10 flex items-center justify-center shrink-0 text-primary">
                   <Rocket size={34} strokeWidth={1.7} />
                 </span>
               }
@@ -219,7 +219,7 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
                 <ListItem
                   key={c.id}
                   media={
-                    <span className="w-10 h-10 flex items-center justify-center shrink-0">
+                    <span className="w-10 h-10 flex items-center justify-center shrink-0 text-primary">
                       <Icon size={34} strokeWidth={1.7} />
                     </span>
                   }
