@@ -28,6 +28,7 @@ import { useApp } from '../store/AppStore'
 import { Avatar } from '../components/Avatar'
 import { getUser } from '../lib/telegram'
 import Fab from '../components/Fab'
+import SwitchPill from '../components/SwitchPill'
 import Menu, { type MenuItem } from '../components/Menu'
 import TaskRow from '../components/TaskRow'
 import TaskSheet from '../sheets/TaskSheet'
@@ -327,6 +328,7 @@ export default function HomePage() {
         </>
       )}
 
+      <SwitchPill />
       <Fab label="Новая задача" onClick={() => setTaskOpen(true)} />
 
       <Menu
