@@ -128,7 +128,7 @@ function ProviderTile({ item, onClick }: { item: Provider; onClick: () => void }
       <img
         src={item.avatar}
         alt=""
-        className="w-16 h-16 rounded-[20px] object-cover bg-black/5 dark:bg-white/10"
+        className="w-16 h-16 rounded-[20px] object-cover bg-black/5 dark:bg-white/10 shadow-[0_2px_8px_rgba(0,0,0,0.10)] dark:shadow-none"
       />
       <span className="text-[13px] font-semibold text-black dark:text-white text-center leading-tight truncate w-full">
         {item.name}
