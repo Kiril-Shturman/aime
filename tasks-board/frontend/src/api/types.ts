@@ -93,25 +93,9 @@ export interface Assistant {
   support: { hours: string; sla: number; escalate: string }
 }
 
-// кого пускаем на доску кроме владельца
-export interface Guest {
-  id: string
-  name: string
-  handle: string
-  added: number
-}
-
-export interface Invite {
-  code: string
-  key: string
-  created: number
-  used_by: string | null
-}
-
+// один тумблер: доска для своих или для всех
 export interface Access {
   open: boolean
-  guests: Guest[]
-  invites: Invite[]
   bot: string
 }
 
