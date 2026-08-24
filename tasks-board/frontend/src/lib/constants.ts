@@ -41,3 +41,13 @@ export function repoUrl(repo: string): string {
 export function kindLabel(id?: string) {
   return KINDS.find((k) => k.id === id)?.label ?? ''
 }
+
+// цвета чипов: состояние участника и его вид
+export const PILL_TONES: Record<string, string> = {
+  work: 'bg-[#2a8bff]/20 text-[#6cb6ff]',
+  free: 'bg-white/10 text-white/45',
+  bot: 'bg-[#30d158]/18 text-[#4ee27a]',
+  agent: 'bg-[#bf5af2]/18 text-[#d18cf7]',
+  service: 'bg-[#ff9f0a]/18 text-[#ffb84d]',
+  human: 'bg-[#64d2ff]/18 text-[#8fdfff]',
+}
