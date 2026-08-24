@@ -1,4 +1,15 @@
-import type { Assistant, Member, Project, QuickReply, Stage, State, Task } from './types'
+import type {
+  Access,
+  Assistant,
+  Invite,
+  Member,
+  Project,
+  QuickReply,
+  Stage,
+  State,
+  Task,
+  Who,
+} from './types'
 import { boardKey, initData } from '../lib/telegram'
 
 async function request<T>(
@@ -92,6 +103,18 @@ export const api = {
       method: 'POST',
       json: { repo, branch },
     }),
+
+  whoami: () => request<{ who: Who | null; can_write: boolean }>('/api/whoami'),
+
+  getAccess: () => request<Access>('/api/access'),
+  setAccessOpen: (open: boolean) =>
+    request<Access>('/api/access', { method: 'PATCH', json: { open } }),
+  addInvite: () =>
+    request<Invite & { bot: string }>('/api/access/invite', { method: 'POST' }),
+  deleteInvite: (code: string) =>
+    request<void>(`/api/access/invite/${code}`, { method: 'DELETE' }),
+  deleteGuest: (gid: string) =>
+    request<void>(`/api/access/guest/${gid}`, { method: 'DELETE' }),
 
   getAssistant: () => request<Assistant>('/api/assistant'),
   patchAssistant: (patch: Partial<Assistant>) =>

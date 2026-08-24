@@ -92,3 +92,30 @@ export interface Assistant {
   replies: QuickReply[]
   support: { hours: string; sla: number; escalate: string }
 }
+
+// кого пускаем на доску кроме владельца
+export interface Guest {
+  id: string
+  name: string
+  handle: string
+  added: number
+}
+
+export interface Invite {
+  code: string
+  created: number
+  used_by: string | null
+}
+
+export interface Access {
+  open: boolean
+  guests: Guest[]
+  invites: Invite[]
+  bot: string
+}
+
+export interface Who {
+  kind: 'owner' | 'member' | 'guest'
+  id: string
+  name: string
+}
