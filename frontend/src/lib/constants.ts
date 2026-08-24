@@ -28,6 +28,43 @@ export const TASK_STATUS_LABEL: Record<string, string> = {
   done: 'Готово',
 }
 
+export const PROJECT_TYPES = [
+  { id: 'project', label: 'Проект' },
+  { id: 'process', label: 'Процесс' },
+] as const
+
+export const PROCESS_KINDS = [
+  {
+    id: 'queue',
+    label: 'Очередь',
+    hint: 'Задачи копятся, агент разбирает по одной',
+  },
+  {
+    id: 'schedule',
+    label: 'Расписание',
+    hint: 'Повторяется по календарю: каждый день, неделю…',
+  },
+  {
+    id: 'monitoring',
+    label: 'Мониторинг',
+    hint: 'Проверять и реагировать при изменении',
+  },
+  {
+    id: 'conveyor',
+    label: 'Конвейер',
+    hint: 'Поток однотипных задач через этапы',
+  },
+  {
+    id: 'regulation',
+    label: 'Регламент',
+    hint: 'Инструкция «как делаем эту работу»',
+  },
+] as const
+
+export function processKindLabel(id?: string) {
+  return PROCESS_KINDS.find((k) => k.id === id)?.label ?? ''
+}
+
 export function repoShort(repo: string): string {
   const m = repo.match(/[:/]([^/:]+\/[^/]+?)(\.git)?$/)
   return m ? m[1] : repo

@@ -20,12 +20,22 @@ export interface Stage {
   progress: { done: number; total: number }
 }
 
+export type ProjectType = 'project' | 'process'
+export type ProcessKind =
+  | 'queue'
+  | 'schedule'
+  | 'monitoring'
+  | 'conveyor'
+  | 'regulation'
+
 export interface Project {
   id: string
   name: string
   color?: string
   note?: string
   repo?: string
+  type?: ProjectType
+  process_kind?: ProcessKind
   members: Member[]
   roadmap: Stage[]
 }

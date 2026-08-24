@@ -10,6 +10,7 @@ import {
   Link as LinkIcon,
   Trash2,
   ChevronRight,
+  Workflow,
 } from 'lucide-react'
 import {
   Block,
@@ -29,7 +30,14 @@ import Menu, { type MenuItem } from '../components/Menu'
 import Pill from '../components/Pill'
 import Fab from '../components/Fab'
 import TaskRow from '../components/TaskRow'
-import { STAGE_STATUS_LABEL, kindLabel, repoShort, repoUrl } from '../lib/constants'
+import {
+  PROCESS_KINDS,
+  STAGE_STATUS_LABEL,
+  kindLabel,
+  processKindLabel,
+  repoShort,
+  repoUrl,
+} from '../lib/constants'
 import { haptic } from '../lib/telegram'
 import TaskSheet from '../sheets/TaskSheet'
 import TaskEditSheet from '../sheets/TaskEditSheet'
@@ -135,7 +143,7 @@ export default function ProjectPage() {
     const items: MenuItem[] = [
       { label: 'Поставить цель', icon: Flag, onSelect: () => setGoalOpen(true) },
       {
-        label: 'Изменить проект',
+        label: project.type === 'process' ? 'Изменить процесс' : 'Изменить проект',
         icon: Pencil,
         onSelect: () => setProjectSheetOpen(true),
       },
@@ -144,8 +152,14 @@ export default function ProjectPage() {
         icon: User,
         onSelect: () => setMemberOpen(true),
       },
-      { label: 'Добавить этап', icon: Flag, onSelect: () => setStageOpen(true) },
     ]
+    if (project.type !== 'process') {
+      items.push({
+        label: 'Добавить этап',
+        icon: Flag,
+        onSelect: () => setStageOpen(true),
+      })
+    }
     if (project.repo) {
       items.push({
         label: repoShort(project.repo),
@@ -171,7 +185,7 @@ export default function ProjectPage() {
       })
     }
     items.push({
-      label: 'Удалить проект',
+      label: project.type === 'process' ? 'Удалить процесс' : 'Удалить проект',
       icon: Trash2,
       red: true,
       onSelect: deleteProject,
@@ -270,7 +284,22 @@ export default function ProjectPage() {
         </>
       )}
 
-      {project.roadmap.length > 0 && (
+      {project.type === 'process' && project.process_kind && (
+        <>
+          <BlockTitle>Способ организации</BlockTitle>
+          <List strong inset>
+            <ListItem
+              media={<Workflow size={20} />}
+              title={processKindLabel(project.process_kind)}
+              subtitle={
+                PROCESS_KINDS.find((k) => k.id === project.process_kind)?.hint
+              }
+            />
+          </List>
+        </>
+      )}
+
+      {project.type !== 'process' && project.roadmap.length > 0 && (
         <>
           <BlockTitle>Роудмап</BlockTitle>
           <List strong inset>
