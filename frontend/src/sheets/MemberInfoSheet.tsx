@@ -97,12 +97,13 @@ export default function MemberInfoSheet({
 
       <BlockTitle>Кто это</BlockTitle>
       <Block>
-        <Segmented strong>
+        <Segmented strong rounded>
           {KINDS.map((k) => (
             <SegmentedButton
               key={k.id}
               active={kind === k.id}
               onClick={() => setKind(k.id as MemberKind)}
+              className="!text-[14px] whitespace-nowrap"
             >
               {k.label}
             </SegmentedButton>
