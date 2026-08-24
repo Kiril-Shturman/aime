@@ -15,6 +15,7 @@ export interface Member {
 export interface Stage {
   id: string
   title: string
+  module?: string
   date?: string
   status: StageStatus
   progress: { done: number; total: number }

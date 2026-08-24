@@ -525,6 +525,7 @@ async def add_stage(request):
     stage = {
         "id": uuid.uuid4().hex[:8],
         "title": title,
+        "module": (body.get("module") or "").strip() or None,
         "note": (body.get("note") or "").strip(),
         "date": body.get("date") or None,
         "status": body.get("status") if body.get("status") in STAGES else "planned",
@@ -542,7 +543,7 @@ async def patch_stage(request):
         if st["id"] == request.match_info["sid"]:
             if "status" in body and body["status"] in STAGES:
                 st["status"] = body["status"]
-            for key in ("title", "note"):
+            for key in ("title", "note", "module"):
                 if key in body:
                     st[key] = (body[key] or "").strip()
             if "date" in body:
