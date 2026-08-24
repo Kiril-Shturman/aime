@@ -281,9 +281,8 @@ export default function HomePage() {
             {state?.projects.map((p) => (
               <ListItem
                 key={p.id}
-                link
-                component={Link as unknown as 'a'}
-                linkProps={{ to: `/project/${p.id}` }}
+                chevron
+                onClick={() => nav(`/project/${p.id}`)}
                 title={p.name}
                 subtitle={
                   p.members.length > 0

@@ -61,11 +61,16 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
   }
 
   const title = project ? 'Изменить проект' : 'Новый проект'
-  const okLabel = project ? 'Сохранить' : 'Создать'
 
   return (
     <>
-      <Popup open={open} onClose={onClose} title={title} onSave={save} saveLabel={okLabel}>
+      <Popup
+      open={open}
+      onClose={onClose}
+      title={title}
+      onSave={save}
+      canSave={!!name.trim()}
+    >
         <List strong inset>
           <ListInput
             label="Название"
