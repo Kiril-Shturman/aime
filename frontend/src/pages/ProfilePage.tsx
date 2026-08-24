@@ -18,6 +18,7 @@ import { api } from '../api/client'
 import type { Assistant } from '../api/types'
 import Pill from '../components/Pill'
 import BoardAccess from '../components/BoardAccess'
+import DmAccount from '../components/DmAccount'
 import PickerSheet from '../sheets/PickerSheet'
 import TextSheet from '../sheets/TextSheet'
 
@@ -183,6 +184,8 @@ export default function ProfilePage() {
       {bot && (
         <>
           <BoardAccess />
+
+          <DmAccount />
 
           <BlockTitle>Бот в личке</BlockTitle>
           <List strong inset>
