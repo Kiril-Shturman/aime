@@ -199,14 +199,13 @@ export default function HomePage() {
         title="Задачи"
         right={
           <>
-            <KLink navbar iconOnly onClick={() => setSearchOn(true)}>
+            <KLink iconOnly onClick={() => setSearchOn(true)}>
               <Search size={22} />
             </KLink>
-            <KLink navbar iconOnly onClick={() => setProjectOpen(true)}>
+            <KLink iconOnly onClick={() => setProjectOpen(true)}>
               <Plus size={22} />
             </KLink>
             <KLink
-              navbar
               iconOnly
               ref={menuBtnRef}
               onClick={() => setMenuOpen(true)}
@@ -230,7 +229,6 @@ export default function HomePage() {
             onInput={(e) => setQ((e.target as HTMLInputElement).value)}
             onClear={() => setQ('')}
             disableButton
-            disableButtonText="Готово"
             onDisable={() => {
               setSearchOn(false)
               setQ('')
@@ -309,9 +307,7 @@ export default function HomePage() {
         </>
       )}
 
-      <Fab label="Новая задача" onClick={() => setTaskOpen(true)}>
-        +
-      </Fab>
+      <Fab label="Новая задача" onClick={() => setTaskOpen(true)} />
 
       <Menu
         open={menuOpen}
