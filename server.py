@@ -28,8 +28,12 @@ API минимальный, чтобы им мог пользоваться аг
   PATCH  /api/project/<id>/stage/<sid> — {title, date, status, note}
   DELETE /api/project/<id>/stage/<sid>
 """
+import hashlib
+import hmac
 import json
 import os
+import secrets
+import urllib.parse
 import shlex
 import subprocess
 import threading
@@ -137,6 +141,10 @@ def migrate(state):
             changed = True
         p.setdefault("members", [])
         p.setdefault("roadmap", [])
+        for m in p["members"]:
+            if not m.get("key"):
+                m["key"] = secrets.token_hex(16)
+                changed = True
     for t in state["tasks"]:
         if "bot" in t:
             t["member"] = t.pop("bot")
@@ -228,6 +236,8 @@ def make_member(body):
         "role": (body.get("role") or "").strip(),
         "kind": kind,
         "avatar": None,
+        # личный ключ: по нему доска понимает, кто из исполнителей пришёл
+        "key": secrets.token_hex(16),
     }
 
 
@@ -296,6 +306,10 @@ async def patch_task(request):
             now = int(time.time())
             if t["status"] == "doing" and not t.get("started_at"):
                 t["started_at"] = now          # засекаем, когда взяли в работу
+            # взял задачу — значит она твоя, даже если её никто не назначал
+            who = request.get("who") or {}
+            if t["status"] == "doing" and who.get("kind") == "member" and not t.get("member"):
+                t["member"] = who["id"]
             t["done_at"] = now if t["done"] else None
             # если исполнитель не сказал, сколько заняло, считаем сами
             if t["done"] and not t.get("seconds") and t.get("started_at"):
@@ -466,7 +480,8 @@ async def add_tasks(request):
             "project": project,
             "stage": body.get("stage") or None,
             "parent": body.get("parent") or None,
-            "member": body.get("member") or None,
+            "member": (item.get("member") if isinstance(item, dict) else None)
+                      or body.get("member") or None,
             "status": "todo",
             "report": "",
             "url": "",
@@ -659,6 +674,84 @@ async def run_command(request):
     return web.json_response({"label": cmd["label"], "text": text})
 
 
+# ------------------------------------------------------- кто пришёл на доску
+#
+# Доска висит в интернете, поэтому пишем правило: читать может кто угодно,
+# менять — только опознанный. Опознаём двумя способами:
+#   1. ключ в заголовке X-Board-Key — так ходят исполнители (MCP, скрипты);
+#   2. подпись мини-аппы Телеграма — так ходит владелец из телефона.
+
+OWNER_KEY_FILE = os.path.join(ROOT, "owner.key")
+BOT_TOKEN = os.environ.get("BOARD_BOT_TOKEN", "")
+OWNERS = {x.strip() for x in os.environ.get("BOARD_OWNERS", "").split(",") if x.strip()}
+
+
+def owner_key():
+    """Ключ владельца: генерируем один раз и держим рядом с данными."""
+    if not os.path.exists(OWNER_KEY_FILE):
+        with open(OWNER_KEY_FILE, "w", encoding="utf-8") as f:
+            f.write(secrets.token_hex(16))
+    with open(OWNER_KEY_FILE, encoding="utf-8") as f:
+        return f.read().strip()
+
+
+def check_init_data(raw):
+    """Проверка подписи мини-аппы по алгоритму Телеграма."""
+    if not BOT_TOKEN or not raw:
+        return None
+    pairs = [p.split("=", 1) for p in raw.split("&") if "=" in p]
+    data = {k: urllib.parse.unquote_plus(v) for k, v in pairs}
+    got = data.pop("hash", "")
+    check = "\n".join(f"{k}={data[k]}" for k in sorted(data))
+    secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+    want = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(got, want):
+        return None
+    try:
+        user = json.loads(data.get("user", "{}"))
+    except json.JSONDecodeError:
+        return None
+    uid = str(user.get("id", ""))
+    if OWNERS and uid not in OWNERS:
+        return None
+    return user.get("first_name") or uid
+
+
+def whoami(request):
+    """Возвращает {kind, id, name} или None, если пришли без ключа."""
+    key = request.headers.get("X-Board-Key", "").strip()
+    if key:
+        if hmac.compare_digest(key, owner_key()):
+            return {"kind": "owner", "id": "owner", "name": "владелец"}
+        for p in load()["projects"]:
+            for m in p["members"]:
+                if m.get("key") and hmac.compare_digest(key, m["key"]):
+                    return {"kind": "member", "id": m["id"], "name": m["name"]}
+        return None
+    name = check_init_data(request.headers.get("X-Telegram-Init-Data", ""))
+    if name:
+        return {"kind": "owner", "id": "owner", "name": name}
+    return None
+
+
+@web.middleware
+async def guard(request, handler):
+    """Читать можно всем, менять — только своим."""
+    who = whoami(request)
+    request["who"] = who
+    if request.method != "GET" and request.path.startswith("/api/") and not who:
+        return web.json_response(
+            {"error": "нужен ключ: заголовок X-Board-Key или запуск из мини-аппы"},
+            status=401,
+        )
+    return await handler(request)
+
+
+async def get_whoami(request):
+    who = request.get("who")
+    return web.json_response({"who": who, "can_write": bool(who)})
+
+
 # ------------------------------------------------------------ бот в личке
 
 async def get_assistant(request):
@@ -729,8 +822,10 @@ async def spa(request):
 
 
 def make_app():
-    app = web.Application()
+    owner_key()   # чтобы ключ владельца существовал с первого запуска
+    app = web.Application(middlewares=[guard])
     app.router.add_get("/api/state", get_state)
+    app.router.add_get("/api/whoami", get_whoami)
     app.router.add_get("/api/assistant", get_assistant)
     app.router.add_patch("/api/assistant", patch_assistant)
     app.router.add_post("/api/assistant/reply", add_reply)

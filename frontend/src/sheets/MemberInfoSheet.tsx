@@ -12,6 +12,7 @@ import {
 } from 'konsta/react'
 import Sheet from '../components/Sheet'
 import { Avatar } from '../components/Avatar'
+import MemberConnect from '../components/MemberConnect'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
@@ -91,6 +92,8 @@ export default function MemberInfoSheet({
           <Stat title="токенов" value={tokens ? String(tokens) : '—'} />
         </div>
       </Block>
+
+      <MemberConnect member={member} />
 
       <BlockTitle>Кто это</BlockTitle>
       <Block>

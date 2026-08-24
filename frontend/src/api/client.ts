@@ -1,4 +1,5 @@
 import type { Assistant, Member, Project, QuickReply, Stage, State, Task } from './types'
+import { boardKey, initData } from '../lib/telegram'
 
 async function request<T>(
   path: string,
@@ -9,6 +10,8 @@ async function request<T>(
     ...rest,
     headers: {
       ...(json !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(initData() ? { 'X-Telegram-Init-Data': initData() } : {}),
+      ...(boardKey() ? { 'X-Board-Key': boardKey() } : {}),
       ...(headers ?? {}),
     },
     body: json !== undefined ? JSON.stringify(json) : rest.body,
