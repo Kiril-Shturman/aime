@@ -740,6 +740,9 @@ def whoami(request):
 
     kind: owner — хозяин доски, member — исполнитель с ключом,
     guest — приглашённый человек из Телеграма."""
+    # Ключ, который ничего не открывает, — не приговор: пробуем дальше
+    # подпись мини-аппы и общий тумблер. Иначе старый ключ, застрявший
+    # в памяти браузера, запирает дверь даже владельцу.
     key = request.headers.get("X-Board-Key", "").strip()
     if key:
         if hmac.compare_digest(key, owner_key()):
@@ -748,7 +751,6 @@ def whoami(request):
             for m in p["members"]:
                 if m.get("key") and hmac.compare_digest(key, m["key"]):
                     return {"kind": "member", "id": m["id"], "name": m["name"]}
-        return None
 
     signed = check_init_data(request.headers.get("X-Telegram-Init-Data", ""))
     if signed:

@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from 'react'
 import { api } from '../api/client'
+import { boardKey, forgetBoardKey } from '../lib/telegram'
 import type { State } from '../api/types'
 
 interface Ctx {
@@ -31,6 +32,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setError(null)
       setDenied(false)
     } catch (e) {
+      // ключ протух — выкидываем его и пробуем ещё раз как обычный гость
+      if (String(e).includes('401') && boardKey()) {
+        forgetBoardKey()
+        try {
+          setState(await api.state())
+          setError(null)
+          setDenied(false)
+          return
+        } catch {
+          /* всё равно не пускают — покажем экран «закрыто» */
+        }
+      }
       setDenied(String(e).includes('401'))
       setError(String(e))
     }
