@@ -9,9 +9,9 @@ import {
   RefreshCw,
   Link as LinkIcon,
   Trash2,
+  ChevronRight,
 } from 'lucide-react'
 import {
-  Badge,
   Block,
   BlockTitle,
   List,
@@ -26,6 +26,7 @@ import { api, type GitStatus } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { Avatar } from '../components/Avatar'
 import Menu, { type MenuItem } from '../components/Menu'
+import Pill from '../components/Pill'
 import Fab from '../components/Fab'
 import TaskRow from '../components/TaskRow'
 import { STAGE_STATUS_LABEL, kindLabel, repoShort, repoUrl } from '../lib/constants'
@@ -230,7 +231,7 @@ export default function ProjectPage() {
         <>
           <BlockTitle>Команда</BlockTitle>
           {/* «Data list, with icons» из Konsta: иконка слева, значение справа */}
-          <List strongIos outlineIos inset dividers>
+          <List strong inset dividers>
             {project.members.map((m) => (
               <ListItem
                 key={m.id}
@@ -242,21 +243,27 @@ export default function ProjectPage() {
                 }
                 media={<Avatar member={m} color={project.color} />}
                 title={m.name}
+                // чипы вместо значения справа: состояние и кто это по роли
                 subtitle={
-                  [m.role, m.handle].filter(Boolean).join(' · ') ||
-                  kindLabel(m.kind)
+                  <span className="flex flex-wrap gap-1.5 mt-1">
+                    <Pill tone={teamOpenCount.get(m.id) ? 'work' : 'free'}>
+                      {teamOpenCount.get(m.id)
+                        ? `${teamOpenCount.get(m.id)} в работе`
+                        : 'свободен'}
+                    </Pill>
+                    {m.kind && <Pill tone={m.kind}>{kindLabel(m.kind)}</Pill>}
+                  </span>
                 }
-                // справа короткое значение: сколько в работе или «свободен».
-                // Роль туда не годится — она в предложение длиной и лезет на стрелку
-                after={
-                  teamOpenCount.get(m.id) ? (
-                    <Badge colors={{ bg: 'bg-[#2a8bff]', text: 'text-white' }}>
-                      {teamOpenCount.get(m.id)}
-                    </Badge>
-                  ) : (
-                    <span className="text-white/35">свободен</span>
-                  )
+                text={[m.role, m.handle].filter(Boolean).join(' · ') || undefined}
+                // стрелка живёт в строке заголовка, поэтому у многострочного
+                // элемента она уезжает вверх — ставим свою по центру
+                chevronIcon={
+                  <ChevronRight
+                    size={18}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 text-white/25"
+                  />
                 }
+                innerClassName="pr-6"
                 className={memberFilter === m.id ? 'bg-black/[.04] dark:bg-white/[.06]' : ''}
               />
             ))}
