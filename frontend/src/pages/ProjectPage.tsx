@@ -229,7 +229,8 @@ export default function ProjectPage() {
       {project.members.length > 0 && (
         <>
           <BlockTitle>Команда</BlockTitle>
-          <List strong inset>
+          {/* «Data list, with icons» из Konsta: иконка слева, значение справа */}
+          <List strongIos outlineIos inset dividers>
             {project.members.map((m) => (
               <ListItem
                 key={m.id}
@@ -245,13 +246,16 @@ export default function ProjectPage() {
                   [m.role, m.handle].filter(Boolean).join(' · ') ||
                   kindLabel(m.kind)
                 }
-                // ноль задач показывать незачем: пусто и есть ответ
+                // справа короткое значение: сколько в работе или «свободен».
+                // Роль туда не годится — она в предложение длиной и лезет на стрелку
                 after={
                   teamOpenCount.get(m.id) ? (
                     <Badge colors={{ bg: 'bg-[#2a8bff]', text: 'text-white' }}>
                       {teamOpenCount.get(m.id)}
                     </Badge>
-                  ) : undefined
+                  ) : (
+                    <span className="text-white/35">свободен</span>
+                  )
                 }
                 className={memberFilter === m.id ? 'bg-black/[.04] dark:bg-white/[.06]' : ''}
               />
