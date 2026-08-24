@@ -104,6 +104,13 @@ export interface Assistant {
   support: { hours: string; sla: number; escalate: string }
 }
 
+// аккаунт владельца, от имени которого доска пишет другим ботам
+export interface DmAccount {
+  id: number
+  name: string
+  username?: string
+}
+
 // один тумблер: доска для своих или для всех
 export interface Access {
   open: boolean

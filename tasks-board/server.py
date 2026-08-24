@@ -1150,6 +1150,75 @@ async def dm_read(request):
         raise web.HTTPBadRequest(text="to: @ник бота или id чата")
     return web.json_response(await dm_call(["read", to, request.query.get("n", "5")], 60))
 
+# --------------------------------------------- вход в аккаунт из мини-аппы
+#
+# Код входа Телеграм присылает в сам Телеграм и аннулирует его, если увидит
+# в переписке. Поэтому владелец вводит код прямо в доске: секрет никуда не
+# пересылается, а сессия остаётся на сервере.
+
+USERBOT_ENV = os.path.join(ROOT, "userbot.env")
+USERBOT_SESSION = os.path.join(ROOT, "userbot.session")
+
+
+async def dm_creds(request):
+    """Сохранить api_id/api_hash с my.telegram.org."""
+    only_owner(request)
+    body = await request.json()
+    api_id = str(body.get("api_id") or "").strip()
+    api_hash = (body.get("api_hash") or "").strip()
+    if not api_id.isdigit() or len(api_hash) < 16:
+        raise web.HTTPBadRequest(text="api_id — числом, api_hash — строкой с my.telegram.org")
+    with open(USERBOT_ENV, "w", encoding="utf-8") as f:
+        f.write(f"TG_API_ID={api_id}\nTG_API_HASH={api_hash}\n")
+    os.chmod(USERBOT_ENV, 0o600)
+    return web.json_response({"saved": True})
+
+
+async def dm_code(request):
+    """Попросить Телеграм прислать код входа."""
+    only_owner(request)
+    body = await request.json()
+    phone = (body.get("phone") or "").strip()
+    if not phone.startswith("+") or not phone[1:].replace(" ", "").isdigit():
+        raise web.HTTPBadRequest(text="телефон в виде +79990000000")
+    return web.json_response(await dm_call(["code", phone], 90))
+
+
+async def dm_login(request):
+    """Ввести код, при нужде — пароль двухфакторки."""
+    only_owner(request)
+    body = await request.json()
+    code = (body.get("code") or "").strip()
+    if not any(ch.isdigit() for ch in code):
+        raise web.HTTPBadRequest(text="код цифрами, пробелы внутри не мешают")
+    args = ["enter", code]
+    if body.get("password"):
+        args.append(body["password"])
+    return web.json_response(await dm_call(args, 90))
+
+
+async def dm_logout(request):
+    """Забыть аккаунт: сессия удаляется, доступ к Телеграму пропадает."""
+    only_owner(request)
+    for path in (USERBOT_SESSION, USERBOT_SESSION + "-journal",
+                 os.path.join(ROOT, "userbot.pending")):
+        if os.path.exists(path):
+            os.remove(path)
+    return web.json_response({"ok": True})
+
+
+async def dm_status(request):
+    """Что доска знает об аккаунте: заведены ли ключи и кто вошёл."""
+    only_owner(request)
+    ready = os.path.exists(USERBOT_ENV)
+    if not os.path.exists(USERBOT_SESSION):
+        return web.json_response({"creds": ready, "account": None})
+    try:
+        who = await dm_call(["who"], 60)
+        return web.json_response({"creds": ready, "account": who})
+    except web.HTTPException:
+        return web.json_response({"creds": ready, "account": None})
+
 # ------------------------------------------------------------ бот в личке
 
 async def get_assistant(request):
@@ -1250,6 +1319,11 @@ def make_app():
     app.router.add_get("/api/dm", dm_read)
     app.router.add_post("/api/dm/send", dm_send)
     app.router.add_post("/api/dm/ask", dm_ask)
+    app.router.add_get("/api/dm/status", dm_status)
+    app.router.add_post("/api/dm/creds", dm_creds)
+    app.router.add_post("/api/dm/code", dm_code)
+    app.router.add_post("/api/dm/login", dm_login)
+    app.router.add_post("/api/dm/logout", dm_logout)
     app.router.add_post("/api/goal", add_goal)
     app.router.add_post("/api/tasks", add_tasks)
     app.router.add_get("/api/project/{pid}/git", get_git)

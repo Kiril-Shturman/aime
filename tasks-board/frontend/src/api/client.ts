@@ -2,6 +2,7 @@ import type {
   Access,
   Assistant,
   BotLink,
+  DmAccount,
   Member,
   Project,
   QuickReply,
@@ -118,6 +119,30 @@ export const api = {
     request<{ status: GitStatus }>(`/api/project/${pid}/git`, {
       method: 'POST',
       json: { repo, branch },
+    }),
+
+  dmStatus: () =>
+    request<{ creds: boolean; account: DmAccount | null }>('/api/dm/status'),
+  dmCreds: (api_id: string, api_hash: string) =>
+    request<{ saved: true }>('/api/dm/creds', {
+      method: 'POST',
+      json: { api_id, api_hash },
+    }),
+  dmCode: (phone: string) =>
+    request<{ sent: true; note: string }>('/api/dm/code', {
+      method: 'POST',
+      json: { phone },
+    }),
+  dmLogin: (code: string, password?: string) =>
+    request<DmAccount>('/api/dm/login', {
+      method: 'POST',
+      json: { code, password },
+    }),
+  dmLogout: () => request<{ ok: true }>('/api/dm/logout', { method: 'POST' }),
+  dmAsk: (to: string, text: string, wait?: number) =>
+    request<{ reply: { text: string } | null; note?: string }>('/api/dm/ask', {
+      method: 'POST',
+      json: { to, text, wait },
     }),
 
   whoami: () => request<{ who: Who | null; can_write: boolean }>('/api/whoami'),
