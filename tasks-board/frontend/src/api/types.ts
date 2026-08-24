@@ -9,6 +9,7 @@ export interface Member {
   role?: string
   kind: MemberKind
   avatar?: string
+  key?: string   // личный ключ исполнителя
 }
 
 export interface Stage {

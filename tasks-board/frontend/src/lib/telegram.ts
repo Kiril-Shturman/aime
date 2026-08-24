@@ -15,6 +15,7 @@ interface TG {
   setBackgroundColor?: (c: string) => void
   setBottomBarColor?: (c: string) => void
   disableVerticalSwipes?: () => void
+  initData?: string
   initDataUnsafe?: { user?: TgUser }
   HapticFeedback?: {
     impactOccurred: (kind: 'light' | 'medium' | 'heavy') => void
@@ -59,4 +60,23 @@ export function initTelegram() {
   } catch {
     /* обычный браузер */
   }
+}
+
+// Доска пускает менять данные только своих. Из Телеграма подпись мини-аппы
+// приходит сама, а в обычном браузере ключ передаётся один раз через
+// ?key=… и остаётся в памяти браузера.
+const KEY_STORE = 'board-key'
+
+export function boardKey(): string {
+  try {
+    const fromUrl = new URLSearchParams(location.search).get('key')
+    if (fromUrl) localStorage.setItem(KEY_STORE, fromUrl)
+    return localStorage.getItem(KEY_STORE) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+export function initData(): string {
+  return tg()?.initData ?? ''
 }

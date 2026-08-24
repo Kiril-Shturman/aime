@@ -18,6 +18,8 @@ import urllib.error
 import urllib.request
 
 BOARD = os.environ.get("BOARD_URL", "http://127.0.0.1:8095").rstrip("/")
+# личный ключ исполнителя: по нему доска понимает, кто именно пришёл
+KEY = os.environ.get("BOARD_KEY", "")
 VERSION = "1.0.0"
 
 
@@ -28,7 +30,12 @@ def call(path, method="GET", body=None):
         BOARD + path,
         data=json.dumps(body).encode() if body is not None else None,
         # помечаемся, чтобы доска не будила агента на его же записи
-        headers={"Content-Type": "application/json", "X-Actor": "agent"},
+        headers={
+            "Content-Type": "application/json",
+            # помечаемся, чтобы доска не будила агента на его же записи
+            "X-Actor": "agent",
+            **({"X-Board-Key": KEY} if KEY else {}),
+        },
         method=method,
     )
     with urllib.request.urlopen(req, timeout=20) as resp:
@@ -38,6 +45,33 @@ def call(path, method="GET", body=None):
 
 def state():
     return call("/api/state")
+
+
+_me = {}
+
+
+def me():
+    """Свой id на доске, если ключ выдан. Без ключа работаем как раньше."""
+    if not _me:
+        try:
+            _me.update(call("/api/whoami").get("who") or {"kind": "anon"})
+        except (urllib.error.URLError, urllib.error.HTTPError):
+            _me.update({"kind": "anon"})
+    return _me
+
+
+def find_member(st, name_or_id):
+    """Участник по id, имени или нику — в любом проекте."""
+    key = (name_or_id or "").strip().lower().lstrip("@")
+    if not key:
+        return None
+    for p in st["projects"]:
+        for m in p["members"]:
+            if (m["id"] == name_or_id
+                    or m["name"].lower() == key
+                    or (m.get("handle") or "").lower().lstrip("@") == key):
+                return m
+    return None
 
 
 def find_project(st, name_or_id):
@@ -66,7 +100,15 @@ def tool_overview(args):
         if not p["count"] and not p.get("roadmap"):
             continue
         roles = ", ".join(f"{m['name']} — {m['role'] or 'без роли'}" for m in p["members"])
+        busy = {}
+        for t in st["tasks"]:
+            if t.get("member") and not t.get("done") and t["project"] == p["id"]:
+                busy[t["member"]] = busy.get(t["member"], 0) + 1
         lines.append(f"\n{p['name']} ({p['count']} открытых){' · ' + roles if roles else ''}")
+        for m in p["members"]:
+            n = busy.get(m["id"], 0)
+            lines.append(f"  участник {m['name']} [{m['id']}]"
+                         + (f", открытых задач {n}" if n else ", свободен"))
         if p.get("path"):
             lines.append(f"  исходники: {p['path']}")
         elif p.get("repo"):
@@ -94,14 +136,18 @@ def tool_next_task(args):
 
     def rank(t):
         return (
+            0 if t.get("member") else 1,      # назначенное мне важнее ничейного
             0 if t.get("stage") in active_stages else 1,
             0 if t.get("flagged") else 1,
             t.get("due") or "9999-99-99",
         )
 
+    mine = me().get("id") if me().get("kind") == "member" else None
     free = [t for t in st["tasks"]
             if t.get("status") == "todo"
-            and (not project or t["project"] == project["id"])]
+            and (not project or t["project"] == project["id"])
+            # чужое не трогаем: задача либо ничья, либо назначена мне
+            and (not t.get("member") or t["member"] == mine)]
     if not free:
         return "Свободных задач нет — можно ничего не делать."
     t = sorted(free, key=rank)[0]
@@ -145,16 +191,19 @@ def tool_add_task(args):
     if not p:
         return "На доске нет ни одного проекта — задачу некуда класть."
     stage = find_stage(p, args.get("stage")) if args.get("stage") else None
+    member = find_member(st, args.get("member"))
     t = call("/api/task", "POST", {
         "title": args["title"],
         "note": args.get("note", ""),
         "project": p["id"],
         "stage": stage["id"] if stage else None,
+        "member": member["id"] if member else None,
         "flagged": bool(args.get("flagged")),
         "due": args.get("due"),
     })
     where = f"{p['name']}" + (f" → {stage['title']}" if stage else "")
-    return f"Добавлено в {where}: {t['title']} [id {t['id']}]"
+    who = f", исполнитель {member['name']}" if member else ""
+    return f"Добавлено в {where}: {t['title']}{who} [id {t['id']}]"
 
 
 def tool_set_goal(args):
@@ -168,11 +217,19 @@ def tool_split_goal(args):
     st = state()
     p = find_project(st, args.get("project", "")) or st["projects"][0]
     stage = find_stage(p, args.get("stage")) if args.get("stage") else None
-    items = [{"title": t} if isinstance(t, str) else t for t in args["items"]]
+    items = []
+    for item in args["items"]:
+        item = {"title": item} if isinstance(item, str) else dict(item)
+        # исполнителя можно указать у каждой задачи отдельно
+        who = find_member(st, item.pop("member", None))
+        if who:
+            item["member"] = who["id"]
+        items.append(item)
     out = call("/api/tasks", "POST", {
         "project": p["id"],
         "stage": stage["id"] if stage else None,
         "parent": args.get("parent"),
+        "member": (find_member(st, args.get("member")) or {}).get("id"),
         "items": items,
     })
     where = p["name"] + (f" → {stage['title']}" if stage else "")
@@ -234,6 +291,7 @@ TOOLS = [
             "stage": {"type": "string"},
             "note": {"type": "string"},
             "due": {"type": "string", "description": "ГГГГ-ММ-ДД"},
+            "member": {"type": "string", "description": "Кому поручить: имя, ник или id участника"},
             "flagged": {"type": "boolean"}},
             "required": ["title"]},
         "run": tool_add_task,
@@ -253,8 +311,10 @@ TOOLS = [
             "project": {"type": "string"},
             "stage": {"type": "string", "description": "Этап-цель, к которому крепим задачи"},
             "parent": {"type": "string", "description": "Родительская задача, если дробим её"},
+            "member": {"type": "string", "description": "Кому поручить всю пачку"},
             "items": {"type": "array", "items": {"type": "object", "properties": {
-                "title": {"type": "string"}, "note": {"type": "string"}}}}},
+                "title": {"type": "string"}, "note": {"type": "string"},
+                "member": {"type": "string", "description": "Исполнитель именно этой задачи"}}}}},
             "required": ["items"]},
         "run": tool_split_goal,
     },
