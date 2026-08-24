@@ -196,7 +196,7 @@ export default function ProjectPage() {
 
   if (!project) {
     return (
-      <Page>
+      <Page className="pb-safe-24 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         <Navbar
           title="Не найдено"
           left={
@@ -219,7 +219,7 @@ export default function ProjectPage() {
   )
 
   return (
-    <Page>
+    <Page className="pb-safe-24 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <Navbar
         title={project.name}
         left={
