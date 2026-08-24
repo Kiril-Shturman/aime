@@ -26,6 +26,7 @@ import {
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { Avatar } from '../components/Avatar'
+import { getUser } from '../lib/telegram'
 import Fab from '../components/Fab'
 import Menu, { type MenuItem } from '../components/Menu'
 import TaskRow from '../components/TaskRow'
@@ -197,6 +198,26 @@ export default function HomePage() {
     <Page>
       <Navbar
         title="Задачи"
+        left={(() => {
+          const user = getUser()
+          const letter =
+            (user?.first_name || 'Г').trim().charAt(0).toUpperCase() || '?'
+          return (
+            <KLink navbar iconOnly onClick={() => nav('/profile')}>
+              {user?.photo_url ? (
+                <img
+                  src={user.photo_url}
+                  alt=""
+                  className="w-7 h-7 rounded-full object-cover"
+                />
+              ) : (
+                <span className="w-7 h-7 rounded-full bg-[#2a8bff] text-white text-[13px] font-semibold flex items-center justify-center">
+                  {letter}
+                </span>
+              )}
+            </KLink>
+          )
+        })()}
         right={
           <>
             <KLink iconOnly onClick={() => setSearchOn(true)}>
