@@ -13,6 +13,7 @@ import type { State } from '../api/types'
 interface Ctx {
   state: State | null
   error: string | null
+  denied: boolean          // доска закрыта: ни ключа, ни подписи мини-аппы
   refresh: () => Promise<void>
 }
 
@@ -21,13 +22,16 @@ const AppContext = createContext<Ctx | null>(null)
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [denied, setDenied] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
       const s = await api.state()
       setState(s)
       setError(null)
+      setDenied(false)
     } catch (e) {
+      setDenied(String(e).includes('401'))
       setError(String(e))
     }
   }, [])
@@ -36,7 +40,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     refresh()
   }, [refresh])
 
-  const value = useMemo(() => ({ state, error, refresh }), [state, error, refresh])
+  const value = useMemo(
+    () => ({ state, error, denied, refresh }),
+    [state, error, denied, refresh],
+  )
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>
 }
 
