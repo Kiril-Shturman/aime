@@ -1,8 +1,6 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { App as KonstaApp } from 'konsta/react'
-import { AppRoot } from '@telegram-apps/telegram-ui'
-import '@telegram-apps/telegram-ui/dist/styles.css'
 import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
 import FilterPage from './pages/FilterPage'
@@ -36,21 +34,15 @@ function Themed() {
   }, [theme])
 
   return (
-    <AppRoot
-      appearance={dark ? 'dark' : 'light'}
-      platform="ios"
-      className={dark ? 'tg-dark' : ''}
-    >
-      <KonstaApp theme="ios" dark={dark}>
-        <AppStoreProvider>
-          <Gate>
-            <BrowserRouter>
-              <AppRoutes />
-            </BrowserRouter>
-          </Gate>
-        </AppStoreProvider>
-      </KonstaApp>
-    </AppRoot>
+    <KonstaApp theme="ios" dark={dark}>
+      <AppStoreProvider>
+        <Gate>
+          <BrowserRouter>
+            <AppRoutes />
+          </BrowserRouter>
+        </Gate>
+      </AppStoreProvider>
+    </KonstaApp>
   )
 }
 

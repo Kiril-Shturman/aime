@@ -81,10 +81,15 @@ export function kindLabel(id?: string) {
 
 // цвета чипов: состояние участника и его вид
 export const PILL_TONES: Record<string, string> = {
-  work: 'bg-[#2a8bff]/20 text-[#6cb6ff]',
-  free: 'bg-white/10 text-white/45',
-  bot: 'bg-[#30d158]/18 text-[#4ee27a]',
-  agent: 'bg-[#bf5af2]/18 text-[#d18cf7]',
-  service: 'bg-[#ff9f0a]/18 text-[#ffb84d]',
-  human: 'bg-[#64d2ff]/18 text-[#8fdfff]',
+  work:
+    'bg-[#2a8bff]/15 text-[#1477e6] dark:bg-[#2a8bff]/20 dark:text-[#6cb6ff]',
+  free: 'bg-black/[.06] text-black/55 dark:bg-white/10 dark:text-white/45',
+  bot:
+    'bg-[#30d158]/15 text-[#168c3a] dark:bg-[#30d158]/18 dark:text-[#4ee27a]',
+  agent:
+    'bg-[#bf5af2]/15 text-[#8e44ad] dark:bg-[#bf5af2]/18 dark:text-[#d18cf7]',
+  service:
+    'bg-[#ff9f0a]/15 text-[#a85f00] dark:bg-[#ff9f0a]/18 dark:text-[#ffb84d]',
+  human:
+    'bg-[#32ade6]/15 text-[#187ca8] dark:bg-[#64d2ff]/18 dark:text-[#8fdfff]',
 }

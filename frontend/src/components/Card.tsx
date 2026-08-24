@@ -11,7 +11,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-2xl overflow-hidden bg-[#1c1c1e] divide-y divide-white/[.08] ${
+      className={`rounded-2xl overflow-hidden bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 divide-y divide-black/[.08] dark:divide-white/[.08] ${
         pad ? 'p-4' : ''
       } ${className}`}
     >
@@ -30,7 +30,7 @@ export function CardRow({
   className?: string
 }) {
   const cls = `flex items-center gap-3 px-4 py-3 ${
-    onClick ? 'active:bg-white/[.05] cursor-pointer' : ''
+    onClick ? 'active:bg-black/[.05] dark:active:bg-white/[.05] cursor-pointer' : ''
   } ${className}`
   if (onClick) {
     return (
@@ -44,7 +44,7 @@ export function CardRow({
 
 export function SectionLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="px-1 pt-6 pb-2 text-white/50 text-[13px] font-medium uppercase tracking-wider">
+    <div className="px-1 pt-6 pb-2 text-black/50 dark:text-white/50 text-[13px] font-medium uppercase tracking-wider">
       {children}
     </div>
   )
@@ -52,7 +52,7 @@ export function SectionLabel({ children }: { children: ReactNode }) {
 
 export function GroupLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="px-2 pt-3 pb-1 text-white/70 text-[15px] font-semibold">
+    <div className="px-2 pt-3 pb-1 text-black/70 dark:text-white/70 text-[15px] font-semibold">
       {children}
     </div>
   )

@@ -128,10 +128,15 @@ body,
 
 body {
   margin: 0;
-  background: #000;
-  color: #fff;
+  background: #efeff4;
+  color: #000;
   font: 400 17px/1.32 -apple-system, BlinkMacSystemFont, 'SF Pro Text',
     'Helvetica Neue', Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+.dark body {
+  background: #000;
+  color: #fff;
 }

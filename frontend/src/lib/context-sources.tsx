@@ -33,7 +33,7 @@ export interface ContextSource {
   label: string
   hint: string
   color: string
-  // тонкая lucide-иконка для info-хедера (currentColor из IconContainer)
+  // тонкая lucide-иконка для информационного блока
   render: () => ReactElement
   // цветная/бренд-иконка для списка «Настройки»
   renderColored: () => ReactElement

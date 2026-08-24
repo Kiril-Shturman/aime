@@ -272,7 +272,7 @@ export default function ProjectPage() {
                 chevronIcon={
                   <ChevronRight
                     size={18}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-white/25"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-black/25 dark:text-white/25"
                   />
                 }
                 innerClassName="pr-10"
@@ -313,7 +313,7 @@ export default function ProjectPage() {
                         ? 'bg-[#30d158]'
                         : st.status === 'active'
                           ? 'bg-[#2a8bff]'
-                          : 'bg-white/25'
+                          : 'bg-black/25 dark:bg-white/25'
                     }`}
                   />
                 }
@@ -329,7 +329,7 @@ export default function ProjectPage() {
                         }
                         className="flex-1"
                       />
-                      <span className="text-white/50 text-[12px] shrink-0">
+                      <span className="text-black/50 dark:text-white/50 text-[12px] shrink-0">
                         {st.progress.done} из {st.progress.total}
                       </span>
                     </span>
@@ -341,8 +341,8 @@ export default function ProjectPage() {
                       st.status === 'done'
                         ? 'bg-[#30d158]/20 text-[#30d158]'
                         : st.status === 'active'
-                          ? 'bg-[#2a8bff]/20 text-[#4ea3ff]'
-                          : 'bg-white/10 text-white/60'
+                          ? 'bg-primary/15 text-primary'
+                          : 'bg-black/[.06] text-black/60 dark:bg-white/10 dark:text-white/60'
                     }`}
                   >
                     {STAGE_STATUS_LABEL[st.status]}
