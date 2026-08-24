@@ -34,13 +34,13 @@ export default function Popup({
         <Navbar
           title={title}
           left={
-            <KLink navbar onClick={onClose}>
+            <KLink onClick={onClose}>
               <X size={22} />
             </KLink>
           }
           right={
             onSave ? (
-              <KLink navbar onClick={onSave}>
+              <KLink onClick={onSave}>
                 {saveLabel ? saveLabel : <Check size={22} strokeWidth={2.5} />}
               </KLink>
             ) : undefined

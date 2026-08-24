@@ -201,14 +201,13 @@ export default function HomePage() {
         transparent
         right={
           <div className="flex items-center gap-2 pr-2">
-            <KLink navbar iconOnly onClick={() => setSearchOn((v) => !v)}>
+            <KLink iconOnly onClick={() => setSearchOn((v) => !v)}>
               <Search size={20} />
             </KLink>
-            <KLink navbar iconOnly onClick={() => setProjectOpen(true)}>
+            <KLink iconOnly onClick={() => setProjectOpen(true)}>
               <Plus size={22} />
             </KLink>
             <KLink
-              navbar
               iconOnly
               ref={menuBtnRef}
               onClick={() => setMenuOpen(true)}
@@ -298,9 +297,7 @@ export default function HomePage() {
         </>
       )}
 
-      <Fab label="Новая задача" onClick={() => setTaskOpen(true)}>
-        +
-      </Fab>
+      <Fab label="Новая задача" onClick={() => setTaskOpen(true)} />
 
       <Menu
         open={menuOpen}
