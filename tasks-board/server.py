@@ -679,6 +679,8 @@ def make_app():
     app.router.add_post("/api/project/{pid}/stage", add_stage)
     app.router.add_patch("/api/project/{pid}/stage/{sid}", patch_stage)
     app.router.add_delete("/api/project/{pid}/stage/{sid}", delete_stage)
+    os.makedirs(os.path.join(ROOT, "avatars"), exist_ok=True)
+    app.router.add_static("/avatars", os.path.join(ROOT, "avatars"))
     app.router.add_get("/{tail:.*}", spa)
     return app
 

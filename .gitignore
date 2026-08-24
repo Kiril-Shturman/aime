@@ -23,7 +23,7 @@ memory/telegram-business-outbox.jsonl
 memory/telegram-business-results.jsonl
 tasks-board/data.json
 tasks-board/data.json.tmp
-tasks-board/static/avatars/
+tasks-board/avatars/
 __pycache__/
 
 # какую ветку тянет прод
@@ -31,3 +31,6 @@ __pycache__/
 
 # JetBrains IDE workspace
 .idea/
+
+# сборка фронта: её делает сервер при выкатке, в гите ей делать нечего
+tasks-board/static/
