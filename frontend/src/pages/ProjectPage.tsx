@@ -241,7 +241,7 @@ export default function ProjectPage() {
                     ? setMemberFilter(null)
                     : setMemberInfo(m)
                 }
-                media={<Avatar member={m} color={project.color} />}
+                media={<Avatar member={m} color={project.color} size={44} />}
                 title={m.name}
                 // чипы вместо значения справа: состояние и кто это по роли
                 subtitle={
