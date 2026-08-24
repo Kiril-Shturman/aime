@@ -30,14 +30,13 @@ export default function Popup({
         <Navbar
           title={title}
           left={
-            <KLink navbar iconOnly onClick={onClose}>
+            <KLink iconOnly onClick={onClose}>
               <X size={22} strokeWidth={2.5} />
             </KLink>
           }
           right={
             onSave ? (
               <KLink
-                navbar
                 iconOnly
                 onClick={canSave ? onSave : undefined}
                 className={

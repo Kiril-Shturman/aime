@@ -72,6 +72,7 @@ colors={{ textIos: 'text-red-500', textMaterial: 'text-red-500' }}
 | `<Link navbar>` | пропа нет, навбарный стиль приходит из контекста `Navbar` |
 | `<NavbarBackLink linkProps={{to}}>` | не принимает роутерных пропов, переход вешай на `onClick` с `useNavigate` |
 | `colors={{ text, activeBg }}` | ключи по темам: `textIos`/`textMaterial`, фон у `clear`-кнопки — `clearBgIos` |
+| `<ListItem link component={Link} linkProps={{to}}>` | `component` — это внешний `li`, а кликается внутренний элемент из `linkComponent` (по умолчанию `a`). Роутерную ссылку давать так: `link linkComponent={RouterLink} linkProps={{ to }}`. С `component` строка молча перестаёт нажиматься |
 | `<Searchbar disableButtonText="Готово">` | в 5.3 кнопка отмены рисуется иконкой, подписи у неё нет |
 | `<Fab>+</Fab>` | это была наша обёртка `components/Fab.tsx`: она рисует иконку сама и детей не берёт. У самого Konsta `Fab` дети разрешены, но иконку правильнее давать пропом `icon`, а подпись — `text` |
 
