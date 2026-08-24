@@ -243,29 +243,17 @@ export default function ProjectPage() {
     ) ??
     modules.at(-1) ??
     null
-  const currentModuleTasks = currentModule
-    ? projectTasks.filter((task) =>
-        currentModule.stages.some((stage) => stage.id === task.stage),
-      )
-    : []
-  const currentModuleDone = currentModuleTasks.filter((task) => task.done).length
-  const currentModuleProgress = currentModuleTasks.length
-    ? currentModuleDone / currentModuleTasks.length
-    : currentModule?.stages.length
-      ? currentModule.stages.reduce((sum, stage) => {
-          if (stage.status === 'done') return sum + 1
-          if (stage.progress.total) {
-            return sum + stage.progress.done / stage.progress.total
-          }
-          return sum
-        }, 0) / currentModule.stages.length
-      : 0
   const currentTask =
     openTasks.find((task) => task.status === 'doing') ?? openTasks[0] ?? null
 
   const openTaskSheet = (stage: string | null = null) => {
     setTaskStage(stage)
     setTaskOpen(true)
+  }
+
+  const openStageFromRoadmap = (stage: Stage) => {
+    setModuleOpen(false)
+    window.setTimeout(() => setStageInfo(stage), 280)
   }
 
   return (
@@ -349,30 +337,21 @@ export default function ProjectPage() {
             <button
               type="button"
               onClick={() => setModuleOpen(true)}
-              className="relative mx-safe-4 mb-6 w-[calc(100%-2rem)] min-h-36 overflow-hidden rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 text-left active:opacity-75"
+              className="relative mx-safe-4 mb-6 w-[calc(100%-2rem)] min-h-24 overflow-hidden rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 text-left active:opacity-75"
             >
-              <span className="block py-5 pl-5 pr-20">
-                <span className="block text-[11px] font-semibold uppercase tracking-wide text-primary">
-                  Текущий модуль
-                </span>
-                <span className="block mt-1 text-[20px] leading-tight font-semibold text-black dark:text-white">
+              <span className="flex min-h-24 items-center py-4 pl-5 pr-20">
+                <span className="min-w-0">
+                  <span className="block truncate text-[19px] leading-tight font-semibold text-black dark:text-white">
                   {currentModule.name}
-                </span>
-                <span className="block mt-2 text-[13px] text-black/50 dark:text-white/50">
-                  {currentModule.stages.length} этапов · {currentModuleDone} из {currentModuleTasks.length} задач готово
-                </span>
-                <span className="flex items-center gap-2 mt-4">
-                  <Progressbar progress={currentModuleProgress} className="flex-1" />
-                  <span className="text-[12px] font-medium text-primary shrink-0">
-                    {Math.round(currentModuleProgress * 100)}%
                   </span>
-                </span>
-                <span className="block mt-3 text-[13px] text-primary">
-                  Открыть этапы
+                  <span className="mt-1 block text-[13px] text-black/45 dark:text-white/45">
+                    {currentModule.stages.length} этапов
+                  </span>
                 </span>
               </span>
 
-              <span className="absolute right-8 top-0 bottom-0 w-px bg-black/[.08] dark:bg-white/[.10]" />
+              <span className="absolute right-8 top-0 h-1/2 w-px bg-primary" />
+              <span className="absolute right-8 top-1/2 bottom-0 w-px bg-black/[.08] dark:bg-white/[.10]" />
               <span className="absolute right-[17px] top-1/2 -translate-y-1/2 w-[31px] h-[31px] rounded-full bg-primary text-white ring-4 ring-ios-light-surface-1 dark:ring-ios-dark-surface-1 flex items-center justify-center shadow-sm">
                 <ModuleIcon size={18} />
               </span>
@@ -517,14 +496,14 @@ export default function ProjectPage() {
         projectId={id}
         stage={stageInfo}
       />
-      {currentModule && (
+      {modules.length > 0 && (
         <ModuleRoadmapPopup
           open={moduleOpen}
           onClose={() => setModuleOpen(false)}
-          moduleName={currentModule.name}
-          stages={currentModule.stages}
+          modules={modules}
           tasks={projectTasks}
-          onStageClick={(stage) => setStageInfo(stage)}
+          currentModuleName={currentModule?.name}
+          onStageClick={openStageFromRoadmap}
         />
       )}
       <GitSheet
