@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   MoreHorizontal,
   Flag,
@@ -42,6 +42,7 @@ import type { Member, Stage, Task } from '../api/types'
 
 export default function ProjectPage() {
   const { id = '' } = useParams()
+  const navigate = useNavigate()
   const { state, refresh } = useApp()
   const project = state?.projects.find((p) => p.id === id) ?? null
 
@@ -185,8 +186,7 @@ export default function ProjectPage() {
           left={
             <NavbarBackLink
               text="Назад"
-              component={Link as unknown as 'a'}
-              linkProps={{ to: '/' }}
+              onClick={() => navigate('/')}
             />
           }
         />
@@ -209,13 +209,11 @@ export default function ProjectPage() {
         left={
           <NavbarBackLink
             text="Назад"
-            component={Link as unknown as 'a'}
-            linkProps={{ to: '/' }}
+            onClick={() => navigate('/')}
           />
         }
         right={
           <KLink
-            navbar
             iconOnly
             ref={menuBtnRef}
             onClick={() => setMenuOpen(true)}

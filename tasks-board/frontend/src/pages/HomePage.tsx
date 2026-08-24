@@ -6,6 +6,7 @@ import {
   Inbox,
   Flag,
   Check,
+  Search,
   Plus,
   MoreHorizontal,
   Folder,
@@ -116,6 +117,7 @@ export default function HomePage() {
   const { state, refresh } = useApp()
   const nav = useNavigate()
 
+  const [searchOn, setSearchOn] = useState(false)
   const [q, setQ] = useState('')
 
   const [menuOpen, setMenuOpen] = useState(false)
@@ -195,10 +197,15 @@ export default function HomePage() {
     <Page>
       <Navbar
         title="Задачи"
+        large
+        transparent
         right={
-          <>
+          <div className="flex items-center gap-2 pr-2">
+            <KLink navbar iconOnly onClick={() => setSearchOn((v) => !v)}>
+              <Search size={20} />
+            </KLink>
             <KLink navbar iconOnly onClick={() => setProjectOpen(true)}>
-              <Plus size={24} />
+              <Plus size={22} />
             </KLink>
             <KLink
               navbar
@@ -206,19 +213,21 @@ export default function HomePage() {
               ref={menuBtnRef}
               onClick={() => setMenuOpen(true)}
             >
-              <MoreHorizontal size={24} />
+              <MoreHorizontal size={22} />
             </KLink>
-          </>
+          </div>
         }
       />
 
-      <Searchbar
-        value={q}
-        onInput={(e) => setQ((e.target as HTMLInputElement).value)}
-        onClear={() => setQ('')}
-        disableButton
-        placeholder="Поиск по задачам"
-      />
+      {searchOn && (
+        <Searchbar
+          value={q}
+          onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+          onClear={() => setQ('')}
+          disableButton
+          placeholder="Поиск по задачам"
+        />
+      )}
 
       {query ? (
         <>
@@ -289,7 +298,9 @@ export default function HomePage() {
         </>
       )}
 
-      <Fab label="Новая задача" onClick={() => setTaskOpen(true)} />
+      <Fab label="Новая задача" onClick={() => setTaskOpen(true)}>
+        +
+      </Fab>
 
       <Menu
         open={menuOpen}

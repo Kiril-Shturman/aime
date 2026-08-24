@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { List, ListItem, Navbar, NavbarBackLink, Page } from 'konsta/react'
 import { useApp } from '../store/AppStore'
 import TaskRow from '../components/TaskRow'
@@ -30,6 +30,7 @@ function filter(kind: string, tasks: Task[]): Task[] {
 
 export default function FilterPage() {
   const { kind = 'all' } = useParams()
+  const navigate = useNavigate()
   const { state } = useApp()
   const [editTask, setEditTask] = useState<Task | null>(null)
 
@@ -45,8 +46,7 @@ export default function FilterPage() {
         left={
           <NavbarBackLink
             text="Задачи"
-            component={Link as unknown as 'a'}
-            linkProps={{ to: '/' }}
+            onClick={() => navigate('/')}
           />
         }
       />
