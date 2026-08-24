@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 BOARD = os.environ.get("BOARD_URL", "http://127.0.0.1:8095").rstrip("/")
@@ -299,6 +300,38 @@ def tool_bot_call(args):
     return json.dumps(out.get("result"), ensure_ascii=False, indent=2)[:3000]
 
 
+# ------------------------------------------- личка от имени хозяина аккаунта
+#
+# Бот боту не пишет — Телеграм запрещает. Поэтому промты другим ботам уходят
+# с аккаунта владельца: доска зовёт userbot.py, тот отправляет и ждёт ответ.
+
+def tool_dm_ask(args):
+    out = call("/api/dm/ask", "POST", {
+        "to": args["to"], "text": args["text"], "wait": args.get("wait", 90)})
+    reply = out.get("reply")
+    if not reply:
+        return out.get("note") or "Ответа не дождались"
+    text = reply.get("text") or ""
+    if reply.get("media") and not text:
+        text = "(прислал файл или картинку — забери из чата)"
+    return f"{args['to']} ответил:\n{text[:3000]}"
+
+
+def tool_dm_send(args):
+    out = call("/api/dm/send", "POST", {"to": args["to"], "text": args["text"]})
+    return f"Отправлено в {args['to']} (сообщение {out.get('message_id')})"
+
+
+def tool_dm_read(args):
+    peer = args["to"]
+    out = call(f"/api/dm?to={urllib.parse.quote(peer)}&n={int(args.get('count', 5))}")
+    rows = []
+    for m in out.get("messages", []):
+        who = "я" if m["mine"] else peer
+        rows.append(f"{who}: {(m.get('text') or '').strip()[:400]}")
+    return "\n".join(rows) or "Переписка пустая"
+
+
 TOOLS = [
     {
         "name": "board_overview",
@@ -407,6 +440,35 @@ TOOLS = [
             "params": {"type": "object", "description": "Поля метода как в документации Bot API"}},
             "required": ["method"]},
         "run": tool_bot_call,
+    },
+    {
+        "name": "board_dm_ask",
+        "description": ("Написать другому боту в личку от имени владельца и дождаться "
+                        "ответа. Так агент пользуется чужими ботами: бот боту писать "
+                        "не может, а аккаунт может."),
+        "inputSchema": {"type": "object", "properties": {
+            "to": {"type": "string", "description": "@ник бота или id чата"},
+            "text": {"type": "string", "description": "Промт целиком"},
+            "wait": {"type": "integer", "description": "Сколько секунд ждать ответ, по умолчанию 90"}},
+            "required": ["to", "text"]},
+        "run": tool_dm_ask,
+    },
+    {
+        "name": "board_dm_send",
+        "description": "Просто отправить сообщение в личку от имени владельца, не ожидая ответа.",
+        "inputSchema": {"type": "object", "properties": {
+            "to": {"type": "string"}, "text": {"type": "string"}},
+            "required": ["to", "text"]},
+        "run": tool_dm_send,
+    },
+    {
+        "name": "board_dm_read",
+        "description": "Последние сообщения переписки владельца с ботом или человеком.",
+        "inputSchema": {"type": "object", "properties": {
+            "to": {"type": "string"},
+            "count": {"type": "integer", "description": "Сколько сообщений, по умолчанию 5"}},
+            "required": ["to"]},
+        "run": tool_dm_read,
     },
 ]
 
