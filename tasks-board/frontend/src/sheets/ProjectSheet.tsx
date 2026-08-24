@@ -19,6 +19,12 @@ import { Avatar } from '../components/Avatar'
 import { api } from '../api/client'
 import { COLORS, KINDS, kindLabel } from '../lib/constants'
 import { WORKSPACE_KINDS, workspaceKindFor } from '../lib/workspace-kinds'
+import {
+  CONTEXT_SOURCES,
+  PROJECT_ABOUT,
+  type ContextSource,
+} from '../lib/context-sources'
+import AboutSheet from './AboutSheet'
 import { haptic } from '../lib/telegram'
 import { useApp } from '../store/AppStore'
 import type { Member, MemberKind, Project } from '../api/types'
@@ -110,6 +116,9 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
 
   const togglePro = () => setPro((v) => !v)
 
+  // какую карточку сейчас объясняем в листе «что это»
+  const [about, setAbout] = useState<ContextSource | null>(null)
+
   return (
     <>
       <Popup
@@ -134,7 +143,11 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
                 связанную работу, хранит контекст и управляет задачами.{' '}
                 <a
                   href="#"
-                  onClick={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    haptic('light')
+                    setAbout(PROJECT_ABOUT)
+                  }}
                   className="text-[#4ea3ff]"
                 >
                   Что это
@@ -173,6 +186,38 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
 
         {!project && (
           <>
+            <BlockTitle>Откуда взять контекст</BlockTitle>
+            <Block strong inset className="!p-0 overflow-hidden">
+              {CONTEXT_SOURCES.map((src, i) => (
+                <div key={src.id}>
+                  {i > 0 && <div className="border-t border-white/[.08]" />}
+                  <Cell
+                    multiline
+                    onClick={() => {
+                      haptic('light')
+                      setAbout(src)
+                    }}
+                    before={
+                      <IconContainer style={{ padding: '0 6px' }}>
+                        <src.Icon size={28} strokeWidth={1.7} />
+                      </IconContainer>
+                    }
+                    description={
+                      <>
+                        {src.short}{' '}
+                        <span className="text-[#4ea3ff]">Что это</span>
+                      </>
+                    }
+                  >
+                    {src.label}
+                  </Cell>
+                </div>
+              ))}
+            </Block>
+            <BlockFooter inset className="!text-[13px]">
+              Нажми на источник, чтобы посмотреть, что это и работает ли уже.
+            </BlockFooter>
+
             <BlockTitle>Команда</BlockTitle>
             <List strong inset>
               {drafts.map((d, i) => (
@@ -300,6 +345,8 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
         )}
 
       </Popup>
+
+      <AboutSheet source={about} onClose={() => setAbout(null)} />
 
       <MemberDraftSheet
         open={addOpen}
