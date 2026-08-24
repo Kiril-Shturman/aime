@@ -647,8 +647,14 @@ async def spa(request):
         # Не выпускаем за пределы static/
         if os.path.commonpath([os.path.abspath(path), os.path.abspath(os.path.join(ROOT, "static"))]) == os.path.abspath(os.path.join(ROOT, "static")):
             if os.path.isfile(path):
-                return web.FileResponse(path)
-    return web.FileResponse(os.path.join(ROOT, "static", "index.html"))
+                # у собранных файлов хеш в имени, их можно кэшировать надолго
+                headers = ({"Cache-Control": "public, max-age=31536000, immutable"}
+                           if tail.startswith("assets/") else None)
+                return web.FileResponse(path, headers=headers)
+    # а вот index.html кэшировать нельзя: вебвью Телеграма держит его мёртвой
+    # хваткой и после выкатки показывает старую сборку
+    return web.FileResponse(os.path.join(ROOT, "static", "index.html"),
+                            headers={"Cache-Control": "no-store"})
 
 
 def make_app():
