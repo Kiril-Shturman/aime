@@ -18,6 +18,7 @@ import { COLORS } from '../lib/constants'
 import { WORKSPACE_KINDS, workspaceKindFor } from '../lib/workspace-kinds'
 import { CONTEXT_SOURCES } from '../lib/context-sources'
 import ContextSourceSheet from './ContextSourceSheet'
+import ConceptInfoSheet from './ConceptInfoSheet'
 import ContextInfoSheet from './ContextInfoSheet'
 import { haptic } from '../lib/telegram'
 import { useApp } from '../store/AppStore'
@@ -92,6 +93,8 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
   )
   const [editSource, setEditSource] = useState<string | null>(null)
   const [infoOpen, setInfoOpen] = useState(false)
+  // какую карточку объясняем: у каждой свой разбор
+  const [concept, setConcept] = useState<Concept | null>(null)
   const [sub, setSub] = useState<null | 'color' | 'repo'>(null)
   const [repoDraft, setRepoDraft] = useState('')
 
@@ -188,32 +191,34 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
       >
         {/* Проект + все источники контекста — одним стеком Cell'ов */}
         <Block strong inset className="!p-0 overflow-hidden">
-          <Cell
-            multiline
-            before={
-              <IconContainer style={{ padding: '0 6px' }}>
-                <Rocket size={34} strokeWidth={1.7} />
-              </IconContainer>
-            }
-            description={
-              <>
-                Отдельное пространство, где агент выполняет связанную работу,
-                хранит контекст и управляет задачами.{' '}
-                <a
-                  href="#"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    setInfoOpen(true)
-                  }}
-                  className="text-[#4ea3ff]"
-                >
-                  Что это
-                </a>
-              </>
-            }
-          >
-            Проект
-          </Cell>
+          {project && (
+            <Cell
+              multiline
+              before={
+                <IconContainer style={{ padding: '0 6px' }}>
+                  <Rocket size={34} strokeWidth={1.7} />
+                </IconContainer>
+              }
+              description={
+                <>
+                  Отдельное пространство, где агент выполняет связанную работу,
+                  хранит контекст и управляет задачами.{' '}
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      setInfoOpen(true)
+                    }}
+                    className="text-[#4ea3ff]"
+                  >
+                    Что это
+                  </a>
+                </>
+              }
+            >
+              Проект
+            </Cell>
+          )}
 
           {!project &&
             CONCEPTS.map((c) => {
@@ -235,7 +240,8 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
                           href="#"
                           onClick={(e) => {
                             e.preventDefault()
-                            setInfoOpen(true)
+                            haptic('light')
+                            setConcept(c)
                           }}
                           className="text-[#4ea3ff]"
                         >
@@ -405,6 +411,12 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
       <ContextInfoSheet
         open={infoOpen}
         onClose={() => setInfoOpen(false)}
+      />
+
+      <ConceptInfoSheet
+        open={!!concept}
+        concept={concept}
+        onClose={() => setConcept(null)}
       />
 
       {/* Sub-sheet: Repo URL */}
