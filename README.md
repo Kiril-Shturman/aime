@@ -130,7 +130,8 @@ openclaw mcp probe        # должно показать: board: 6 tools
 ```bash
 pip3 install --user telethon
 echo "TG_API_ID=...\nTG_API_HASH=..." > userbot.env   # ключи с my.telegram.org
-python3 userbot.py login                              # телефон + код, один раз
+python3 userbot.py code +79990000000                  # придёт код входа
+python3 userbot.py enter "1 2 3 4 5"                  # код, при нужде пароль 2FA
 python3 userbot.py ask @some_ai_bot "напиши план поста"
 ```
 
