@@ -141,6 +141,8 @@ def migrate(state):
             changed = True
         p.setdefault("members", [])
         p.setdefault("roadmap", [])
+        p.setdefault("type", "project")       # project | process
+        p.setdefault("process_kind", None)    # queue|schedule|monitoring|conveyor|regulation
         for m in p["members"]:
             if not m.get("key"):
                 m["key"] = secrets.token_hex(16)
@@ -354,6 +356,8 @@ async def add_project(request):
         "note": (body.get("note") or "").strip(),
         "repo": (body.get("repo") or "").strip(),
         "path": (body.get("path") or "").strip(),
+        "type": body.get("type") or "project",
+        "process_kind": body.get("process_kind") or None,
         "members": [make_member(m) for m in body.get("members", [])],
         "roadmap": [],
     }
@@ -366,7 +370,7 @@ async def patch_project(request):
     body = await request.json()
     state = load()
     p = find_project(state, request.match_info["pid"])
-    for key in ("name", "color", "note", "repo", "path"):
+    for key in ("name", "color", "note", "repo", "path", "type", "process_kind"):
         if key in body:
             p[key] = (body[key] or "").strip() if isinstance(body[key], str) else body[key]
     save(state)
