@@ -18,7 +18,6 @@ import { api } from '../api/client'
 import type { Assistant } from '../api/types'
 import Pill from '../components/Pill'
 import BoardAccess from '../components/BoardAccess'
-import TabPill from '../components/TabPill'
 import PickerSheet from '../sheets/PickerSheet'
 import TextSheet from '../sheets/TextSheet'
 
@@ -379,7 +378,6 @@ export default function ProfilePage() {
         />
       )}
 
-      <TabPill />
     </Page>
   )
 }

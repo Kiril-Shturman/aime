@@ -12,7 +12,6 @@ import {
 } from 'lucide-react'
 import { Link as KLink, Navbar, Page } from 'konsta/react'
 import Menu, { type MenuItem } from '../components/Menu'
-import TabPill from '../components/TabPill'
 import { getUser, haptic } from '../lib/telegram'
 import { useTheme } from '../store/ThemeStore'
 
@@ -304,8 +303,6 @@ export default function GeneratePage() {
           </ul>
         )}
       </div>
-
-      <TabPill />
 
       <Menu
         open={menuOpen}

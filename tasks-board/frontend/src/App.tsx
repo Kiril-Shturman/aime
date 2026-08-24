@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { App as KonstaApp } from 'konsta/react'
 import { AppRoot } from '@telegram-apps/telegram-ui'
 import '@telegram-apps/telegram-ui/dist/styles.css'
@@ -9,6 +9,7 @@ import FilterPage from './pages/FilterPage'
 import ProfilePage from './pages/ProfilePage'
 import GeneratePage from './pages/GeneratePage'
 import ChatPage from './pages/ChatPage'
+import TabPill from './components/TabPill'
 import { AppStoreProvider, useApp } from './store/AppStore'
 import { ThemeProvider, useTheme } from './store/ThemeStore'
 import { applyTgTheme, initTelegram } from './lib/telegram'
@@ -44,19 +45,35 @@ function Themed() {
         <AppStoreProvider>
           <Gate>
             <BrowserRouter>
-              <Routes>
-                <Route path="/" element={<HomePage />} />
-                <Route path="/project/:id" element={<ProjectPage />} />
-                <Route path="/filter/:kind" element={<FilterPage />} />
-                <Route path="/profile" element={<ProfilePage />} />
-                <Route path="/generate" element={<GeneratePage />} />
-                <Route path="/chat/:id" element={<ChatPage />} />
-              </Routes>
+              <AppRoutes />
             </BrowserRouter>
           </Gate>
         </AppStoreProvider>
       </KonstaApp>
     </AppRoot>
+  )
+}
+
+function AppRoutes() {
+  const { pathname } = useLocation()
+  const hasTabPill =
+    pathname === '/' ||
+    pathname === '/generate' ||
+    pathname === '/profile' ||
+    pathname.startsWith('/project/')
+
+  return (
+    <>
+      <Routes>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/project/:id" element={<ProjectPage />} />
+        <Route path="/filter/:kind" element={<FilterPage />} />
+        <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/generate" element={<GeneratePage />} />
+        <Route path="/chat/:id" element={<ChatPage />} />
+      </Routes>
+      {hasTabPill && <TabPill />}
+    </>
   )
 }
 

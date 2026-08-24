@@ -28,7 +28,6 @@ import { useApp } from '../store/AppStore'
 import { Avatar } from '../components/Avatar'
 import Menu, { type MenuItem } from '../components/Menu'
 import Pill from '../components/Pill'
-import TabPill from '../components/TabPill'
 import TaskRow from '../components/TaskRow'
 import {
   PROCESS_KINDS,
@@ -403,8 +402,6 @@ export default function ProjectPage() {
           </List>
         </>
       )}
-
-      <TabPill />
 
       <Menu
         open={menuOpen}

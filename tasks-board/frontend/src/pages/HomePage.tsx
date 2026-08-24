@@ -29,7 +29,6 @@ import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { Avatar } from '../components/Avatar'
 import { getUser } from '../lib/telegram'
-import TabPill from '../components/TabPill'
 import Menu, { type MenuItem } from '../components/Menu'
 import TaskRow from '../components/TaskRow'
 import TaskSheet from '../sheets/TaskSheet'
@@ -339,8 +338,6 @@ export default function HomePage() {
           </List>
         </>
       )}
-
-      <TabPill />
 
       <Menu
         open={menuOpen}
