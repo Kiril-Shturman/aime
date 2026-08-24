@@ -49,16 +49,27 @@ export function haptic(kind: 'light' | 'medium' | 'heavy' | 'success' | 'error' 
 
 export function initTelegram() {
   const t = tg()
-  const BG = '#000000'
   try {
     t?.ready?.()
     t?.expand?.()
-    t?.setHeaderColor?.(BG)
-    t?.setBackgroundColor?.(BG)
-    t?.setBottomBarColor?.(BG)
     t?.disableVerticalSwipes?.()
   } catch {
     /* обычный браузер */
+  }
+}
+
+// Красим шапку/фон/нижнюю панель ТГ-мини-аппы под текущую тему.
+// Вызываем каждый раз, когда пользователь переключает светлую/тёмную.
+export function applyTgTheme(theme: 'dark' | 'light') {
+  const t = tg()
+  if (!t) return
+  const bg = theme === 'dark' ? '#000000' : '#ffffff'
+  try {
+    t.setHeaderColor?.(bg)
+    t.setBackgroundColor?.(bg)
+    t.setBottomBarColor?.(bg)
+  } catch {
+    /* старая версия клиента */
   }
 }
 

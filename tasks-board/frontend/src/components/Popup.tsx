@@ -40,7 +40,9 @@ export default function Popup({
                 iconOnly
                 onClick={canSave ? onSave : undefined}
                 className={
-                  canSave ? '!text-[#4ea3ff]' : '!text-white/30 pointer-events-none'
+                  canSave
+                    ? '!text-[#4ea3ff]'
+                    : '!text-black/30 dark:!text-white/30 pointer-events-none'
                 }
               >
                 <Check size={24} strokeWidth={3} />
