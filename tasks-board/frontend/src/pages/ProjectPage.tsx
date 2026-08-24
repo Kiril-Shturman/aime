@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import {
+  Badge,
   Block,
   BlockTitle,
   List,
@@ -232,6 +233,7 @@ export default function ProjectPage() {
             {project.members.map((m) => (
               <ListItem
                 key={m.id}
+                link
                 onClick={() =>
                   memberFilter === m.id
                     ? setMemberFilter(null)
@@ -243,7 +245,14 @@ export default function ProjectPage() {
                   [m.role, m.handle].filter(Boolean).join(' · ') ||
                   kindLabel(m.kind)
                 }
-                after={String(teamOpenCount.get(m.id) ?? 0)}
+                // ноль задач показывать незачем: пусто и есть ответ
+                after={
+                  teamOpenCount.get(m.id) ? (
+                    <Badge colors={{ bg: 'bg-[#2a8bff]', text: 'text-white' }}>
+                      {teamOpenCount.get(m.id)}
+                    </Badge>
+                  ) : undefined
+                }
                 className={memberFilter === m.id ? 'bg-black/[.04] dark:bg-white/[.06]' : ''}
               />
             ))}
