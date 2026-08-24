@@ -7,7 +7,7 @@ import type { Member } from '../api/types'
 // Чем участник работает. Всё, что понимает MCP, подключается одинаково —
 // меняется только место, куда положить настройку.
 const TOOLS = [
-  { id: 'claude', label: 'Claude Code' },
+  { id: 'claude', label: 'Claude' },
   { id: 'cursor', label: 'Cursor' },
   { id: 'codex', label: 'Codex' },
   { id: 'http', label: 'Своё' },
@@ -69,12 +69,13 @@ export default function MemberConnect({ member }: { member: Member }) {
     <>
       <BlockTitle>Чем работает</BlockTitle>
       <div className="px-4 mt-2">
-        <Segmented strong>
+        <Segmented strong rounded>
           {TOOLS.map((t) => (
             <SegmentedButton
               key={t.id}
               active={tool === t.id}
               onClick={() => setTool(t.id)}
+              className="!text-[14px] whitespace-nowrap"
             >
               {t.label}
             </SegmentedButton>
