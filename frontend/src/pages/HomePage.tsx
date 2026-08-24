@@ -197,12 +197,10 @@ export default function HomePage() {
     <Page>
       <Navbar
         title="Задачи"
-        large
-        transparent
         right={
-          <div className="flex items-center gap-2 pr-2">
+          <>
             <KLink navbar iconOnly onClick={() => setSearchOn(true)}>
-              <Search size={20} />
+              <Search size={22} />
             </KLink>
             <KLink navbar iconOnly onClick={() => setProjectOpen(true)}>
               <Plus size={22} />
@@ -215,17 +213,18 @@ export default function HomePage() {
             >
               <MoreHorizontal size={22} />
             </KLink>
-          </div>
+          </>
         }
       />
 
-      {/* Поиск-оверлей: растягивается справа налево из тройки иконок */}
+      {/* Поиск-оверлей: разворачивается/сворачивается в правый верхний угол
+          (в иконку поиска), перекрывает navbar по высоте */}
       <div
-        className={`fixed top-0 left-0 right-0 z-[100] origin-right transition-transform duration-300 ease-out ${
-          searchOn ? 'scale-x-100' : 'scale-x-0'
+        className={`fixed top-0 left-0 right-0 z-[100] bg-black origin-top-right transition-all duration-300 ease-out ${
+          searchOn ? 'scale-100 opacity-100' : 'scale-0 opacity-0'
         }`}
       >
-        <div className="bg-black/95 backdrop-blur-xl pt-[env(safe-area-inset-top)]">
+        <div className="pt-[max(16px,env(safe-area-inset-top))] px-4">
           <Searchbar
             value={q}
             onInput={(e) => setQ((e.target as HTMLInputElement).value)}
