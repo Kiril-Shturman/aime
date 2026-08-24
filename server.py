@@ -82,6 +82,19 @@ TASK_STATUS = ("todo", "doing", "done")
 
 DEFAULT = {"projects": [], "tasks": []}
 
+# Настройки бота, который сидит у владельца в личке. Сама доска их только
+# хранит и показывает — исполняет бот, когда его подключат к личке через
+# режим «Бизнес» в Телеграме.
+ASSISTANT = {
+    "mode": "personal",                      # personal | support
+    "business": {"connected": False, "account": "", "since": None},
+    "autoreply": {"on": False, "text": "", "away_after": 0},
+    "watch": {"deleted": True, "edited": True},
+    "digest": {"on": False, "at": "21:00"},
+    "replies": [],                           # заготовки: {id, title, text}
+    "support": {"hours": "", "sla": 0, "escalate": ""},
+}
+
 
 def fallback_project(state):
     """Куда падает задача, если проект не указан: первый в списке."""
@@ -104,6 +117,14 @@ def migrate(state):
         for t in state.get("tasks", []):
             t["project"] = t.pop("list", "inbox")
         changed = True
+    if "assistant" not in state:
+        state["assistant"] = json.loads(json.dumps(ASSISTANT))
+        changed = True
+    for key, value in ASSISTANT.items():
+        state["assistant"].setdefault(key, json.loads(json.dumps(value)))
+        if isinstance(value, dict):
+            for k2, v2 in value.items():
+                state["assistant"][key].setdefault(k2, v2)
     for p in state["projects"]:
         p.setdefault("note", "")
         p.setdefault("repo", "")   # ссылка на репозиторий проекта
@@ -638,6 +659,56 @@ async def run_command(request):
     return web.json_response({"label": cmd["label"], "text": text})
 
 
+# ------------------------------------------------------------ бот в личке
+
+async def get_assistant(request):
+    return web.json_response(load()["assistant"])
+
+
+async def patch_assistant(request):
+    """Частичное обновление: вложенные словари сливаем, а не затираем."""
+    body = await request.json()
+    state = load()
+    a = state["assistant"]
+    for key, value in body.items():
+        if key not in ASSISTANT or key == "replies":
+            continue
+        if isinstance(value, dict) and isinstance(a.get(key), dict):
+            a[key].update(value)
+        else:
+            a[key] = value
+    save(state)
+    return web.json_response(a)
+
+
+async def add_reply(request):
+    """Заготовка ответа: короткое название и текст, который бот вставит."""
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise web.HTTPBadRequest(text="text required")
+    state = load()
+    reply = {
+        "id": uuid.uuid4().hex[:8],
+        "title": (body.get("title") or text[:24]).strip(),
+        "text": text,
+    }
+    state["assistant"]["replies"].append(reply)
+    save(state)
+    return web.json_response(reply)
+
+
+async def delete_reply(request):
+    state = load()
+    replies = state["assistant"]["replies"]
+    left = [r for r in replies if r["id"] != request.match_info["rid"]]
+    if len(left) == len(replies):
+        raise web.HTTPNotFound()
+    state["assistant"]["replies"] = left
+    save(state)
+    return web.json_response({"ok": True})
+
+
 async def spa(request):
     # Отдаёт статику из static/ если файл существует, иначе index.html
     # (SPA-фолбэк для клиентского роутера).
@@ -660,6 +731,10 @@ async def spa(request):
 def make_app():
     app = web.Application()
     app.router.add_get("/api/state", get_state)
+    app.router.add_get("/api/assistant", get_assistant)
+    app.router.add_patch("/api/assistant", patch_assistant)
+    app.router.add_post("/api/assistant/reply", add_reply)
+    app.router.add_delete("/api/assistant/reply/{rid}", delete_reply)
     app.router.add_get("/api/commands", list_commands)
     app.router.add_post("/api/command/{cid}", run_command)
     app.router.add_post("/api/task", add_task)
