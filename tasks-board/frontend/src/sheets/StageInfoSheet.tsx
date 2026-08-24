@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Trash2, Flag } from 'lucide-react'
-import { Block, BlockTitle, Button, List, ListItem } from 'konsta/react'
+import { Block, BlockTitle, Button, List, ListInput, ListItem } from 'konsta/react'
 import Sheet from '../components/Sheet'
 import PickerSheet, { type PickerOption } from './PickerSheet'
 import { api } from '../api/client'
@@ -19,10 +19,14 @@ interface Props {
 export default function StageInfoSheet({ open, onClose, projectId, stage }: Props) {
   const { state, refresh } = useApp()
   const [status, setStatus] = useState<StageStatus>('planned')
+  const [moduleName, setModuleName] = useState('')
   const [picking, setPicking] = useState(false)
 
   useEffect(() => {
-    if (stage) setStatus(stage.status)
+    if (stage) {
+      setStatus(stage.status)
+      setModuleName(stage.module ?? '')
+    }
   }, [stage])
 
   const options: PickerOption[] = useMemo(
@@ -47,7 +51,10 @@ export default function StageInfoSheet({ open, onClose, projectId, stage }: Prop
     .join(' · ')
 
   const save = async () => {
-    await api.patchStage(projectId, stage.id, { status })
+    await api.patchStage(projectId, stage.id, {
+      status,
+      module: moduleName.trim(),
+    })
     haptic('success')
     onClose()
     await refresh()
@@ -66,6 +73,13 @@ export default function StageInfoSheet({ open, onClose, projectId, stage }: Prop
         <Block className="!mt-0 opacity-60 text-[13px]">{meta}</Block>
 
         <List strong inset>
+          <ListInput
+            label="Модуль"
+            type="text"
+            placeholder="Основной модуль"
+            value={moduleName}
+            onChange={(e) => setModuleName((e.target as HTMLInputElement).value)}
+          />
           <ListItem
             onClick={() => setPicking(true)}
             media={<Flag size={20} />}

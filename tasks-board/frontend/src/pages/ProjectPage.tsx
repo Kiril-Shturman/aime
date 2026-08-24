@@ -11,6 +11,7 @@ import {
   Trash2,
   ChevronRight,
   Workflow,
+  Plus,
 } from 'lucide-react'
 import {
   Block,
@@ -48,6 +49,12 @@ import StageInfoSheet from '../sheets/StageInfoSheet'
 import GitSheet from '../sheets/GitSheet'
 import GoalSheet from '../sheets/GoalSheet'
 import type { Member, Stage, Task } from '../api/types'
+import {
+  ModuleIcon,
+  ProjectIcon,
+  StageIcon,
+  TaskIcon,
+} from '../components/WorkItemIcons'
 
 export default function ProjectPage() {
   const { id = '' } = useParams()
@@ -61,6 +68,7 @@ export default function ProjectPage() {
   const menuBtnRef = useRef<HTMLAnchorElement>(null)
 
   const [taskOpen, setTaskOpen] = useState(false)
+  const [taskStage, setTaskStage] = useState<string | null>(null)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [projectSheetOpen, setProjectSheetOpen] = useState(false)
   const [memberOpen, setMemberOpen] = useState(false)
@@ -142,6 +150,14 @@ export default function ProjectPage() {
     const items: MenuItem[] = [
       { label: 'Поставить цель', icon: Flag, onSelect: () => setGoalOpen(true) },
       {
+        label: 'Добавить задачу',
+        icon: Plus,
+        onSelect: () => {
+          setTaskStage(null)
+          setTaskOpen(true)
+        },
+      },
+      {
         label: project.type === 'process' ? 'Изменить процесс' : 'Изменить проект',
         icon: Pencil,
         onSelect: () => setProjectSheetOpen(true),
@@ -210,12 +226,26 @@ export default function ProjectPage() {
     )
   }
 
-  const stagesWithTasks = project.roadmap.filter((st) =>
-    openTasks.some((t) => t.stage === st.id),
-  )
-  const looseTasks = openTasks.filter(
+  const visibleTasks = [...openTasks, ...doneTasks]
+  const looseTasks = visibleTasks.filter(
     (t) => !t.stage || !project.roadmap.some((s) => s.id === t.stage),
   )
+  const projectTasks = state?.tasks.filter((t) => t.project === id) ?? []
+  const projectDone = projectTasks.filter((t) => t.done).length
+  const projectProgress = projectTasks.length
+    ? projectDone / projectTasks.length
+    : 0
+  const moduleMap = new Map<string, Stage[]>()
+  project.roadmap.forEach((stage) => {
+    const moduleName = stage.module?.trim() || 'Основной модуль'
+    moduleMap.set(moduleName, [...(moduleMap.get(moduleName) ?? []), stage])
+  })
+  const modules = Array.from(moduleMap, ([name, stages]) => ({ name, stages }))
+
+  const openTaskSheet = (stage: string | null = null) => {
+    setTaskStage(stage)
+    setTaskOpen(true)
+  }
 
   return (
     <Page className="pb-safe-20 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -238,50 +268,32 @@ export default function ProjectPage() {
         }
       />
 
-      {project.note && <Block>{project.note}</Block>}
-
-      {project.members.length > 0 && (
-        <>
-          <BlockTitle>Команда</BlockTitle>
-          {/* «Data list, with icons» из Konsta: иконка слева, значение справа */}
-          <List strong inset dividers>
-            {project.members.map((m) => (
-              <ListItem
-                key={m.id}
-                link
-                onClick={() =>
-                  memberFilter === m.id
-                    ? setMemberFilter(null)
-                    : setMemberInfo(m)
-                }
-                media={<Avatar member={m} color={project.color} size={44} />}
-                title={m.name}
-                // чипы вместо значения справа: состояние и кто это по роли
-                subtitle={
-                  <span className="flex flex-wrap gap-1.5 mt-1">
-                    <Pill tone={teamOpenCount.get(m.id) ? 'work' : 'free'}>
-                      {teamOpenCount.get(m.id)
-                        ? `${teamOpenCount.get(m.id)} в работе`
-                        : 'свободен'}
-                    </Pill>
-                    {m.kind && <Pill tone={m.kind}>{kindLabel(m.kind)}</Pill>}
-                  </span>
-                }
-                // стрелка живёт в строке заголовка, поэтому у многострочного
-                // элемента она уезжает вверх — ставим свою по центру
-                chevronIcon={
-                  <ChevronRight
-                    size={18}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-black/25 dark:text-white/25"
-                  />
-                }
-                innerClassName="pr-10"
-                className={memberFilter === m.id ? 'bg-black/[.04] dark:bg-white/[.06]' : ''}
-              />
-            ))}
-          </List>
-        </>
-      )}
+      <List strong inset>
+        <ListItem
+          media={
+            <span className="w-12 h-12 rounded-2xl bg-primary/12 text-primary flex items-center justify-center">
+              <ProjectIcon size={28} />
+            </span>
+          }
+          title={<span className="font-semibold">{project.name}</span>}
+          subtitle={`${modules.length} ${modules.length === 1 ? 'модуль' : 'модуля'} · ${project.roadmap.length} этапов · ${projectTasks.length} задач`}
+          text={
+            <span className="block mt-2">
+              {project.note && (
+                <span className="block text-black/65 dark:text-white/60 mb-2">
+                  {project.note}
+                </span>
+              )}
+              <span className="flex items-center gap-2">
+                <Progressbar progress={projectProgress} className="flex-1" />
+                <span className="text-[12px] text-black/50 dark:text-white/50 shrink-0">
+                  {projectDone} из {projectTasks.length}
+                </span>
+              </span>
+            </span>
+          }
+        />
+      </List>
 
       {project.type === 'process' && project.process_kind && (
         <>
@@ -298,110 +310,209 @@ export default function ProjectPage() {
         </>
       )}
 
-      {project.type !== 'process' && project.roadmap.length > 0 && (
+      {project.type !== 'process' && (
         <>
-          <BlockTitle>Роудмап</BlockTitle>
-          <List
-            strong
-            inset
-            className="[--k-hairline-color:rgba(0,0,0,0.08)] dark:[--k-hairline-color:rgba(255,255,255,0.08)]"
-          >
-            {project.roadmap.map((st) => (
+          <BlockTitle>{memberFilter ? 'План участника' : 'План проекта'}</BlockTitle>
+
+          {modules.length === 0 ? (
+            <List strong inset>
               <ListItem
-                key={st.id}
-                onClick={() => setStageInfo(st)}
-                media={
-                  <span
-                    className={`w-3 h-3 rounded-full shrink-0 ${
-                      st.status === 'done'
-                        ? 'bg-[#30d158]'
-                        : st.status === 'active'
-                          ? 'bg-[#2a8bff]'
-                          : 'bg-black/25 dark:bg-white/25'
-                    }`}
-                  />
-                }
-                title={st.title}
-                subtitle={st.date ?? undefined}
-                text={
-                  st.progress.total > 0 ? (
-                    <span className="flex items-center gap-2 mt-1.5">
-                      <Progressbar
-                        progress={
-                          Math.round((100 * st.progress.done) / st.progress.total) /
-                          100
-                        }
-                        className="flex-1"
-                      />
-                      <span className="text-black/50 dark:text-white/50 text-[12px] shrink-0">
-                        {st.progress.done} из {st.progress.total}
-                      </span>
-                    </span>
-                  ) : undefined
-                }
-                after={
-                  <span
-                    className={`text-[12px] px-2 py-0.5 rounded-full shrink-0 ${
-                      st.status === 'done'
-                        ? 'bg-[#30d158]/20 text-[#30d158]'
-                        : st.status === 'active'
-                          ? 'bg-primary/15 text-primary'
-                          : 'bg-black/[.06] text-black/60 dark:bg-white/10 dark:text-white/60'
-                    }`}
-                  >
-                    {STAGE_STATUS_LABEL[st.status]}
-                  </span>
-                }
+                link
+                onClick={() => setStageOpen(true)}
+                media={<ModuleIcon size={28} className="text-primary" />}
+                title="Создать первый модуль"
+                subtitle="Добавь этап — модуль появится автоматически"
               />
-            ))}
+            </List>
+          ) : (
+            modules.map((module) => {
+              const moduleTasks = visibleTasks.filter((task) =>
+                module.stages.some((stage) => stage.id === task.stage),
+              )
+              const moduleDone = moduleTasks.filter((task) => task.done).length
+
+              return (
+                <section
+                  key={module.name}
+                  className="mx-safe-4 mb-5 rounded-3xl overflow-hidden bg-ios-light-surface-1 dark:bg-ios-dark-surface-1"
+                >
+                  <div className="flex items-center gap-3 px-4 py-4 bg-primary/[.07] dark:bg-primary/[.10]">
+                    <span className="w-11 h-11 rounded-2xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
+                      <ModuleIcon size={25} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+                        Модуль
+                      </div>
+                      <div className="text-[18px] font-semibold text-black dark:text-white truncate">
+                        {module.name}
+                      </div>
+                      <div className="text-[13px] text-black/50 dark:text-white/50">
+                        {module.stages.length} этапов · {moduleDone} из {moduleTasks.length} задач готово
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="divide-y divide-black/[.08] dark:divide-white/[.08]">
+                    {module.stages.map((stage) => {
+                      const stageTasks = visibleTasks.filter(
+                        (task) => task.stage === stage.id,
+                      )
+                      const stageProgress = stage.progress.total
+                        ? stage.progress.done / stage.progress.total
+                        : 0
+
+                      return (
+                        <div key={stage.id}>
+                          <button
+                            type="button"
+                            onClick={() => setStageInfo(stage)}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-black/[.05] dark:active:bg-white/[.06]"
+                          >
+                            <span className="w-9 h-9 rounded-xl bg-black/[.04] dark:bg-white/[.06] text-primary flex items-center justify-center shrink-0">
+                              <StageIcon size={22} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-2">
+                                <span className="text-[11px] font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">
+                                  Этап
+                                </span>
+                                {stage.date && (
+                                  <span className="text-[11px] text-black/40 dark:text-white/40">
+                                    {stage.date}
+                                  </span>
+                                )}
+                              </span>
+                              <span className="block text-[16px] font-semibold text-black dark:text-white truncate">
+                                {stage.title}
+                              </span>
+                              {stage.progress.total > 0 && (
+                                <span className="flex items-center gap-2 mt-1.5">
+                                  <Progressbar progress={stageProgress} className="flex-1" />
+                                  <span className="text-[11px] text-black/45 dark:text-white/45 shrink-0">
+                                    {stage.progress.done}/{stage.progress.total}
+                                  </span>
+                                </span>
+                              )}
+                            </span>
+                            <span
+                              className={`text-[11px] px-2 py-0.5 rounded-full shrink-0 ${
+                                stage.status === 'done'
+                                  ? 'bg-[#30d158]/20 text-[#248a3d] dark:text-[#30d158]'
+                                  : stage.status === 'active'
+                                    ? 'bg-primary/15 text-primary'
+                                    : 'bg-black/[.06] text-black/55 dark:bg-white/10 dark:text-white/55'
+                              }`}
+                            >
+                              {STAGE_STATUS_LABEL[stage.status]}
+                            </span>
+                          </button>
+
+                          <div className="bg-black/[.015] dark:bg-white/[.015] border-t border-black/[.05] dark:border-white/[.05]">
+                            {stageTasks.length > 0 ? (
+                              <List nested dividers>
+                                {stageTasks.map((task) => (
+                                  <TaskRow key={task.id} task={task} onEdit={setEditTask} />
+                                ))}
+                              </List>
+                            ) : (
+                              <div className="px-4 py-3 flex items-center gap-3 text-[14px] text-black/45 dark:text-white/45">
+                                <TaskIcon size={20} className="text-primary/60" />
+                                Задач пока нет
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => openTaskSheet(stage.id)}
+                              className="w-full px-4 py-3 flex items-center gap-3 text-[14px] text-primary border-t border-black/[.05] dark:border-white/[.05] active:bg-primary/[.06]"
+                            >
+                              <Plus size={20} />
+                              Добавить задачу
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </section>
+              )
+            })
+          )}
+
+          {looseTasks.length > 0 && (
+            <>
+              <BlockTitle>Без этапа</BlockTitle>
+              <List strong inset>
+                {looseTasks.map((task) => (
+                  <TaskRow key={task.id} task={task} onEdit={setEditTask} />
+                ))}
+                <ListItem
+                  link
+                  onClick={() => openTaskSheet()}
+                  media={<Plus size={20} className="text-primary" />}
+                  title="Добавить задачу"
+                />
+              </List>
+            </>
+          )}
+        </>
+      )}
+
+      {project.type === 'process' && (
+        <>
+          <BlockTitle>{memberFilter ? 'Задачи участника' : 'Задачи'}</BlockTitle>
+          <List strong inset>
+            {visibleTasks.length === 0 ? (
+              <ListItem title="Пусто" />
+            ) : (
+              visibleTasks.map((task) => (
+                <TaskRow key={task.id} task={task} onEdit={setEditTask} />
+              ))
+            )}
           </List>
         </>
       )}
 
-      <BlockTitle>{memberFilter ? 'Задачи участника' : 'Задачи'}</BlockTitle>
-      {openTasks.length === 0 ? (
-        <List strong inset>
-          <ListItem title="Пусто" />
-        </List>
-      ) : project.roadmap.length > 0 ? (
+      {project.members.length > 0 && (
         <>
-          {stagesWithTasks.map((st) => (
-            <div key={st.id}>
-              <BlockTitle>{st.title}</BlockTitle>
-              <List strong inset>
-                {openTasks
-                  .filter((t) => t.stage === st.id)
-                  .map((t) => (
-                    <TaskRow key={t.id} task={t} onEdit={setEditTask} />
-                  ))}
-              </List>
-            </div>
-          ))}
-          {looseTasks.length > 0 && (
-            <div>
-              {stagesWithTasks.length > 0 && <BlockTitle>Без этапа</BlockTitle>}
-              <List strong inset>
-                {looseTasks.map((t) => (
-                  <TaskRow key={t.id} task={t} onEdit={setEditTask} />
-                ))}
-              </List>
-            </div>
-          )}
-        </>
-      ) : (
-        <List strong inset>
-          {openTasks.map((t) => (
-            <TaskRow key={t.id} task={t} onEdit={setEditTask} />
-          ))}
-        </List>
-      )}
-
-      {doneTasks.length > 0 && (
-        <>
-          <BlockTitle>Завершено</BlockTitle>
-          <List strong inset>
-            {doneTasks.map((t) => (
-              <TaskRow key={t.id} task={t} onEdit={setEditTask} />
+          <BlockTitle>Команда</BlockTitle>
+          <List strong inset dividers>
+            {project.members.map((member) => (
+              <ListItem
+                key={member.id}
+                link
+                onClick={() =>
+                  memberFilter === member.id
+                    ? setMemberFilter(null)
+                    : setMemberInfo(member)
+                }
+                media={<Avatar member={member} color={project.color} size={44} />}
+                title={member.name}
+                subtitle={
+                  <span className="flex flex-wrap gap-1.5 mt-1">
+                    <Pill tone={teamOpenCount.get(member.id) ? 'work' : 'free'}>
+                      {teamOpenCount.get(member.id)
+                        ? `${teamOpenCount.get(member.id)} в работе`
+                        : 'свободен'}
+                    </Pill>
+                    {member.kind && (
+                      <Pill tone={member.kind}>{kindLabel(member.kind)}</Pill>
+                    )}
+                  </span>
+                }
+                chevronIcon={
+                  <ChevronRight
+                    size={18}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-black/25 dark:text-white/25"
+                  />
+                }
+                innerClassName="pr-10"
+                className={
+                  memberFilter === member.id
+                    ? 'bg-black/[.04] dark:bg-white/[.06]'
+                    : ''
+                }
+              />
             ))}
           </List>
         </>
@@ -416,8 +527,12 @@ export default function ProjectPage() {
 
       <TaskSheet
         open={taskOpen}
-        onClose={() => setTaskOpen(false)}
+        onClose={() => {
+          setTaskOpen(false)
+          setTaskStage(null)
+        }}
         defaultProject={id}
+        defaultStage={taskStage}
       />
       <TaskEditSheet
         open={editTask != null}

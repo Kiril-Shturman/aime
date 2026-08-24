@@ -13,11 +13,13 @@ interface Props {
 
 export default function StageSheet({ open, onClose, projectId }: Props) {
   const { refresh } = useApp()
+  const [moduleName, setModuleName] = useState('')
   const [title, setTitle] = useState('')
   const [date, setDate] = useState('')
 
   useEffect(() => {
     if (!open) return
+    setModuleName('')
     setTitle('')
     setDate('')
   }, [open])
@@ -25,6 +27,7 @@ export default function StageSheet({ open, onClose, projectId }: Props) {
   const save = async () => {
     if (!title.trim()) return
     await api.addStage(projectId, {
+      module: moduleName.trim() || undefined,
       title: title.trim(),
       date: date || undefined,
       status: 'planned',
@@ -35,10 +38,17 @@ export default function StageSheet({ open, onClose, projectId }: Props) {
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Этап роудмапа">
+    <Sheet open={open} onClose={onClose} title="Новый этап">
       <List strong inset>
         <ListInput
-          label="Название"
+          label="Модуль"
+          type="text"
+          placeholder="Основной модуль"
+          value={moduleName}
+          onChange={(e) => setModuleName((e.target as HTMLInputElement).value)}
+        />
+        <ListInput
+          label="Название этапа"
           type="text"
           placeholder="Например, Закрытая бета"
           value={title}
