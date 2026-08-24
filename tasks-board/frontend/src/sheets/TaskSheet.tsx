@@ -156,7 +156,7 @@ export default function TaskSheet({
             after={
               <span className="flex items-center gap-3">
                 {hasDate && (
-                  <span className="text-[#4ea3ff] text-[15px]">
+                  <span className="text-primary text-[15px]">
                     {fmtDate(due)}
                   </span>
                 )}
@@ -202,7 +202,7 @@ export default function TaskSheet({
             after={
               <span className="flex items-center gap-3">
                 {hasTime && time && (
-                  <span className="text-[#4ea3ff] text-[15px]">{time}</span>
+                  <span className="text-primary text-[15px]">{time}</span>
                 )}
                 <Toggle
                   checked={hasTime}

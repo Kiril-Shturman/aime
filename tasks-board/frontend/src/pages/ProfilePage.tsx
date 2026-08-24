@@ -129,7 +129,7 @@ export default function ProfilePage() {
               {fullName}
             </div>
             {user?.username && (
-              <div className="text-black/60 dark:text-black/60 dark:text-white/60 text-[15px] mt-0.5">
+              <div className="text-black/60 dark:text-white/60 text-[15px] mt-0.5">
                 @{user.username}
               </div>
             )}
@@ -392,7 +392,7 @@ function Stat({
   accent?: string
 }) {
   return (
-    <div className="bg-white/[.06] rounded-2xl px-3 py-3 text-center">
+    <div className="bg-black/[.05] dark:bg-white/[.06] rounded-2xl px-3 py-3 text-center">
       <div
         className="text-[24px] font-bold"
         style={accent ? { color: accent } : undefined}

@@ -59,7 +59,7 @@ export default function BoardAccess() {
 
       {access.open && (
         <Block>
-          <p className="text-white/45 text-[14px] leading-snug">
+          <p className="text-black/55 dark:text-white/45 text-[14px] leading-snug">
             Пока тумблер включён, доску откроет любой, кто знает адрес, и
             сможет менять задачи. Выключишь — снова видно только тебе.
           </p>

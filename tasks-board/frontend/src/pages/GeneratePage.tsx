@@ -128,7 +128,7 @@ function ProviderTile({ item, onClick }: { item: Provider; onClick: () => void }
       <img
         src={item.avatar}
         alt=""
-        className="w-16 h-16 rounded-[20px] object-cover bg-white/10"
+        className="w-16 h-16 rounded-[20px] object-cover bg-black/5 dark:bg-white/10"
       />
       <span className="text-[13px] font-semibold text-black dark:text-white text-center leading-tight truncate w-full">
         {item.name}
@@ -282,7 +282,7 @@ export default function GeneratePage() {
                   <img
                     src={c.avatar}
                     alt=""
-                    className="w-10 h-10 rounded-full object-cover bg-white/10 shrink-0"
+                    className="w-10 h-10 rounded-full object-cover bg-black/5 dark:bg-white/10 shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">

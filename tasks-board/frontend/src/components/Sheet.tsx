@@ -28,7 +28,7 @@ export default function Sheet({
     <KSheet
       opened={open}
       onBackdropClick={onClose}
-      className="pb-safe max-h-[92dvh] overflow-y-auto bg-white dark:!bg-black"
+      className="pb-safe max-h-[92dvh] overflow-y-auto"
     >
       {(title || headerRight || headerLeft) && (
         <div className="flex items-center gap-3 px-4 pt-3 pb-2">

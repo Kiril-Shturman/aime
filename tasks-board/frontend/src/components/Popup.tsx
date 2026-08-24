@@ -41,7 +41,7 @@ export default function Popup({
                 onClick={canSave ? onSave : undefined}
                 className={
                   canSave
-                    ? '!text-[#4ea3ff]'
+                    ? '!text-primary'
                     : '!text-black/30 dark:!text-white/30 pointer-events-none'
                 }
               >

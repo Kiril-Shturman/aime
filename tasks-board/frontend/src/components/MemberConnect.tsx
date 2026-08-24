@@ -83,18 +83,18 @@ export default function MemberConnect({ member }: { member: Member }) {
         </Segmented>
 
         <div className="relative mt-3">
-          <pre className="bg-white/[.06] rounded-2xl p-3 pr-11 text-[12px] leading-snug text-white/80 overflow-x-auto whitespace-pre">
+          <pre className="bg-black/[.05] dark:bg-white/[.06] rounded-2xl p-3 pr-11 text-[12px] leading-snug text-black/80 dark:text-white/80 overflow-x-auto whitespace-pre">
             {text}
           </pre>
           <button
             onClick={copy}
-            className="absolute top-2 right-2 p-2 rounded-full bg-white/10 text-white/70"
+            className="absolute top-2 right-2 p-2 rounded-full bg-black/10 dark:bg-white/10 text-black/70 dark:text-white/70"
           >
             {copied ? <Check size={15} /> : <Copy size={15} />}
           </button>
         </div>
 
-        <p className="text-white/40 text-[13px] mt-2 leading-snug">
+        <p className="text-black/55 dark:text-white/40 text-[13px] mt-2 leading-snug">
           Ключ личный: по нему доска понимает, кто взял задачу, и не пускает
           посторонних. Отдавать никому не надо.
         </p>

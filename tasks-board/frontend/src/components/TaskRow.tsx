@@ -58,7 +58,7 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
           className={`w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center shrink-0 ${
             task.done
               ? 'border-[#2a8bff] bg-[#2a8bff]'
-              : 'border-white/25 bg-transparent'
+              : 'border-black/25 dark:border-white/25 bg-transparent'
           }`}
         >
           {task.done && (
@@ -83,7 +83,7 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
       text={
         <>
           {task.status === 'doing' && (
-            <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#2a8bff]/20 text-[#4ea3ff]">
+            <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">
               В работе
             </span>
           )}
@@ -98,7 +98,7 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="block text-[#4ea3ff] text-[13px] mt-0.5 truncate"
+              className="block text-primary text-[13px] mt-0.5 truncate"
             >
               {task.url}
             </a>

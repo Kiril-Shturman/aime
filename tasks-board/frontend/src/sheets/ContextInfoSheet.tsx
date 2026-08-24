@@ -1,11 +1,11 @@
 import { X } from 'lucide-react'
 import {
-  Block,
   Link as KLink,
+  List,
+  ListItem,
   Toolbar,
   ToolbarPane,
 } from 'konsta/react'
-import { Cell, IconContainer } from '@telegram-apps/telegram-ui'
 import Sheet from '../components/Sheet'
 import { CONTEXT_SOURCES } from '../lib/context-sources'
 
@@ -14,8 +14,6 @@ interface Props {
   onClose: () => void
 }
 
-// Все «Что это» источника открывают одну модалку с той же вёрсткой:
-// один Block, Cell-и через разделитель.
 export default function ContextInfoSheet({ open, onClose }: Props) {
   return (
     <Sheet open={open} onClose={onClose}>
@@ -27,24 +25,20 @@ export default function ContextInfoSheet({ open, onClose }: Props) {
           </KLink>
         </ToolbarPane>
       </Toolbar>
-      <Block strong inset className="!p-0 overflow-hidden">
-        {CONTEXT_SOURCES.map((s, i) => (
-          <div key={s.id}>
-            {i > 0 && <div className="border-t border-white/[.08]" />}
-            <Cell
-              multiline
-              before={
-                <IconContainer style={{ padding: '0 6px' }}>
-                  {s.render()}
-                </IconContainer>
-              }
-              description={s.hint}
-            >
-              {s.label}
-            </Cell>
-          </div>
+      <List strong inset dividers>
+        {CONTEXT_SOURCES.map((s) => (
+          <ListItem
+            key={s.id}
+            media={
+              <span className="w-10 h-10 flex items-center justify-center shrink-0">
+                {s.render()}
+              </span>
+            }
+            title={s.label}
+            subtitle={s.hint}
+          />
         ))}
-      </Block>
+      </List>
     </Sheet>
   )
 }

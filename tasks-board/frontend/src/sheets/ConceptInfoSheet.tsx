@@ -2,10 +2,11 @@ import { X } from 'lucide-react'
 import {
   Block,
   Link as KLink,
+  List,
+  ListItem,
   Toolbar,
   ToolbarPane,
 } from 'konsta/react'
-import { Cell, IconContainer } from '@telegram-apps/telegram-ui'
 import Sheet from '../components/Sheet'
 import type { Concept } from './ProjectSheet'
 
@@ -28,19 +29,17 @@ export default function ConceptInfoSheet({ open, concept, onClose }: Props) {
       </Toolbar>
       {concept && (
         <>
-          <Block strong inset className="!p-0 overflow-hidden">
-            <Cell
-              multiline
-              before={
-                <IconContainer style={{ padding: '0 6px' }}>
+          <List strong inset>
+            <ListItem
+              media={
+                <span className="w-10 h-10 flex items-center justify-center shrink-0">
                   <concept.Icon size={34} strokeWidth={1.7} />
-                </IconContainer>
+                </span>
               }
-              description={concept.hint}
-            >
-              {concept.label}
-            </Cell>
-          </Block>
+              title={concept.label}
+              subtitle={concept.hint}
+            />
+          </List>
           <Block className="!text-[15px] leading-snug whitespace-pre-line opacity-80">
             {concept.details}
           </Block>

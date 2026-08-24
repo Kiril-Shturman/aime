@@ -10,7 +10,6 @@ import {
   ListItem,
   Toggle,
 } from 'konsta/react'
-import { Cell, IconContainer } from '@telegram-apps/telegram-ui'
 import Popup from '../components/Popup'
 import Sheet from '../components/Sheet'
 import { api } from '../api/client'
@@ -30,9 +29,6 @@ interface Props {
   project?: Project | null
 }
 
-// Ключевые понятия, из которых состоит работа в этом инструменте.
-// Показываются в шапке при создании — чтобы человек с ходу понял,
-// куда попал.
 // Ключевые понятия, из которых состоит работа в этом инструменте.
 // Показываются в шапке при создании — чтобы человек с ходу понял,
 // куда попал.
@@ -189,81 +185,69 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
         onSave={save}
         canSave={canSave}
       >
-        {/* Проект + все источники контекста — одним стеком Cell'ов */}
-        <Block strong inset className="!p-0 overflow-hidden">
+        <List strong inset dividers>
           {project && (
-            <Cell
-              multiline
-              before={
-                <IconContainer style={{ padding: '0 6px' }}>
+            <ListItem
+              media={
+                <span className="w-10 h-10 flex items-center justify-center shrink-0">
                   <Rocket size={34} strokeWidth={1.7} />
-                </IconContainer>
+                </span>
               }
-              description={
+              title="Проект"
+              subtitle={
                 <>
                   Отдельное пространство, где агент выполняет связанную работу,
                   хранит контекст и управляет задачами.{' '}
-                  <a
-                    href="#"
-                    onClick={(e) => {
-                      e.preventDefault()
+                  <button
+                    type="button"
+                    onClick={() => {
                       setInfoOpen(true)
                     }}
-                    className="text-[#4ea3ff]"
+                    className="text-primary"
                   >
                     Что это
-                  </a>
+                  </button>
                 </>
               }
-            >
-              Проект
-            </Cell>
+            />
           )}
 
           {!project &&
             CONCEPTS.map((c) => {
               const Icon = c.Icon
               return (
-                <div key={c.id}>
-                  <div className="border-t border-white/[.08]" />
-                  <Cell
-                    multiline
-                    before={
-                      <IconContainer style={{ padding: '0 6px' }}>
-                        <Icon size={34} strokeWidth={1.7} />
-                      </IconContainer>
-                    }
-                    description={
-                      <>
-                        {c.hint}{' '}
-                        <a
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            haptic('light')
-                            setConcept(c)
-                          }}
-                          className="text-[#4ea3ff]"
-                        >
-                          Что это
-                        </a>
-                      </>
-                    }
-                  >
-                    {c.label}
-                  </Cell>
-                </div>
+                <ListItem
+                  key={c.id}
+                  media={
+                    <span className="w-10 h-10 flex items-center justify-center shrink-0">
+                      <Icon size={34} strokeWidth={1.7} />
+                    </span>
+                  }
+                  title={c.label}
+                  subtitle={
+                    <>
+                      {c.hint}{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          haptic('light')
+                          setConcept(c)
+                        }}
+                        className="text-primary"
+                      >
+                        Что это
+                      </button>
+                    </>
+                  }
+                />
               )
             })}
 
-          <div className="border-t border-white/[.08]" />
-          <label className="flex items-center px-4 py-3 cursor-pointer">
-            <span className="flex-1 text-black dark:text-white text-[17px]">
-              Профессиональный режим
-            </span>
-            <Toggle checked={pro} onChange={togglePro} />
-          </label>
-        </Block>
+          <ListItem
+            title="Профессиональный режим"
+            after={<Toggle checked={pro} onChange={togglePro} />}
+          />
+        </List>
         <BlockFooter inset className="!text-[13px]">
           В проф-режиме сам выберешь тип, цвет и подключишь репозиторий —
           обычно этим занимается агент.
@@ -293,7 +277,11 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
                   <ListItem
                     key={s.id}
                     onClick={() => setEditSource(s.id)}
-                    media={<IconContainer>{s.renderColored()}</IconContainer>}
+                    media={
+                      <span className="w-10 h-10 flex items-center justify-center shrink-0">
+                        {s.renderColored()}
+                      </span>
+                    }
                     title={s.label}
                     subtitle={
                       <span className="text-black/55 dark:text-white/45">{s.hint}</span>
@@ -337,7 +325,7 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
                         className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
                           active
                             ? 'bg-[#2a8bff] text-white'
-                            : 'bg-white/10 text-white'
+                            : 'bg-black/[.06] text-black/70 dark:bg-white/10 dark:text-white'
                         }`}
                       >
                         <Icon size={18} />
@@ -369,7 +357,7 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
                 title="Цвет"
                 after={
                   <span
-                    className="w-6 h-6 rounded-full border border-white/10"
+                    className="w-6 h-6 rounded-full border border-black/10 dark:border-white/10"
                     style={{ background: color }}
                   />
                 }
@@ -479,4 +467,3 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
     </>
   )
 }
-
