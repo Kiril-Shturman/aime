@@ -13,6 +13,7 @@ import {
 import Sheet from '../components/Sheet'
 import { Avatar } from '../components/Avatar'
 import MemberConnect from '../components/MemberConnect'
+import BotConnect from '../components/BotConnect'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
@@ -93,7 +94,11 @@ export default function MemberInfoSheet({
         </div>
       </Block>
 
-      <MemberConnect member={member} />
+      {kind === 'bot' ? (
+        <BotConnect projectId={projectId} member={member} />
+      ) : (
+        <MemberConnect member={member} />
+      )}
 
       <BlockTitle>Кто это</BlockTitle>
       <Block>

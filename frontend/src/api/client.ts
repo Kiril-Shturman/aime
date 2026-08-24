@@ -1,6 +1,7 @@
 import type {
   Access,
   Assistant,
+  BotLink,
   Member,
   Project,
   QuickReply,
@@ -78,6 +79,22 @@ export const api = {
     }),
   deleteMember: (pid: string, mid: string) =>
     request<void>(`/api/project/${pid}/member/${mid}`, { method: 'DELETE' }),
+
+  // ref — ссылка t.me/бот или токен от BotFather; токен остаётся на сервере
+  connectBot: (pid: string, mid: string, ref: string) =>
+    request<{ member: Member; bot: BotLink | null; hint?: string }>(
+      `/api/project/${pid}/member/${mid}/bot`,
+      { method: 'POST', json: { ref } },
+    ),
+  disconnectBot: (pid: string, mid: string) =>
+    request<{ bot: null }>(`/api/project/${pid}/member/${mid}/bot`, {
+      method: 'DELETE',
+    }),
+  callBot: (mid: string, method: string, params?: Record<string, unknown>) =>
+    request<{ result: unknown }>(`/api/bot/${mid}/call`, {
+      method: 'POST',
+      json: { method, params },
+    }),
 
   addStage: (pid: string, s: Partial<Stage>) =>
     request<Stage>(`/api/project/${pid}/stage`, { method: 'POST', json: s }),
