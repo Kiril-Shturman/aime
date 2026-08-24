@@ -203,7 +203,7 @@ export default function HomePage() {
           const letter =
             (user?.first_name || 'Г').trim().charAt(0).toUpperCase() || '?'
           return (
-            <KLink navbar iconOnly onClick={() => nav('/profile')}>
+            <KLink iconOnly onClick={() => nav('/profile')}>
               {user?.photo_url ? (
                 <img
                   src={user.photo_url}
