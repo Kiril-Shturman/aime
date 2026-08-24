@@ -301,7 +301,11 @@ export default function ProjectPage() {
       {project.type !== 'process' && project.roadmap.length > 0 && (
         <>
           <BlockTitle>Роудмап</BlockTitle>
-          <List strong inset>
+          <List
+            strong
+            inset
+            className="[--k-hairline-color:rgba(0,0,0,0.08)] dark:[--k-hairline-color:rgba(255,255,255,0.08)]"
+          >
             {project.roadmap.map((st) => (
               <ListItem
                 key={st.id}
