@@ -27,7 +27,15 @@ export default function Popup({
   }, [open])
 
   return (
-    <KPopup opened={open} onBackdropClick={onClose}>
+    <KPopup
+      opened={open}
+      onBackdropClick={onClose}
+      // Konsta по умолчанию рисует поповер квадратом 640×640 на md+.
+      // Для форм с большим количеством секций это тесно — расширяем.
+      // Плюс: фон белый по дефолту, при overscroll сверху видно белую полоску
+      // над серой Page — прибиваем фон к тому же серому (ios-light-surface).
+      className="md:!w-[880px] md:!h-[90vh] md:!max-h-[900px] !bg-ios-light-surface dark:!bg-ios-dark-surface"
+    >
       <Page className={pageClassName}>
         <Navbar
           title={title}

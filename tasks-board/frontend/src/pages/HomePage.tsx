@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   CalendarDays,
@@ -121,6 +121,17 @@ export default function HomePage() {
 
   const [q, setQ] = useState('')
   const [searchOn, setSearchOn] = useState(false)
+  const searchInputRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!searchOn) return
+    // Konsta Searchbar рендерит <input> внутри своей обёртки; ищем его после
+    // окончания анимации разворота, иначе iOS не открывает клавиатуру.
+    const timer = window.setTimeout(() => {
+      searchInputRef.current?.querySelector('input')?.focus()
+    }, 320)
+    return () => window.clearTimeout(timer)
+  }, [searchOn])
 
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBtnRef = useRef<HTMLAnchorElement>(null)
@@ -245,30 +256,30 @@ export default function HomePage() {
         }
       />
 
-      {/* Поиск-оверлей: разворачивается из иконки поиска (правый верх)
-          и опускается сверху. Плавная iOS-подобная кривая. */}
+      {/* F7 Searchbar Expandable: выезжает из-под иконки справа налево через
+          весь navbar. Клип по правому краю, чтобы полоса вылезала оттуда же,
+          где стоит иконка. */}
       <div
-        className={`fixed top-0 left-0 right-0 z-[100] origin-top-right
-                   transition-all duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)]
-                   ${
-                     searchOn
-                       ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
-                       : 'opacity-0 -translate-y-2 scale-95 pointer-events-none'
-                   }`}
+        ref={searchInputRef}
+        className={`fixed inset-x-0 top-0 z-[100] bg-white pt-[max(16px,env(safe-area-inset-top))] px-4 pb-2 dark:bg-black
+                    transition-[clip-path] duration-[350ms] ease-[cubic-bezier(0.22,1,0.36,1)]
+                    ${
+                      searchOn
+                        ? '[clip-path:inset(0_0_0_0)] pointer-events-auto'
+                        : '[clip-path:inset(0_0_0_100%)] pointer-events-none'
+                    }`}
       >
-        <div className="bg-white dark:bg-black pt-[max(16px,env(safe-area-inset-top))] px-4 pb-2">
-          <Searchbar
-            value={q}
-            onInput={(e) => setQ((e.target as HTMLInputElement).value)}
-            onClear={() => setQ('')}
-            disableButton
-            onDisable={() => {
-              setSearchOn(false)
-              setQ('')
-            }}
-            placeholder="Поиск по задачам"
-          />
-        </div>
+        <Searchbar
+          value={q}
+          onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+          onClear={() => setQ('')}
+          disableButton
+          onDisable={() => {
+            setSearchOn(false)
+            setQ('')
+          }}
+          placeholder="Поиск по задачам"
+        />
       </div>
 
       {query ? (
@@ -291,7 +302,8 @@ export default function HomePage() {
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 px-4 mt-6">
+          {/* На десктопе фильтры живут в левом сайдбаре, здесь их не дублируем. */}
+          <div className="grid grid-cols-2 gap-3 px-4 mt-6 md:hidden">
             {TILES.map((t) => (
               <Tile
                 key={t.key}
@@ -304,38 +316,41 @@ export default function HomePage() {
             ))}
           </div>
 
-          <BlockTitle>Мои проекты</BlockTitle>
-          <List strong inset>
-            {state?.projects.length === 0 && (
-              <ListItem title="Пока нет проектов" />
-            )}
-            {state?.projects.map((p) => (
-              <ListItem
-                key={p.id}
-                link
-                onClick={() => nav(`/project/${p.id}`)}
-                title={p.name}
-                subtitle={
-                  p.members.length > 0
-                    ? p.members.map((m) => m.role ?? m.name).join(' · ')
-                    : undefined
-                }
-                after={String(openTasksProjectCount.get(p.id) ?? 0)}
-                media={
-                  p.members.length > 0 ? (
-                    <Avatar member={p.members[0]} color={p.color} />
-                  ) : (
-                    <span
-                      className="flex items-center justify-center w-8 h-8 rounded-full text-white shrink-0"
-                      style={{ background: p.color ?? '#2a8bff' }}
-                    >
-                      <Folder size={16} />
-                    </span>
-                  )
-                }
-              />
-            ))}
-          </List>
+          {/* Проекты на десктопе дублировать не надо — они в сайдбаре слева. */}
+          <div className="md:hidden">
+            <BlockTitle>Мои проекты</BlockTitle>
+            <List strong inset>
+              {state?.projects.length === 0 && (
+                <ListItem title="Пока нет проектов" />
+              )}
+              {state?.projects.map((p) => (
+                <ListItem
+                  key={p.id}
+                  link
+                  onClick={() => nav(`/project/${p.id}`)}
+                  title={p.name}
+                  subtitle={
+                    p.members.length > 0
+                      ? p.members.map((m) => m.role ?? m.name).join(' · ')
+                      : undefined
+                  }
+                  after={String(openTasksProjectCount.get(p.id) ?? 0)}
+                  media={
+                    p.members.length > 0 ? (
+                      <Avatar member={p.members[0]} color={p.color} />
+                    ) : (
+                      <span
+                        className="flex items-center justify-center w-8 h-8 rounded-full text-white shrink-0"
+                        style={{ background: p.color ?? '#2a8bff' }}
+                      >
+                        <Folder size={16} />
+                      </span>
+                    )
+                  }
+                />
+              ))}
+            </List>
+          </div>
         </>
       )}
 

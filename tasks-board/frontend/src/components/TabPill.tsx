@@ -52,7 +52,7 @@ function ProfileIcon({ className = '' }: { className?: string }) {
   )
 }
 
-export default function TabPill() {
+export default function TabPill({ className = '' }: { className?: string }) {
   const nav = useNavigate()
   const { pathname } = useLocation()
 
@@ -73,8 +73,8 @@ export default function TabPill() {
       icons
       // Konsta кладёт снизу safe-area плюс целый rem — с ним под панелью
       // зияет дыра, без него она липнет к краю. Вырез и двенадцать пикселей.
-      className="!fixed !left-0 !right-0 !bottom-0 !w-full z-30
-                 !pb-[calc(env(safe-area-inset-bottom)+12px)]"
+      className={`!fixed !left-0 !right-0 !bottom-0 !w-full z-30
+                 !pb-[calc(env(safe-area-inset-bottom)+12px)] ${className}`}
     >
       <ToolbarPane>
         <TabbarLink

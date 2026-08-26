@@ -1,13 +1,22 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router-dom'
 import { App as KonstaApp } from 'konsta/react'
 import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
 import FilterPage from './pages/FilterPage'
 import ProfilePage from './pages/ProfilePage'
 import GeneratePage from './pages/GeneratePage'
+import HistoryPage from './pages/HistoryPage'
 import ChatPage from './pages/ChatPage'
+import LoginPage from './pages/LoginPage'
+import RegisterPage from './pages/RegisterPage'
 import TabPill from './components/TabPill'
+import DesktopSidebar from './components/DesktopSidebar'
 import { AppStoreProvider, useApp } from './store/AppStore'
 import { ThemeProvider, useTheme } from './store/ThemeStore'
 import { applyTgTheme, initTelegram } from './lib/telegram'
@@ -36,11 +45,11 @@ function Themed() {
   return (
     <KonstaApp theme="ios" dark={dark}>
       <AppStoreProvider>
-        <Gate>
-          <BrowserRouter>
+        <BrowserRouter>
+          <Gate>
             <AppRoutes />
-          </BrowserRouter>
-        </Gate>
+          </Gate>
+        </BrowserRouter>
       </AppStoreProvider>
     </KonstaApp>
   )
@@ -53,27 +62,40 @@ function AppRoutes() {
     pathname === '/generate' ||
     pathname === '/profile' ||
     pathname.startsWith('/project/')
+  // На страницах авторизации сайдбар не рисуем — там своя вёрстка на всю ширину.
+  const withSidebar = !PUBLIC_PATHS.some((p) => pathname.startsWith(p))
 
   return (
-    <>
-      <Routes>
-        <Route path="/" element={<HomePage />} />
-        <Route path="/project/:id" element={<ProjectPage />} />
-        <Route path="/filter/:kind" element={<FilterPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/generate" element={<GeneratePage />} />
-        <Route path="/chat/:id" element={<ChatPage />} />
-      </Routes>
-      {hasTabPill && <TabPill />}
-    </>
+    <div className="flex h-full w-full">
+      {withSidebar && <DesktopSidebar />}
+      <div className="flex-1 min-w-0 relative">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/project/:id" element={<ProjectPage />} />
+          <Route path="/filter/:kind" element={<FilterPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/generate" element={<GeneratePage />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/chat/:provider" element={<ChatPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+        </Routes>
+        {hasTabPill && <TabPill className="md:hidden" />}
+      </div>
+    </div>
   )
 }
+
+// Публичные страницы: авторизация и правовые — их гейт не закрывает.
+const PUBLIC_PATHS = ['/login', '/register', '/terms', '/privacy']
 
 // Доска закрыта ключом. Из Телеграма подпись приходит сама, в браузере
 // ключ передаётся один раз: адрес?key=…
 function Gate({ children }: { children: React.ReactNode }) {
   const { denied } = useApp()
-  if (!denied) return <>{children}</>
+  const { pathname } = useLocation()
+  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+  if (!denied || isPublic) return <>{children}</>
   return (
     <div className="h-full flex items-center justify-center px-8 text-center">
       <div>

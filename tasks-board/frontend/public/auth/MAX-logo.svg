@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" fill="none" role="img" aria-label="MAX">
+  <defs>
+    <linearGradient id="maxLogoGradient" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#34AAFF"/>
+      <stop offset="1" stop-color="#007AFF"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#maxLogoGradient)"/>
+  <path d="M18 44V20h6.2l7.8 12.2L39.8 20H46v24h-6.4V31.1L33 41.2h-2l-6.6-10.1V44H18z" fill="#FFFFFF"/>
+</svg>
