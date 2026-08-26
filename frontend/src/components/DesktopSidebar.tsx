@@ -11,6 +11,7 @@ import {
   Calendar,
   CalendarDays,
   Check,
+  ChevronDown,
   Flag,
   Folder,
   History,
@@ -71,6 +72,15 @@ export default function DesktopSidebar() {
   const user = getUser()
   const [q, setQ] = useState('')
   const [newProject, setNewProject] = useState(false)
+  const [projectsCollapsed, setProjectsCollapsed] = useState<boolean>(
+    () => localStorage.getItem('sidebar-projects-collapsed') === '1',
+  )
+  useEffect(() => {
+    localStorage.setItem(
+      'sidebar-projects-collapsed',
+      projectsCollapsed ? '1' : '0',
+    )
+  }, [projectsCollapsed])
 
   const counts: Counts = state?.counts ?? {
     today: 0,
@@ -240,10 +250,36 @@ export default function DesktopSidebar() {
           </span>
         </button>
 
-        <div className="mt-4 px-1 pb-1 text-[12px] text-black/50 dark:text-white/45">
-          Мои проекты
+        {/* Заголовок «Мои проекты» с наведением: стрелка сворачивает
+            список, плюсик открывает форму нового проекта. */}
+        <div className="group mt-4 pr-1 flex items-center h-7">
+          <button
+            type="button"
+            onClick={() => setProjectsCollapsed((v) => !v)}
+            className="flex-1 min-w-0 flex items-center gap-1 pl-1 pr-2 h-7 rounded-md text-left text-[12px] text-black/50 dark:text-white/45 hover:text-black dark:hover:text-white hover:bg-black/[.05] dark:hover:bg-white/[.06] transition"
+          >
+            <ChevronDown
+              size={12}
+              className={`shrink-0 transition-transform ${
+                projectsCollapsed ? '-rotate-90' : ''
+              }`}
+            />
+            <span className="flex-1 truncate">Мои проекты</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setNewProject(true)}
+            aria-label="Новый проект"
+            className="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity w-6 h-6 rounded-md flex items-center justify-center text-black/60 dark:text-white/55 hover:text-[#2a8bff] hover:bg-black/[.05] dark:hover:bg-white/[.06]"
+          >
+            <Plus size={14} />
+          </button>
         </div>
-        <div className="flex flex-col">
+        <div
+          className={`flex flex-col overflow-hidden transition-[max-height] duration-200 ${
+            projectsCollapsed ? 'max-h-0' : 'max-h-[9999px]'
+          }`}
+        >
           {projects.length === 0 && (
             <div className="px-3 py-2 text-[13px] text-black/45 dark:text-white/40">
               Пока нет
@@ -282,18 +318,6 @@ export default function DesktopSidebar() {
         )}
       </div>
 
-      {inToday && (
-        <div className="px-3 pt-1 pb-2">
-          <button
-            type="button"
-            onClick={() => setNewProject(true)}
-            className="w-full h-9 flex items-center gap-2 px-2 rounded-lg text-[14px] text-[#2a8bff] active:bg-black/[.05] dark:active:bg-white/[.06]"
-          >
-            <Plus size={16} />
-            <span>Новый проект</span>
-          </button>
-        </div>
-      )}
 
       <button
         type="button"
