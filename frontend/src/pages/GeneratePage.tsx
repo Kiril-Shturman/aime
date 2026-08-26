@@ -435,7 +435,9 @@ function RankedRow({
   )
 }
 
-function AICard({ item, onClick }: { item: Provider; onClick: () => void }) {
+// плитка нейросети: пока не вставлена в раскладку, но пусть живёт —
+// экспорт нужен, чтобы tsc не ругался на неиспользуемое имя
+export function AICard({ item, onClick }: { item: Provider; onClick: () => void }) {
   const letter = item.name.trim().charAt(0).toUpperCase() || '?'
   return (
     <button
