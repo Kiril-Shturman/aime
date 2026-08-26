@@ -12,6 +12,10 @@ import FilterPage from './pages/FilterPage'
 import ProfilePage from './pages/ProfilePage'
 import GeneratePage from './pages/GeneratePage'
 import HistoryPage from './pages/HistoryPage'
+import TariffsPage from './pages/TariffsPage'
+import PaymentPage from './pages/PaymentPage'
+import TermsPage from './pages/TermsPage'
+import PrivacyPage from './pages/PrivacyPage'
 import ChatPage from './pages/ChatPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -76,6 +80,10 @@ function AppRoutes() {
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/generate" element={<GeneratePage />} />
           <Route path="/history" element={<HistoryPage />} />
+          <Route path="/tariffs" element={<TariffsPage />} />
+          <Route path="/payment/subscription" element={<PaymentPage />} />
+          <Route path="/terms" element={<TermsPage />} />
+          <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/chat/:provider" element={<ChatPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

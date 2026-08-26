@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Folder, Plus, Trash2 } from 'lucide-react'
+import { ChevronRight, Folder, Plus, Sparkles, Trash2 } from 'lucide-react'
 import {
   Block,
   BlockTitle,
@@ -150,6 +150,38 @@ export default function ProfilePage() {
           <Stat value={stats.doing} label="сейчас" accent="#4ea3ff" />
           <Stat value={stats.done} label="закрыто" />
         </div>
+      </Block>
+
+      <BlockTitle>Подписка</BlockTitle>
+      <Block>
+        <button
+          type="button"
+          onClick={() => {
+            haptic('light')
+            navigate('/tariffs')
+          }}
+          className="w-full text-left rounded-3xl px-4 py-4 flex items-center gap-3 text-white active:scale-[.99] transition-transform"
+          style={{
+            background:
+              'linear-gradient(135deg,#4ea3ff 0%,#2a8bff 50%,#a855f7 100%)',
+          }}
+        >
+          <span className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center shrink-0">
+            <Sparkles size={20} />
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[13px] opacity-85">
+              Ваш тариф — Free
+            </span>
+            <span className="block text-[17px] font-semibold leading-tight">
+              Выбрать подписку
+            </span>
+            <span className="block text-[12px] opacity-80 mt-0.5">
+              Модели GPT-4, Claude, Gemini и генерация картинок
+            </span>
+          </span>
+          <ChevronRight size={20} className="opacity-90 shrink-0" />
+        </button>
       </Block>
 
       {projects.length > 0 && (
