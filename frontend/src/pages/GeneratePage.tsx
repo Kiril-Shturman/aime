@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bookmark,
   Download,
@@ -10,10 +10,11 @@ import {
   Settings,
   Sun,
 } from 'lucide-react'
-import { Link as KLink, Navbar, Page } from 'konsta/react'
+import { Link as KLink, Navbar, Page, Searchbar } from 'konsta/react'
 import Menu, { type MenuItem } from '../components/Menu'
 import { getUser, haptic } from '../lib/telegram'
 import { useTheme } from '../store/ThemeStore'
+import { CHAT_PROVIDERS } from '../lib/providers'
 
 // Каталог AI-сервисов по типам генерации. Дизайн взят из ai-webapi
 // (страница «Поиск»): четыре категории горизонтальными лентами,
@@ -43,9 +44,10 @@ interface ChatHistoryItem {
 }
 
 // Заглушки истории чатов — позже сюда прилетят реальные данные из API.
+// id = provider slug из lib/providers.ts (для навигации в /chat/:provider).
 const CHAT_HISTORY: ChatHistoryItem[] = [
   {
-    id: '1',
+    id: 'chatgpt',
     provider: 'ChatGPT',
     title: 'ChatGPT',
     preview: 'Помоги написать письмо клиенту про перенос сроков…',
@@ -53,7 +55,7 @@ const CHAT_HISTORY: ChatHistoryItem[] = [
     avatar: '/providers/gpt.png',
   },
   {
-    id: '2',
+    id: 'claude',
     provider: 'Claude',
     title: 'Claude',
     preview: 'Разбор ТЗ на посадочную страницу',
@@ -61,12 +63,12 @@ const CHAT_HISTORY: ChatHistoryItem[] = [
     avatar: '/providers/claude.png',
   },
   {
-    id: '3',
-    provider: 'Midjourney',
-    title: 'Midjourney',
-    preview: 'Постер к концерту — тёмный акварельный стиль',
+    id: 'gemini',
+    provider: 'Gemini',
+    title: 'Gemini',
+    preview: 'Собери мне таблицу по спринтам за неделю',
     time: '3 д',
-    avatar: '/providers/midjourney.png',
+    avatar: '/providers/gemini.png',
   },
 ]
 
@@ -74,19 +76,13 @@ const CATEGORIES: Category[] = [
   {
     id: 'text',
     title: 'Текст',
-    items: [
-      { id: 'chatgpt', name: 'ChatGPT', avatar: `${P}/gpt.png` },
-      { id: 'claude', name: 'Claude', avatar: `${P}/claude.png` },
-      { id: 'gemini', name: 'Gemini', avatar: `${P}/gemini.png` },
-      { id: 'grok', name: 'Grok', avatar: `${P}/grok.png` },
-      { id: 'deepseek', name: 'Deepseek', avatar: `${P}/deepseek.png` },
-      { id: 'perplexity', name: 'Perplexity', avatar: `${P}/perplexity.png` },
-      { id: 'qwen', name: 'Qwen', avatar: `${P}/qwen.png` },
-      { id: 'nvidia', name: 'NVIDIA', avatar: `${P}/nvidea.png` },
-      { id: 'meta', name: 'Meta AI', avatar: `${P}/metaai.png` },
-      { id: 'nous', name: 'Nous', avatar: `${P}/nous.png` },
-      { id: 'baidu', name: 'Baidu', avatar: `${P}/baidu.png` },
-    ],
+    // Реестр в src/lib/providers.ts — единый источник правды.
+    // avatar null → плитка с буквой (рисует ProviderTile).
+    items: CHAT_PROVIDERS.map((p) => ({
+      id: p.slug,
+      name: p.name,
+      avatar: p.avatar ?? '',
+    })),
   },
   {
     id: 'image',
@@ -119,17 +115,24 @@ const CATEGORIES: Category[] = [
 ]
 
 function ProviderTile({ item, onClick }: { item: Provider; onClick: () => void }) {
+  const letter = item.name.trim().charAt(0).toUpperCase() || '?'
   return (
     <button
       type="button"
       onClick={onClick}
       className="flex flex-col items-center gap-2 w-[80px] shrink-0 active:opacity-70"
     >
-      <img
-        src={item.avatar}
-        alt=""
-        className="w-16 h-16 rounded-[20px] object-cover bg-black/5 dark:bg-white/10 shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none"
-      />
+      {item.avatar ? (
+        <img
+          src={item.avatar}
+          alt=""
+          className="w-16 h-16 rounded-[20px] object-cover bg-black/5 dark:bg-white/10 shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none"
+        />
+      ) : (
+        <span className="w-16 h-16 rounded-[20px] bg-[#2a8bff]/85 text-white text-[24px] font-semibold flex items-center justify-center shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none">
+          {letter}
+        </span>
+      )}
       <span className="text-[13px] font-semibold text-black dark:text-white text-center leading-tight truncate w-full">
         {item.name}
       </span>
@@ -146,6 +149,29 @@ export default function GeneratePage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBtnRef = useRef<HTMLAnchorElement>(null)
 
+  const [q, setQ] = useState('')
+  const [searchOn, setSearchOn] = useState(false)
+  const searchInputRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!searchOn) return
+    const timer = window.setTimeout(() => {
+      searchInputRef.current?.querySelector('input')?.focus()
+    }, 320)
+    return () => window.clearTimeout(timer)
+  }, [searchOn])
+
+  const query = q.trim().toLowerCase()
+  const searchHits = useMemo(() => {
+    if (!query) return []
+    const hits: { cat: string; item: Provider }[] = []
+    for (const cat of CATEGORIES)
+      for (const item of cat.items)
+        if (item.name.toLowerCase().includes(query))
+          hits.push({ cat: cat.title, item })
+    return hits
+  }, [query])
+
   const menuItems: MenuItem[] = [
     { label: 'Загрузки', icon: Download, onSelect: () => haptic('light') },
     { label: 'Избранное', icon: Bookmark, onSelect: () => haptic('light') },
@@ -157,9 +183,16 @@ export default function GeneratePage() {
     : 'Гость'
   const letter = fullName.trim().charAt(0).toUpperCase() || '?'
 
+  const CHAT_SLUGS = new Set(CHAT_PROVIDERS.map((p) => p.slug))
+
   const pick = (id: string) => {
     haptic('light')
-    // TODO: открыть подробную страницу провайдера
+    // Тайлы из категории «Текст» — это чат-провайдеры (id = slug),
+    // ведут прямо в /chat/:provider. Image/video/audio пока без страницы.
+    if (CHAT_SLUGS.has(id)) {
+      nav(`/chat/${id}`)
+      return
+    }
     console.log('provider', id)
   }
 
@@ -169,7 +202,7 @@ export default function GeneratePage() {
         title="Генерация"
         right={
           <>
-            <KLink iconOnly onClick={() => haptic('light')}>
+            <KLink iconOnly onClick={() => setSearchOn(true)}>
               <Search size={22} />
             </KLink>
             <KLink iconOnly onClick={() => haptic('light')}>
@@ -185,6 +218,30 @@ export default function GeneratePage() {
           </>
         }
       />
+
+      {/* F7 Searchbar Expandable: выезжает справа налево через весь navbar */}
+      <div
+        ref={searchInputRef}
+        className={`fixed inset-x-0 top-0 z-[100] bg-white pt-[max(16px,env(safe-area-inset-top))] px-4 pb-2 dark:bg-black
+                    transition-[clip-path] duration-[350ms] ease-[cubic-bezier(0.22,1,0.36,1)]
+                    ${
+                      searchOn
+                        ? '[clip-path:inset(0_0_0_0)] pointer-events-auto'
+                        : '[clip-path:inset(0_0_0_100%)] pointer-events-none'
+                    }`}
+      >
+        <Searchbar
+          value={q}
+          onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+          onClear={() => setQ('')}
+          disableButton
+          onDisable={() => {
+            setSearchOn(false)
+            setQ('')
+          }}
+          placeholder="Поиск по AI-сервисам"
+        />
+      </div>
 
       {/* Профиль-пилюля: аватарка, имя, план, тумблер темы */}
       <div className="mx-safe-4 mt-20 mb-3">
@@ -230,29 +287,50 @@ export default function GeneratePage() {
         </div>
       </div>
 
-      {CATEGORIES.map((cat) => (
+      {query ? (
         <div
-          key={cat.id}
           className="ml-safe-4 mr-safe-4 rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1
-                     my-3 pt-3 pb-4 pl-4"
+                     my-3 pt-3 pb-3 px-4"
         >
-          <div className="pr-4 text-[17px] font-semibold text-black dark:text-white mb-3">
-            {cat.title}
+          <div className="text-[17px] font-semibold text-black dark:text-white mb-2">
+            {searchHits.length ? `Найдено: ${searchHits.length}` : 'Ничего не нашлось'}
           </div>
-          <div
-            className="flex gap-4 overflow-x-auto pr-4
-                       [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-          >
-            {cat.items.map((it) => (
-              <ProviderTile
-                key={it.id}
-                item={it}
-                onClick={() => pick(it.id)}
-              />
+          <div className="grid grid-cols-4 gap-3">
+            {searchHits.map(({ cat, item }) => (
+              <div key={`${cat}-${item.id}`} className="flex flex-col items-center gap-1">
+                <ProviderTile item={item} onClick={() => pick(item.id)} />
+                <span className="text-[10px] text-black/45 dark:text-white/45 truncate w-full text-center">
+                  {cat}
+                </span>
+              </div>
             ))}
           </div>
         </div>
-      ))}
+      ) : (
+        CATEGORIES.map((cat) => (
+          <div
+            key={cat.id}
+            className="ml-safe-4 mr-safe-4 rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1
+                       my-3 pt-3 pb-4 pl-4"
+          >
+            <div className="pr-4 text-[17px] font-semibold text-black dark:text-white mb-3">
+              {cat.title}
+            </div>
+            <div
+              className="flex gap-4 overflow-x-auto pr-4
+                         [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            >
+              {cat.items.map((it) => (
+                <ProviderTile
+                  key={it.id}
+                  item={it}
+                  onClick={() => pick(it.id)}
+                />
+              ))}
+            </div>
+          </div>
+        ))
+      )}
 
       {/* История чатов */}
       <div

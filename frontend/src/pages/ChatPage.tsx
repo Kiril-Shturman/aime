@@ -1,17 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { ChevronDown, Paperclip } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Clock, Paperclip, Plus } from 'lucide-react'
 import {
   Link as KLink,
   Messagebar,
   Message,
   Messages,
   MessagesTitle,
-  Navbar,
-  NavbarBackLink,
   Page,
+  Popover,
   ToolbarPane,
 } from 'konsta/react'
+import {
+  CHAT_PROVIDERS,
+  findProvider,
+  type ChatProvider,
+  type ProviderModel,
+} from '../lib/providers'
+import { sendMessage, type OutgoingMessage } from '../lib/chatClient'
 
 interface ChatMsg {
   type: 'sent' | 'received'
@@ -20,184 +26,302 @@ interface ChatMsg {
   avatar?: string
 }
 
-interface Model {
-  id: string
-  name: string
-  desc: string
-  free?: boolean
-}
-
-interface Seed {
-  title: string
-  avatar: string
-  models: Model[]
-  messages: ChatMsg[]
-}
-
-const SEED: Record<string, Seed> = {
-  '1': {
-    title: 'ChatGPT',
-    avatar: '/providers/gpt.png',
-    models: [
-      { id: 'gpt-4o', name: 'GPT-4o', desc: 'Быстрая и универсальная' },
-      { id: 'gpt-4', name: 'GPT-4', desc: 'Точная, чуть медленнее' },
-      { id: 'gpt-3.5', name: 'GPT-3.5', desc: 'Дешёвая и простая', free: true },
-    ],
-    messages: [
-      { type: 'sent', text: 'Помоги написать письмо клиенту про перенос сроков' },
-      {
-        type: 'received',
-        name: 'ChatGPT',
-        avatar: '/providers/gpt.png',
-        text: 'Конечно. Уточним контекст: кому именно, что за проект и на какие новые сроки переносим?',
-      },
-      { type: 'sent', text: 'Иван, релиз API. Было 25.08, теперь 05.09.' },
-    ],
-  },
-  '2': {
-    title: 'Claude',
-    avatar: '/providers/claude.png',
-    models: [
-      { id: 'sonnet-3.5', name: 'Claude 3.5 Sonnet', desc: 'Основная модель' },
-      { id: 'haiku', name: 'Claude 3.5 Haiku', desc: 'Быстрая', free: true },
-      { id: 'opus', name: 'Claude 3 Opus', desc: 'Самая умная' },
-    ],
-    messages: [
-      { type: 'sent', text: 'Разбери, пожалуйста, ТЗ на посадочную' },
-      {
-        type: 'received',
-        name: 'Claude',
-        avatar: '/providers/claude.png',
-        text: 'Давайте так: пришли ТЗ или ссылку, я вычленю блоки, цели, метрики и подсвечу пробелы.',
-      },
-    ],
-  },
-  '3': {
-    title: 'Midjourney',
-    avatar: '/providers/midjourney.png',
-    models: [{ id: 'v6.1', name: 'Midjourney v6.1', desc: 'Реалистичные картинки' }],
-    messages: [
-      { type: 'sent', text: 'Постер к концерту — тёмный акварельный стиль' },
-      {
-        type: 'received',
-        name: 'Midjourney',
-        avatar: '/providers/midjourney.png',
-        text: 'Ок. Сформулируй сцену: город, инструмент, толпа? Дай ключевые референсы.',
-      },
-    ],
-  },
-}
-
-// Верхний блок выбора модели: строка «Модель · описание · шеврон»,
-// по тапу раскрывается список. Пришло из ai-webapi (simple-header).
-function ModelSelector({
-  models,
-  selected,
-  onSelect,
+// Плашка с аватаркой провайдера. Если картинки нет — цветной кружок с буквой.
+function ProviderAvatar({
+  provider,
+  size,
 }: {
-  models: Model[]
-  selected: Model
-  onSelect: (m: Model) => void
+  provider: ChatProvider
+  size: number
 }) {
-  const [open, setOpen] = useState(false)
+  if (provider.avatar) {
+    return (
+      <img
+        alt=""
+        src={provider.avatar}
+        className="rounded-full object-cover"
+        style={{ width: size, height: size }}
+      />
+    )
+  }
+  const letter = provider.name.trim().charAt(0).toUpperCase() || '?'
   return (
-    <div className="mx-safe-4 my-3 rounded-2xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 overflow-hidden">
-      <button
-        type="button"
-        onClick={() => models.length > 1 && setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left"
-      >
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-[15px] font-semibold text-black dark:text-white truncate">
-              {selected.name}
-            </span>
-            {selected.free && (
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#30d158]/20 text-[#30d158]">
-                FREE
-              </span>
-            )}
+    <span
+      className="flex shrink-0 items-center justify-center rounded-full font-semibold text-white"
+      style={{
+        width: size,
+        height: size,
+        background: provider.color,
+        fontSize: Math.round(size * 0.45),
+      }}
+    >
+      {letter}
+    </span>
+  )
+}
+
+// Стекло из дизайн-системы Konsta (те же токены, что у k-Navbar иконок):
+// bg-ios-light-glass + shadow-ios-light-glass + backdrop-blur-lg + k-glass.
+// Форма — rounded-full, фиксированная высота 44px (iOS-стандарт).
+const PILL =
+  'inline-flex items-center h-11 rounded-full transform-gpu ' +
+  'bg-ios-light-glass shadow-ios-light-glass backdrop-blur-lg k-glass ' +
+  'dark:bg-ios-dark-glass dark:shadow-ios-dark-glass touch-none'
+
+// Шапка чата: три стеклянные пилюли (левая — back+аватар, центральная —
+// провайдер/модель + выпадашка с моделями, правая — история + новый чат).
+// Прибита фиксировано к верху окна поверх сообщений; для контента добавляем
+// верхний паддинг ~72px.
+function ChatHeader({
+  provider,
+  model,
+  models,
+  onSelectModel,
+  onSelectProvider,
+  onBack,
+}: {
+  provider: ChatProvider
+  model: ProviderModel
+  models: ProviderModel[]
+  onSelectModel: (m: ProviderModel) => void
+  onSelectProvider: (p: ChatProvider) => void
+  onBack: () => void
+}) {
+  const [modelsOpen, setModelsOpen] = useState(false)
+  const [aboutOpen, setAboutOpen] = useState(false)
+  const modelBtnRef = useRef<HTMLButtonElement | null>(null)
+  const avatarBtnRef = useRef<HTMLButtonElement | null>(null)
+
+  return (
+    <>
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-50 pt-[max(8px,env(safe-area-inset-top))] md:left-[var(--sidebar-width,18rem)]">
+        <div className="pointer-events-auto mx-auto flex max-w-[1000px] items-center gap-2 px-3">
+          {/* левая пилюля: назад + новый чат */}
+          <div className={`${PILL} shrink-0 justify-center text-black dark:text-white`}>
+            <KLink
+              iconOnly
+              onClick={onBack}
+              aria-label="Назад"
+              className="aspect-square h-full max-h-11 !text-black dark:!text-white"
+            >
+              <ChevronLeft size={20} strokeWidth={2.5} />
+            </KLink>
+            <KLink
+              iconOnly
+              onClick={() => {}}
+              aria-label="Новый чат"
+              className="aspect-square h-full max-h-11 !text-black dark:!text-white"
+            >
+              <Plus size={20} strokeWidth={2.5} />
+            </KLink>
           </div>
-          <div className="text-[12px] text-black/50 dark:text-white/45 truncate mt-0.5">
-            {selected.desc}
+
+          {/* центральная пилюля — provider + model, клик открывает Popover */}
+          <button
+            ref={modelBtnRef}
+            type="button"
+            onClick={() => models.length > 1 && setModelsOpen(true)}
+            className={`${PILL} flex-1 min-w-0 flex-col items-center justify-center px-5 py-1.5 text-black dark:text-white`}
+          >
+            <span className="max-w-full truncate text-[13px] font-normal leading-tight opacity-70">
+              {provider.name}
+            </span>
+            <span className="flex max-w-full items-center gap-1.5">
+              <span className="truncate text-[16px] font-semibold leading-tight">
+                {model.name}
+              </span>
+              {model.free && (
+                <span className="rounded-md bg-[#30d158]/20 px-1.5 py-0.5 text-[10px] font-bold text-[#30d158]">
+                  FREE
+                </span>
+              )}
+              {models.length > 1 && (
+                <ChevronDown
+                  size={14}
+                  className={`shrink-0 opacity-70 transition-transform ${modelsOpen ? 'rotate-180' : ''}`}
+                />
+              )}
+            </span>
+          </button>
+
+          {/* правая пилюля: история + аватарка провайдера (клик = About-попап) */}
+          <div className={`${PILL} shrink-0 justify-center pr-1.5 text-black dark:text-white`}>
+            <KLink
+              iconOnly
+              onClick={() => {}}
+              aria-label="История"
+              className="aspect-square h-full max-h-11 !text-black dark:!text-white"
+            >
+              <Clock size={20} strokeWidth={2} />
+            </KLink>
+            <button
+              ref={avatarBtnRef}
+              type="button"
+              onClick={() => setAboutOpen(true)}
+              className="ml-0.5 rounded-full active:opacity-70"
+              aria-label={`Сменить провайдера · сейчас ${provider.name}`}
+            >
+              <ProviderAvatar provider={provider} size={32} />
+            </button>
           </div>
         </div>
-        {models.length > 1 && (
-          <ChevronDown
-            size={20}
-            className={`text-black/45 dark:text-white/45 shrink-0 transition-transform ${
-              open ? 'rotate-180' : ''
-            }`}
-          />
-        )}
-      </button>
+      </div>
 
-      {open && (
-        <div className="border-t border-black/[.06] dark:border-white/[.06]">
-          {models.map((m) => {
-            const active = m.id === selected.id
+      {/* Popover со списком моделей — привязан к центральной пилюле */}
+      <Popover
+        opened={modelsOpen}
+        target={modelBtnRef.current}
+        onBackdropClick={() => setModelsOpen(false)}
+        className="!w-72 !mt-2"
+      >
+        <div className="py-1">
+          {models.map((m, i) => {
+            const active = m.id === model.id
             return (
               <button
                 key={m.id}
                 type="button"
                 onClick={() => {
-                  onSelect(m)
-                  setOpen(false)
+                  onSelectModel(m)
+                  setModelsOpen(false)
                 }}
-                className="w-full flex items-center gap-3 px-4 py-2.5 text-left active:bg-black/[.03] dark:active:bg-white/[.04]"
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/[.06] ${
+                  i > 0 ? 'border-t border-black/[.06] dark:border-white/[.06]' : ''
+                }`}
               >
-                <div className="flex-1 min-w-0">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-[15px] font-semibold text-black dark:text-white truncate">
+                    <span className="truncate text-[15px] font-semibold text-black dark:text-white">
                       {m.name}
                     </span>
                     {m.free && (
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-[#30d158]/20 text-[#30d158]">
+                      <span className="rounded-md bg-[#30d158]/20 px-1.5 py-0.5 text-[10px] font-bold text-[#30d158]">
                         FREE
                       </span>
                     )}
                   </div>
-                  <div className="text-[12px] text-black/50 dark:text-white/45 truncate mt-0.5">
+                  <div className="mt-0.5 truncate text-[12px] text-black/50 dark:text-white/45">
                     {m.desc}
                   </div>
                 </div>
                 {active && (
-                  <span className="text-[#2a8bff] text-[17px] leading-none">✓</span>
+                  <span className="text-[17px] leading-none text-[#2a8bff]">✓</span>
                 )}
               </button>
             )
           })}
         </div>
-      )}
-    </div>
+      </Popover>
+
+      {/* Popover-переключатель провайдера — весь реестр списком, с
+          активной галочкой на текущем. Клик = переход на /chat/${slug}. */}
+      <Popover
+        opened={aboutOpen}
+        target={avatarBtnRef.current}
+        onBackdropClick={() => setAboutOpen(false)}
+        className="!w-72 !mt-2"
+      >
+        <div className="max-h-[70vh] overflow-y-auto py-1">
+          {CHAT_PROVIDERS.map((p, i) => {
+            const active = p.slug === provider.slug
+            return (
+              <button
+                key={p.slug}
+                type="button"
+                onClick={() => {
+                  setAboutOpen(false)
+                  if (!active) onSelectProvider(p)
+                }}
+                // Компактнее F7-дефолтов, но с той же композицией:
+                // min-h 44px, gap 12px, avatar 32px, title 15px.
+                className={`flex w-full min-h-[44px] items-center gap-3 px-4 text-left active:bg-black/[.04] dark:active:bg-white/[.04] ${
+                  i > 0 ? 'border-t border-black/[.06] dark:border-white/[.06]' : ''
+                }`}
+              >
+                <ProviderAvatar provider={p} size={32} />
+                <span className="min-w-0 flex-1 truncate text-[15px] font-semibold text-black dark:text-white">
+                  {p.name}
+                </span>
+                {active && (
+                  <span className="shrink-0 text-[17px] leading-none text-[#2a8bff]">
+                    ✓
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
+      </Popover>
+    </>
   )
 }
 
 export default function ChatPage() {
-  const { id = '1' } = useParams()
+  const { provider: slug } = useParams<{ provider: string }>()
   const navigate = useNavigate()
-  const seed = SEED[id] ?? SEED['1']
+  const provider = findProvider(slug)
 
-  const [messages, setMessages] = useState<ChatMsg[]>(seed.messages)
+  const [messages, setMessages] = useState<ChatMsg[]>([])
   const [text, setText] = useState('')
-  const [model, setModel] = useState<Model>(seed.models[0])
+  const [model, setModel] = useState<ProviderModel | null>(
+    provider?.models[0] ?? null,
+  )
+  const [sending, setSending] = useState(false)
+
+  // При смене провайдера через URL — сброс модели на дефолт и очистка истории
+  useEffect(() => {
+    setMessages([])
+    setModel(provider?.models[0] ?? null)
+  }, [slug, provider])
 
   const pageRef = useRef<HTMLDivElement | null>(null)
-
   useEffect(() => {
     const el = pageRef.current as unknown as HTMLElement | null
     if (!el) return
     el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [messages])
 
-  const send = () => {
+  const send = async () => {
+    if (!provider || !model) return
     const trimmed = text.trim()
-    if (!trimmed) return
-    setMessages((m) => [...m, { type: 'sent', text: trimmed }])
+    if (!trimmed || sending) return
+    const nextMessages: ChatMsg[] = [
+      ...messages,
+      { type: 'sent', text: trimmed },
+    ]
+    setMessages(nextMessages)
     setText('')
+    setSending(true)
+    try {
+      const outgoing: OutgoingMessage[] = nextMessages.map((m) => ({
+        role: m.type === 'sent' ? 'user' : 'assistant',
+        content: m.text,
+      }))
+      const reply = await sendMessage(provider.slug, model.id, outgoing)
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: 'received',
+          name: provider.name,
+          text: reply,
+          avatar: provider.avatar ?? undefined,
+        },
+      ])
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: 'received',
+          name: provider.name,
+          text: `Не получилось получить ответ: ${String(error)}`,
+        },
+      ])
+    } finally {
+      setSending(false)
+    }
   }
 
-  const canSend = text.trim().length > 0
+  const canSend = !!provider && !!model && text.trim().length > 0 && !sending
 
   const nowLabel = useMemo(
     () =>
@@ -211,22 +335,44 @@ export default function ChatPage() {
     [],
   )
 
+  if (!provider) {
+    return (
+      <Page>
+        <div className="px-4 pt-safe-24 pb-6 text-black/60 dark:text-white/60">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="mb-3 text-[15px] text-[#2a8bff]"
+          >
+            ← Назад
+          </button>
+          Неизвестный провайдер «{slug}». Открой чат из каталога на странице
+          «Генерация».
+        </div>
+      </Page>
+    )
+  }
+
   return (
-    <Page
-      ref={pageRef as unknown as React.RefObject<HTMLDivElement>}
-      className="ios:bg-white ios:dark:bg-black"
-    >
-      <Navbar
-        title={seed.title}
-        left={<NavbarBackLink text="Назад" onClick={() => navigate(-1)} />}
-      />
+    <Page ref={pageRef as unknown as React.RefObject<HTMLDivElement>}>
+      {model && (
+        <ChatHeader
+          provider={provider}
+          model={model}
+          models={provider.models}
+          onSelectModel={setModel}
+          onSelectProvider={(p) => navigate(`/chat/${p.slug}`)}
+          onBack={() => navigate(-1)}
+        />
+      )}
 
-      <ModelSelector
-        models={seed.models}
-        selected={model}
-        onSelect={setModel}
-      />
+      {/* Отступ под фиксированной трёхпилюльной шапкой */}
+      <div className="h-[calc(env(safe-area-inset-top)+64px)]" />
 
+
+      {/* Konsta Messages не пробрасывает className — оборачиваем в div,
+          чтобы центрировать ленту тем же max-width, что у пилюли и ввода. */}
+      <div className="md:max-w-[1000px] md:mx-auto">
       <Messages>
         <MessagesTitle>{nowLabel}</MessagesTitle>
         {messages.map((m, i) => (
@@ -236,21 +382,26 @@ export default function ChatPage() {
             name={m.name}
             text={m.text}
             avatar={
-              m.type === 'received' && m.avatar ? (
-                <img
-                  alt=""
-                  src={m.avatar}
-                  className="w-8 h-8 rounded-full object-cover"
-                />
+              m.type === 'received' ? (
+                <ProviderAvatar provider={provider} size={32} />
               ) : undefined
             }
           />
         ))}
+        {sending && (
+          <Message
+            type="received"
+            name={provider.name}
+            text="…"
+            avatar={<ProviderAvatar provider={provider} size={32} />}
+          />
+        )}
       </Messages>
+      </div>
 
       <Messagebar
-        className="z-20 [&_textarea]:!min-h-[44px] [&_textarea]:!py-3 [&_textarea]:!text-[16px]"
-        placeholder="Сообщение"
+        className="z-20 md:!w-auto md:!left-[calc(var(--sidebar-width,18rem)+max(0px,(100vw-var(--sidebar-width,18rem)-1000px)/2))] md:!right-[max(0px,calc((100vw-var(--sidebar-width,18rem)-1000px)/2))] [&_textarea]:!min-h-[44px] [&_textarea]:!py-3 [&_textarea]:!text-[16px]"
+        placeholder={`Сообщение · ${provider.name}`}
         value={text}
         onInput={(e) => setText((e.target as HTMLInputElement).value)}
         left={
