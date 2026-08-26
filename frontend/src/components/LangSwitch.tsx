@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ReactElement } from 'react'
 import { Check, Globe } from 'lucide-react'
 import { Popover } from 'konsta/react'
 import { haptic } from '../lib/telegram'
 
 export type Lang = 'ru' | 'en'
 
-const OPTIONS: { id: Lang; label: string; flag: () => JSX.Element }[] = [
+const OPTIONS: { id: Lang; label: string; flag: () => ReactElement }[] = [
   { id: 'ru', label: 'Русский', flag: () => <RuFlag /> },
   { id: 'en', label: 'English', flag: () => <GbFlag /> },
 ]
