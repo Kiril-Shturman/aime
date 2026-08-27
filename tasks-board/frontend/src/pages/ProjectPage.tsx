@@ -315,6 +315,7 @@ export default function ProjectPage() {
         <MemberInfoSheet
           open={memberInfo != null}
           onClose={() => setMemberInfo(null)}
+          projectId={id}
           member={memberInfo}
           projectColor={project.color}
         />
