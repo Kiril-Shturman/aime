@@ -21,6 +21,7 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import TabPill from './components/TabPill'
 import DesktopSidebar from './components/DesktopSidebar'
+import CopyToast from './components/CopyToast'
 import { AppStoreProvider, useApp } from './store/AppStore'
 import { ThemeProvider, useTheme } from './store/ThemeStore'
 import { applyTgTheme, initTelegram } from './lib/telegram'
@@ -55,6 +56,7 @@ function Themed() {
           </Gate>
         </BrowserRouter>
       </AppStoreProvider>
+      <CopyToast />
     </KonstaApp>
   )
 }
