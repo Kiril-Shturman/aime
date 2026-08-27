@@ -128,7 +128,7 @@ export default function MediaPicker({
           fade+slide-in — через transform+opacity, длительность 250ms. */}
       <div
         style={{ bottom: `calc(env(safe-area-inset-bottom) + ${anchorBottom}px)` }}
-        className={`fixed z-50 left-4 right-4
+        className={`fixed z-50 left-3 right-3
                    md:left-[calc(var(--sidebar-width,18rem)+max(0px,(100vw-var(--sidebar-width,18rem)-1000px)/2))]
                    md:right-[max(0px,calc((100vw-var(--sidebar-width,18rem)-1000px)/2))]
                    transition-all duration-250 ease-out ${

@@ -10,12 +10,20 @@ import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
 import FilterPage from './pages/FilterPage'
 import ProfilePage from './pages/ProfilePage'
+import BoardSettingsPage from './pages/BoardSettingsPage'
+import ProfileEditPage from './pages/ProfileEditPage'
 import GeneratePage from './pages/GeneratePage'
 import HistoryPage from './pages/HistoryPage'
 import TariffsPage from './pages/TariffsPage'
 import PaymentPage from './pages/PaymentPage'
 import TermsPage from './pages/TermsPage'
 import PrivacyPage from './pages/PrivacyPage'
+import TransactionsPage from './pages/TransactionsPage'
+import TokenUsagePage from './pages/TokenUsagePage'
+import BalancePage from './pages/BalancePage'
+import McpKeysPage from './pages/McpKeysPage'
+import ConnectedAppsPage from './pages/ConnectedAppsPage'
+import FaqPage from './pages/FaqPage'
 import ChatPage from './pages/ChatPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -66,8 +74,7 @@ function AppRoutes() {
   const hasTabPill =
     pathname === '/' ||
     pathname === '/generate' ||
-    pathname === '/profile' ||
-    pathname.startsWith('/project/')
+    pathname === '/profile'
   // На страницах авторизации сайдбар не рисуем — там своя вёрстка на всю ширину.
   const withSidebar = !PUBLIC_PATHS.some((p) => pathname.startsWith(p))
 
@@ -80,12 +87,20 @@ function AppRoutes() {
           <Route path="/project/:id" element={<ProjectPage />} />
           <Route path="/filter/:kind" element={<FilterPage />} />
           <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/board-settings" element={<BoardSettingsPage />} />
+          <Route path="/profile/edit" element={<ProfileEditPage />} />
           <Route path="/generate" element={<GeneratePage />} />
           <Route path="/history" element={<HistoryPage />} />
           <Route path="/tariffs" element={<TariffsPage />} />
           <Route path="/payment/subscription" element={<PaymentPage />} />
           <Route path="/terms" element={<TermsPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
+          <Route path="/transactions" element={<TransactionsPage />} />
+          <Route path="/tokens" element={<TokenUsagePage />} />
+          <Route path="/balance" element={<BalancePage />} />
+          <Route path="/mcp-keys" element={<McpKeysPage />} />
+          <Route path="/connected-apps" element={<ConnectedAppsPage />} />
+          <Route path="/faq" element={<FaqPage />} />
           <Route path="/chat/:provider" element={<ChatPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />

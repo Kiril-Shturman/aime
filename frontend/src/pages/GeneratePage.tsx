@@ -450,20 +450,20 @@ function ProviderTile({ item, onClick }: { item: Provider; onClick: () => void }
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-2 w-[96px] shrink-0 active:opacity-70"
+      className="flex flex-col items-center gap-2 w-[80px] shrink-0 active:opacity-70"
     >
       {item.avatar ? (
         <img
           src={item.avatar}
           alt=""
-          className="w-16 h-16 rounded-[26px] object-cover bg-black/5 dark:bg-white/10 shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none"
+          className="w-16 h-16 rounded-[20px] object-cover bg-black/5 dark:bg-white/10 shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none"
         />
       ) : (
-        <span className="w-16 h-16 rounded-[26px] bg-[#2a8bff]/85 text-white text-[24px] font-semibold flex items-center justify-center shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none">
+        <span className="w-16 h-16 rounded-[20px] bg-[#2a8bff]/85 text-white text-[24px] font-semibold flex items-center justify-center shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none">
           {letter}
         </span>
       )}
-      <span className="text-[17px] font-semibold text-black dark:text-white text-center leading-tight truncate w-full">
+      <span className="text-[13px] font-semibold text-black dark:text-white text-center leading-tight truncate w-full">
         {item.name}
       </span>
     </button>

@@ -262,22 +262,7 @@ export default function TariffsPage() {
         }
       />
 
-      <div className="mx-auto w-full max-w-[880px]">
-        {/* Хиро */}
-        <div className="px-6 pt-6 pb-2 text-center">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/[.05] dark:bg-white/[.08] text-[12px] font-medium text-black/70 dark:text-white/70">
-            <Sparkles size={12} className="text-[#a855f7]" />
-            Один тариф — доступ ко всем AI сразу
-          </div>
-          <h1 className="mt-4 text-[32px] md:text-[42px] leading-[1.05] font-extrabold text-black dark:text-white tracking-tight">
-            Выберите подписку
-          </h1>
-          <p className="mt-3 text-black/60 dark:text-white/55 text-[15px] md:text-[16px] max-w-[560px] mx-auto">
-            GPT, Claude, Gemini, Midjourney и десяток других — по одной цене.
-            Смените модель прямо в чате, история переезжает вместе с вами.
-          </p>
-        </div>
-
+      <div className="mx-auto w-full max-w-[760px]">
         {/* «Как это работает» — в стиле ProjectSheet: без квадратов
             под иконками, иконки просто синим, разделители-хайрлайны. */}
         <BlockTitle>Как это работает</BlockTitle>

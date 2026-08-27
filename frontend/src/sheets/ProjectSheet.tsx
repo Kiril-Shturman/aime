@@ -5,6 +5,8 @@ import {
   BlockFooter,
   BlockTitle,
   Button,
+  Dialog,
+  DialogButton,
   List,
   ListInput,
   ListItem,
@@ -17,17 +19,10 @@ import { COLORS } from '../lib/constants'
 import { WORKSPACE_KINDS, workspaceKindFor } from '../lib/workspace-kinds'
 import { CONTEXT_SOURCES } from '../lib/context-sources'
 import ContextSourceSheet from './ContextSourceSheet'
-import ConceptInfoSheet from './ConceptInfoSheet'
-import ContextInfoSheet from './ContextInfoSheet'
 import { haptic } from '../lib/telegram'
 import { useApp } from '../store/AppStore'
 import type { Project } from '../api/types'
-import {
-  ModuleIcon,
-  ProjectIcon,
-  StageIcon,
-  TaskIcon,
-} from '../components/WorkItemIcons'
+import { ProjectIcon, TaskIcon } from '../components/WorkItemIcons'
 
 interface Props {
   open: boolean
@@ -43,25 +38,9 @@ export const CONCEPTS = [
     id: 'project',
     label: 'Проект',
     Icon: ProjectIcon,
-    hint: 'Вся работа над одной большой целью: от замысла до готового результата.',
+    hint: 'Пространство, где выполняется работа, хранится контекст и ставят задачи.',
     details:
-      'Проект — верхний уровень работы. Внутри него находятся модули, этапы и задачи. Здесь хранятся общая цель, команда, контекст и весь прогресс.',
-  },
-  {
-    id: 'module',
-    label: 'Модуль',
-    Icon: ModuleIcon,
-    hint: 'Крупная самостоятельная часть проекта, которую удобно развивать отдельно.',
-    details:
-      'Модуль объединяет связанные этапы и задачи по одному направлению. Например, в приложении это могут быть «Авторизация», «Оплата» или «Аналитика».',
-  },
-  {
-    id: 'stage',
-    label: 'Этап',
-    Icon: StageIcon,
-    hint: 'Понятный отрезок пути с собственным результатом и сроком.',
-    details:
-      'Этап показывает, что должно быть достигнуто следующим. Он объединяет задачи в логическую часть плана и помогает видеть движение проекта по порядку.',
+      'Проект — верхний уровень работы. Внутри него — задачи, общая цель, команда, контекст и весь прогресс.',
   },
   {
     id: 'task',
@@ -69,7 +48,7 @@ export const CONCEPTS = [
     Icon: TaskIcon,
     hint: 'Конкретное действие с исполнителем и проверяемым результатом.',
     details:
-      'Задача — минимальная единица работы. У неё есть понятный результат, статус, исполнитель и при необходимости срок. Из выполненных задач складывается прогресс этапа.',
+      'Задача — минимальная единица работы. У неё есть понятный результат, статус, исполнитель и при необходимости срок.',
   },
 ] as const
 
@@ -80,9 +59,20 @@ function repoShort(url: string) {
   return m ? m[1] : url
 }
 
+// Русская плюрализация слов: 1 слово / 2 слова / 5 слов.
+function pluralWords(n: number) {
+  const mod100 = n % 100
+  if (mod100 >= 11 && mod100 <= 14) return 'слов'
+  const mod10 = n % 10
+  if (mod10 === 1) return 'слово'
+  if (mod10 >= 2 && mod10 <= 4) return 'слова'
+  return 'слов'
+}
+
 export default function ProjectSheet({ open, onClose, project }: Props) {
   const { state, refresh } = useApp()
 
+  const [name, setName] = useState('')
   const [text, setText] = useState('')
   const [pro, setPro] = useState(false)
   const [color, setColor] = useState(COLORS[0])
@@ -94,11 +84,10 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
     {},
   )
   const [editSource, setEditSource] = useState<string | null>(null)
-  const [infoOpen, setInfoOpen] = useState(false)
-  // какую карточку объясняем: у каждой свой разбор
-  const [concept, setConcept] = useState<Concept | null>(null)
   const [sub, setSub] = useState<null | 'color' | 'repo'>(null)
   const [repoDraft, setRepoDraft] = useState('')
+  // Диалог «уверены?» при попытке закрыть с введёнными данными.
+  const [confirmClose, setConfirmClose] = useState(false)
 
   useEffect(() => {
     if (!open) return
@@ -106,14 +95,14 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
     setSources({})
     setEditSource(null)
     if (project) {
-      const base = project.name
-      const nt = project.note ?? ''
-      setText(nt ? `${base}\n${nt}` : base)
+      setName(project.name)
+      setText(project.note ?? '')
       setColor(project.color ?? COLORS[0])
       setKindId(workspaceKindFor(project.type, project.process_kind).id)
       setRepo(project.repo ?? '')
       setPro(false)
     } else {
+      setName('')
       setText('')
       setColor(COLORS[(state?.projects.length ?? 0) % COLORS.length])
       setKindId('project')
@@ -122,16 +111,28 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
     }
   }, [open, project, state?.projects.length])
 
-  const canSave = !!text.trim()
+  // Описание считаем осмысленным, если это хотя бы пара слов и в сумме
+  // не короче ~10 символов — иначе агенту работать не с чем.
+  const descWords = text
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
+  const descOk = descWords >= 2 && text.trim().length >= 10
+  const canSave = !!name.trim() && descOk
+  // Есть ли что-то введённое, что жалко потерять при случайном закрытии.
+  const isDirty = !project && (!!name.trim() || !!text.trim())
+
+  const requestClose = () => {
+    if (isDirty) setConfirmClose(true)
+    else onClose()
+  }
 
   const save = async () => {
     if (!canSave) return
-    const trimmed = text.trim()
-    const [firstLine, ...rest] = trimmed.split('\n')
     const kind = WORKSPACE_KINDS.find((k) => k.id === kindId) ?? WORKSPACE_KINDS[0]
     const payload: Partial<Project> = {
-      name: firstLine.trim(),
-      note: rest.join('\n').trim(),
+      name: name.trim(),
+      note: text.trim(),
       // в проф-режиме — то, что руками выставили; иначе цвет по умолчанию
       color: pro ? color : COLORS[(state?.projects.length ?? 0) % COLORS.length],
       repo: pro ? repo.trim() : undefined,
@@ -186,36 +187,23 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
     <>
       <Popup
         open={open}
-        onClose={onClose}
-        title={project ? 'Проект' : 'Создать'}
+        onClose={requestClose}
+        title={project ? 'Проект' : 'Новый проект'}
         onSave={save}
         canSave={canSave}
+        side="right"
       >
         {!project && <BlockTitle>Как устроена работа</BlockTitle>}
         <List strong inset dividers>
           {project && (
             <ListItem
               media={
-                <span className="w-10 h-10 flex items-center justify-center shrink-0 text-primary">
-                  <ProjectIcon size={30} />
+                <span className="w-9 h-9 flex items-center justify-center shrink-0 text-primary">
+                  <ProjectIcon size={24} />
                 </span>
               }
               title="Проект"
-              subtitle={
-                <>
-                  Отдельное пространство, где агент выполняет связанную работу,
-                  хранит контекст и управляет задачами.{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setInfoOpen(true)
-                    }}
-                    className="text-primary"
-                  >
-                    Что это
-                  </button>
-                </>
-              }
+              subtitle="Отдельное пространство, где агент выполняет связанную работу, хранит контекст и управляет задачами."
             />
           )}
 
@@ -226,26 +214,12 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
                 <ListItem
                   key={c.id}
                   media={
-                    <span className="w-10 h-10 flex items-center justify-center shrink-0 text-primary">
-                      <Icon size={30} />
+                    <span className="w-9 h-9 flex items-center justify-center shrink-0 text-primary">
+                      <Icon size={24} />
                     </span>
                   }
                   title={c.label}
-                  subtitle={
-                    <>
-                      {c.hint}{' '}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          haptic('light')
-                          setConcept(c)
-                        }}
-                        className="text-primary"
-                      >
-                        Что это
-                      </button>
-                    </>
-                  }
+                  subtitle={c.hint}
                 />
               )
             })}
@@ -253,38 +227,46 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
         </List>
         {!project && (
           <BlockFooter inset className="!text-[13px]">
-            Проект → модуль → этап → задача. Каждый уровень делает большую
-            работу понятнее и управляемее.
+            Проект держит контекст и цель, задачи разбивают работу на шаги.
           </BlockFooter>
         )}
 
-        <BlockTitle>Режим</BlockTitle>
-        <List strong inset>
-          <ListItem
-            title="Профессиональный режим"
-            after={<Toggle checked={pro} onChange={togglePro} />}
+        <BlockTitle>Название</BlockTitle>
+        <Block strong inset>
+          <input
+            type="text"
+            placeholder="Как назвать проект"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            autoFocus
+            className="w-full bg-transparent text-black dark:text-white text-[17px] outline-none placeholder:text-black/40 dark:placeholder:text-white/40"
           />
-        </List>
-        <BlockFooter inset className="!text-[13px]">
-          В проф-режиме сам выберешь тип, цвет и подключишь репозиторий —
-          обычно этим занимается агент.
-        </BlockFooter>
+        </Block>
 
-        {/* Форма ввода — одна и та же в обоих режимах, всегда на этом месте */}
         <BlockTitle>Описание</BlockTitle>
         <Block strong inset>
           <textarea
-            autoFocus
             rows={6}
             placeholder="Например: сделать посадку под новую услугу, собрать 20 заявок за неделю"
             value={text}
             onChange={(e) => setText(e.target.value)}
             className="w-full bg-transparent text-black dark:text-white text-[17px] outline-none resize-none placeholder:text-black/40 dark:placeholder:text-white/40"
           />
+          {/* Живой счётчик: показывает слова и символы, подсвечивается,
+              когда условия минимума пройдены. */}
+          <div
+            className={`mt-1 text-right text-[12px] tabular-nums ${
+              descOk
+                ? 'text-[#2a8bff]'
+                : 'text-black/40 dark:text-white/40'
+            }`}
+          >
+            {descWords} {pluralWords(descWords)} · {text.trim().length}/10 симв.
+          </div>
         </Block>
 
-
-        {!project && (
+        {/* «Настройки» пока скрыты — вернём, когда доработаем источники. */}
+        {false && !project && (
           <>
             <BlockTitle>Настройки</BlockTitle>
             <List strong inset>
@@ -398,7 +380,40 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
           </>
         )}
 
+        {/* Синяя «Создать» появляется только когда и название, и описание
+            заполнены; в режиме правки хватает синей галочки в шапке. */}
+        {!project && canSave && (
+          <Block>
+            <Button large rounded onClick={save} className="!h-14">
+              Создать
+            </Button>
+          </Block>
+        )}
+
       </Popup>
+
+      <Dialog
+        opened={confirmClose}
+        onBackdropClick={() => setConfirmClose(false)}
+        title="Закрыть без сохранения?"
+        content="Введённые данные не сохранятся."
+        buttons={
+          <>
+            <DialogButton onClick={() => setConfirmClose(false)}>
+              Продолжить
+            </DialogButton>
+            <DialogButton
+              strong
+              onClick={() => {
+                setConfirmClose(false)
+                onClose()
+              }}
+            >
+              Закрыть
+            </DialogButton>
+          </>
+        }
+      />
 
       <ContextSourceSheet
         open={editSource !== null}
@@ -411,17 +426,6 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
             ? () => removeSource(editSource)
             : undefined
         }
-      />
-
-      <ContextInfoSheet
-        open={infoOpen}
-        onClose={() => setInfoOpen(false)}
-      />
-
-      <ConceptInfoSheet
-        open={!!concept}
-        concept={concept}
-        onClose={() => setConcept(null)}
       />
 
       {/* Sub-sheet: Repo URL */}

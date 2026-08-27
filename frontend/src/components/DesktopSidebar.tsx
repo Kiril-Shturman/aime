@@ -24,6 +24,7 @@ import { useApp } from '../store/AppStore'
 import type { Counts } from '../api/types'
 import { Avatar } from './Avatar'
 import ProjectSheet from '../sheets/ProjectSheet'
+import { ProjectIcon } from './WorkItemIcons'
 
 // Плитки-фильтры iOS-«Напоминаний»: те же ключи, цвета и иконки, что на
 // мобильной главной, только компактнее для сайдбара.
@@ -257,15 +258,16 @@ export default function DesktopSidebar() {
           <button
             type="button"
             onClick={() => setProjectsCollapsed((v) => !v)}
-            className="flex-1 min-w-0 flex items-center gap-1 pl-1 pr-2 h-7 rounded-md text-left text-[12px] text-black/50 dark:text-white/45 hover:text-black dark:hover:text-white hover:bg-black/[.05] dark:hover:bg-white/[.06] transition"
+            className="flex-1 min-w-0 flex items-center gap-2 pl-1 pr-2 h-7 rounded-md text-left text-[14px] text-black/60 dark:text-white/55 hover:text-black dark:hover:text-white hover:bg-black/[.05] dark:hover:bg-white/[.06] transition"
           >
+            <ProjectIcon size={16} className="shrink-0" />
+            <span className="flex-1 truncate">Мои проекты</span>
             <ChevronDown
-              size={12}
+              size={14}
               className={`shrink-0 transition-transform ${
                 projectsCollapsed ? '-rotate-90' : ''
               }`}
             />
-            <span className="flex-1 truncate">Мои проекты</span>
           </button>
           <button
             type="button"
