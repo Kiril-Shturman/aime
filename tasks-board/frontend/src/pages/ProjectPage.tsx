@@ -50,6 +50,7 @@ import GitSheet from '../sheets/GitSheet'
 import GoalSheet from '../sheets/GoalSheet'
 import type { Member, Stage, Task } from '../api/types'
 import { ModuleIcon, ProjectIcon } from '../components/WorkItemIcons'
+import ChatPage from './ChatPage'
 
 export default function ProjectPage() {
   const { id = '' } = useParams()
@@ -228,6 +229,20 @@ export default function ProjectPage() {
   const projectProgress = projectTasks.length
     ? projectDone / projectTasks.length
     : 0
+
+  // Готовность проекта (что ИИ уже понимает): чек-лист базовых сигналов.
+  // Пока < 100 % — вместо обычного обзора рендерим онбординг-чат.
+  const readinessFlags = [
+    !!project.note && project.note.trim().length > 0,
+    !!project.repo,
+    false, // почта — поле появится позже
+    false, // ИИ-агент
+    false, // собес с ИИ
+  ]
+  const readinessPct = Math.round(
+    (readinessFlags.filter(Boolean).length / readinessFlags.length) * 100,
+  )
+  const onboarding = readinessPct < 100
   const moduleMap = new Map<string, Stage[]>()
   project.roadmap.forEach((stage) => {
     const moduleName = stage.module?.trim() || 'Основной модуль'
@@ -259,6 +274,69 @@ export default function ProjectPage() {
   const openTaskFromRoadmap = (task: Task) => {
     setModuleOpen(false)
     window.setTimeout(() => setEditTask(task), 280)
+  }
+
+  // Пока ИИ не набрал 100% понимания — вся страница отдаётся под чат,
+  // но это ровно та же ChatPage, что живёт на /chat/:provider: тот же
+  // мессаджбар, те же пузыри, та же длинная ленивая история. Мы только
+  // фиксируем провайдера, прячем выбор модели и показываем в шапке имя
+  // проекта + полоску понимания.
+  if (onboarding) {
+    // ChatPage — единый компонент чата. Мы даём ему всё, что нужно
+    // знать о проекте (имя, % понимания, коллбэк «три точки»), и
+    // рядом монтируем те же меню/шиты, что показывает обычная
+    // страница проекта — пункты «Изменить», «Добавить участника» и
+    // т.д. работают из чата так же, как со страницы.
+    return (
+      <>
+        <ChatPage
+          providerSlug="chatgpt"
+          projectContext={{
+            name: project.name,
+            pct: readinessPct,
+            onMoreClick: (anchor) => {
+              menuBtnRef.current = anchor
+              setMenuOpen(true)
+            },
+          }}
+        />
+        <Menu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          items={menuItems}
+          target={menuBtnRef}
+        />
+        <ProjectSheet
+          open={projectSheetOpen}
+          onClose={() => setProjectSheetOpen(false)}
+          project={project}
+        />
+        <MemberSheet open={memberOpen} onClose={() => setMemberOpen(false)} projectId={id} />
+        <MemberInfoSheet
+          open={memberInfo != null}
+          onClose={() => setMemberInfo(null)}
+          member={memberInfo}
+          projectColor={project.color}
+        />
+        <StageSheet
+          open={stageOpen}
+          onClose={() => setStageOpen(false)}
+          projectId={id}
+        />
+        <GitSheet
+          open={gitOpen}
+          onClose={() => setGitOpen(false)}
+          projectId={id}
+          initialRepo={project.repo ?? ''}
+          initialBranch={gitStatus?.branch ?? ''}
+        />
+        <GoalSheet
+          open={goalOpen}
+          onClose={() => setGoalOpen(false)}
+          defaultProject={id}
+        />
+      </>
+    )
   }
 
   return (

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import {
   Check,
   ChevronDown,
@@ -7,6 +7,7 @@ import {
   Clock,
   Copy as CopyIcon,
   Mic,
+  MoreHorizontal,
   Pause,
   Paperclip,
   Play,
@@ -353,12 +354,10 @@ function HistoryPopover({
   opened,
   target,
   onClose,
-  onSeeAll,
 }: {
   opened: boolean
   target: HTMLElement | null
   onClose: () => void
-  onSeeAll: () => void
 }) {
   const [q, setQ] = useState('')
   const filtered = q
@@ -416,17 +415,6 @@ function HistoryPopover({
             ))
           )}
         </div>
-        {/* Футер: переход на полноэкранную /history */}
-        <button
-          type="button"
-          onClick={() => {
-            onClose()
-            onSeeAll()
-          }}
-          className="w-full border-t border-black/[.06] dark:border-white/[.08] py-2.5 text-[13px] font-medium text-primary active:bg-black/[.04] dark:active:bg-white/[.04]"
-        >
-          Показать всю историю
-        </button>
       </div>
     </Popover>
   )
@@ -525,7 +513,8 @@ function ChatHeader({
   onSelectModel,
   onSelectProvider,
   onBack,
-  onOpenHistoryPage,
+  lockModel = false,
+  projectContext,
 }: {
   provider: ChatProvider
   model: ProviderModel
@@ -533,7 +522,20 @@ function ChatHeader({
   onSelectModel: (m: ProviderModel) => void
   onSelectProvider: (p: ChatProvider) => void
   onBack: () => void
-  onOpenHistoryPage: () => void
+  // В режиме собеседования модель зафиксирована: центральная пилюля
+  // — не кнопка, шеврон и Popover со списком моделей не показываем.
+  lockModel?: boolean
+  // Проектный контекст: имя показываем в центральной пилюле, а под
+  // тройкой пилюль рисуем полоску «понимания» 0–100%.
+  projectContext?: {
+    name: string
+    pct: number
+    onOpenReasoning?: () => void
+    // «Три точки» вместо часов «Истории». Родитель ловит клик и
+    // якорится к переданному элементу (тому, что тапнули), чтобы
+    // самому нарисовать Menu — здесь мы про пункты не знаем.
+    onMoreClick?: (anchor: HTMLAnchorElement) => void
+  }
 }) {
   const [modelsOpen, setModelsOpen] = useState(false)
   const [aboutOpen, setAboutOpen] = useState(false)
@@ -566,22 +568,27 @@ function ChatHeader({
             </KLink>
           </div>
 
-          {/* центральная пилюля — provider + model, клик открывает Popover */}
+          {/* центральная пилюля — provider + model, клик открывает Popover.
+              В режиме собеседования (lockModel) шеврон и клик убираем —
+              модель выбираем мы, юзеру её менять нельзя. Внутри проекта
+              вместо модели показываем имя проекта. */}
           <button
             ref={modelBtnRef}
             type="button"
-            onClick={() => models.length > 1 && setModelsOpen(true)}
-            className="inline-flex flex-1 min-w-0 items-center justify-center gap-1.5 h-11 px-5 text-black dark:text-white active:opacity-70"
+            onClick={() => !lockModel && models.length > 1 && setModelsOpen(true)}
+            className={`inline-flex flex-1 min-w-0 items-center justify-center gap-1.5 h-11 px-5 text-black dark:text-white ${
+              lockModel ? 'cursor-default' : 'active:opacity-70'
+            }`}
           >
             <span className="truncate text-[16px] font-semibold leading-tight">
-              {model.name}
+              {projectContext ? projectContext.name : model.name}
             </span>
-            {model.free && (
+            {!projectContext && model.free && (
               <span className="rounded-md bg-[#30d158]/20 px-1.5 py-0.5 text-[10px] font-bold text-[#30d158]">
                 FREE
               </span>
             )}
-            {models.length > 1 && (
+            {!lockModel && models.length > 1 && (
               <ChevronDown
                 size={14}
                 className={`shrink-0 opacity-70 transition-transform ${modelsOpen ? 'rotate-180' : ''}`}
@@ -589,17 +596,33 @@ function ChatHeader({
             )}
           </button>
 
-          {/* правая пилюля: история + аватарка провайдера (клик = About-попап) */}
+          {/* правая пилюля: история/меню + аватарка провайдера. В
+              проектном режиме часы уступают место «трём точкам» — из
+              них родитель раскрывает своё меню действий над проектом. */}
           <div className={`${PILL} shrink-0 justify-center pr-1.5 text-black dark:text-white`}>
-            <KLink
-              ref={historyBtnRef}
-              iconOnly
-              onClick={() => setHistoryOpen(true)}
-              aria-label="История"
-              className="aspect-square h-full max-h-11 !text-black dark:!text-white"
-            >
-              <Clock size={20} strokeWidth={2} />
-            </KLink>
+            {projectContext ? (
+              <KLink
+                ref={historyBtnRef}
+                iconOnly
+                onClick={(e: React.MouseEvent<HTMLAnchorElement>) =>
+                  projectContext.onMoreClick?.(e.currentTarget)
+                }
+                aria-label="Меню"
+                className="aspect-square h-full max-h-11 !text-black dark:!text-white"
+              >
+                <MoreHorizontal size={22} strokeWidth={2} />
+              </KLink>
+            ) : (
+              <KLink
+                ref={historyBtnRef}
+                iconOnly
+                onClick={() => setHistoryOpen(true)}
+                aria-label="История"
+                className="aspect-square h-full max-h-11 !text-black dark:!text-white"
+              >
+                <Clock size={20} strokeWidth={2} />
+              </KLink>
+            )}
             <button
               ref={avatarBtnRef}
               type="button"
@@ -611,6 +634,35 @@ function ChatHeader({
             </button>
           </div>
         </div>
+
+        {/* Полоска «понимания» проекта — рисуется в шапке под тройкой
+            пилюль, только когда чат работает в контексте проекта.
+            Клик — колбэк наверх, чтобы родитель показал детали. */}
+        {projectContext && (
+          <div className="pointer-events-auto mt-2 mx-safe-4">
+            <button
+              type="button"
+              onClick={projectContext.onOpenReasoning}
+              className="w-full flex items-center gap-3 px-4 h-9 rounded-full
+                         bg-ios-light-glass dark:bg-ios-dark-glass shadow-ios-light-glass
+                         dark:shadow-ios-dark-glass backdrop-blur-lg k-glass
+                         text-left active:opacity-70"
+            >
+              <span className="text-[12px] font-semibold text-black/60 dark:text-white/60 shrink-0">
+                Понимание
+              </span>
+              <span className="flex-1 h-1.5 rounded-full bg-black/[.08] dark:bg-white/[.12] overflow-hidden">
+                <span
+                  className="block h-full bg-[#2a8bff] rounded-full transition-[width] duration-500"
+                  style={{ width: `${projectContext.pct}%` }}
+                />
+              </span>
+              <span className="text-[12px] tabular-nums text-black/55 dark:text-white/50 shrink-0">
+                {projectContext.pct}%
+              </span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Popover со списком моделей — привязан к центральной пилюле */}
@@ -676,16 +728,48 @@ function ChatHeader({
         opened={historyOpen}
         target={historyBtnRef.current}
         onClose={() => setHistoryOpen(false)}
-        onSeeAll={onOpenHistoryPage}
       />
     </>
   )
 }
 
-export default function ChatPage() {
-  const { provider: slug } = useParams<{ provider: string }>()
+// Опциональные пропсы позволяют использовать эту же страницу как «чат
+// внутри проекта»: жёстко задать провайдера, спрятать пикер модели и
+// подсунуть данные проекта (имя + понимание в %) в шапку. Роут
+// /chat/:provider работает по-прежнему — все пропсы необязательные.
+export interface ChatPageProps {
+  providerSlug?: string
+  projectContext?: {
+    name: string
+    pct: number
+    onOpenReasoning?: () => void
+    // «Три точки» вместо часов «Истории». Родитель ловит клик и
+    // якорится к переданному элементу (тому, что тапнули), чтобы
+    // самому нарисовать Menu — здесь мы про пункты не знаем.
+    onMoreClick?: (anchor: HTMLAnchorElement) => void
+  }
+}
+
+export default function ChatPage({
+  providerSlug,
+  projectContext,
+}: ChatPageProps = {}) {
+  const { provider: routeSlug } = useParams<{ provider: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
+  const slug = providerSlug ?? routeSlug
   const provider = findProvider(slug)
+
+  // Режим «собеседование по проекту»: приходит из ProjectKickoff через
+  // navigate state ИЛИ включается сразу, если страницу отрисовали из
+  // ProjectPage с projectContext. Тут фиксируем модель, прячем её пикер
+  // и в самом начале сами задаём первый вопрос ИИ (плюс, если
+  // пользователь начал печатать на карточке, добавляем его текст первым
+  // sent-сообщением).
+  const nav = location.state as
+    | { interview?: boolean; projectId?: string; seedPrompt?: string | null }
+    | null
+  const interviewMode = !!nav?.interview || !!projectContext
 
   const [messages, setMessages] = useState<ChatMsg[]>([])
   const [text, setText] = useState('')
@@ -832,6 +916,34 @@ export default function ChatPage() {
     setMessages([])
     setModel(provider?.models[0] ?? null)
   }, [slug, provider])
+
+  // Заготовка стартовой ленты для собеседования: если пользователь начал
+  // печатать на карточке — его текст летит первым sent-сообщением, а ИИ
+  // сразу задаёт первый вопрос собеса. Настоящую подгрузку следующих
+  // ответов будет делать sendMessage при вводе следующих реплик.
+  useEffect(() => {
+    if (!interviewMode) return
+    const seed = nav?.seedPrompt?.trim() || ''
+    const opener: ChatMsg = {
+      type: 'received',
+      name: provider?.name,
+      avatar: provider?.avatar,
+      text:
+        'Привет! Помогу распаковать проект и составлю первый план. ' +
+        'Начнём с короткого собеседования — задам несколько вопросов.\n\n' +
+        '**Вопрос 1.** Что должно получиться в итоге? Опиши финальный результат одним абзацем.',
+    }
+    setMessages(
+      seed
+        ? [{ type: 'sent', text: seed }, opener]
+        : [opener],
+    )
+    // Убираем seed из истории роутера, чтобы обновление страницы не
+    // перезаряжало собес заново.
+    window.history.replaceState({}, '')
+    // Зависимости специально узкие: заряжаем один раз на вход в чат.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interviewMode])
 
   const pageRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
@@ -991,12 +1103,20 @@ export default function ChatPage() {
           onSelectModel={setModel}
           onSelectProvider={(p) => navigate(`/chat/${p.slug}`)}
           onBack={() => navigate(-1)}
-          onOpenHistoryPage={() => navigate('/history')}
+          lockModel={interviewMode}
+          projectContext={projectContext}
         />
       )}
 
-      {/* Отступ под фиксированной трёхпилюльной шапкой */}
-      <div className="h-[calc(env(safe-area-inset-top)+64px)]" />
+      {/* Отступ под фиксированной трёхпилюльной шапкой; в проектном
+          режиме под ней ещё живёт полоска понимания — плюс её высота. */}
+      <div
+        className={`${
+          projectContext
+            ? 'h-[calc(env(safe-area-inset-top)+108px)]'
+            : 'h-[calc(env(safe-area-inset-top)+64px)]'
+        }`}
+      />
 
 
       {/* Konsta Messages не пробрасывает className — оборачиваем в div,
@@ -1145,7 +1265,7 @@ export default function ChatPage() {
 
       <Messagebar
         textareaId="chat-textarea"
-        className={`z-20 !pb-[env(safe-area-inset-bottom)] md:!w-auto md:!left-[calc(var(--sidebar-width,18rem)+max(0px,(100vw-var(--sidebar-width,18rem)-1000px)/2))] md:!right-[max(0px,calc((100vw-var(--sidebar-width,18rem)-1000px)/2))] [&_.k-toolbar>div]:!items-end [&_.k-toolbar>div]:!h-auto [&_.k-toolbar>div]:!py-2 [&_textarea]:!min-h-[86px] [&_textarea]:!py-3 [&_textarea]:!text-[16px] [&_textarea]:!leading-snug [&_textarea]:!overflow-y-auto ${
+        className={`z-20 [&_.k-toolbar]:!pb-[max(5px,env(safe-area-inset-bottom))] md:[&_.k-toolbar]:!pb-safe-4 md:!w-auto md:!left-[calc(var(--sidebar-width,18rem)+max(0px,(100vw-var(--sidebar-width,18rem)-1000px)/2))] md:!right-[max(0px,calc((100vw-var(--sidebar-width,18rem)-1000px)/2))] [&_.k-toolbar>div]:!items-end [&_.k-toolbar>div]:!h-auto [&_.k-toolbar>div]:!py-2 [&_textarea]:!min-h-[86px] [&_textarea]:!py-3 [&_textarea]:!text-[16px] [&_textarea]:!leading-snug [&_textarea]:!overflow-y-auto max-md:[&_.k-toolbar]:!px-safe-3 max-md:[&_.k-toolbar>div>div:first-child]:!hidden max-md:[&_textarea]:!pl-6 ${
           isRec ? '!hidden' : ''
         }`}
         placeholder={`Сообщение · ${provider.name}`}
@@ -1158,7 +1278,7 @@ export default function ChatPage() {
           // так что растёт только вверх). Потолок 260px — потом скролл.
           el.style.height = 'auto'
           el.style.height =
-            Math.min(260, Math.max(86, el.scrollHeight)) + 'px'
+            Math.min(260, Math.max(86, el.scrollHeight + 22)) + 'px'
         }}
         left={
           <ToolbarPane className="ios:h-10">
@@ -1195,6 +1315,20 @@ export default function ChatPage() {
           </ToolbarPane>
         }
       />
+
+      {/* Плавающая скрепка внутри поля ввода — только мобилка. Левая
+          Konsta-пилюля спрятана через max-md:!hidden, textarea добавляет
+          !pl-11 чтобы текст не наезжал на иконку. */}
+      {!isRec && (
+        <button
+          type="button"
+          onClick={() => setPickerOpen(true)}
+          aria-label="Прикрепить файл"
+          className="md:hidden fixed z-30 bottom-[calc(max(5px,env(safe-area-inset-bottom))+14px)] left-6 h-9 w-9 flex items-center justify-center text-black/70 dark:text-white/70 active:opacity-60"
+        >
+          <Paperclip size={20} />
+        </button>
+      )}
 
       {/* Ряд записи: подменяет мессаджбар (Messagebar скрывается !hidden).
           Пилюля высотой в одну строку, справа две кнопки — Готово сверху,

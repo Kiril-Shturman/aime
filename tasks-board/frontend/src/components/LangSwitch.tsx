@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ReactElement } from 'react'
 import { Check, Globe } from 'lucide-react'
 import { Popover } from 'konsta/react'
@@ -23,11 +24,14 @@ export function useLang() {
 
 interface Props {
   className?: string
+  // Компактный режим — маленький круглый кружок только с иконкой,
+  // без подписи. Для мест вроде левого слота Navbar.
+  compact?: boolean
 }
 
 // Круглая кнопка с планетой + поповер выбора языка. Позиционирование
 // оставляем родителю (обычно absolute top-right в углу страницы).
-export default function LangSwitch({ className = '' }: Props) {
+export default function LangSwitch({ className = '', compact = false }: Props) {
   const { lang, setLang } = useLang()
   const [open, setOpen] = useState(false)
   const btn = useRef<HTMLButtonElement | null>(null)
@@ -43,52 +47,63 @@ export default function LangSwitch({ className = '' }: Props) {
         type="button"
         aria-label={lang === 'ru' ? 'Язык' : 'Language'}
         onClick={() => setOpen(true)}
-        className={`h-10 pl-3 pr-4 rounded-full flex items-center gap-2 bg-ios-light-glass dark:bg-ios-dark-glass shadow-ios-light-glass dark:shadow-ios-dark-glass backdrop-blur-lg text-black dark:text-white text-[15px] font-medium active:opacity-70 ${className}`}
+        className={
+          compact
+            ? `w-11 h-11 rounded-full flex items-center justify-center bg-ios-light-glass dark:bg-ios-dark-glass shadow-ios-light-glass dark:shadow-ios-dark-glass backdrop-blur-lg k-glass text-black dark:text-white [-webkit-tap-highlight-color:transparent] active:opacity-50 duration-300 ${className}`
+            : `h-10 pl-3 pr-4 rounded-full flex items-center gap-2 bg-ios-light-glass dark:bg-ios-dark-glass shadow-ios-light-glass dark:shadow-ios-dark-glass backdrop-blur-lg k-glass text-black dark:text-white text-[15px] font-medium [-webkit-tap-highlight-color:transparent] active:opacity-50 duration-300 ${className}`
+        }
       >
-        <Globe size={18} />
-        <span>{lang === 'ru' ? 'Язык' : 'Language'}</span>
+        <Globe size={compact ? 20 : 18} />
+        {!compact && <span>{lang === 'ru' ? 'Язык' : 'Language'}</span>}
       </button>
 
-      <Popover
-        opened={open}
-        target={btn.current}
-        onBackdropClick={() => setOpen(false)}
-        className="!w-56 !mt-3"
-      >
-        <div className="py-1">
-          {OPTIONS.map((o, i) => {
-            const active = lang === o.id
-            return (
-              <button
-                key={o.id}
-                type="button"
-                onClick={() => {
-                  setOpen(false)
-                  setLang(o.id)
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/[.06] ${
-                  i > 0
-                    ? 'border-t border-black/[.06] dark:border-white/[.06]'
-                    : ''
-                }`}
-              >
-                <span className="w-6 h-6 rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-white">
-                  {o.flag()}
-                </span>
-                <span className="flex-1 text-[15px]">{o.label}</span>
-                {active && (
-                  <Check size={16} className="text-[#2a8bff] shrink-0" />
-                )}
-              </button>
-            )
-          })}
-        </div>
-      </Popover>
+      {/* Портируем поповер в body: Konsta ставит fixed-элементам position
+          относительно ближайшего transform-предка (у нас — обёртка Navbar
+          с `transform-gpu`), из-за чего backdrop получал ширину слота,
+          а не всего экрана. */}
+      {createPortal(
+        <Popover
+          opened={open}
+          target={btn.current}
+          onBackdropClick={() => setOpen(false)}
+          className="!w-56 !mt-3"
+        >
+          <div className="py-1">
+            {OPTIONS.map((o, i) => {
+              const active = lang === o.id
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  onClick={() => {
+                    setOpen(false)
+                    setLang(o.id)
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 text-left active:bg-black/5 dark:active:bg-white/[.06] ${
+                    i > 0
+                      ? 'border-t border-black/[.06] dark:border-white/[.06]'
+                      : ''
+                  }`}
+                >
+                  <span className="w-6 h-6 rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-white">
+                    {o.flag()}
+                  </span>
+                  <span className="flex-1 text-[15px]">{o.label}</span>
+                  {active && (
+                    <Check size={16} className="text-[#2a8bff] shrink-0" />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </Popover>,
+        document.body,
+      )}
     </>
   )
 }
 
-function RuFlag() {
+export function RuFlag() {
   return (
     <svg
       viewBox="0 0 3 2"
@@ -102,7 +117,7 @@ function RuFlag() {
   )
 }
 
-function GbFlag() {
+export function GbFlag() {
   return (
     <svg
       viewBox="0 0 60 30"
