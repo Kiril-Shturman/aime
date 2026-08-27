@@ -36,11 +36,14 @@ export function getUser(): TgUser | null {
   return tg()?.initDataUnsafe?.user ?? null
 }
 
-export function haptic(kind: 'light' | 'medium' | 'heavy' | 'success' | 'error' = 'light') {
+export function haptic(
+  kind: 'light' | 'medium' | 'heavy' | 'success' | 'error' | 'warning' = 'light',
+) {
   try {
     const t = tg()
     if (!t?.HapticFeedback) return
-    if (kind === 'success' || kind === 'error') t.HapticFeedback.notificationOccurred(kind)
+    if (kind === 'success' || kind === 'error' || kind === 'warning')
+      t.HapticFeedback.notificationOccurred(kind)
     else t.HapticFeedback.impactOccurred(kind)
   } catch {
     /* вне Телеграма */

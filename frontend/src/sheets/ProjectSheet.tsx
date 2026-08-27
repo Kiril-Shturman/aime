@@ -10,7 +10,6 @@ import {
   List,
   ListInput,
   ListItem,
-  Toggle,
 } from 'konsta/react'
 import Popup from '../components/Popup'
 import Sheet from '../components/Sheet'
@@ -181,7 +180,8 @@ export default function ProjectSheet({ open, onClose, project }: Props) {
     setEditSource(null)
   }
 
-  const togglePro = () => setPro((v) => !v)
+  // переключатель проф-режима готов, но пока не выведен в раскладку
+  void (() => setPro((v) => !v))
 
   return (
     <>

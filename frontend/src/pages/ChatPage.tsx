@@ -927,7 +927,7 @@ export default function ChatPage({
     const opener: ChatMsg = {
       type: 'received',
       name: provider?.name,
-      avatar: provider?.avatar,
+      avatar: provider?.avatar ?? undefined,
       text:
         'Привет! Помогу распаковать проект и составлю первый план. ' +
         'Начнём с короткого собеседования — задам несколько вопросов.\n\n' +
