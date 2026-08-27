@@ -12,7 +12,6 @@ import {
   Play,
   Plus,
   Search,
-  X,
 } from 'lucide-react'
 import MarkdownMessage from '../components/MarkdownMessage'
 import MediaPicker, { type RecentMedia } from '../components/MediaPicker'
@@ -24,7 +23,6 @@ import { useLongPress } from '../lib/longPress'
 import {
   Link as KLink,
   Messagebar,
-  Message,
   Messages,
   MessagesTitle,
   Page,
@@ -92,7 +90,8 @@ function ProviderAvatar({
 // Круглая стеклянная кнопка с синим кругом-фоном под иконкой — тот же
 // визуальный шаблон, что у основной кнопки «отправить»: белая иконка
 // на синем круге, обёрнутая в стеклянную капсулу.
-function GlassCircleButton({
+// пока не вставлена в раскладку; экспорт нужен, чтобы сборка не падала
+export function GlassCircleButton({
   onClick,
   ariaLabel,
   children,
@@ -1023,7 +1022,7 @@ export default function ChatPage() {
                 onOpenMedia={(items, index) => setBrowser({ items, index })}
               />
             ) : (
-              <AiReply name={m.name} text={m.text} provider={provider} />
+              <AiReply name={m.name ?? provider.name} text={m.text} provider={provider} />
             )}
           </MessageWrapper>
         ))}
