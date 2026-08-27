@@ -22,6 +22,7 @@ import {
 import { getUser, haptic } from '../lib/telegram'
 import { useApp } from '../store/AppStore'
 import type { Counts } from '../api/types'
+import { Avatar } from './Avatar'
 import ProjectSheet from '../sheets/ProjectSheet'
 
 // Плитки-фильтры iOS-«Напоминаний»: те же ключи, цвета и иконки, что на
@@ -298,12 +299,18 @@ export default function DesktopSidebar() {
                     : 'active:bg-black/[.05] dark:active:bg-white/[.06]'
                 }`}
               >
-                <span
-                  className="w-6 h-6 rounded-md flex items-center justify-center text-white shrink-0"
-                  style={{ background: p.color ?? '#2a8bff' }}
-                >
-                  <Folder size={13} />
-                </span>
+                {/* Аватарка первого участника, если он есть — как на HomePage.
+                    Без участников — цветной кружок с папкой. */}
+                {p.members.length > 0 ? (
+                  <Avatar member={p.members[0]} color={p.color} size={24} />
+                ) : (
+                  <span
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-white shrink-0"
+                    style={{ background: p.color ?? '#2a8bff' }}
+                  >
+                    <Folder size={13} />
+                  </span>
+                )}
                 <span className="flex-1 min-w-0 truncate text-[14px] text-black dark:text-white">
                   {p.name}
                 </span>

@@ -21,6 +21,7 @@ import Menu, { type MenuItem } from '../components/Menu'
 import { getUser, haptic } from '../lib/telegram'
 import { useTheme } from '../store/ThemeStore'
 import { CHAT_PROVIDERS } from '../lib/providers'
+import { CHAT_HISTORY } from '../lib/history'
 
 // Каталог AI-сервисов по типам генерации. Дизайн взят из ai-webapi
 // (страница «Поиск»): четыре категории горизонтальными лентами,
@@ -41,44 +42,6 @@ interface Category {
 }
 
 const P = '/providers'
-
-interface ChatHistoryItem {
-  id: string
-  provider: string
-  title: string
-  preview: string
-  time: string
-  avatar: string
-}
-
-// Заглушки истории чатов — позже сюда прилетят реальные данные из API.
-// id = provider slug из lib/providers.ts (для навигации в /chat/:provider).
-const CHAT_HISTORY: ChatHistoryItem[] = [
-  {
-    id: 'chatgpt',
-    provider: 'ChatGPT',
-    title: 'ChatGPT',
-    preview: 'Помоги написать письмо клиенту про перенос сроков…',
-    time: '2 ч',
-    avatar: '/providers/gpt.png',
-  },
-  {
-    id: 'claude',
-    provider: 'Claude',
-    title: 'Claude',
-    preview: 'Разбор ТЗ на посадочную страницу',
-    time: 'вчера',
-    avatar: '/providers/claude.png',
-  },
-  {
-    id: 'gemini',
-    provider: 'Gemini',
-    title: 'Gemini',
-    preview: 'Собери мне таблицу по спринтам за неделю',
-    time: '3 д',
-    avatar: '/providers/gemini.png',
-  },
-]
 
 const CATEGORIES: Category[] = [
   {
@@ -197,7 +160,7 @@ const FEATURED = [
 function FeaturedCards({ onPick }: { onPick: (id: string) => void }) {
   return (
     <div
-      className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 -mx-6 px-6
+      className="flex gap-4 overflow-x-auto snap-x snap-mandatory py-2
                  [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {FEATURED.map((f) => (
@@ -410,15 +373,15 @@ function RankedRow({
         <img
           src={item.avatar}
           alt=""
-          className="w-12 h-12 rounded-xl object-cover shrink-0 bg-white"
+          className="w-12 h-12 rounded-[14px] object-cover shrink-0 bg-white"
         />
       ) : (
-        <span className="w-12 h-12 rounded-xl bg-[#2a8bff] text-white text-[19px] font-semibold flex items-center justify-center shrink-0">
+        <span className="w-12 h-12 rounded-[14px] bg-[#2a8bff] text-white text-[19px] font-semibold flex items-center justify-center shrink-0">
           {letter}
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <div className="text-[14px] font-semibold text-black dark:text-white truncate">
+        <div className="text-[16px] font-semibold text-black dark:text-white truncate">
           {item.name}
         </div>
         <div className="text-[12px] text-black/55 dark:text-white/50 truncate">
@@ -487,20 +450,20 @@ function ProviderTile({ item, onClick }: { item: Provider; onClick: () => void }
     <button
       type="button"
       onClick={onClick}
-      className="flex flex-col items-center gap-2 w-[80px] shrink-0 active:opacity-70"
+      className="flex flex-col items-center gap-2 w-[96px] shrink-0 active:opacity-70"
     >
       {item.avatar ? (
         <img
           src={item.avatar}
           alt=""
-          className="w-16 h-16 rounded-[20px] object-cover bg-black/5 dark:bg-white/10 shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none"
+          className="w-16 h-16 rounded-[26px] object-cover bg-black/5 dark:bg-white/10 shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none"
         />
       ) : (
-        <span className="w-16 h-16 rounded-[20px] bg-[#2a8bff]/85 text-white text-[24px] font-semibold flex items-center justify-center shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none">
+        <span className="w-16 h-16 rounded-[26px] bg-[#2a8bff]/85 text-white text-[24px] font-semibold flex items-center justify-center shadow-[0_3px_12px_rgba(0,0,0,0.14)] dark:shadow-none">
           {letter}
         </span>
       )}
-      <span className="text-[13px] font-semibold text-black dark:text-white text-center leading-tight truncate w-full">
+      <span className="text-[17px] font-semibold text-black dark:text-white text-center leading-tight truncate w-full">
         {item.name}
       </span>
     </button>
@@ -578,7 +541,13 @@ export default function GeneratePage() {
             <KLink iconOnly onClick={() => setSearchOn(true)}>
               <Search size={22} />
             </KLink>
-            <KLink iconOnly onClick={() => haptic('light')}>
+            <KLink
+              iconOnly
+              onClick={() => {
+                haptic('light')
+                nav('/history')
+              }}
+            >
               <History size={22} />
             </KLink>
             <KLink
@@ -801,7 +770,7 @@ export default function GeneratePage() {
                   type="button"
                   onClick={() => {
                     haptic('light')
-                    nav(`/chat/${c.id}`)
+                    if (c.kind === 'text') nav(`/chat/${c.target}`)
                   }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-left
                              active:bg-black/[.04] dark:active:bg-white/[.04]"
