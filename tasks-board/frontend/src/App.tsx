@@ -25,6 +25,7 @@ import McpKeysPage from './pages/McpKeysPage'
 import ConnectedAppsPage from './pages/ConnectedAppsPage'
 import FaqPage from './pages/FaqPage'
 import ChatPage from './pages/ChatPage'
+import GmailConnectPage from './pages/GmailConnectPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import TabPill from './components/TabPill'
@@ -102,6 +103,7 @@ function AppRoutes() {
           <Route path="/connected-apps" element={<ConnectedAppsPage />} />
           <Route path="/faq" element={<FaqPage />} />
           <Route path="/chat/:provider" element={<ChatPage />} />
+          <Route path="/connect/gmail" element={<GmailConnectPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
         </Routes>

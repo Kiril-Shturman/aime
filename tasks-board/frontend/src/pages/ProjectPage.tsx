@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import {
   MoreHorizontal,
   Flag,
+  Mail,
   Pencil,
   User,
   GitBranch,
@@ -51,6 +52,7 @@ import GoalSheet from '../sheets/GoalSheet'
 import type { Member, Stage, Task } from '../api/types'
 import { ModuleIcon, ProjectIcon } from '../components/WorkItemIcons'
 import ChatPage from './ChatPage'
+import { getGmail } from '../lib/gmail'
 
 export default function ProjectPage() {
   const { id = '' } = useParams()
@@ -196,6 +198,16 @@ export default function ProjectPage() {
         onSelect: () => setGitOpen(true),
       })
     }
+    // Gmail — OAuth-подключение почты к проекту через Google Identity
+    // Services. Если аккаунт уже подключён, показываем адрес и ведём
+    // в тот же экран, где его можно отключить.
+    const gmail = getGmail(project.id)
+    items.push({
+      label: gmail ? gmail.email : 'Подключить Gmail-почту',
+      sub: gmail ? 'Почта подключена' : undefined,
+      icon: Mail,
+      onSelect: () => navigate(`/connect/gmail?project=${project.id}`),
+    })
     items.push({
       label: project.type === 'process' ? 'Удалить процесс' : 'Удалить проект',
       icon: Trash2,
@@ -235,7 +247,7 @@ export default function ProjectPage() {
   const readinessFlags = [
     !!project.note && project.note.trim().length > 0,
     !!project.repo,
-    false, // почта — поле появится позже
+    !!getGmail(id), // Gmail подключён (OAuth-токен в localStorage)
     false, // ИИ-агент
     false, // собес с ИИ
   ]
