@@ -32,6 +32,7 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/tasks                    — {project, stage, parent, items:[{title,…}]} — пачкой
   POST   /api/project/<id>/git         — {repo, branch} — подключить репозиторий
   GET    /api/project/<id>/git         — ветка, последний коммит, есть ли правки
+  GET    /api/project/<id>/git/log     — лента коммитов рабочей копии
   POST   /api/project/<id>/stage       — {title, date, status, note}
   PATCH  /api/project/<id>/stage/<sid> — {title, date, status, note}
   DELETE /api/project/<id>/stage/<sid>
@@ -628,10 +629,46 @@ def git_status(path):
     }
 
 
+def git_log(path, limit=30):
+    """История коммитов рабочей копии: что, кто и когда."""
+    if not path or not os.path.isdir(os.path.join(path, ".git")):
+        return []
+    # разделитель \x1f между полями и \x1e между коммитами: в сообщениях их не бывает
+    ok, out = git(["log", f"-{limit}", "--pretty=%h\x1f%an\x1f%ct\x1f%s\x1e"], cwd=path)
+    if not ok:
+        return []
+    commits = []
+    for kus in out.split("\x1e"):
+        kus = kus.strip("\n")
+        if not kus:
+            continue
+        casti = kus.split("\x1f")
+        if len(casti) < 4:
+            continue
+        commits.append({
+            "hash": casti[0],
+            "author": casti[1],
+            "ts": int(casti[2]) if casti[2].isdigit() else 0,
+            "subject": casti[3],
+        })
+    return commits
+
+
 async def get_git(request):
     state = load()
     p = find_project(state, request.match_info["pid"])
     return web.json_response({"repo": p.get("repo", ""), "status": git_status(p.get("path"))})
+
+
+async def get_git_log(request):
+    """Лента коммитов для вкладки «История» на странице проекта."""
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    try:
+        limit = max(1, min(100, int(request.query.get("limit", 30))))
+    except ValueError:
+        limit = 30
+    return web.json_response({"items": git_log(p.get("path"), limit)})
 
 
 async def connect_git(request):
@@ -1329,6 +1366,7 @@ def make_app():
     app.router.add_post("/api/goal", add_goal)
     app.router.add_post("/api/tasks", add_tasks)
     app.router.add_get("/api/project/{pid}/git", get_git)
+    app.router.add_get("/api/project/{pid}/git/log", get_git_log)
     app.router.add_post("/api/project/{pid}/git", connect_git)
     app.router.add_post("/api/project/{pid}/stage", add_stage)
     app.router.add_patch("/api/project/{pid}/stage/{sid}", patch_stage)

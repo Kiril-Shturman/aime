@@ -52,6 +52,7 @@ import GoalSheet from '../sheets/GoalSheet'
 import type { Member, Stage, Task } from '../api/types'
 import { ModuleIcon, ProjectIcon } from '../components/WorkItemIcons'
 import ChatPage from './ChatPage'
+import GitHistory from '../components/GitHistory'
 import { getGmail } from '../lib/gmail'
 
 export default function ProjectPage() {
@@ -248,8 +249,8 @@ export default function ProjectPage() {
     !!project.note && project.note.trim().length > 0,
     !!project.repo,
     !!getGmail(id), // Gmail подключён (OAuth-токен в localStorage)
-    false, // ИИ-агент
-    false, // собес с ИИ
+    project.members.some((m) => m.kind === 'agent'), // за проектом закреплён ИИ-агент
+    project.roadmap.length > 0, // после собеседования у проекта есть план
   ]
   const readinessPct = Math.round(
     (readinessFlags.filter(Boolean).length / readinessFlags.length) * 100,
@@ -497,6 +498,8 @@ export default function ProjectPage() {
           </List>
         </>
       )}
+
+      {project.repo && <GitHistory projectId={project.id} color={project.color ?? "#2a8bff"} />}
 
       {project.members.length > 0 && (
         <>
