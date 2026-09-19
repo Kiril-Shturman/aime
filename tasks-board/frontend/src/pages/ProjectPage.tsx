@@ -53,6 +53,7 @@ import type { Member, Stage, Task } from '../api/types'
 import { ModuleIcon, ProjectIcon } from '../components/WorkItemIcons'
 import ChatPage from './ChatPage'
 import GitHistory from '../components/GitHistory'
+import StaggeredText from '../components/react-bits/staggered-text'
 import { getGmail } from '../lib/gmail'
 
 export default function ProjectPage() {
@@ -381,7 +382,16 @@ export default function ProjectPage() {
               <ProjectIcon size={28} />
             </span>
           }
-          title={<span className="font-semibold">{project.name}</span>}
+          title={
+            <StaggeredText
+              as="span"
+              text={project.name}
+              segmentBy="words"
+              delay={60}
+              duration={0.5}
+              className="block font-semibold"
+            />
+          }
           subtitle={`${modules.length} ${modules.length === 1 ? 'модуль' : 'модуля'} · ${project.roadmap.length} этапов · ${projectTasks.length} задач`}
           text={
             <span className="block mt-2">
