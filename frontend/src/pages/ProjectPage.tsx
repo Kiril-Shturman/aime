@@ -272,6 +272,20 @@ export default function ProjectPage() {
     ) ??
     modules.at(-1) ??
     null
+
+  // для карточки модуля: сколько этапов уже сделано и три ближайших
+  const hotovoEtap = currentModule
+    ? currentModule.stages.filter((st) => st.status === 'done').length
+    : 0
+  const dalsiEtapy = currentModule
+    ? [...currentModule.stages]
+        .sort((a, b) => {
+          const poradi = (st: Stage) => (st.status === 'active' ? 0 : st.status === 'planned' ? 1 : 2)
+          if (poradi(a) !== poradi(b)) return poradi(a) - poradi(b)
+          return (a.date ?? '9999').localeCompare(b.date ?? '9999')
+        })
+        .slice(0, 3)
+    : []
   const currentTask =
     openTasks.find((task) => task.status === 'doing') ?? openTasks[0] ?? null
 
@@ -441,28 +455,55 @@ export default function ProjectPage() {
               />
             </List>
           ) : (
-            <button
-              type="button"
-              onClick={() => setModuleOpen(true)}
-              className="relative mx-safe-4 mb-10 w-[calc(100%-2rem)] min-h-32 overflow-hidden rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 text-left active:opacity-75"
-            >
-              <span className="flex min-h-32 items-center py-5 pl-5 pr-20">
-                <span className="min-w-0">
-                  <span className="block truncate text-[19px] leading-tight font-semibold text-black dark:text-white">
-                  {currentModule.name}
+            <List strong inset>
+              <ListItem
+                link
+                onClick={() => setModuleOpen(true)}
+                media={
+                  <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-primary/12 text-primary">
+                    <ModuleIcon size={24} />
                   </span>
-                  <span className="mt-1 block text-[13px] text-black/45 dark:text-white/45">
-                    {currentModule.stages.length} этапов
+                }
+                title={<span className="font-semibold">{currentModule.name}</span>}
+                subtitle={`${hotovoEtap} из ${currentModule.stages.length} этапов`}
+                text={
+                  <span className="mt-2 block">
+                    <Progressbar
+                      progress={currentModule.stages.length ? hotovoEtap / currentModule.stages.length : 0}
+                    />
                   </span>
-                </span>
-              </span>
-
-              <span className="absolute right-8 top-0 h-1/2 w-px bg-primary" />
-              <span className="absolute right-8 top-1/2 bottom-0 w-px bg-black/[.08] dark:bg-white/[.10]" />
-              <span className="absolute right-[17px] top-1/2 -translate-y-1/2 w-[31px] h-[31px] rounded-full bg-primary text-white ring-4 ring-ios-light-surface-1 dark:ring-ios-dark-surface-1 flex items-center justify-center shadow-sm">
-                <ModuleIcon size={18} />
-              </span>
-            </button>
+                }
+              />
+              {dalsiEtapy.map((stage) => (
+                <ListItem
+                  key={stage.id}
+                  link
+                  onClick={() => setStageInfo(stage)}
+                  media={
+                    <span
+                      className={`mt-1 block h-2.5 w-2.5 rounded-full ${
+                        stage.status === 'done'
+                          ? 'bg-black/25 dark:bg-white/25'
+                          : stage.status === 'active'
+                            ? 'bg-primary'
+                            : 'bg-black/15 dark:bg-white/15'
+                      }`}
+                    />
+                  }
+                  title={stage.title}
+                  after={
+                    stage.date ? (
+                      <span className="text-[13px] text-black/45 dark:text-white/45">
+                        {new Date(stage.date).toLocaleDateString('ru-RU', {
+                          day: 'numeric',
+                          month: 'short',
+                        })}
+                      </span>
+                    ) : undefined
+                  }
+                />
+              ))}
+            </List>
           )}
 
           <BlockTitle>Задачи</BlockTitle>
