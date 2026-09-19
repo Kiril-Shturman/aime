@@ -36,8 +36,11 @@ export default function GmailConnectPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const goBack = () =>
-    navigate(projectId ? `/project/${projectId}` : -1)
+  // адрес и «шаг назад» — разные перегрузки navigate, поэтому разводим их
+  const goBack = () => {
+    if (projectId) navigate(`/project/${projectId}`)
+    else navigate(-1)
+  }
 
   const connect = async () => {
     if (busy || !projectId) return
