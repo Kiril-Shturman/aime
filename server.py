@@ -33,6 +33,7 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/project/<id>/git         — {repo, branch} — подключить репозиторий
   GET    /api/project/<id>/git         — ветка, последний коммит, есть ли правки
   GET    /api/project/<id>/git/log     — лента коммитов рабочей копии
+  POST   /api/chat                     — {model, messages} — ответ модели
   POST   /api/project/<id>/stage       — {title, date, status, note}
   PATCH  /api/project/<id>/stage/<sid> — {title, date, status, note}
   DELETE /api/project/<id>/stage/<sid>
@@ -589,6 +590,64 @@ async def delete_stage(request):
             t["stage"] = None
     save(state)
     return web.json_response({"ok": True})
+
+
+# ---------------------------------------------------------------- чат с моделью
+
+OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+async def chat_completion(request):
+    """Ответ модели для чата мини-аппы.
+
+    Ключ живёт только здесь, на сервере: браузеру его не отдаём. Запрос
+    синхронный (urllib), поэтому уводим его в поток, чтобы не держать цикл.
+    """
+    if not OPENROUTER_KEY:
+        raise web.HTTPServiceUnavailable(
+            text="модель не подключена: на сервере нет OPENROUTER_API_KEY"
+        )
+    body = await request.json()
+    model = (body.get("model") or "openai/gpt-4o-mini").strip()
+    messages = body.get("messages") or []
+    if not isinstance(messages, list) or not messages:
+        raise web.HTTPBadRequest(text="нужен список сообщений")
+    # режем историю: 20 последних реплик хватает, а счёт за токены меньше
+    messages = [
+        {"role": m.get("role", "user"), "content": str(m.get("content", ""))[:8000]}
+        for m in messages[-20:]
+    ]
+
+    def zavolat():
+        req = urllib.request.Request(
+            OPENROUTER_URL,
+            data=json.dumps({"model": model, "messages": messages}).encode(),
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_KEY}",
+                "Content-Type": "application/json",
+                "X-Title": "aiMe board",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return json.load(resp)
+
+    try:
+        odpoved = await asyncio.to_thread(zavolat)
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")[:300]
+        raise web.HTTPBadGateway(text=f"модель ответила {exc.code}: {detail}")
+    except Exception as exc:
+        raise web.HTTPBadGateway(text=f"не достучались до модели: {exc}")
+
+    volby = odpoved.get("choices") or []
+    text = (volby[0].get("message", {}).get("content") if volby else "") or ""
+    usage = odpoved.get("usage") or {}
+    return web.json_response({
+        "text": text,
+        "model": odpoved.get("model", model),
+        "tokens": usage.get("total_tokens", 0),
+    })
 
 
 # ---------------------------------------------------------------- git
@@ -1340,6 +1399,7 @@ def make_app():
     app.router.add_delete("/api/assistant/reply/{rid}", delete_reply)
     app.router.add_get("/api/commands", list_commands)
     app.router.add_post("/api/command/{cid}", run_command)
+    app.router.add_post("/api/chat", chat_completion)
     app.router.add_post("/api/task", add_task)
     app.router.add_patch("/api/task/{tid}", patch_task)
     app.router.add_post("/api/task/{tid}/toggle", toggle_task)
