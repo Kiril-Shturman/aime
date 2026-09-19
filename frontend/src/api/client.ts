@@ -52,6 +52,13 @@ export interface GitStatus {
   dirty?: number
 }
 
+export interface Commit {
+  hash: string
+  author: string
+  ts: number
+  subject: string
+}
+
 export const api = {
   state: () => request<State>('/api/state'),
 
@@ -115,6 +122,8 @@ export const api = {
 
   getGit: (pid: string) =>
     request<{ status: GitStatus | null }>(`/api/project/${pid}/git`),
+  gitLog: (pid: string, limit = 30) =>
+    request<{ items: Commit[] }>(`/api/project/${pid}/git/log?limit=${limit}`),
   connectGit: (pid: string, repo: string, branch?: string) =>
     request<{ status: GitStatus }>(`/api/project/${pid}/git`, {
       method: 'POST',
