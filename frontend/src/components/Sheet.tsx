@@ -33,7 +33,7 @@ export default function Sheet({
       className="pb-safe w-full max-h-[92dvh] overflow-y-auto"
     >
       {(title || headerRight || headerLeft) && (
-        <Toolbar top>
+        <Toolbar top innerClassName="w-full">
           <div className="flex w-full items-center justify-between gap-3 px-1">
             <span className="truncate text-[17px] font-semibold text-black dark:text-white">
               {headerLeft ?? title}
