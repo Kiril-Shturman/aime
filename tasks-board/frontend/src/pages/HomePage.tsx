@@ -318,7 +318,16 @@ export default function HomePage() {
 
           {/* Проекты на десктопе дублировать не надо — они в сайдбаре слева. */}
           <div className="md:hidden">
-            <BlockTitle>Мои проекты</BlockTitle>
+            <div className="flex items-end justify-between">
+              <BlockTitle>Мои проекты</BlockTitle>
+              <button
+                type="button"
+                onClick={() => setProjectOpen(true)}
+                className="mb-1 mr-4 text-[15px] font-medium text-primary active:opacity-60"
+              >
+                Новый
+              </button>
+            </div>
             <List strong inset>
               {state?.projects.length === 0 && (
                 <ListItem title="Пока нет проектов" />
