@@ -8,7 +8,7 @@ import {
   ListInput,
   ListItem,
 } from 'konsta/react'
-import Sheet from '../components/Sheet'
+import Popup from '../components/Popup'
 import PickerSheet, { type PickerOption } from './PickerSheet'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
@@ -111,7 +111,13 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
 
   return (
     <>
-      <Sheet open={open} onClose={onClose} title="Задача">
+      <Popup
+        open={open}
+        onClose={onClose}
+        title="Задача"
+        onSave={save}
+        canSave={!!title.trim()}
+      >
         <List strong inset>
           <ListInput
             type="textarea"
@@ -233,7 +239,7 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
             <Trash2 size={18} className="mr-2" /> Удалить задачу
           </Button>
         </Block>
-      </Sheet>
+      </Popup>
 
       <PickerSheet
         open={picker === 'status'}
