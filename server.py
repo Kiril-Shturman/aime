@@ -33,6 +33,10 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/project/<id>/git         — {repo, branch} — подключить репозиторий
   GET    /api/project/<id>/git         — ветка, последний коммит, есть ли правки
   GET    /api/project/<id>/git/log     — лента коммитов рабочей копии
+  POST   /api/agents                   — завести агента доски
+  PATCH  /api/agents/<id>               — имя, роль, в каких проектах участвует
+  DELETE /api/agents/<id>               — убрать агента с доски
+  POST   /api/agents/<id>/ping          — позвать агента
   POST   /api/project/<id>/member/<mid>/ping — позвать исполнителя
   POST   /api/agent/hello              — {client, model, avatar} — агент представился
   POST   /api/chat                     — {model, messages} — ответ модели
@@ -152,6 +156,13 @@ def migrate(state):
         if stale in state["access"]:
             del state["access"][stale]
             changed = True
+    # агенты — общие для доски: заводим один раз, к проектам просто цепляем
+    if "agents" not in state:
+        state["agents"] = []
+        changed = True
+    for a in state["agents"]:
+        a.setdefault("projects", [])
+        a.setdefault("kind", "agent")
     if "assistant" not in state:
         state["assistant"] = json.loads(json.dumps(ASSISTANT))
         changed = True
@@ -253,7 +264,10 @@ async def get_state(request):
         roadmap = [dict(st, progress=per_stage.get(st["id"], {"done": 0, "total": 0}))
                    for st in p["roadmap"]]
         members = []
-        for m in p["members"]:
+        vlastni = list(p["members"]) + [
+            a for a in state.get("agents", []) if p["id"] in a.get("projects", [])
+        ]
+        for m in vlastni:
             m = dict(m, bot=bot_card(m["id"], bots))
             # личный ключ исполнителя пускает на доску, поэтому он только хозяину
             if not owner:
@@ -261,7 +275,14 @@ async def get_state(request):
             members.append(m)
         projects.append(dict(p, members=members, roadmap=roadmap,
                              count=per_project.get(p["id"], 0)))
-    odpoved = {"projects": projects, "tasks": state["tasks"], "counts": counts(state)}
+    agents = []
+    for a in state.get("agents", []):
+        a = dict(a)
+        if not owner:
+            a.pop("key", None)
+        agents.append(a)
+    odpoved = {"projects": projects, "tasks": state["tasks"],
+               "counts": counts(state), "agents": agents}
     kdo = request.get("who") or {}
     if kdo.get("kind") == "member":
         for p in state["projects"]:
@@ -639,6 +660,62 @@ def stahnout_avatar(mid, url):
         return None
 
 
+async def add_agent(request):
+    """Завести агента на доске. К проектам его цепляем отдельно."""
+    only_owner(request)
+    body = await request.json()
+    state = load()
+    agent = make_member({**body, "kind": "agent"})
+    if not agent["name"]:
+        raise web.HTTPBadRequest(text="нужно имя")
+    agent["projects"] = [p for p in (body.get("projects") or []) if isinstance(p, str)]
+    state.setdefault("agents", []).append(agent)
+    save(state)
+    return web.json_response(agent)
+
+
+async def patch_agent(request):
+    """Имя, роль и то, в каких проектах агент участвует."""
+    only_owner(request)
+    body = await request.json()
+    state = load()
+    for a in state.get("agents", []):
+        if a["id"] != request.match_info["aid"]:
+            continue
+        for pole in ("name", "role", "model", "avatar"):
+            if pole in body:
+                a[pole] = (body[pole] or "").strip()
+        if "projects" in body:
+            znama = {p["id"] for p in state["projects"]}
+            a["projects"] = [p for p in (body["projects"] or []) if p in znama]
+        save(state)
+        return web.json_response(a)
+    raise web.HTTPNotFound(text="нет такого агента")
+
+
+async def delete_agent(request):
+    only_owner(request)
+    state = load()
+    pred = len(state.get("agents", []))
+    state["agents"] = [a for a in state.get("agents", []) if a["id"] != request.match_info["aid"]]
+    if len(state["agents"]) == pred:
+        raise web.HTTPNotFound(text="нет такого агента")
+    save(state)
+    return web.json_response({"ok": True})
+
+
+async def ping_agent(request):
+    """Позвать агента: отметку он увидит, когда придёт за задачами."""
+    only_owner(request)
+    state = load()
+    for a in state.get("agents", []):
+        if a["id"] == request.match_info["aid"]:
+            a["ping"] = int(time.time())
+            save(state)
+            return web.json_response({"ok": True, "ping": a["ping"]})
+    raise web.HTTPNotFound(text="нет такого агента")
+
+
 async def ping_member(request):
     """Позвать исполнителя. Доска не может постучаться к агенту сама, поэтому
     оставляем отметку: он увидит её, как только в следующий раз придёт."""
@@ -906,6 +983,15 @@ def owner_key():
         return f.read().strip()
 
 
+def vsichni_clenove(state):
+    """Все исполнители доски: участники проектов и общие агенты."""
+    for p in state["projects"]:
+        for m in p["members"]:
+            yield m
+    for a in state.get("agents", []):
+        yield a
+
+
 def videl_jsem(mid, **info):
     """Отмечаем участника «на связи». Пишем не чаще раза в минуту: запрос
     от агента может быть каждую секунду, а файл дёргать незачем."""
@@ -915,15 +1001,14 @@ def videl_jsem(mid, **info):
         return
     _viden[mid] = ted
     state = load()
-    for p in state["projects"]:
-        for m in p["members"]:
-            if m["id"] == mid:
-                m["seen"] = ted
-                for k, v in info.items():
-                    if v:
-                        m[k] = str(v)[:80]
-                save(state)
-                return
+    for m in vsichni_clenove(state):
+        if m["id"] == mid:
+            m["seen"] = ted
+            for k, v in info.items():
+                if v:
+                    m[k] = str(v)[:80]
+            save(state)
+            return
 
 
 def check_init_data(raw):
@@ -960,11 +1045,11 @@ def whoami(request):
     if key:
         if hmac.compare_digest(key, owner_key()):
             return {"kind": "owner", "id": "owner", "name": "владелец"}
-        for p in load()["projects"]:
-            for m in p["members"]:
-                if m.get("key") and hmac.compare_digest(key, m["key"]):
-                    videl_jsem(m["id"])
-                    return {"kind": "member", "id": m["id"], "name": m["name"]}
+        stav = load()
+        for m in vsichni_clenove(stav):
+            if m.get("key") and hmac.compare_digest(key, m["key"]):
+                videl_jsem(m["id"])
+                return {"kind": "member", "id": m["id"], "name": m["name"]}
 
     signed = check_init_data(request.headers.get("X-Telegram-Init-Data", ""))
     if signed:
@@ -1495,6 +1580,10 @@ def make_app():
     app.router.add_get("/api/commands", list_commands)
     app.router.add_post("/api/command/{cid}", run_command)
     app.router.add_get("/mcp_board.py", get_connector)
+    app.router.add_post("/api/agents", add_agent)
+    app.router.add_patch("/api/agents/{aid}", patch_agent)
+    app.router.add_delete("/api/agents/{aid}", delete_agent)
+    app.router.add_post("/api/agents/{aid}/ping", ping_agent)
     app.router.add_post("/api/project/{pid}/member/{mid}/ping", ping_member)
     app.router.add_post("/api/agent/hello", agent_hello)
     app.router.add_post("/api/chat", chat_completion)
