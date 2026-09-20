@@ -225,37 +225,37 @@
   "id": "swipeout",
   "title": "Свайп-действия",
   "group": "Списки",
-  "code": "<List strong inset dividers>\n  <ListItem\n    swipeout\n    title=\"Задача со свайпом\"\n    swipeoutActionsRight={\n      <SwipeoutActions>\n        <SwipeoutButton color=\"orange\" onClick={archive}>Архив</SwipeoutButton>\n        <SwipeoutButton color=\"red\" onClick={remove}>Удалить</SwipeoutButton>\n      </SwipeoutActions>\n    }\n  />\n</List>"
+  "code": "// строка уезжает пальцем, под ней действие\n<div className=\"relative overflow-hidden rounded-3xl\">\n  <button className=\"absolute inset-y-0 right-0 w-24 bg-[#ff3b30] text-white\"\n    onClick={smazat}>Удалить</button>\n  <div style={{ transform: `translateX(${-posun}px)` }}\n    onPointerDown={(e) => (start.current = e.clientX + posun)}\n    onPointerMove={(e) => start.current !== null &&\n      setPosun(Math.max(0, Math.min(96, start.current - e.clientX)))}\n    onPointerUp={() => { setPosun(posun > 48 ? 96 : 0); start.current = null }}>\n    <ListItem title=\"Задача со свайпом\" />\n  </div>\n</div>"
  },
  {
   "id": "sortable-list",
   "title": "Сортируемый список",
   "group": "Списки",
-  "code": "<List strong inset sortable sortableEnabled>\n  {items.map((item) => (\n    <ListItem key={item.id} title={item.title} sortable />\n  ))}\n</List>"
+  "code": "<List strong inset dividers>\n  {radky.map((title, i) => (\n    <ListItem key={title} title={title} after={\n      <span className=\"flex items-center gap-1\">\n        <Link onClick={() => presun(i, i - 1)}><ChevronUp size={18} /></Link>\n        <Link onClick={() => presun(i, i + 1)}><ChevronDown size={18} /></Link>\n        <GripVertical size={18} className=\"opacity-25\" />\n      </span>\n    } />\n  ))}\n</List>"
  },
  {
   "id": "smart-select",
   "title": "Умный выбор",
   "group": "Формы",
-  "code": "<List strong inset>\n  <ListItem\n    title=\"Исполнитель\"\n    smartSelect\n    smartSelectParams={{ pageTitle: 'Выбери исполнителя', searchbar: true }}\n  >\n    <select name=\"member\" value={member} onChange={changeMember}>\n      <option value=\"developer\">Разработчик</option>\n      <option value=\"reviewer\">Проверяющий</option>\n    </select>\n  </ListItem>\n</List>"
+  "code": "<List strong inset>\n  <ListItem link title=\"Роль\" after={value} onClick={() => setOpen(true)} />\n</List>\n<Sheet open={open} onClose={() => setOpen(false)} title=\"Роль\">\n  <List strong inset>\n    {volby.map((o) => (\n      <ListItem key={o} link title={o} onClick={() => { setValue(o); setOpen(false) }}\n        after={o === value ? <Check size={18} className=\"text-primary\" /> : undefined} />\n    ))}\n  </List>\n</Sheet>"
  },
  {
   "id": "calendar",
   "title": "Календарь",
   "group": "Формы",
-  "code": "<Calendar\n  value={[date]}\n  onCalendarChange={(calendar, value) => setDate(value[0])}\n  firstDay={1}\n  closeOnSelect\n/>"
+  "code": "<List strong inset>\n  <ListItem title={\n    <span className=\"flex items-center justify-between\">\n      <Link onClick={() => setMesic(predchozi)}><ChevronLeft size={20} /></Link>\n      <span className=\"font-semibold\">{nazevMesice}</span>\n      <Link onClick={() => setMesic(dalsi)}><ChevronRight size={20} /></Link>\n    </span>\n  } />\n  <ListItem title={\n    <span className=\"grid grid-cols-7 gap-y-1 text-center text-[13px]\">\n      {dnyTydne.map((d) => <span key={d} className=\"opacity-35\">{d}</span>)}\n      {dny.map((d) => (\n        <button key={d} onClick={() => setVybrano(d)}\n          className={`mx-auto grid h-8 w-8 place-items-center rounded-full\n            ${d === vybrano ? 'bg-primary text-white' : ''}`}>{d}</button>\n      ))}\n    </span>\n  } />\n</List>"
  },
  {
   "id": "picker",
   "title": "Колёсико выбора",
   "group": "Формы",
-  "code": "<ListInput\n  label=\"Приоритет\"\n  type=\"text\"\n  readonly\n  value={priority}\n  onClick={() => picker.open()}\n/>\n\nconst picker = f7.picker.create({\n  cols: [{ values: ['Низкий', 'Обычный', 'Высокий'] }],\n  on: { change: (_, values) => setPriority(String(values[0])) },\n})"
+  "code": "<List strong inset>\n  <ListItem title={\n    <span className=\"grid grid-cols-3 gap-2\">\n      {sloupce.map((sloupec, si) => (\n        <span key={si} className=\"flex flex-col items-center gap-1\">\n          {sloupec.map((v, vi) => (\n            <button key={v} onClick={() => vybrat(si, vi)}\n              className={vybr[si] === vi ? 'font-semibold' : 'opacity-40'}>{v}</button>\n          ))}\n        </span>\n      ))}\n    </span>\n  } />\n  <ListItem title=\"Выбрано\" after={hodnota} />\n</List>"
  },
  {
   "id": "text-editor",
   "title": "Редактор текста",
   "group": "Формы",
-  "code": "<TextEditor\n  value={html}\n  placeholder=\"Описание задачи\"\n  buttons={[['bold', 'italic', 'underline'], ['orderedList', 'unorderedList']]}\n  onTextEditorChange={(value) => setHtml(value)}\n/>"
+  "code": "<span className=\"mb-2 flex gap-1.5\">\n  {[['bold','Ж'],['italic','К'],['underline','Ч'],['insertUnorderedList','• список']]\n    .map(([cmd, label]) => (\n      <button key={cmd} onClick={() => { pole.current?.focus(); document.execCommand(cmd) }}>\n        {label}\n      </button>\n    ))}\n</span>\n<span ref={pole} contentEditable suppressContentEditableWarning\n  className=\"block min-h-20 rounded-xl bg-black/[.04] p-3 outline-none dark:bg-white/[.06]\" />"
  },
  {
   "id": "tabs",
@@ -297,19 +297,19 @@
   "id": "pull-to-refresh",
   "title": "Потянуть для обновления",
   "group": "Навигация",
-  "code": "<Page\n  ptr\n  onPtrRefresh={async (done) => {\n    await reload()\n    done()\n  }}\n>\n  <Block>Потяни страницу вниз, чтобы обновить</Block>\n</Page>"
+  "code": "<div\n  onPointerDown={(e) => (start.current = e.clientY)}\n  onPointerMove={(e) => start.current !== null &&\n    setTah(Math.max(0, Math.min(70, e.clientY - start.current)))}\n  onPointerUp={() => { start.current = null; tah > 45 ? obnovit() : setTah(0) }}>\n  <div style={{ height: obnovuje ? 44 : tah }} className=\"flex items-center justify-center\">\n    {obnovuje ? <Preloader className=\"h-5 w-5\" /> : 'тяни вниз'}\n  </div>\n  <Block>{kdy ? `Обновлено в ${kdy}` : 'Потяни этот блок вниз'}</Block>\n</div>"
  },
  {
   "id": "infinite-scroll",
   "title": "Бесконечная прокрутка",
   "group": "Навигация",
-  "code": "<Page infinite onInfinite={loadMore} infiniteDistance={80}>\n  <List strong inset>\n    {items.map((item) => <ListItem key={item.id} title={item.title} />)}\n  </List>\n  {loading && <Preloader className=\"mx-auto\" />}\n</Page>"
+  "code": "<div onScroll={dobrat} className=\"max-h-56 overflow-y-auto rounded-3xl\">\n  <List strong inset dividers>\n    {Array.from({ length: kolik }, (_, i) => <ListItem key={i} title={`Элемент ${i + 1}`} />)}\n  </List>\n  {nacita && <Preloader className=\"h-5 w-5\" />}\n</div>\n\n// dobrat: если докрутили до низа — через полсекунды добавляем ещё строки"
  },
  {
   "id": "login-screen",
   "title": "Экран входа",
   "group": "Окна",
-  "code": "<LoginScreen opened={open} onLoginScreenClosed={() => setOpen(false)}>\n  <Page loginScreen>\n    <LoginScreenTitle>aiMe</LoginScreenTitle>\n    <List form>\n      <ListInput label=\"Email\" type=\"email\" value={email} />\n      <ListInput label=\"Пароль\" type=\"password\" value={password} />\n    </List>\n    <List><ListButton onClick={login}>Войти</ListButton></List>\n  </Page>\n</LoginScreen>"
+  "code": "<BlockTitle className=\"!text-center\">aiMe</BlockTitle>\n<List strong inset>\n  <ListInput label=\"Почта\" type=\"email\" placeholder=\"you@example.com\"\n    value={mail} onChange={(e) => setMail(e.target.value)} />\n  <ListInput label=\"Пароль\" type=\"password\" placeholder=\"••••••\"\n    value={heslo} onChange={(e) => setHeslo(e.target.value)} />\n</List>\n<Block>\n  <Button large rounded onClick={vojit}>Войти</Button>\n</Block>"
  },
  {
   "id": "photo-browser",
@@ -321,6 +321,6 @@
   "id": "tooltip",
   "title": "Подсказка",
   "group": "Окна",
-  "code": "<Button\n  id=\"help-button\"\n  tooltip=\"Здесь можно назначить агента\"\n  tooltipTrigger=\"click\"\n>\n  Что это?\n</Button>"
+  "code": "{open && (\n  <span className=\"rounded-lg bg-black px-3 py-2 text-[12px] text-white dark:bg-white dark:text-black\">\n    Здесь можно назначить агента\n  </span>\n)}\n<Button rounded outline onClick={() => setOpen((o) => !o)}>\n  <HelpCircle size={17} className=\"mr-1\" />\n  {open ? 'Скрыть подсказку' : 'Что это?'}\n</Button>"
  }
 ]

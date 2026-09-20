@@ -6,6 +6,7 @@ import {
   ActionsLabel,
   Badge,
   Block,
+  BlockTitle,
   Breadcrumbs,
   BreadcrumbsItem,
   BreadcrumbsSeparator,
@@ -55,17 +56,20 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
   GripVertical,
   HelpCircle,
   MoreHorizontal,
   Plus,
-  RefreshCw,
   Send,
   User,
 } from 'lucide-react'
 import Popup from '../components/Popup'
 import Sheet from '../components/Sheet'
 import Pill from '../components/Pill'
+import { haptic } from '../lib/telegram'
 import '../f7-timeline.css'
 
 // Живые примеры блоков. Рядом с каждым в каталоге лежит его код —
@@ -604,92 +608,266 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       />
     </div>
   ),
-  swipeout: () => (
-    <div className="mx-4 overflow-hidden rounded-2xl bg-[#ff3b30]">
-      <div className="flex min-h-14 items-stretch">
-        <div className="flex flex-1 items-center bg-ios-light-surface-1 px-4 text-[15px] font-medium dark:bg-ios-dark-surface-1">
-          Задача со свайпом
-        </div>
-        <button type="button" className="px-4 text-[13px] font-semibold text-white">
+  // свайп по-настоящему: тянем строку влево, под ней открывается «Удалить»
+  swipeout: function SwipeoutDemo() {
+    const [posun, setPosun] = useState(0)
+    const [smazano, setSmazano] = useState(false)
+    const start = useRef<number | null>(null)
+    if (smazano) {
+      return (
+        <List strong inset>
+          <ListItem
+            link
+            title="Строку удалили"
+            after="вернуть"
+            onClick={() => {
+              setSmazano(false)
+              setPosun(0)
+            }}
+          />
+        </List>
+      )
+    }
+    return (
+      <div className="relative overflow-hidden rounded-3xl">
+        <button
+          type="button"
+          onClick={() => setSmazano(true)}
+          className="absolute inset-y-0 right-0 w-24 bg-[#ff3b30] text-[15px] font-semibold text-white"
+        >
           Удалить
         </button>
+        <div
+          className="relative touch-pan-y bg-ios-light-surface-1 dark:bg-ios-dark-surface-1"
+          style={{ transform: `translateX(${-posun}px)`, transition: start.current === null ? 'transform .2s' : 'none' }}
+          onPointerDown={(e) => {
+            start.current = e.clientX + posun
+          }}
+          onPointerMove={(e) => {
+            if (start.current === null) return
+            setPosun(Math.max(0, Math.min(96, start.current - e.clientX)))
+          }}
+          onPointerUp={() => {
+            setPosun(posun > 48 ? 96 : 0)
+            start.current = null
+          }}
+        >
+          <div className="flex min-h-14 items-center px-4 text-[17px]">
+            Задача со свайпом
+          </div>
+        </div>
       </div>
-    </div>
-  ),
-  'sortable-list': () => (
-    <List strong inset dividers>
-      {['Авторизация', 'Профиль', 'Оплата'].map((title) => (
-        <ListItem
-          key={title}
-          title={title}
-          after={<GripVertical size={19} className="text-black/25 dark:text-white/25" />}
-        />
-      ))}
-    </List>
-  ),
+    )
+  },
+
+  // список с перестановкой: тянем за ручку вверх-вниз
+  'sortable-list': function SortableDemo() {
+    const [radky, setRadky] = useState(['Авторизация', 'Профиль', 'Оплата'])
+    const presun = (od: number, kam: number) => {
+      if (kam < 0 || kam >= radky.length) return
+      const dalsi = [...radky]
+      const [x] = dalsi.splice(od, 1)
+      dalsi.splice(kam, 0, x)
+      setRadky(dalsi)
+      haptic('light')
+    }
+    return (
+      <List strong inset dividers>
+        {radky.map((title, i) => (
+          <ListItem
+            key={title}
+            title={title}
+            after={
+              <span className="flex items-center gap-1">
+                <KLink onClick={() => presun(i, i - 1)} aria-label="Выше">
+                  <ChevronUp size={18} />
+                </KLink>
+                <KLink onClick={() => presun(i, i + 1)} aria-label="Ниже">
+                  <ChevronDown size={18} />
+                </KLink>
+                <GripVertical size={18} className="text-black/25 dark:text-white/25" />
+              </span>
+            }
+          />
+        ))}
+      </List>
+    )
+  },
+
+  // умный выбор: строка открывает шторку со списком, как у f7
   'smart-select': function SmartSelectDemo() {
     const [value, setValue] = useState('Разработчик')
+    const [open, setOpen] = useState(false)
+    const volby = ['Разработчик', 'Проверяющий', 'Аналитик', 'Дизайнер']
+    return (
+      <>
+        <List strong inset>
+          <ListItem link title="Роль" after={value} onClick={() => setOpen(true)} />
+        </List>
+        <Sheet open={open} onClose={() => setOpen(false)} title="Роль">
+          <List strong inset>
+            {volby.map((o) => (
+              <ListItem
+                key={o}
+                link
+                title={o}
+                onClick={() => {
+                  setValue(o)
+                  setOpen(false)
+                }}
+                after={o === value ? <Check size={18} className="text-primary" /> : undefined}
+              />
+            ))}
+          </List>
+        </Sheet>
+      </>
+    )
+  },
+
+  // календарь: листается по месяцам, дата выбирается тапом
+  calendar: function CalendarDemo() {
+    const [mesic, setMesic] = useState(new Date(2026, 8, 1))
+    const [vybrano, setVybrano] = useState(20)
+    const prvni = new Date(mesic.getFullYear(), mesic.getMonth(), 1)
+    const posun = (prvni.getDay() + 6) % 7
+    const dni = new Date(mesic.getFullYear(), mesic.getMonth() + 1, 0).getDate()
     return (
       <List strong inset>
         <ListItem
-          link
-          title="Исполнитель"
-          after={value}
-          onClick={() => setValue(value === 'Разработчик' ? 'Проверяющий' : 'Разработчик')}
+          title={
+            <span className="flex items-center justify-between">
+              <KLink onClick={() => setMesic(new Date(mesic.getFullYear(), mesic.getMonth() - 1, 1))} aria-label="Раньше">
+                <ChevronLeft size={20} />
+              </KLink>
+              <span className="text-[17px] font-semibold">
+                {mesic.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+              </span>
+              <KLink onClick={() => setMesic(new Date(mesic.getFullYear(), mesic.getMonth() + 1, 1))} aria-label="Позже">
+                <ChevronRight size={20} />
+              </KLink>
+            </span>
+          }
+        />
+        <ListItem
+          title={
+            <span className="grid grid-cols-7 gap-y-1 py-1 text-center text-[13px]">
+              {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((d) => (
+                <span key={d} className="text-black/35 dark:text-white/35">{d}</span>
+              ))}
+              {Array.from({ length: posun }, (_, i) => <span key={`x${i}`} />)}
+              {Array.from({ length: dni }, (_, i) => i + 1).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => {
+                    setVybrano(d)
+                    haptic('light')
+                  }}
+                  className={`mx-auto grid h-8 w-8 place-items-center rounded-full ${
+                    d === vybrano ? 'bg-primary text-white' : 'active:bg-black/10 dark:active:bg-white/10'
+                  }`}
+                >
+                  {d}
+                </button>
+              ))}
+            </span>
+          }
         />
       </List>
     )
   },
-  calendar: () => (
-    <div className="mx-4 rounded-2xl bg-ios-light-surface-1 p-4 dark:bg-ios-dark-surface-1">
-      <div className="mb-3 text-center text-[16px] font-semibold">Сентябрь 2026</div>
-      <div className="grid grid-cols-7 gap-y-2 text-center text-[12px]">
-        {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((day) => (
-          <span key={day} className="text-black/35 dark:text-white/35">{day}</span>
-        ))}
-        {Array.from({ length: 35 }, (_, index) => index - 1).map((day, index) => (
-          <span
-            key={index}
-            className={`grid h-8 place-items-center rounded-full ${day === 20 ? 'bg-primary font-semibold text-white' : ''}`}
-          >
-            {day > 0 && day <= 30 ? day : ''}
-          </span>
-        ))}
-      </div>
-    </div>
-  ),
-  picker: () => (
-    <div className="relative mx-4 h-36 overflow-hidden rounded-2xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1">
-      <div className="absolute inset-x-0 top-1/2 h-10 -translate-y-1/2 border-y border-black/10 bg-black/[.03] dark:border-white/10 dark:bg-white/[.04]" />
-      <div className="grid h-full grid-cols-3 place-items-center text-center text-[15px]">
-        {[
-          ['18', '19', '20'],
-          ['сент.', 'окт.', 'нояб.'],
-          ['2025', '2026', '2027'],
-        ].map((column, index) => (
-          <div key={index} className="grid gap-2">
-            {column.map((item, itemIndex) => (
-              <span key={item} className={itemIndex === 1 ? 'font-semibold' : 'opacity-30'}>{item}</span>
-            ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  ),
-  'text-editor': () => (
-    <div className="mx-4 overflow-hidden rounded-2xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1">
-      <div className="flex gap-1 border-b border-black/[.07] p-2 dark:border-white/[.08]">
-        {['B', 'I', 'U', '• List'].map((button) => (
-          <button key={button} type="button" className="min-h-8 rounded-lg bg-black/[.05] px-3 text-[13px] font-semibold dark:bg-white/10">
-            {button}
-          </button>
-        ))}
-      </div>
-      <div className="min-h-24 p-4 text-[15px] text-black/55 outline-none dark:text-white/55" contentEditable suppressContentEditableWarning>
-        Описание задачи с форматированием…
-      </div>
-    </div>
-  ),
+
+  // барабаны: крутятся и подставляют выбранное значение
+  picker: function PickerDemo() {
+    const sloupce = [
+      ['18', '19', '20', '21', '22'],
+      ['августа', 'сентября', 'октября'],
+      ['2025', '2026', '2027'],
+    ]
+    const [vybr, setVybr] = useState([2, 1, 1])
+    return (
+      <List strong inset>
+        <ListItem
+          title={
+            <span className="grid grid-cols-3 gap-2 py-1">
+              {sloupce.map((sloupec, si) => (
+                <span key={si} className="flex flex-col items-center gap-1">
+                  {sloupec.map((v, vi) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => {
+                        const dalsi = [...vybr]
+                        dalsi[si] = vi
+                        setVybr(dalsi)
+                        haptic('light')
+                      }}
+                      className={`w-full rounded-lg py-1 text-[15px] ${
+                        vybr[si] === vi
+                          ? 'bg-black/[.06] font-semibold dark:bg-white/10'
+                          : 'opacity-40'
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </span>
+              ))}
+            </span>
+          }
+        />
+        <ListItem
+          title="Выбрано"
+          after={sloupce.map((sl, i) => sl[vybr[i]]).join(' ')}
+        />
+      </List>
+    )
+  },
+
+  // редактор: кнопки реально меняют начертание выделенного текста
+  'text-editor': function TextEditorDemo() {
+    const pole = useRef<HTMLDivElement | null>(null)
+    const prikaz = (cmd: string) => {
+      pole.current?.focus()
+      document.execCommand(cmd)
+    }
+    return (
+      <List strong inset>
+        <ListItem
+          title={
+            <span className="block py-1">
+              <span className="mb-2 flex gap-1.5">
+                {[
+                  ['bold', 'Ж'],
+                  ['italic', 'К'],
+                  ['underline', 'Ч'],
+                  ['insertUnorderedList', '• список'],
+                ].map(([cmd, label]) => (
+                  <button
+                    key={cmd}
+                    type="button"
+                    onClick={() => prikaz(cmd)}
+                    className="min-h-8 rounded-lg bg-black/[.06] px-3 text-[13px] font-semibold dark:bg-white/10"
+                  >
+                    {label}
+                  </button>
+                ))}
+              </span>
+              <span
+                ref={pole}
+                contentEditable
+                suppressContentEditableWarning
+                className="block min-h-20 rounded-xl bg-black/[.04] p-3 text-[15px] font-normal outline-none dark:bg-white/[.06]"
+              >
+                Выдели текст и нажми кнопку — начертание поменяется.
+              </span>
+            </span>
+          }
+        />
+      </List>
+    )
+  },
+
   tabs: function TabsDemo() {
     const [tab, setTab] = useState('overview')
     return (
@@ -762,43 +940,131 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </svg>
     </div>
   ),
-  'pull-to-refresh': () => (
-    <div className="flex flex-col items-center gap-2 py-4 text-center">
-      <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/12 text-primary"><RefreshCw size={21} /></span>
-      <div className="text-[14px] font-semibold">Потяни вниз для обновления</div>
-    </div>
-  ),
-  'infinite-scroll': () => (
-    <div>
-      <List strong inset dividers>
-        {['Элемент 18', 'Элемент 19', 'Элемент 20'].map((item) => <ListItem key={item} title={item} />)}
-      </List>
-      <div className="flex justify-center pb-2"><Preloader className="h-5 w-5" /></div>
-    </div>
-  ),
-  'login-screen': () => (
-    <div className="mx-4 rounded-2xl bg-ios-light-surface-1 p-4 text-center dark:bg-ios-dark-surface-1">
-      <div className="text-[25px] font-bold">aiMe</div>
-      <div className="mb-3 text-[13px] opacity-45">Войди в рабочее пространство</div>
-      <div className="grid gap-2">
-        <div className="rounded-xl bg-black/[.05] px-3 py-2.5 text-left text-[14px] opacity-55 dark:bg-white/[.07]">Email</div>
-        <div className="rounded-xl bg-black/[.05] px-3 py-2.5 text-left text-[14px] opacity-55 dark:bg-white/[.07]">Пароль</div>
-        <Button rounded>Войти</Button>
+  // потянуть вниз: тащим содержимое — появляется крутилка и «обновлено»
+  'pull-to-refresh': function PullDemo() {
+    const [tah, setTah] = useState(0)
+    const [obnovuje, setObnovuje] = useState(false)
+    const [kdy, setKdy] = useState<string | null>(null)
+    const start = useRef<number | null>(null)
+    return (
+      <div
+        className="overflow-hidden rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1"
+        onPointerDown={(e) => (start.current = e.clientY)}
+        onPointerMove={(e) => {
+          if (start.current === null || obnovuje) return
+          setTah(Math.max(0, Math.min(70, e.clientY - start.current)))
+        }}
+        onPointerUp={() => {
+          start.current = null
+          if (tah > 45) {
+            setObnovuje(true)
+            window.setTimeout(() => {
+              setObnovuje(false)
+              setTah(0)
+              setKdy(new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }))
+            }, 900)
+          } else {
+            setTah(0)
+          }
+        }}
+      >
+        <div
+          className="flex items-center justify-center overflow-hidden text-[13px] opacity-60"
+          style={{ height: obnovuje ? 44 : tah, transition: start.current === null ? 'height .2s' : 'none' }}
+        >
+          {obnovuje ? <Preloader className="h-5 w-5" /> : 'тяни вниз'}
+        </div>
+        <div className="px-4 py-5 text-[15px]">
+          {kdy ? `Обновлено в ${kdy}` : 'Потяни этот блок вниз'}
+        </div>
       </div>
-    </div>
-  ),
+    )
+  },
+
+  'infinite-scroll': function InfiniteDemo() {
+    const [kolik, setKolik] = useState(6)
+    const [nacita, setNacita] = useState(false)
+    const dobrat = (e: React.UIEvent<HTMLDivElement>) => {
+      const el = e.currentTarget
+      if (nacita || el.scrollTop + el.clientHeight < el.scrollHeight - 24) return
+      setNacita(true)
+      window.setTimeout(() => {
+        setKolik((k) => k + 4)
+        setNacita(false)
+      }, 500)
+    }
+    return (
+      <div onScroll={dobrat} className="max-h-56 overflow-y-auto rounded-3xl">
+        <List strong inset dividers>
+          {Array.from({ length: kolik }, (_, i) => (
+            <ListItem key={i} title={`Элемент ${i + 1}`} />
+          ))}
+        </List>
+        <div className="flex justify-center py-2">
+          {nacita ? <Preloader className="h-5 w-5" /> : (
+            <span className="text-[13px] opacity-45">крути вниз — добавится ещё</span>
+          )}
+        </div>
+      </div>
+    )
+  },
+
+  // экран входа: поля реально печатаются, кнопка отзывается
+  'login-screen': function LoginDemo() {
+    const [mail, setMail] = useState('')
+    const [heslo, setHeslo] = useState('')
+    const [vesel, setVesel] = useState(false)
+    return (
+      <>
+        <BlockTitle className="!text-center">aiMe</BlockTitle>
+        <List strong inset>
+          <ListInput
+            label="Почта"
+            type="email"
+            placeholder="you@example.com"
+            value={mail}
+            onChange={(e) => setMail((e.target as HTMLInputElement).value)}
+          />
+          <ListInput
+            label="Пароль"
+            type="password"
+            placeholder="••••••"
+            value={heslo}
+            onChange={(e) => setHeslo((e.target as HTMLInputElement).value)}
+          />
+        </List>
+        <Block className="!mt-2">
+          <Button large rounded onClick={() => setVesel(true)}>
+            {vesel ? 'Добро пожаловать' : 'Войти'}
+          </Button>
+        </Block>
+      </>
+    )
+  },
+
   'photo-browser': () => (
     <div className="mx-4 overflow-hidden rounded-2xl bg-[#101014] p-3 text-white">
       <div className="aspect-[16/9] rounded-xl bg-gradient-to-br from-[#6dd5ed] via-[#8e7dff] to-[#ff758c]" />
       <div className="mt-2 flex items-center justify-between text-[12px]"><span className="opacity-55">1 из 4</span><span>Скриншот интерфейса</span></div>
     </div>
   ),
-  tooltip: () => (
-    <div className="flex flex-col items-center py-4">
-      <div className="mb-2 rounded-lg bg-black px-3 py-2 text-[12px] text-white dark:bg-white dark:text-black">Здесь можно назначить агента</div>
-      <Button rounded outline><HelpCircle size={17} className="mr-1" />Что это?</Button>
-    </div>
-  ),
+  // подсказка: появляется по тапу и прячется вторым тапом
+  tooltip: function TooltipDemo() {
+    const [open, setOpen] = useState(false)
+    return (
+      <Block className="!my-0 flex flex-col items-center gap-2">
+        {open && (
+          <span className="rounded-lg bg-black px-3 py-2 text-[12px] text-white dark:bg-white dark:text-black">
+            Здесь можно назначить агента
+          </span>
+        )}
+        <Button rounded outline onClick={() => setOpen((o) => !o)}>
+          <HelpCircle size={17} className="mr-1" />
+          {open ? 'Скрыть подсказку' : 'Что это?'}
+        </Button>
+      </Block>
+    )
+  },
 }
 
 export { ucastnik }
