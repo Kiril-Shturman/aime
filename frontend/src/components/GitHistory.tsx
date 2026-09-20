@@ -136,7 +136,7 @@ export default function GitHistory({
           itemGap={6}
           height="auto"
           renderItem={(item) => (
-            <div className="rounded-2xl bg-black/[.04] px-4 py-3 dark:bg-white/[.06]">
+            <div className="rounded-2xl bg-ios-light-surface-1 px-4 py-3 dark:bg-ios-dark-surface-1">
               {item.content}
             </div>
           )}

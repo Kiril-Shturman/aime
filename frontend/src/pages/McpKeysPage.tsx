@@ -75,7 +75,7 @@ export default function McpKeysPage() {
           </div>
 
           {/* URL: код + копия */}
-          <div className="mt-4 flex items-center gap-2 rounded-2xl bg-black/[.05] dark:bg-white/[.06] px-3 py-2">
+          <div className="mt-4 flex items-center gap-2 rounded-2xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 px-3 py-2">
             <code className="flex-1 min-w-0 text-[13px] font-mono text-black dark:text-white truncate">
               {MCP_URL}
             </code>
@@ -107,7 +107,7 @@ export default function McpKeysPage() {
         <div className="mt-4 rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 overflow-hidden">
           {keys.length === 0 ? (
             <div className="p-6 text-center">
-              <span className="inline-flex w-12 h-12 items-center justify-center rounded-full bg-black/[.05] dark:bg-white/[.06] text-black/45 dark:text-white/40 mb-2">
+              <span className="inline-flex w-12 h-12 items-center justify-center rounded-full bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 text-black/45 dark:text-white/40 mb-2">
                 <KeyRound size={22} />
               </span>
               <div className="text-[15px] font-semibold text-black dark:text-white">
@@ -140,7 +140,7 @@ export default function McpKeysPage() {
                     type="button"
                     onClick={() => copyKey(k.id, k.key)}
                     aria-label="Скопировать ключ"
-                    className="shrink-0 h-9 px-3 rounded-full text-[13px] font-medium text-[#2a8bff] active:bg-black/[.05] dark:active:bg-white/[.06] inline-flex items-center gap-1"
+                    className="shrink-0 h-9 px-3 rounded-full text-[13px] font-medium text-[#2a8bff] active:bg-ios-light-surface-1 dark:active:bg-white/[.06] inline-flex items-center gap-1"
                   >
                     {copiedKey === k.id ? (
                       <>
