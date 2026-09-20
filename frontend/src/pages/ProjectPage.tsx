@@ -12,6 +12,7 @@ import {
   Trash2,
   ChevronRight,
   Workflow,
+  Blocks,
   Palette,
   Plus,
   Settings,
@@ -463,6 +464,13 @@ export default function ProjectPage() {
               {project.design ? 'задан' : 'не задан'}
             </span>
           }
+        />
+        <ListItem
+          link
+          onClick={() => navigate('/design')}
+          media={<Blocks size={20} className="text-primary" />}
+          title="Каталог блоков"
+          subtitle="Готовые куски интерфейса с кодом"
         />
       </List>
 

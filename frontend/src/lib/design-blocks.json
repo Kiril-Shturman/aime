@@ -1,0 +1,224 @@
+[
+ {
+  "id": "list",
+  "title": "Список",
+  "group": "Списки",
+  "code": "<List strong inset>\n  <ListItem title=\"Первый пункт\" />\n  <ListItem title=\"Второй пункт\" subtitle=\"Подпись под названием\" />\n  <ListItem link onClick={() => {}} title=\"Пункт-ссылка\" after=\"значение\" />\n</List>"
+ },
+ {
+  "id": "list-media",
+  "title": "Список с картинкой",
+  "group": "Списки",
+  "code": "<List strong inset dividers>\n  <ListItem\n    media={<Avatar member={member} size={40} />}\n    title=\"Имя участника\"\n    subtitle=\"Роль\"\n    after={<Pill tone=\"bot\">берёт задачи</Pill>}\n  />\n</List>"
+ },
+ {
+  "id": "list-group",
+  "title": "Список с заголовками групп",
+  "group": "Списки",
+  "code": "<List strong inset>\n  <ListGroup>\n    <ListItem title=\"А\" groupTitle />\n    <ListItem title=\"Алексей\" />\n  </ListGroup>\n  <ListGroup>\n    <ListItem title=\"Б\" groupTitle />\n    <ListItem title=\"Борис\" />\n  </ListGroup>\n</List>"
+ },
+ {
+  "id": "list-button",
+  "title": "Кнопки-строки",
+  "group": "Списки",
+  "code": "<List strong inset>\n  <ListButton onClick={() => {}}>Обычное действие</ListButton>\n  <ListButton colors={{ text: 'text-red-500' }} onClick={() => {}}>\n    Опасное действие\n  </ListButton>\n</List>"
+ },
+ {
+  "id": "menu-list",
+  "title": "Меню-список",
+  "group": "Списки",
+  "code": "<MenuList>\n  <MenuListItem active title=\"Сегодня\" />\n  <MenuListItem title=\"Запланировано\" />\n  <MenuListItem title=\"Все задачи\" />\n</MenuList>"
+ },
+ {
+  "id": "inputs",
+  "title": "Поля ввода",
+  "group": "Формы",
+  "code": "<List strong inset>\n  <ListInput label=\"Имя\" type=\"text\" placeholder=\"Как зовут\" value={name}\n    onChange={(e) => setName(e.target.value)} />\n  <ListInput label=\"Заметка\" type=\"textarea\" placeholder=\"Пара строк\"\n    value={note} onChange={(e) => setNote(e.target.value)} />\n  <ListInput label=\"Срок\" type=\"date\" value={date}\n    onChange={(e) => setDate(e.target.value)} />\n</List>"
+ },
+ {
+  "id": "checkbox",
+  "title": "Галочки",
+  "group": "Формы",
+  "code": "<List strong inset>\n  <ListItem label title=\"Пункт с галочкой\"\n    media={<Checkbox component=\"div\" checked={on} onChange={() => setOn(!on)} />} />\n</List>"
+ },
+ {
+  "id": "radio",
+  "title": "Переключатели",
+  "group": "Формы",
+  "code": "<List strong inset>\n  {options.map((o) => (\n    <ListItem key={o} label title={o}\n      media={<Radio component=\"div\" checked={value === o} onChange={() => setValue(o)} />} />\n  ))}\n</List>"
+ },
+ {
+  "id": "toggle",
+  "title": "Тумблер",
+  "group": "Формы",
+  "code": "<List strong inset>\n  <ListItem label title=\"Берёт новые задачи\"\n    after={<Toggle component=\"div\" checked={on} onChange={() => setOn(!on)} />} />\n</List>"
+ },
+ {
+  "id": "stepper",
+  "title": "Счётчик",
+  "group": "Формы",
+  "code": "<Stepper value={count} onPlus={() => setCount(count + 1)}\n  onMinus={() => setCount(Math.max(0, count - 1))} />"
+ },
+ {
+  "id": "range",
+  "title": "Ползунок",
+  "group": "Формы",
+  "code": "<Range value={value} step={1} min={0} max={100}\n  onChange={(e) => setValue(Number(e.target.value))} />"
+ },
+ {
+  "id": "searchbar",
+  "title": "Поиск",
+  "group": "Формы",
+  "code": "<Searchbar value={q} onInput={(e) => setQ(e.target.value)}\n  onClear={() => setQ('')} placeholder=\"Найти задачу\" />"
+ },
+ {
+  "id": "segmented",
+  "title": "Сегменты",
+  "group": "Управление",
+  "code": "<Segmented strong rounded>\n  <SegmentedButton active={tab === 'a'} onClick={() => setTab('a')}>Исполнитель</SegmentedButton>\n  <SegmentedButton active={tab === 'b'} onClick={() => setTab('b')}>Проверяющий</SegmentedButton>\n</Segmented>"
+ },
+ {
+  "id": "buttons",
+  "title": "Кнопки",
+  "group": "Управление",
+  "code": "<Block className=\"grid gap-2\">\n  <Button large rounded onClick={() => {}}>Основная</Button>\n  <Button large rounded outline onClick={() => {}}>Контурная</Button>\n  <Button large rounded clear onClick={() => {}}>Без фона</Button>\n</Block>"
+ },
+ {
+  "id": "fab",
+  "title": "Плавающая кнопка",
+  "group": "Управление",
+  "code": "<Fab className=\"fixed right-4-safe bottom-20-safe z-20\"\n  icon={<Plus size={22} />} onClick={() => {}} />"
+ },
+ {
+  "id": "chips",
+  "title": "Чипы",
+  "group": "Показ данных",
+  "code": "<div className=\"flex flex-wrap gap-1.5\">\n  <Chip>Просто чип</Chip>\n  <Chip media={<Avatar member={member} size={22} />}>взял: Разраб</Chip>\n  <Chip deleteButton onDelete={() => {}}>С крестиком</Chip>\n</div>"
+ },
+ {
+  "id": "badge",
+  "title": "Бейдж",
+  "group": "Показ данных",
+  "code": "<ListItem title=\"Непрочитанные\" after={<Badge>7</Badge>} />"
+ },
+ {
+  "id": "card",
+  "title": "Карточка",
+  "group": "Показ данных",
+  "code": "<Card header=\"Заголовок карточки\" footer=\"Подпись снизу\">\n  Содержимое карточки: текст, список, что угодно.\n</Card>"
+ },
+ {
+  "id": "progressbar",
+  "title": "Полоса прогресса",
+  "group": "Показ данных",
+  "code": "<Progressbar progress={0.45} />"
+ },
+ {
+  "id": "preloader",
+  "title": "Крутилка",
+  "group": "Показ данных",
+  "code": "<Preloader />"
+ },
+ {
+  "id": "table",
+  "title": "Таблица",
+  "group": "Показ данных",
+  "code": "<Table>\n  <TableHead>\n    <TableRow header>\n      <TableCell header>Задача</TableCell>\n      <TableCell header>Статус</TableCell>\n    </TableRow>\n  </TableHead>\n  <TableBody>\n    <TableRow>\n      <TableCell>Сверстать главную</TableCell>\n      <TableCell>В работе</TableCell>\n    </TableRow>\n  </TableBody>\n</Table>"
+ },
+ {
+  "id": "breadcrumbs",
+  "title": "Хлебные крошки",
+  "group": "Показ данных",
+  "code": "<Breadcrumbs>\n  <BreadcrumbsItem onClick={() => {}}>Проект</BreadcrumbsItem>\n  <BreadcrumbsSeparator />\n  <BreadcrumbsItem active>Этап</BreadcrumbsItem>\n</Breadcrumbs>"
+ },
+ {
+  "id": "timeline",
+  "title": "Таймлайн",
+  "group": "Показ данных",
+  "code": "<div className=\"timeline timeline-sides\">\n  <div className=\"timeline-item\">\n    <div className=\"timeline-item-date\">20 сен</div>\n    <div className=\"timeline-item-divider\" />\n    <div className=\"timeline-item-content\">\n      <div className=\"timeline-item-inner\">\n        <div className=\"timeline-item-title\">Название этапа</div>\n        <div className=\"timeline-item-subtitle\">3 из 5 задач</div>\n      </div>\n    </div>\n  </div>\n</div>"
+ },
+ {
+  "id": "accordion",
+  "title": "Раскрывающийся блок",
+  "group": "Показ данных",
+  "code": "<List strong inset>\n  <ListItem link onClick={() => setOpen(!open)} title=\"Показать подробности\"\n    after={<ChevronDown className={open ? 'rotate-180' : ''} size={16} />} />\n  {open && <ListItem title=\"Скрытое содержимое\" />}\n</List>"
+ },
+ {
+  "id": "navbar",
+  "title": "Шапка",
+  "group": "Навигация",
+  "code": "<Navbar\n  title=\"Название экрана\"\n  subtitle=\"Подзаголовок\"\n  left={<NavbarBackLink text=\"Назад\" onClick={() => navigate(-1)} />}\n  right={<Link iconOnly onClick={() => {}}><MoreHorizontal size={22} /></Link>}\n/>"
+ },
+ {
+  "id": "toolbar",
+  "title": "Нижняя панель",
+  "group": "Навигация",
+  "code": "<Toolbar top>\n  <div className=\"flex w-full items-center justify-between px-1\">\n    <span className=\"font-semibold\">Заголовок</span>\n    <Link onClick={() => {}}>Готово</Link>\n  </div>\n</Toolbar>"
+ },
+ {
+  "id": "tabbar",
+  "title": "Таббар",
+  "group": "Навигация",
+  "code": "<Tabbar labels icons className=\"left-0 bottom-0 fixed\">\n  <TabbarLink active label=\"Сегодня\" icon={<CalendarDays size={22} />} onClick={() => {}} />\n  <TabbarLink label=\"Профиль\" icon={<User size={22} />} onClick={() => {}} />\n</Tabbar>"
+ },
+ {
+  "id": "popup",
+  "title": "Окно на весь экран",
+  "group": "Окна",
+  "code": "<Popup open={open} onClose={() => setOpen(false)} title=\"Задача\"\n  onSave={save} canSave={!!title.trim()}>\n  <List strong inset>\n    <ListInput type=\"textarea\" placeholder=\"Название\" value={title}\n      onChange={(e) => setTitle(e.target.value)} />\n  </List>\n</Popup>"
+ },
+ {
+  "id": "sheet-modal",
+  "title": "Нижняя шторка",
+  "group": "Окна",
+  "code": "<Sheet open={open} onClose={() => setOpen(false)} title=\"Статус\">\n  <List strong inset>\n    {options.map((o) => (\n      <ListItem key={o.id} link onClick={() => pick(o.id)} title={o.label}\n        after={value === o.id ? <Check size={18} className=\"text-primary\" /> : undefined} />\n    ))}\n  </List>\n</Sheet>"
+ },
+ {
+  "id": "actions",
+  "title": "Меню действий",
+  "group": "Окна",
+  "code": "<Actions opened={open} onBackdropClick={() => setOpen(false)}>\n  <ActionsGroup>\n    <ActionsLabel>Что сделать с задачей</ActionsLabel>\n    <ActionsButton onClick={() => {}}>Взять в работу</ActionsButton>\n    <ActionsButton colors={{ text: 'text-red-500' }} onClick={() => {}}>Удалить</ActionsButton>\n  </ActionsGroup>\n  <ActionsGroup>\n    <ActionsButton bold onClick={() => setOpen(false)}>Отмена</ActionsButton>\n  </ActionsGroup>\n</Actions>"
+ },
+ {
+  "id": "dialog",
+  "title": "Диалог",
+  "group": "Окна",
+  "code": "<Dialog opened={open} onBackdropClick={() => setOpen(false)}\n  title=\"Удалить задачу?\" content=\"Её отчёт и история пропадут.\"\n  buttons={<>\n    <DialogButton onClick={() => setOpen(false)}>Отмена</DialogButton>\n    <DialogButton strong onClick={remove}>Удалить</DialogButton>\n  </>} />"
+ },
+ {
+  "id": "popover",
+  "title": "Поповер",
+  "group": "Окна",
+  "code": "<Popover opened={open} target={btnRef.current} onBackdropClick={() => setOpen(false)}>\n  <List nested>\n    <ListItem link title=\"Изменить\" onClick={() => {}} />\n    <ListItem link title=\"Удалить\" onClick={() => {}} />\n  </List>\n</Popover>"
+ },
+ {
+  "id": "panel",
+  "title": "Боковая панель",
+  "group": "Окна",
+  "code": "<Panel side=\"left\" opened={open} onBackdropClick={() => setOpen(false)}>\n  <Page>\n    <Navbar title=\"Меню\" />\n    <List strong inset>\n      <ListItem link title=\"Проекты\" onClick={() => {}} />\n    </List>\n  </Page>\n</Panel>"
+ },
+ {
+  "id": "toast",
+  "title": "Тост",
+  "group": "Окна",
+  "code": "<Toast opened={open} position=\"center\"\n  button={<Button clear onClick={() => setOpen(false)}>Закрыть</Button>}>\n  <span>Сохранено</span>\n</Toast>"
+ },
+ {
+  "id": "notification",
+  "title": "Уведомление",
+  "group": "Окна",
+  "code": "<Notification opened={open} title=\"Доска\" titleRightText=\"сейчас\"\n  subtitle=\"Агент взял задачу\" text=\"Сверстать главную\"\n  onClose={() => setOpen(false)} />"
+ },
+ {
+  "id": "messages",
+  "title": "Лента сообщений",
+  "group": "Чат",
+  "code": "<Messages>\n  <MessagesTitle>воскресенье, 20 сент.</MessagesTitle>\n  <Message type=\"received\" name=\"Агент\" text=\"Задачу взял, начинаю\" />\n  <Message type=\"sent\" text=\"Ок, жду отчёт\" />\n</Messages>"
+ },
+ {
+  "id": "messagebar",
+  "title": "Поле ввода сообщения",
+  "group": "Чат",
+  "code": "<Messagebar placeholder=\"Сообщение\" value={text}\n  onInput={(e) => setText(e.target.value)}\n  right={<ToolbarPane><Link onClick={send} iconOnly aria-label=\"Отправить\">\n    <Send size={22} /></Link></ToolbarPane>} />"
+ }
+]

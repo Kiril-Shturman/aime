@@ -9,6 +9,7 @@
 
 API минимальный, чтобы им мог пользоваться агент:
   GET    /api/state                    — всё сразу: сводка, проекты, задачи
+  GET    /api/design/blocks            — каталог готовых блоков интерфейса
   POST   /api/task                     — {title, note, url, project, member, stage, due, time, flagged}
   PATCH  /api/task/<id>                — {title, note, status, member, stage, report, commit,
                                           tokens, seconds, due, time, flagged}
@@ -165,6 +166,8 @@ div, не тащим новые UI-библиотеки, не выдумывае
 ios-dark-surface-1). Форма всегда отличается от фона страницы.
 Крупные карточки (задача, этап, участник) — на весь экран через Popup,
 мелкие выборы — нижней шторкой Sheet.
+Готовые куски с кодом: board_blocks (список) и board_blocks id=<id> —
+оттуда копируем и собираем экран, а не пишем с нуля.
 Тексты в интерфейсе — по-русски, коротко, без канцелярита."""
 
 
@@ -296,6 +299,37 @@ def counts(state):
         "flagged": sum(1 for t in open_tasks if t.get("flagged")),
         "done": sum(1 for t in state["tasks"] if t.get("done")),
     }
+
+
+BLOCKS_FILE = os.path.join(ROOT, "frontend", "src", "lib", "design-blocks.json")
+
+
+def design_blocks():
+    """Каталог готовых кусков интерфейса: id, название, группа и код.
+
+    Один файл на фронт и на агентов: страница «Блоки» рисует из него
+    примеры, а агент забирает тот же код через API."""
+    try:
+        with open(BLOCKS_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return []
+
+
+async def get_blocks(request):
+    hledat = (request.query.get("q") or "").strip().lower()
+    bid = (request.query.get("id") or "").strip()
+    bloky = design_blocks()
+    if bid:
+        for b in bloky:
+            if b["id"] == bid:
+                return web.json_response(b)
+        raise web.HTTPNotFound(text="нет такого блока")
+    if hledat:
+        bloky = [b for b in bloky
+                 if hledat in b["id"] or hledat in b["title"].lower()
+                 or hledat in b["group"].lower()]
+    return web.json_response({"items": bloky})
 
 
 async def get_state(request):
@@ -2077,6 +2111,7 @@ def make_app():
     owner_key()   # чтобы ключ владельца существовал с первого запуска
     app = web.Application(middlewares=[guard])
     app.router.add_get("/api/state", get_state)
+    app.router.add_get("/api/design/blocks", get_blocks)
     app.router.add_get("/api/whoami", get_whoami)
     app.router.add_get("/api/access", get_access)
     app.router.add_patch("/api/access", patch_access)
