@@ -19,7 +19,7 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/task/<id>/review         — {ok, why, shot} — вердикт проверяющего
   DELETE /api/task/<id>
   POST   /api/project                  — {name, color, note, repo, path, members:[…]}
-  PATCH  /api/project/<id>             — {name, color, note, repo, path}
+  PATCH  /api/project/<id>             — {name, color, note, repo, path, design}
   DELETE /api/project/<id>
   POST   /api/project/<id>/member      — {name, handle, role, kind}
   POST   /api/project/<id>/member/<mid>/bot   — {ref} — подключить телеграм-бота
@@ -147,6 +147,27 @@ def positive_int(value, default=3):
         return default
 
 
+# Дизайн-код по умолчанию: чем агенты собирают интерфейс. Правила живут
+# на доске, а не в голове у каждого агента, иначе каждый рисует своё.
+DESIGN_CODE = """Интерфейс собираем только из готовых компонентов konsta/react
+(это framework7 iOS kitchen-sink на React) и наших обёрток из src/components.
+
+Что берём: List, ListItem, ListInput, ListButton, Block, BlockTitle, Button,
+Chip, Segmented, Toggle, Checkbox, Radio, Progressbar, Navbar, Toolbar,
+Popup, Sheet, Popover, Actions, Card, Messagebar, Messages.
+Наши обёртки: Popup (на весь экран), Sheet (нижняя шторка), PickerSheet,
+Pill, TaskChips, Avatar, TaskRow, Menu, Fab.
+
+Чего не делаем: не пишем свои модалки, списки, кнопки и инпуты на голом
+div, не тащим новые UI-библиотеки, не выдумываем свою палитру.
+
+Цвета: два — акцент (primary) и поверхность формы (ios-light-surface-1 /
+ios-dark-surface-1). Форма всегда отличается от фона страницы.
+Крупные карточки (задача, этап, участник) — на весь экран через Popup,
+мелкие выборы — нижней шторкой Sheet.
+Тексты в интерфейсе — по-русски, коротко, без канцелярита."""
+
+
 def fallback_project(state):
     """Куда падает задача, если проект не указан: первый в списке."""
     return state["projects"][0]["id"] if state["projects"] else None
@@ -201,6 +222,8 @@ def migrate(state):
         p.setdefault("note", "")
         p.setdefault("repo", "")   # ссылка на репозиторий проекта
         p.setdefault("path", "")   # где исходники лежат у агента на сервере
+        # правила интерфейса: их агент обязан прочитать перед фронтом
+        p.setdefault("design", DESIGN_CODE)
         if "bots" in p:
             p["members"] = [
                 dict(b, role=b.get("role", ""), kind=b.get("kind", "bot"))
@@ -646,6 +669,7 @@ async def add_project(request):
         "note": (body.get("note") or "").strip(),
         "repo": (body.get("repo") or "").strip(),
         "path": (body.get("path") or "").strip(),
+        "design": (body.get("design") or DESIGN_CODE),
         "type": body.get("type") or "project",
         "process_kind": body.get("process_kind") or None,
         "members": [make_member(m) for m in body.get("members", [])],
@@ -660,7 +684,8 @@ async def patch_project(request):
     body = await request.json()
     state = load()
     p = find_project(state, request.match_info["pid"])
-    for key in ("name", "color", "note", "repo", "path", "type", "process_kind"):
+    for key in ("name", "color", "note", "repo", "path", "design",
+                "type", "process_kind"):
         if key in body:
             p[key] = (body[key] or "").strip() if isinstance(body[key], str) else body[key]
     save(state)

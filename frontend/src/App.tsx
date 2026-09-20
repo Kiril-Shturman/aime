@@ -8,6 +8,7 @@ import {
 import { App as KonstaApp } from 'konsta/react'
 import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
+import ProjectSettingsPage from './pages/ProjectSettingsPage'
 import FilterPage from './pages/FilterPage'
 import ProfilePage from './pages/ProfilePage'
 import BoardSettingsPage from './pages/BoardSettingsPage'
@@ -88,6 +89,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/project/:id" element={<ProjectPage />} />
+          <Route path="/project/:id/settings" element={<ProjectSettingsPage />} />
           <Route path="/filter/:kind" element={<FilterPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/board-settings" element={<BoardSettingsPage />} />

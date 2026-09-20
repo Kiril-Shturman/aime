@@ -120,6 +120,8 @@ def tool_overview(args):
             delo = "проверяет работу" if m.get("job") == "check" else "исполнитель"
             lines.append(f"  участник {m['name']} [{m['id']}], {delo}"
                          + (f", открытых задач {n}" if n else ", свободен"))
+        if p.get("design"):
+            lines.append("  перед правками интерфейса читай board_design — там дизайн-код проекта")
         if p.get("path"):
             lines.append(f"  исходники: {p['path']}")
         elif p.get("repo"):
@@ -344,6 +346,16 @@ def tool_add_stage(args):
         "status": args.get("status") or "planned",
     })
     return f"Этап «{stage['title']}» заведён в проекте {p['name']} [id {stage['id']}]"
+
+
+def tool_design(args):
+    """Дизайн-код проекта: из чего собираем интерфейс."""
+    st = state()
+    p = find_project(st, args.get("project")) if args.get("project") else None
+    if not p:
+        return "Укажи проект: board_overview покажет, какие есть"
+    text = (p.get("design") or "").strip()
+    return text or "Дизайн-код у проекта не задан — спроси владельца."
 
 
 def tool_to_check(args):
@@ -606,6 +618,14 @@ TOOLS = [
             "status": {"type": "string", "enum": ["planned", "active", "done"]}},
             "required": ["project", "title"]},
         "run": tool_add_stage,
+    },
+    {
+        "name": "board_design",
+        "description": ("Дизайн-код проекта: какими компонентами собирать интерфейс. "
+                        "Читай ДО любой правки фронта."),
+        "inputSchema": {"type": "object", "properties": {
+            "project": {"type": "string"}}, "required": ["project"]},
+        "run": tool_design,
     },
     {
         "name": "board_to_check",

@@ -4,7 +4,8 @@ import Circle from 'framework7-icons/react/esm/Circle.js'
 import InfoCircle from 'framework7-icons/react/esm/InfoCircle.js'
 import ChevronDown from 'framework7-icons/react/esm/ChevronDown.js'
 import Popup from './Popup'
-import { STAGE_STATUS_LABEL, TASK_STATUS_LABEL } from '../lib/constants'
+import { StatusChip } from './TaskChips'
+import { STAGE_STATUS_LABEL } from '../lib/constants'
 import type { Stage, Task } from '../api/types'
 import '../f7-timeline.css'
 
@@ -98,7 +99,10 @@ export default function ModuleRoadmapTreeview({
             const expanded = expandedStages.has(stage.id)
 
             return (
-              <div key={stage.id} className="timeline-item">
+              <div
+                key={stage.id}
+                className={`timeline-item${expanded ? ' raskryt' : ''}`}
+              >
                 <div className="timeline-item-date text-[11px] leading-tight">
                   <div className="font-semibold text-black/80 dark:text-white/80">
                     {Math.round(progress * 100)}%
@@ -137,50 +141,54 @@ export default function ModuleRoadmapTreeview({
                     </button>
 
                     {stageTasks.length > 0 && (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => toggleStage(stage.id)}
-                          className="mt-2 flex items-center gap-1 text-[11px] text-primary active:opacity-60"
-                          aria-expanded={expanded}
+                      <button
+                        type="button"
+                        onClick={() => toggleStage(stage.id)}
+                        className="mt-2 flex items-center gap-1 text-[11px] text-primary active:opacity-60"
+                        aria-expanded={expanded}
+                      >
+                        <span
+                          className={`inline-flex text-[12px] transition-transform ${expanded ? 'rotate-180' : ''}`}
                         >
-                          <span
-                            className={`inline-flex text-[12px] transition-transform ${expanded ? 'rotate-180' : ''}`}
-                          >
-                            <ChevronDown />
-                          </span>
-                          {expanded ? 'Скрыть задачи' : `Показать задачи (${stageTasks.length})`}
-                        </button>
-
-                        {expanded && (
-                          <div className="timeline-item-text mt-2 flex flex-col gap-1">
-                            {stageTasks.map((task) => (
-                              <button
-                                key={task.id}
-                                type="button"
-                                onClick={() => onTaskClick(task)}
-                                className="flex items-center gap-2 rounded-lg bg-black/[.04] px-2 py-1.5 text-left active:opacity-60 dark:bg-white/[.06]"
-                              >
-                                <span
-                                  className={`flex h-5 w-5 shrink-0 items-center justify-center text-[16px] ${task.done ? 'text-green-500' : 'text-primary/70'}`}
-                                >
-                                  {task.done ? <CheckmarkCircleFill /> : <Circle />}
-                                </span>
-                                <span className="min-w-0 flex-1">
-                                  <span className="block truncate text-[12px] font-medium text-black dark:text-white">
-                                    {task.title}
-                                  </span>
-                                  <span className="block text-[10px] text-black/45 dark:text-white/45">
-                                    {TASK_STATUS_LABEL[task.status]}
-                                  </span>
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </>
+                          <ChevronDown />
+                        </span>
+                        {expanded ? 'Скрыть задачи' : `Показать задачи (${stageTasks.length})`}
+                      </button>
                     )}
                   </div>
+
+                  {/* Раскрытый список — отдельный блок под карточкой,
+                      как в китчен-синке: строки списка, а не мелкие плитки. */}
+                  {expanded && stageTasks.length > 0 && (
+                    <div className="timeline-item-inner mt-2 overflow-hidden !p-0">
+                      {stageTasks.map((task, i) => (
+                        <button
+                          key={task.id}
+                          type="button"
+                          onClick={() => onTaskClick(task)}
+                          className={`flex w-full items-center gap-3 px-3.5 py-3 text-left active:bg-black/5 dark:active:bg-white/[.06] ${
+                            i > 0
+                              ? 'border-t border-black/[.06] dark:border-white/[.08]'
+                              : ''
+                          }`}
+                        >
+                          <span
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center text-[20px] ${task.done ? 'text-green-500' : 'text-primary/70'}`}
+                          >
+                            {task.done ? <CheckmarkCircleFill /> : <Circle />}
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block text-[15px] font-medium leading-snug text-black dark:text-white">
+                              {task.title}
+                            </span>
+                            <span className="mt-1 block">
+                              <StatusChip status={task.status} />
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )
