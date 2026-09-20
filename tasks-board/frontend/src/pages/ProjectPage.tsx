@@ -34,7 +34,7 @@ import { useApp } from '../store/AppStore'
 import { Avatar } from '../components/Avatar'
 import Menu, { type MenuItem } from '../components/Menu'
 import Pill from '../components/Pill'
-import TaskRow from '../components/TaskRow'
+import TaskBoard from '../components/TaskBoard'
 import {
   PROCESS_KINDS,
   kindLabel,
@@ -304,9 +304,6 @@ export default function ProjectPage() {
         })
         .slice(0, 3)
     : []
-  const currentTask =
-    openTasks.find((task) => task.status === 'doing') ?? openTasks[0] ?? null
-
   const openTaskSheet = (stage: string | null = null) => {
     setTaskStage(stage)
     setTaskOpen(true)
@@ -579,47 +576,33 @@ export default function ProjectPage() {
             </List>
           )}
 
-          <BlockTitle>Задачи</BlockTitle>
-          <List strong inset dividers>
-            <div className="px-4 pt-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">
-              Сейчас
-            </div>
-            {currentTask ? (
-              <TaskRow task={currentTask} onEdit={setEditTask} />
-            ) : (
-              <ListItem title="Сейчас задач нет" />
-            )}
-
-            {doneTasks.length > 0 && (
-              <div className="px-4 pt-4 pb-1 border-t border-black/[.08] dark:border-white/[.08] text-[11px] font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">
-                Завершено
-              </div>
-            )}
-            {doneTasks.map((task) => (
-              <TaskRow key={task.id} task={task} onEdit={setEditTask} />
-            ))}
-            <ListItem
-              link
-              onClick={() => openTaskSheet(currentTask?.stage ?? null)}
-              media={<Plus size={20} className="text-primary" />}
-              title="Добавить задачу"
-            />
-          </List>
+          <div className="flex items-end justify-between">
+            <BlockTitle>Задачи</BlockTitle>
+            <button
+              type="button"
+              onClick={() => openTaskSheet()}
+              className="mb-1 mr-4 text-[15px] font-medium text-primary active:opacity-60"
+            >
+              Новая
+            </button>
+          </div>
+          <TaskBoard tasks={visibleTasks} onEdit={setEditTask} showProject={false} />
         </>
       )}
 
       {project.type === 'process' && (
         <>
-          <BlockTitle>{memberFilter ? 'Задачи участника' : 'Задачи'}</BlockTitle>
-          <List strong inset>
-            {visibleTasks.length === 0 ? (
-              <ListItem title="Пусто" />
-            ) : (
-              visibleTasks.map((task) => (
-                <TaskRow key={task.id} task={task} onEdit={setEditTask} />
-              ))
-            )}
-          </List>
+          <div className="flex items-end justify-between">
+            <BlockTitle>{memberFilter ? 'Задачи участника' : 'Задачи'}</BlockTitle>
+            <button
+              type="button"
+              onClick={() => openTaskSheet()}
+              className="mb-1 mr-4 text-[15px] font-medium text-primary active:opacity-60"
+            >
+              Новая
+            </button>
+          </div>
+          <TaskBoard tasks={visibleTasks} onEdit={setEditTask} showProject={false} />
         </>
       )}
 
