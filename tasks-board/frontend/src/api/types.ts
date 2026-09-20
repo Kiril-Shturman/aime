@@ -33,6 +33,7 @@ export interface Member {
   plan?: string       // тариф или подписка
   plan_until?: string // до какого дня оплачено
   usage?: string      // что агент сам сообщил о расходе
+  limits?: string     // остатки по окнам, JSON: { "5ч": {used, limit, reset}, "неделя": {…} }
 }
 
 export interface Stage {
