@@ -86,7 +86,10 @@ export default function MemberInfoSheet({
         ? `${sekundyTyden} с`
         : '—'
 
-  const jeObecny = (state?.agents ?? []).some((a) => a.id === member.id)
+  // Агент доски лежит не в проекте, а рядом: его правим и открепляем
+  // через /api/agents/<id>, иначе доска отвечает «нет такого участника».
+  const obecny = (state?.agents ?? []).find((a) => a.id === member.id) ?? null
+  const jeObecny = !!obecny
 
   const pozvat = async () => {
     haptic('success')
@@ -103,22 +106,46 @@ export default function MemberInfoSheet({
   }
 
   const save = async () => {
-    await api.patchMember(projectId, member.id, {
-      name: name.trim(),
-      role: role.trim() || undefined,
-      handle: handle.trim() || undefined,
-      kind,
-    })
-    haptic('success')
-    onClose()
-    await refresh()
+    try {
+      if (obecny) {
+        await api.patchAgent(obecny.id, {
+          name: name.trim(),
+          role: role.trim() || undefined,
+        })
+      } else {
+        await api.patchMember(projectId, member.id, {
+          name: name.trim(),
+          role: role.trim() || undefined,
+          handle: handle.trim() || undefined,
+          kind,
+        })
+      }
+      haptic('success')
+      onClose()
+      await refresh()
+    } catch (e) {
+      setChyba(String(e).replace(/^Error:\s*\d+\s*[^:]*:\s*/, ''))
+    }
   }
 
   const remove = async () => {
-    if (!confirm('Убрать участника из проекта? Его задачи останутся.')) return
-    await api.deleteMember(projectId, member.id)
-    onClose()
-    await refresh()
+    const otazka = obecny
+      ? 'Убрать агента из проекта? На доске он останется.'
+      : 'Убрать участника из проекта? Его задачи останутся.'
+    if (!confirm(otazka)) return
+    try {
+      if (obecny) {
+        await api.patchAgent(obecny.id, {
+          projects: (obecny.projects ?? []).filter((x) => x !== projectId),
+        })
+      } else {
+        await api.deleteMember(projectId, member.id)
+      }
+      onClose()
+      await refresh()
+    } catch (e) {
+      setChyba(String(e).replace(/^Error:\s*\d+\s*[^:]*:\s*/, ''))
+    }
   }
 
   return (
