@@ -603,13 +603,15 @@ async def review_task(request):
         t.setdefault("checks", []).append(verdikt)
         t["check"] = verdikt
         apply_review(t, prijato, why, int(time.time()))
-        save(state)
         if not prijato:
-            # вернули — будим исполнителя и говорим, что переделать
+            # вернули — зовём исполнителя переделывать. Отметку о вызове
+            # ставим до записи: иначе она останется только в памяти и
+            # исполнитель, который придёт за вызовом позже, её не увидит.
             pozvat(state, t.get("member"), {"event": "rework", "task": t["id"],
                                             "title": t["title"], "why": why})
-            if t["status"] == "todo":
-                wake_agent(f"повтор задачи после проверки: {t['title']}")
+        save(state)
+        if not prijato and t["status"] == "todo":
+            wake_agent(f"повтор задачи после проверки: {t['title']}")
         return web.json_response(t)
     raise web.HTTPNotFound()
 
