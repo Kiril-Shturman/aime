@@ -530,6 +530,8 @@ function ChatHeader({
   projectContext?: {
     name: string
     pct: number
+    // из собеседования возвращаемся в обзор проекта, а не в историю браузера
+    onBack?: () => void
     onOpenReasoning?: () => void
     // «Три точки» вместо часов «Истории». Родитель ловит клик и
     // якорится к переданному элементу (тому, что тапнули), чтобы
@@ -742,6 +744,8 @@ export interface ChatPageProps {
   projectContext?: {
     name: string
     pct: number
+    // из собеседования возвращаемся в обзор проекта, а не в историю браузера
+    onBack?: () => void
     onOpenReasoning?: () => void
     // «Три точки» вместо часов «Истории». Родитель ловит клик и
     // якорится к переданному элементу (тому, что тапнули), чтобы
@@ -1102,7 +1106,7 @@ export default function ChatPage({
           models={provider.models}
           onSelectModel={setModel}
           onSelectProvider={(p) => navigate(`/chat/${p.slug}`)}
-          onBack={() => navigate(-1)}
+          onBack={() => (projectContext?.onBack ? projectContext.onBack() : navigate(-1))}
           lockModel={interviewMode}
           projectContext={projectContext}
         />

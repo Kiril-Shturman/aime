@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Workflow,
   Plus,
+  Sparkles,
 } from 'lucide-react'
 import {
   Block,
@@ -63,6 +64,7 @@ export default function ProjectPage() {
   const project = state?.projects.find((p) => p.id === id) ?? null
 
   const [memberFilter, setMemberFilter] = useState<string | null>(null)
+  const [chatOpen, setChatOpen] = useState(false)
   const [gitStatus, setGitStatus] = useState<GitStatus | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const menuBtnRef = useRef<HTMLAnchorElement>(null)
@@ -253,6 +255,13 @@ export default function ProjectPage() {
     project.members.some((m) => m.kind === 'agent'), // за проектом закреплён ИИ-агент
     project.roadmap.length > 0, // после собеседования у проекта есть план
   ]
+  const chybi = [
+    readinessFlags[0] ? null : 'описание',
+    readinessFlags[1] ? null : 'репозиторий',
+    readinessFlags[2] ? null : 'почта',
+    readinessFlags[3] ? null : 'ИИ-агент',
+    readinessFlags[4] ? null : 'план',
+  ].filter(Boolean) as string[]
   const readinessPct = Math.round(
     (readinessFlags.filter(Boolean).length / readinessFlags.length) * 100,
   )
@@ -304,12 +313,10 @@ export default function ProjectPage() {
     window.setTimeout(() => setEditTask(task), 280)
   }
 
-  // Пока ИИ не набрал 100% понимания — вся страница отдаётся под чат,
-  // но это ровно та же ChatPage, что живёт на /chat/:provider: тот же
-  // мессаджбар, те же пузыри, та же длинная ленивая история. Мы только
-  // фиксируем провайдера, прячем выбор модели и показываем в шапке имя
-  // проекта + полоску понимания.
-  if (onboarding) {
+  // Собеседование с ИИ — не ворота, а отдельный экран: обзор проекта
+  // доступен всегда, даже если что-то не подключено. Чат открывается по
+  // кнопке и закрывается обратно в обзор.
+  if (chatOpen) {
     // ChatPage — единый компонент чата. Мы даём ему всё, что нужно
     // знать о проекте (имя, % понимания, коллбэк «три точки»), и
     // рядом монтируем те же меню/шиты, что показывает обычная
@@ -322,6 +329,7 @@ export default function ProjectPage() {
           projectContext={{
             name: project.name,
             pct: readinessPct,
+            onBack: () => setChatOpen(false),
             onMoreClick: (anchor) => {
               menuBtnRef.current = anchor
               setMenuOpen(true)
@@ -424,6 +432,30 @@ export default function ProjectPage() {
           }
         />
       </List>
+
+      {onboarding && (
+        <>
+          <BlockTitle>Понимание проекта</BlockTitle>
+          <List strong inset>
+            <ListItem
+              title={<span className="font-semibold">{readinessPct}% собрано</span>}
+              subtitle={chybi.length ? `Осталось: ${chybi.join(', ')}` : undefined}
+              text={
+                <span className="mt-2 block">
+                  <Progressbar progress={readinessPct / 100} />
+                </span>
+              }
+            />
+            <ListItem
+              link
+              onClick={() => setChatOpen(true)}
+              media={<Sparkles size={20} className="text-primary" />}
+              title="Поговорить с ИИ о проекте"
+              subtitle="Необязательно — обзор и задачи работают и так"
+            />
+          </List>
+        </>
+      )}
 
       {project.type === 'process' && project.process_kind && (
         <>
