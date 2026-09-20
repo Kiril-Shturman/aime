@@ -41,6 +41,7 @@ export default function MemberInfoSheet({
   const [handle, setHandle] = useState('')
   const [kind, setKind] = useState<MemberKind>('bot')
   const [pozvano, setPozvano] = useState(false)
+  const [chyba, setChyba] = useState<string | null>(null)
 
   useEffect(() => {
     if (!member) return
@@ -87,14 +88,18 @@ export default function MemberInfoSheet({
         ? `${sekundyTyden} с`
         : '—'
 
+  const jeObecny = (state?.agents ?? []).some((a) => a.id === member.id)
+
   const pozvat = async () => {
     haptic('success')
     setPozvano(true)
     try {
-      await api.pingMember(projectId, member.id)
+      if (jeObecny) await api.pingAgent(member.id)
+      else await api.pingMember(projectId, member.id)
       await refresh()
-    } catch {
+    } catch (e) {
       setPozvano(false)
+      setChyba(String(e).replace(/^Error:\s*\d+\s*[^:]*:\s*/, ''))
     }
     window.setTimeout(() => setPozvano(false), 4000)
   }
@@ -165,9 +170,17 @@ export default function MemberInfoSheet({
         </div>
 
         {member.kind === 'agent' && (
-          <Button large rounded className="!mt-3" onClick={pozvat}>
+          <button
+            type="button"
+            onClick={pozvat}
+            className="mt-3 w-full rounded-2xl bg-black/[.06] py-3 text-[15px] font-semibold text-primary active:opacity-70 dark:bg-white/[.08]"
+          >
             {pozvano ? 'Позвали — ждём' : 'Позвать агента'}
-          </Button>
+          </button>
+        )}
+
+        {chyba && (
+          <p className="mt-2 text-[13px] leading-snug text-[#ff9f0a]">{chyba}</p>
         )}
 
         {member.ping && !pozvano ? (

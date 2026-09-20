@@ -285,11 +285,11 @@ async def get_state(request):
                "counts": counts(state), "agents": agents}
     kdo = request.get("who") or {}
     if kdo.get("kind") == "member":
-        for p in state["projects"]:
-            for m in p["members"]:
-                if m["id"] == kdo["id"]:
-                    odpoved["me"] = {"id": m["id"], "name": m["name"],
-                                     "role": m.get("role", ""), "ping": m.get("ping", 0)}
+        for m in vsichni_clenove(state):
+            if m["id"] == kdo["id"]:
+                odpoved["me"] = {"id": m["id"], "name": m["name"],
+                                 "role": m.get("role", ""), "ping": m.get("ping", 0)}
+                break
     return web.json_response(odpoved)
 
 
