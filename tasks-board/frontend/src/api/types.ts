@@ -28,6 +28,7 @@ export interface Member {
   hook?: string       // адрес, по которому доска может разбудить агента
   hook_ok?: boolean   // достучались ли в прошлый раз
   hook_note?: string  // что ответил адрес
+  connected?: string  // когда агент прислал адрес и считается подключённым
 }
 
 export interface Stage {

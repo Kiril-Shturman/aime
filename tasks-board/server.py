@@ -38,6 +38,7 @@ API минимальный, чтобы им мог пользоваться аг
   DELETE /api/agents/<id>               — убрать агента с доски
   POST   /api/agents/<id>/ping          — позвать агента (стучимся в его hook)
   POST   /api/project/<id>/member/<mid>/ping — позвать исполнителя
+  POST   /api/agent/connect            — {hook, client, model} — агент подключился
   POST   /api/agent/hello              — {client, model, avatar} — агент представился
   POST   /api/chat                     — {model, messages} — ответ модели
   GET    /mcp_board.py                 — сам коннектор, чтобы агент скачал его сам
@@ -758,6 +759,29 @@ async def ping_member(request):
             save(state)
             return web.json_response({"ok": True, "ping": m["ping"]})
     raise web.HTTPNotFound(text="нет такого участника")
+
+
+async def agent_connect(request):
+    """Агент подключается сам: присылает адрес, по которому его будить.
+    С этого момента доска считает его подключённым."""
+    who = request.get("who") or {}
+    if who.get("kind") != "member":
+        raise web.HTTPForbidden(text="нужен ключ агента")
+    body = await request.json()
+    hook = (body.get("hook") or "").strip()
+    if not hook.startswith(("http://", "https://")):
+        raise web.HTTPBadRequest(text="нужен hook — адрес, по которому тебя разбудить")
+    info = {"hook": hook, "connected": str(int(time.time()))}
+    for pole in ("client", "model"):
+        if body.get(pole):
+            info[pole] = body[pole]
+    if body.get("avatar"):
+        cesta = await asyncio.get_running_loop().run_in_executor(
+            None, stahnout_avatar, who["id"], body["avatar"])
+        if cesta:
+            info["avatar"] = cesta
+    videl_jsem(who["id"], **info)
+    return web.json_response({"ok": True, "connected": True, "hook": hook})
 
 
 async def agent_hello(request):
@@ -1617,6 +1641,7 @@ def make_app():
     app.router.add_delete("/api/agents/{aid}", delete_agent)
     app.router.add_post("/api/agents/{aid}/ping", ping_agent)
     app.router.add_post("/api/project/{pid}/member/{mid}/ping", ping_member)
+    app.router.add_post("/api/agent/connect", agent_connect)
     app.router.add_post("/api/agent/hello", agent_hello)
     app.router.add_post("/api/chat", chat_completion)
     app.router.add_post("/api/task", add_task)

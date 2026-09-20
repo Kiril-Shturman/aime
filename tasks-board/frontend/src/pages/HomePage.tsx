@@ -146,8 +146,8 @@ export default function HomePage() {
   // «Мои агенты» — только те, кто реально выходил на связь; остальные
   // ещё не подключились, им нужно отдать ключ
   const vsichniAgenti = state?.agents ?? []
-  const pripojeni = vsichniAgenti.filter((a) => !!a.seen)
-  const cekajici = vsichniAgenti.filter((a) => !a.seen)
+  const pripojeni = vsichniAgenti.filter((a) => !!a.hook || !!a.seen)
+  const cekajici = vsichniAgenti.filter((a) => !a.hook && !a.seen)
   const [agent, setAgent] = useState<Agent | null>(null)
   const [goalOpen, setGoalOpen] = useState(false)
   const [outOpen, setOutOpen] = useState<{
@@ -427,7 +427,7 @@ export default function HomePage() {
                     }
                     after={
                       <span className="text-[13px] text-black/40 dark:text-white/35">
-                        {a.model || (online ? 'в сети' : '')}
+                        {a.model || (a.hook ? 'вызов настроен' : online ? 'в сети' : '')}
                       </span>
                     }
                   />
