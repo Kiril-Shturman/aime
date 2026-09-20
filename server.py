@@ -39,6 +39,10 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/agents/<id>/ping          — позвать агента (стучимся в его hook)
   POST   /api/project/<id>/member/<mid>/ping — позвать исполнителя
   GET    /api/agent/wait               — агент висит и ждёт вызова (без белого адреса)
+  GET    /api/agent/inbox              — что владелец написал агенту
+  POST   /api/agent/say                — агент отвечает владельцу
+  GET    /api/agents/<id>/chat         — переписка с агентом
+  POST   /api/agents/<id>/say          — написать агенту
   POST   /api/agent/connect            — {hook, client, model} — агент подключился
   POST   /api/agent/hello              — {client, model, avatar} — агент представился
   POST   /api/chat                     — {model, messages} — ответ модели
@@ -813,6 +817,69 @@ async def ping_member(request):
     raise web.HTTPNotFound(text="нет такого участника")
 
 
+def chat_agenta(state, aid):
+    return state.setdefault("chats", {}).setdefault(aid, [])
+
+
+async def get_chat(request):
+    """Переписка с агентом: и владельцу, и самому агенту."""
+    who = request.get("who") or {}
+    aid = request.match_info["aid"]
+    if who.get("kind") != "owner" and who.get("id") != aid:
+        raise web.HTTPForbidden(text="чужая переписка")
+    return web.json_response({"items": chat_agenta(load(), aid)[-200:]})
+
+
+async def say_to_agent(request):
+    """Владелец пишет агенту. Если тот ждёт на проводе — будим сразу."""
+    only_owner(request)
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise web.HTTPBadRequest(text="пустое сообщение")
+    aid = request.match_info["aid"]
+    state = load()
+    zprava = {"from": "owner", "text": text[:4000], "at": int(time.time())}
+    chat_agenta(state, aid).append(zprava)
+    for a in state.get("agents", []):
+        if a["id"] == aid:
+            a["ping"] = int(time.time())
+    save(state)
+    probudit(aid)
+    return web.json_response(zprava)
+
+
+async def agent_say(request):
+    """Агент отвечает владельцу."""
+    who = request.get("who") or {}
+    if who.get("kind") != "member":
+        raise web.HTTPForbidden(text="нужен ключ агента")
+    body = await request.json()
+    text = (body.get("text") or "").strip()
+    if not text:
+        raise web.HTTPBadRequest(text="пустое сообщение")
+    state = load()
+    zprava = {"from": "agent", "text": text[:4000], "at": int(time.time())}
+    chat_agenta(state, who["id"]).append(zprava)
+    save(state)
+    return web.json_response(zprava)
+
+
+async def agent_inbox(request):
+    """Что владелец написал агенту с прошлого раза."""
+    who = request.get("who") or {}
+    if who.get("kind") != "member":
+        raise web.HTTPForbidden(text="нужен ключ агента")
+    state = load()
+    try:
+        od = int(request.query.get("since", 0))
+    except ValueError:
+        od = 0
+    zpravy = [z for z in chat_agenta(state, who["id"])
+              if z["from"] == "owner" and z["at"] > od]
+    return web.json_response({"items": zpravy})
+
+
 async def agent_connect(request):
     """Агент подключается сам: присылает адрес, по которому его будить.
     С этого момента доска считает его подключённым."""
@@ -826,6 +893,9 @@ async def agent_connect(request):
     info = {"connected": str(int(time.time()))}
     if hook:
         info["hook"] = hook
+    for pole in ("account", "plan", "plan_until", "usage"):
+        if body.get(pole):
+            info[pole] = body[pole]
     for pole in ("client", "model"):
         if body.get(pole):
             info[pole] = body[pole]
@@ -851,8 +921,9 @@ async def agent_hello(request):
         raise web.HTTPForbidden(text="только участник доски")
     body = await request.json()
     info = {"client": body.get("client"), "model": body.get("model")}
-    if body.get("hook"):
-        info["hook"] = body["hook"]
+    for pole in ("hook", "account", "plan", "plan_until", "usage"):
+        if body.get(pole):
+            info[pole] = body[pole]
     if body.get("avatar"):
         cesta = await asyncio.get_running_loop().run_in_executor(
             None, stahnout_avatar, who["id"], body["avatar"])
@@ -1702,6 +1773,10 @@ def make_app():
     app.router.add_post("/api/agents/{aid}/ping", ping_agent)
     app.router.add_post("/api/project/{pid}/member/{mid}/ping", ping_member)
     app.router.add_get("/api/agent/wait", agent_wait)
+    app.router.add_get("/api/agent/inbox", agent_inbox)
+    app.router.add_post("/api/agent/say", agent_say)
+    app.router.add_get("/api/agents/{aid}/chat", get_chat)
+    app.router.add_post("/api/agents/{aid}/say", say_to_agent)
     app.router.add_post("/api/agent/connect", agent_connect)
     app.router.add_post("/api/agent/hello", agent_hello)
     app.router.add_post("/api/chat", chat_completion)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Check, Copy } from 'lucide-react'
+import { Check, Copy, MessageCircle } from 'lucide-react'
 import { Block, Button, List, ListInput, ListItem, Segmented, SegmentedButton } from 'konsta/react'
 import Popup from '../components/Popup'
 import { api } from '../api/client'
@@ -12,11 +12,12 @@ interface Props {
   open: boolean
   onClose: () => void
   agent?: Agent | null
+  onOpenChat?: (agent: Agent) => void
 }
 
 // Агент живёт на доске, а не внутри проекта: здесь его заводят, подключают
 // и отмечают галочками, в каких проектах он участвует.
-export default function AgentSheet({ open, onClose, agent }: Props) {
+export default function AgentSheet({ open, onClose, agent, onOpenChat }: Props) {
   const { state, refresh } = useApp()
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
@@ -28,6 +29,7 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
   const [hook, setHook] = useState('')
   const [doruceno, setDoruceno] = useState<string | null>(null)
   const [chyba, setChyba] = useState<string | null>(null)
+
 
   const zobrazeny = agent ?? hotovy
 
@@ -158,6 +160,34 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
               </span>
             )}
           </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <Udaj nazev="модель" hodnota={zobrazeny.model} />
+            <Udaj nazev="аккаунт" hodnota={zobrazeny.account} />
+            <Udaj nazev="подписка" hodnota={zobrazeny.plan} />
+            <Udaj
+              nazev="оплачено до"
+              hodnota={
+                zobrazeny.plan_until
+                  ? new Date(zobrazeny.plan_until).toLocaleDateString('ru-RU', {
+                      day: 'numeric',
+                      month: 'long',
+                    })
+                  : undefined
+              }
+            />
+            <Udaj nazev="расход" hodnota={zobrazeny.usage} />
+            <Udaj nazev="чем подключён" hodnota={zobrazeny.client} />
+          </div>
+
+          <button
+            type="button"
+            onClick={() => zobrazeny && onOpenChat?.(zobrazeny)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-2xl border border-black/[.06] bg-ios-light-surface-1 py-3 text-[15px] font-semibold text-black active:opacity-70 dark:border-white/[.08] dark:bg-ios-dark-surface-1 dark:text-white"
+          >
+            <MessageCircle size={18} />
+            Открыть чат с агентом
+          </button>
         </Block>
       )}
 
@@ -253,6 +283,11 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
           </Block>
 
           <Block className="grid gap-2">
+            <p className="text-[13px] leading-snug text-black/45 dark:text-white/40">
+              {zobrazeny.hook
+                ? 'Позвать — доска постучится по адресу агента и разбудит его.'
+                : 'Позвать — агент проснётся на своём ожидании (board_wait) или увидит вызов, когда придёт за задачами.'}
+            </p>
             {doruceno && (
               <p className="text-[13px] leading-snug text-black/55 dark:text-white/45">{doruceno}</p>
             )}
@@ -283,5 +318,16 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
         </>
       )}
     </Popup>
+  )
+}
+
+function Udaj({ nazev, hodnota }: { nazev: string; hodnota?: string }) {
+  return (
+    <div className="rounded-xl border border-black/[.06] bg-ios-light-surface-1 px-3 py-2.5 dark:border-white/[.08] dark:bg-ios-dark-surface-1">
+      <div className="truncate text-[15px] font-semibold text-black dark:text-white">
+        {hodnota || '—'}
+      </div>
+      <div className="mt-0.5 text-[12px] text-black/45 dark:text-white/40">{nazev}</div>
+    </div>
   )
 }
