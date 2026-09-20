@@ -25,6 +25,8 @@ export const STAGE_STATUS_LABEL: Record<string, string> = {
 export const TASK_STATUS_LABEL: Record<string, string> = {
   todo: 'Не начата',
   doing: 'В работе',
+  review: 'На проверке',
+  blocked: 'Заблокирована',
   done: 'Готово',
 }
 

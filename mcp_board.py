@@ -22,7 +22,7 @@ import urllib.request
 BOARD = os.environ.get("BOARD_URL", "http://127.0.0.1:8095").rstrip("/")
 # личный ключ исполнителя: по нему доска понимает, кто именно пришёл
 KEY = os.environ.get("BOARD_KEY", "")
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 
 # ---------------------------------------------------------------- HTTP доски
@@ -128,11 +128,12 @@ def tool_overview(args):
             done, total = pr.get("done", 0), pr.get("total", 0)
             lines.append(f"  этап «{stage['title']}» — {mark}, задач {done} из {total}"
                          + (f", срок {stage['date']}" if stage.get("date") else ""))
-    doing = [t for t in st["tasks"] if t.get("status") == "doing"]
+    doing = [t for t in st["tasks"] if t.get("status") in ("doing", "review", "blocked")]
     if doing:
         lines.append("\nСейчас в работе:")
         for t in doing:
-            lines.append(f"  {t['title']} — {t.get('report') or 'отчёта пока нет'} [id {t['id']}]")
+            label = {"doing": "в работе", "review": "на проверке", "blocked": "заблокирована"}[t["status"]]
+            lines.append(f"  {t['title']} ({label}) — {t.get('report') or 'отчёта пока нет'} [id {t['id']}]")
     return "\n".join(lines)
 
 
@@ -155,6 +156,7 @@ def tool_next_task(args):
     free = [t for t in st["tasks"]
             if t.get("status") == "todo"
             and (not project or t["project"] == project["id"])
+            and t.get("stage") in active_stages
             # чужое не трогаем: задача либо ничья, либо назначена мне
             and (not t.get("member") or t["member"] == mine)]
     if not free:
@@ -180,7 +182,7 @@ def tool_take(args):
 
 
 def tool_report(args):
-    """Записать отчёт и, если работа закончена, закрыть задачу.
+    """Записать отчёт и, если работа закончена, сдать её на проверку.
 
     Заодно фиксируем цену работы: коммит, токены, потраченные минуты.
     Время посчитается само, если не передать."""
@@ -189,9 +191,46 @@ def tool_report(args):
         if args.get(key) is not None:
             body[key] = args[key]
     if args.get("done"):
-        body["status"] = "done"
+        t = call(f"/api/task/{args['id']}/submit", "POST", body)
+        return f"Отправлено на проверку (попытка {t['attempts']}): {t['title']}"
     t = call(f"/api/task/{args['id']}", "PATCH", body)
-    return f"{'Закрыто' if t['status'] == 'done' else 'Обновлено'}: {t['title']}"
+    return f"Обновлено: {t['title']}"
+
+
+def tool_return(args):
+    """Вернуть незавершённую задачу в очередь с честным объяснением."""
+    t = call(f"/api/task/{args['id']}/return", "POST", {"report": args["report"]})
+    if t["status"] == "blocked":
+        return f"Заблокировано после лимита попыток: {t['title']}"
+    return f"Возвращено в очередь (попытка {t['attempts']}): {t['title']}"
+
+
+def tool_next_review(args):
+    """Следующая сданная задача для независимой проверки."""
+    st = state()
+    project = find_project(st, args.get("project")) if args.get("project") else None
+    tasks = [t for t in st["tasks"] if t.get("status") == "review"
+             and (not project or t["project"] == project["id"])]
+    if not tasks:
+        return "Задач на проверке нет."
+    t = sorted(tasks, key=lambda x: x.get("submitted_at") or 0)[0]
+    p = next((x for x in st["projects"] if x["id"] == t["project"]), None)
+    return json.dumps({
+        "id": t["id"], "title": t["title"], "note": t.get("note"),
+        "report": t.get("report"), "commit": t.get("commit"),
+        "attempt": t.get("attempts", 1), "max_attempts": t.get("max_attempts", 3),
+        "project": p["name"] if p else None, "path": p.get("path") if p else None,
+        "repo": p.get("repo") if p else None,
+    }, ensure_ascii=False, indent=1)
+
+
+def tool_review(args):
+    t = call(f"/api/task/{args['id']}/review", "POST", {
+        "passed": args["passed"], "report": args["report"],
+    })
+    result = {"done": "Принято", "todo": "Возвращено на повтор",
+              "blocked": "Заблокировано после лимита попыток"}[t["status"]]
+    return f"{result}: {t['title']}"
 
 
 def tool_add_task(args):
@@ -392,16 +431,42 @@ TOOLS = [
     },
     {
         "name": "board_report",
-        "description": "Записать отчёт по задаче и при необходимости закрыть её.",
+        "description": "Записать отчёт; done=true сдаёт результат на независимую проверку, но не закрывает сразу.",
         "inputSchema": {"type": "object", "properties": {
             "id": {"type": "string"},
             "report": {"type": "string", "description": "Что сделано, что осталось, ссылка"},
             "commit": {"type": "string", "description": "Хеш коммита, если работа в коде"},
             "tokens": {"type": "integer", "description": "Сколько токенов ушло на задачу"},
             "seconds": {"type": "integer", "description": "Сколько секунд заняло; можно не слать"},
-            "done": {"type": "boolean", "description": "true — закрыть задачу"}},
+            "done": {"type": "boolean", "description": "true — сдать задачу на проверку"}},
             "required": ["id", "report"]},
         "run": tool_report,
+    },
+    {
+        "name": "board_next_review",
+        "description": "Выдать следующую задачу, которую исполнитель сдал на проверку.",
+        "inputSchema": {"type": "object", "properties": {
+            "project": {"type": "string", "description": "Название проекта, необязательно"}}},
+        "run": tool_next_review,
+    },
+    {
+        "name": "board_return",
+        "description": "Вернуть задачу из работы в очередь, если выполнить её сейчас не получилось.",
+        "inputSchema": {"type": "object", "properties": {
+            "id": {"type": "string"},
+            "report": {"type": "string", "description": "Почему задача не завершена и что нужно для следующей попытки"}},
+            "required": ["id", "report"]},
+        "run": tool_return,
+    },
+    {
+        "name": "board_review",
+        "description": "Записать независимую проверку: принять задачу или вернуть на повтор.",
+        "inputSchema": {"type": "object", "properties": {
+            "id": {"type": "string"},
+            "passed": {"type": "boolean"},
+            "report": {"type": "string", "description": "Что именно проверено и почему результат принят/отклонён"}},
+            "required": ["id", "passed", "report"]},
+        "run": tool_review,
     },
     {
         "name": "board_add_task",

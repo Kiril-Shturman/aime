@@ -12,6 +12,9 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/task                     — {title, note, url, project, member, stage, due, time, flagged}
   PATCH  /api/task/<id>                — {title, note, status, member, stage, report, commit,
                                           tokens, seconds, due, time, flagged}
+  POST   /api/task/<id>/submit         — сдать результат на независимую проверку
+  POST   /api/task/<id>/review         — принять результат или вернуть на повтор
+  POST   /api/task/<id>/return         — вернуть оборванную попытку в очередь
   POST   /api/task/<id>/toggle         — отметить/снять отметку
   DELETE /api/task/<id>
   POST   /api/project                  — {name, color, note, repo, path, members:[…]}
@@ -71,6 +74,7 @@ import uuid
 from datetime import date
 
 from aiohttp import web
+from task_cycle import apply_review, return_for_retry, submit_candidate
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, "data.json")
@@ -111,7 +115,7 @@ def by_agent(request):
 
 KINDS = ("bot", "agent", "service", "human")
 STAGES = ("planned", "active", "done")
-TASK_STATUS = ("todo", "doing", "done")
+TASK_STATUS = ("todo", "doing", "review", "blocked", "done")
 
 DEFAULT = {"projects": [], "tasks": []}
 
@@ -130,6 +134,13 @@ ASSISTANT = {
     "replies": [],                           # заготовки: {id, title, text}
     "support": {"hours": "", "sla": 0, "escalate": ""},
 }
+
+
+def positive_int(value, default=3):
+    try:
+        return max(1, int(value))
+    except (TypeError, ValueError):
+        return default
 
 
 def fallback_project(state):
@@ -212,6 +223,10 @@ def migrate(state):
         t.setdefault("tokens", 0)      # сколько токенов ушло
         t.setdefault("seconds", 0)     # сколько времени заняло
         t.setdefault("started_at", None)
+        t.setdefault("submitted_at", None)
+        t.setdefault("attempts", 0)
+        t.setdefault("max_attempts", 3)
+        t.setdefault("verification_report", "")
     if changed:
         save(state)
     return state
@@ -343,6 +358,10 @@ async def add_task(request):
         "tokens": 0,
         "seconds": 0,
         "started_at": None,
+        "submitted_at": None,
+        "attempts": 0,
+        "max_attempts": positive_int(body.get("max_attempts")),
+        "verification_report": "",
         "url": (body.get("url") or "").strip(),
         "due": body.get("due") or None,
         "time": body.get("time") or None,
@@ -363,10 +382,10 @@ async def patch_task(request):
     for t in state["tasks"]:
         if t["id"] != request.match_info["tid"]:
             continue
-        for key in ("title", "note", "report", "url", "commit"):
+        for key in ("title", "note", "report", "verification_report", "url", "commit"):
             if key in body:
                 t[key] = (body[key] or "").strip()
-        for key in ("tokens", "seconds"):
+        for key in ("tokens", "seconds", "attempts", "max_attempts"):
             if key in body and body[key] is not None:
                 try:
                     t[key] = max(0, int(body[key]))
@@ -383,15 +402,80 @@ async def patch_task(request):
             now = int(time.time())
             if t["status"] == "doing" and not t.get("started_at"):
                 t["started_at"] = now          # засекаем, когда взяли в работу
+            if t["status"] == "todo":
+                t["started_at"] = None
             # взял задачу — значит она твоя, даже если её никто не назначал
             who = request.get("who") or {}
             if t["status"] == "doing" and who.get("kind") == "member" and not t.get("member"):
                 t["member"] = who["id"]
             t["done_at"] = now if t["done"] else None
+            if t["status"] == "review":
+                t["submitted_at"] = now
             # если исполнитель не сказал, сколько заняло, считаем сами
             if t["done"] and not t.get("seconds") and t.get("started_at"):
                 t["seconds"] = max(0, now - t["started_at"])
         save(state)
+        return web.json_response(t)
+    raise web.HTTPNotFound()
+
+
+async def submit_task(request):
+    """Исполнитель закончил работу, но задача ещё не готова: сначала review."""
+    body = await request.json()
+    state = load()
+    for t in state["tasks"]:
+        if t["id"] != request.match_info["tid"]:
+            continue
+        if t.get("status") != "doing":
+            raise web.HTTPConflict(text="сдать можно только задачу в работе")
+        report = (body.get("report") or "").strip()
+        if not report:
+            raise web.HTTPBadRequest(text="report required")
+        body["report"] = report
+        submit_candidate(t, body, int(time.time()))
+        save(state)
+        return web.json_response(t)
+    raise web.HTTPNotFound()
+
+
+async def review_task(request):
+    """Проверяющий либо закрывает задачу, либо возвращает её в очередь."""
+    body = await request.json()
+    if not isinstance(body.get("passed"), bool):
+        raise web.HTTPBadRequest(text="passed must be boolean")
+    review = (body.get("report") or "").strip()
+    if not review:
+        raise web.HTTPBadRequest(text="report required")
+    state = load()
+    for t in state["tasks"]:
+        if t["id"] != request.match_info["tid"]:
+            continue
+        if t.get("status") != "review":
+            raise web.HTTPConflict(text="проверять можно только сданную задачу")
+        apply_review(t, body["passed"], review, int(time.time()))
+        save(state)
+        if t["status"] == "todo":
+            wake_agent(f"повтор задачи после проверки: {t['title']}")
+        return web.json_response(t)
+    raise web.HTTPNotFound()
+
+
+async def return_task(request):
+    """Неудачная попытка исполнения: повторить позже или остановиться по лимиту."""
+    body = await request.json()
+    report = (body.get("report") or "").strip()
+    if not report:
+        raise web.HTTPBadRequest(text="report required")
+    state = load()
+    for t in state["tasks"]:
+        if t["id"] != request.match_info["tid"]:
+            continue
+        if t.get("status") != "doing":
+            raise web.HTTPConflict(text="вернуть можно только задачу в работе")
+        return_for_retry(t, report)
+        save(state)
+        if t["status"] == "todo":
+            wake_agent(f"повтор незавершённой задачи: {t['title']}")
         return web.json_response(t)
     raise web.HTTPNotFound()
 
@@ -563,6 +647,14 @@ async def add_tasks(request):
                       or body.get("member") or None,
             "status": "todo",
             "report": "",
+            "commit": "",
+            "tokens": 0,
+            "seconds": 0,
+            "started_at": None,
+            "submitted_at": None,
+            "attempts": 0,
+            "max_attempts": positive_int(item.get("max_attempts") if isinstance(item, dict) else None),
+            "verification_report": "",
             "url": "",
             "due": None,
             "time": None,
@@ -1843,6 +1935,9 @@ def make_app():
     app.router.add_post("/api/task", add_task)
     app.router.add_patch("/api/task/{tid}", patch_task)
     app.router.add_post("/api/task/{tid}/toggle", toggle_task)
+    app.router.add_post("/api/task/{tid}/submit", submit_task)
+    app.router.add_post("/api/task/{tid}/review", review_task)
+    app.router.add_post("/api/task/{tid}/return", return_task)
     app.router.add_delete("/api/task/{tid}", delete_task)
     app.router.add_post("/api/project", add_project)
     app.router.add_patch("/api/project/{pid}", patch_project)

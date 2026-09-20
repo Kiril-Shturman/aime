@@ -47,6 +47,8 @@ done
 
 say "Поднимаю доску службой"
 $SSH "$REMOTE" "su - ubuntu -c 'mkdir -p ~/.config/systemd/user
+install -m 0644 /home/ubuntu/projects/aime/tasks-board/mcp_board.py /home/ubuntu/board-mcp.py
+cd /home/ubuntu/projects/aime/tasks-board/frontend && npm ci && npm run build
 cat > ~/.config/systemd/user/board.service <<EOF
 [Unit]
 Description=Доска задач
@@ -55,8 +57,7 @@ After=network.target
 [Service]
 WorkingDirectory=/home/ubuntu/projects/aime/tasks-board
 Environment=PORT=8095
-Environment=LOOP_JOB_ID=\${LOOP_JOB_ID:-}
-Environment=LOOP_TRIGGER_CMD=/home/ubuntu/.npm-global/bin/openclaw cron run \${LOOP_JOB_ID:-}
+Environment=LOOP_TRIGGER_CMD=/usr/bin/systemctl --user start --no-block board-worker.service
 ExecStart=/usr/bin/python3 /home/ubuntu/projects/aime/tasks-board/server.py
 Restart=always
 RestartSec=3
@@ -64,7 +65,37 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 EOF
-systemctl --user daemon-reload && systemctl --user enable --now board'"
+cat > ~/.config/systemd/user/board-worker.service <<EOF
+[Unit]
+Description=Замкнутый исполнитель задач aiMe
+After=board.service openclaw-gateway.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ubuntu/projects/aime/tasks-board
+Environment=BOARD_URL=http://127.0.0.1:8095
+Environment=WORKER_PROJECT=aiMe
+Environment=WORKER_MEMBER=NightWorkrr
+Environment=WORKER_LIMIT=3
+Environment=OPENCLAW_BIN=/home/ubuntu/.npm-global/bin/openclaw
+ExecStart=/usr/bin/python3 /home/ubuntu/projects/aime/tasks-board/worker.py
+TimeoutStartSec=3h
+EOF
+cat > ~/.config/systemd/user/board-worker.timer <<EOF
+[Unit]
+Description=Страховочный запуск воркера aiMe раз в шесть часов
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=6h
+Persistent=true
+Unit=board-worker.service
+
+[Install]
+WantedBy=timers.target
+EOF
+systemctl --user daemon-reload
+systemctl --user enable --now board board-worker.timer'"
 
 say "Выпускаю сертификат на $HOST"
 $SSH "$REMOTE" "printf '%s\n' '$HOST {' '    encode zstd gzip' '    reverse_proxy 127.0.0.1:8095' '}' > /etc/caddy/Caddyfile
@@ -81,6 +112,6 @@ cat <<NOTE
   1. Переключить кнопку мини-аппы бота на https://$HOST/
      curl -X POST "https://api.telegram.org/bot<TOKEN>/setChatMenuButton" \\
        -d '{"menu_button":{"type":"web_app","text":"Доска","web_app":{"url":"https://$HOST/"}}}'
-  2. Убедиться, что цикл жив: openclaw cron status
+  2. Убедиться, что цикл жив: systemctl --user status board-worker.timer
   3. Погасить старый сервер, когда всё проверено.
 NOTE
