@@ -12,6 +12,7 @@ import {
   Trash2,
   ChevronRight,
   Workflow,
+  Palette,
   Plus,
   Settings,
   Sparkles,
@@ -393,13 +394,22 @@ export default function ProjectPage() {
           />
         }
         right={
-          <KLink
-            iconOnly
-            ref={menuBtnRef}
-            onClick={() => setMenuOpen(true)}
-          >
-            <MoreHorizontal size={24} />
-          </KLink>
+          <span className="flex items-center">
+            <KLink
+              iconOnly
+              onClick={() => navigate(`/project/${project.id}/settings`)}
+              aria-label="Настройки проекта"
+            >
+              <Settings size={22} />
+            </KLink>
+            <KLink
+              iconOnly
+              ref={menuBtnRef}
+              onClick={() => setMenuOpen(true)}
+            >
+              <MoreHorizontal size={24} />
+            </KLink>
+          </span>
         }
       />
 
@@ -436,6 +446,21 @@ export default function ProjectPage() {
                   {projectDone} из {projectTasks.length}
                 </span>
               </span>
+            </span>
+          }
+        />
+      </List>
+
+      <List strong inset>
+        <ListItem
+          link
+          onClick={() => navigate(`/project/${project.id}/settings`)}
+          media={<Palette size={20} className="text-primary" />}
+          title="Дизайн-код"
+          subtitle="Из чего агенты собирают интерфейс"
+          after={
+            <span className="text-[13px] text-black/40 dark:text-white/35">
+              {project.design ? 'задан' : 'не задан'}
             </span>
           }
         />
