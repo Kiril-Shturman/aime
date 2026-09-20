@@ -179,12 +179,14 @@ export default function DesignKitPage() {
       )}
 
       <div className="sticky top-[52px] z-10 border-y border-black/[.05] bg-ios-light-surface/95 py-2 backdrop-blur-xl dark:border-white/[.06] dark:bg-ios-dark-surface/95">
-        <Searchbar
-          value={q}
-          onInput={(e) => setQ((e.target as HTMLInputElement).value)}
-          onClear={() => setQ('')}
-          placeholder="Найти блок"
-        />
+        <div className="px-safe-4">
+          <Searchbar
+            value={q}
+            onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+            onClear={() => setQ('')}
+            placeholder="Найти блок"
+          />
+        </div>
         <div className="mt-1.5 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {skupiny.map((group) => (
             <button
@@ -220,11 +222,11 @@ export default function DesignKitPage() {
         const meta = GROUP_META[group] ?? fallbackMeta
         const Icon = meta.icon
         return (
-          <section key={group}>
-            <BlockTitle className="!mb-1.5 flex items-center justify-between">
+          <section key={group} className="mt-5 first:mt-4">
+            <div className="mb-2 flex items-center justify-between px-safe-4 text-[17px] font-semibold text-black/65 dark:text-white/60">
               <span>{group}</span>
               <span className="text-[12px] font-medium opacity-45">{groupBlocks.length}</span>
-            </BlockTitle>
+            </div>
             <div className="mx-safe-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {groupBlocks.map((blok) => (
                 <button
@@ -234,15 +236,15 @@ export default function DesignKitPage() {
                     haptic('light')
                     setVybrany(blok)
                   }}
-                  className="min-h-[108px] rounded-[18px] bg-ios-light-surface-1 p-3 text-left shadow-[0_1px_0_rgba(0,0,0,.04)] transition-transform active:scale-[.98] dark:bg-ios-dark-surface-1"
+                  className="flex min-h-[124px] min-w-0 flex-col overflow-hidden rounded-[18px] bg-ios-light-surface-1 p-3 text-left shadow-[0_1px_0_rgba(0,0,0,.04)] transition-transform active:scale-[.98] dark:bg-ios-dark-surface-1"
                 >
                   <span className={`grid h-9 w-9 place-items-center rounded-[13px] ${meta.bg} ${meta.color}`}>
                     <Icon size={19} />
                   </span>
-                  <span className="mt-2.5 block text-[14px] font-semibold leading-tight text-black dark:text-white">
+                  <span className="mt-2.5 block break-words text-[14px] font-semibold leading-[1.2] text-black dark:text-white">
                     {blok.title}
                   </span>
-                  <span className="mt-1 block font-mono text-[10px] text-black/35 dark:text-white/35">
+                  <span className="mt-auto block break-all pt-2 font-mono text-[10px] leading-tight text-black/35 dark:text-white/35">
                     {blok.id}
                   </span>
                 </button>
@@ -255,7 +257,7 @@ export default function DesignKitPage() {
       <Popup
         open={vybrany !== null}
         onClose={() => setVybrany(null)}
-        title={vybrany?.title ?? 'Блок'}
+        title={vybrany?.group ?? 'Блок'}
         pageClassName="pb-safe-10"
         headerRight={
           vybrany ? (
@@ -272,7 +274,7 @@ export default function DesignKitPage() {
                 <ActiveIcon size={23} />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-[16px] font-semibold">{vybrany.title}</div>
+                <div className="break-words text-[16px] font-semibold leading-tight">{vybrany.title}</div>
                 <div className="text-[13px] text-black/45 dark:text-white/45">
                   {vybrany.group} · Framework7 iOS
                 </div>
@@ -280,7 +282,7 @@ export default function DesignKitPage() {
             </div>
 
             <BlockTitle>Живой пример</BlockTitle>
-            <div className="mx-safe-4 min-h-24 overflow-hidden rounded-[24px] border border-black/[.05] bg-ios-light-surface-2 py-3 dark:border-white/[.07] dark:bg-ios-dark-surface-2">
+            <div className="min-h-24 overflow-hidden py-2">
               {Demo ? <Demo /> : <Block>Для блока доступен готовый код.</Block>}
             </div>
 
