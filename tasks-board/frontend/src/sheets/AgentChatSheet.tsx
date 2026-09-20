@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
+import { Messagebar, ToolbarPane } from 'konsta/react'
 import { Send } from 'lucide-react'
-import { Block } from 'konsta/react'
 import Popup from '../components/Popup'
+import { Avatar } from '../components/Avatar'
 import { api } from '../api/client'
 import { haptic } from '../lib/telegram'
 import type { Agent, ChatZprava } from '../api/types'
 
-// Переписка с агентом: владелец пишет, агент отвечает через board_say.
-// Пока открыто — подтягиваем новые сообщения раз в пару секунд.
+// Переписка с агентом. Поле ввода — тот же Messagebar, что в чатах с ИИ,
+// в шапке справа аватарка агента.
 export default function AgentChatSheet({
   open,
   onClose,
@@ -19,7 +20,7 @@ export default function AgentChatSheet({
 }) {
   const [zpravy, setZpravy] = useState<ChatZprava[]>([])
   const [text, setText] = useState('')
-  const [posilam, setPosilam] = useState(false)
+  const [chyba, setChyba] = useState<string | null>(null)
   const konec = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -30,7 +31,7 @@ export default function AgentChatSheet({
         const r = await api.agentChat(agent.id)
         if (zive) setZpravy(r.items)
       } catch {
-        /* доска недоступна — покажем то, что уже есть */
+        /* доска недоступна — оставляем то, что уже показано */
       }
     }
     nacti()
@@ -46,31 +47,44 @@ export default function AgentChatSheet({
   }, [zpravy.length])
 
   const poslat = async () => {
-    if (!agent || !text.trim() || posilam) return
-    setPosilam(true)
+    const hotovy = text.trim()
+    if (!agent || !hotovy) return
+    setChyba(null)
     haptic('light')
     try {
-      const z = await api.sayToAgent(agent.id, text.trim())
+      const z = await api.sayToAgent(agent.id, hotovy)
       setZpravy((p) => [...p, z])
       setText('')
-    } catch {
-      /* не ушло — текст останется в поле */
+    } catch (e) {
+      // молчаливая пропажа сообщения хуже ошибки — показываем причину
+      setChyba(String(e).replace(/^Error:\s*\d+\s*[^:]*:\s*/, ''))
     }
-    setPosilam(false)
   }
 
   const cas = (at: number) =>
     new Date(at * 1000).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 
   return (
-    <Popup open={open} onClose={onClose} title={agent ? `Чат · ${agent.name}` : 'Чат'}>
-      <Block className="!mt-3 !mb-28">
+    <Popup
+      open={open}
+      onClose={onClose}
+      title={agent ? agent.name : 'Чат'}
+      headerRight={
+        agent ? (
+          <span className="pr-1">
+            <Avatar member={agent} size={30} />
+          </span>
+        ) : undefined
+      }
+    >
+      <div className="px-4 pb-40 pt-3">
         {zpravy.length === 0 && (
-          <p className="py-8 text-center text-[14px] leading-snug text-black/45 dark:text-white/40">
-            Сообщений пока нет. Напишите агенту — он прочитает это,
-            когда придёт за задачами, и ответит здесь же.
+          <p className="py-10 text-center text-[14px] leading-snug text-black/45 dark:text-white/40">
+            Сообщений пока нет. Напишите агенту — он получит это сразу, если
+            держит канал, и ответит здесь же.
           </p>
         )}
+
         <div className="grid gap-2">
           {zpravy.map((z, i) => (
             <div
@@ -92,36 +106,41 @@ export default function AgentChatSheet({
             </div>
           ))}
         </div>
-        <div ref={konec} />
-      </Block>
 
-      {/* строка ввода прижата к низу, как в обычном чате */}
-      <div className="pb-safe fixed inset-x-0 bottom-0 border-t border-black/[.06] bg-white/90 px-4 py-3 backdrop-blur dark:border-white/[.08] dark:bg-black/85">
-        <div className="mx-auto flex max-w-[560px] items-end gap-2">
-          <textarea
-            rows={1}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                poslat()
-              }
-            }}
-            placeholder="Написать агенту"
-            className="max-h-32 flex-1 resize-none rounded-2xl bg-ios-light-surface-1 px-4 py-2.5 text-[15px] text-black outline-none placeholder:text-black/40 dark:bg-ios-dark-surface-1 dark:text-white dark:placeholder:text-white/35"
-          />
-          <button
-            type="button"
-            onClick={poslat}
-            disabled={!text.trim() || posilam}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-white disabled:opacity-40"
-            aria-label="Отправить"
-          >
-            <Send size={18} />
-          </button>
-        </div>
+        {chyba && (
+          <p className="mt-3 text-center text-[13px] leading-snug text-[#ff9f0a]">
+            Не отправилось: {chyba}
+          </p>
+        )}
+        <div ref={konec} />
       </div>
+
+      <Messagebar
+        className="z-20 [&_.k-toolbar]:!pb-[max(5px,env(safe-area-inset-bottom))] [&_.k-toolbar>div]:!items-end [&_.k-toolbar>div]:!py-2 [&_textarea]:!py-3 [&_textarea]:!text-[16px] [&_textarea]:!leading-snug"
+        placeholder={agent ? `Сообщение · ${agent.name}` : 'Сообщение'}
+        value={text}
+        onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            poslat()
+          }
+        }}
+        right={
+          <ToolbarPane className="ios:h-10">
+            <button
+              type="button"
+              aria-label="Отправить"
+              onClick={poslat}
+              className={`grid h-10 w-10 place-items-center ${
+                text.trim() ? 'text-primary' : 'text-black/30 dark:text-white/30'
+              }`}
+            >
+              <Send size={22} />
+            </button>
+          </ToolbarPane>
+        }
+      />
     </Popup>
   )
 }

@@ -14,6 +14,8 @@ interface Props {
   // 'right'  — на ПК разворачивается панелью во всю правую сторону,
   //            выезжает справа. На мобилках всё как в 'center': на весь экран.
   side?: 'center' | 'right'
+  // что показать справа в шапке вместо галочки сохранения
+  headerRight?: ReactNode
   children: ReactNode
 }
 
@@ -25,6 +27,7 @@ export default function Popup({
   onSave,
   canSave,
   side = 'center',
+  headerRight,
   children,
 }: Props) {
   useEffect(() => {
@@ -69,7 +72,7 @@ export default function Popup({
             </KLink>
           }
           right={
-            onSave ? (
+            headerRight ?? (onSave ? (
               <KLink
                 iconOnly
                 onClick={canSave ? onSave : undefined}
@@ -81,7 +84,7 @@ export default function Popup({
               >
                 <Check size={24} strokeWidth={3} />
               </KLink>
-            ) : undefined
+            ) : undefined)
           }
         />
         {drawer ? (
