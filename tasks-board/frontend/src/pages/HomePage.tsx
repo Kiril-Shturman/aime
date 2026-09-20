@@ -15,6 +15,7 @@ import {
   Database,
   CheckSquare,
   FolderPlus,
+  Palette,
 } from 'lucide-react'
 import {
   BlockTitle,
@@ -193,6 +194,11 @@ export default function HomePage() {
 
   const menuItems: MenuItem[] = [
     { label: 'Поставить цель', icon: Flag, onSelect: () => setGoalOpen(true) },
+    {
+      label: 'Дизайн-код и блоки',
+      icon: Palette,
+      onSelect: () => nav('/design'),
+    },
     { label: 'Прогнать цикл', icon: RefreshCw, onSelect: () => runCommand('loop') },
     { label: 'Статус агента', icon: Bot, onSelect: () => runCommand('status') },
     { label: 'Ещё команды', icon: MoreHorizontal, onSelect: openCommandsMenu },

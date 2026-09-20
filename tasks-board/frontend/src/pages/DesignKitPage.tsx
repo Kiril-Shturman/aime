@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, ChevronLeft, Copy, Search } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, Copy, Search } from 'lucide-react'
 import {
   Block,
   BlockTitle,
@@ -15,6 +15,7 @@ import {
 } from 'konsta/react'
 import blocks from '../lib/design-blocks.json'
 import { DEMOS } from '../lib/design-demos'
+import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
 
 interface Blok {
@@ -28,7 +29,13 @@ interface Blok {
 // и собирает из них экран — ничего не выдумывая.
 export default function DesignKitPage() {
   const navigate = useNavigate()
+  const { state } = useApp()
   const vsechny = blocks as Blok[]
+  // Правила берём у первого проекта, где они заданы: дизайн-код общий,
+  // а правится в настройках конкретного проекта.
+  const pravidla = state?.projects.find((p) => p.design)?.design ?? ''
+  const projektSPravidly = state?.projects.find((p) => p.design)?.id
+  const [pravidlaOtevrena, setPravidlaOtevrena] = useState(false)
   const [q, setQ] = useState('')
   const [skupina, setSkupina] = useState('все')
   const [zkopirovan, setZkopirovan] = useState<string | null>(null)
@@ -72,6 +79,42 @@ export default function DesignKitPage() {
           </KLink>
         }
       />
+
+      {pravidla && (
+        <>
+          <BlockTitle>Дизайн-код</BlockTitle>
+          <List strong inset>
+            <ListItem
+              link
+              onClick={() => setPravidlaOtevrena((p) => !p)}
+              title="Правила: из чего собираем интерфейс"
+              after={
+                <ChevronDown
+                  size={16}
+                  className={`transition-transform ${pravidlaOtevrena ? 'rotate-180' : ''}`}
+                />
+              }
+            />
+            {pravidlaOtevrena && (
+              <ListItem
+                title={
+                  <span className="block whitespace-pre-wrap text-[14px] font-normal leading-snug">
+                    {pravidla}
+                  </span>
+                }
+              />
+            )}
+            {projektSPravidly && (
+              <ListItem
+                link
+                onClick={() => navigate(`/project/${projektSPravidly}/settings`)}
+                title="Изменить правила"
+                subtitle="в настройках проекта"
+              />
+            )}
+          </List>
+        </>
+      )}
 
       <Searchbar
         value={q}
