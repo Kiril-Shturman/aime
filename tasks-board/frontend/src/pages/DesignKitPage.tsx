@@ -22,8 +22,21 @@ import { haptic } from '../lib/telegram'
 
 // этим блокам мало места в ленте — показываем их отдельной страницей
 const NA_STRANKU = new Set([
-  'calendar',
+  // всё, что вылезает поверх экрана, показываем на своей странице —
+  // там оно живёт как в настоящем приложении, с затемнением и анимацией
+  'popup',
+  'sheet-modal',
+  'actions',
+  'dialog',
+  'popover',
+  'panel',
+  'toast',
+  'notification',
   'photo-browser',
+  'smart-select',
+  'tooltip',
+  // и то, чему просто мало места в ленте
+  'calendar',
   'virtual-list',
   'messages',
   'messagebar',
@@ -32,6 +45,15 @@ const NA_STRANKU = new Set([
   'infinite-scroll',
   'list-index',
   'swiper',
+  'tabbar',
+  'navbar',
+  'subnavbar',
+  'statusbar',
+])
+
+const OKNA = new Set([
+  'popup', 'sheet-modal', 'actions', 'dialog', 'popover', 'panel', 'toast',
+  'notification', 'photo-browser', 'smart-select', 'tooltip',
 ])
 
 interface Blok {
@@ -226,7 +248,11 @@ export default function DesignKitPage() {
                       onClick={() => navigate(`/design/${b.id}`)}
                       media={<Maximize2 size={20} className="text-primary" />}
                       title="Открыть на отдельной странице"
-                      subtitle="блоку нужен весь экран"
+                      subtitle={
+                        OKNA.has(b.id)
+                          ? 'окно показывается поверх экрана'
+                          : 'блоку нужен весь экран'
+                      }
                     />
                   </List>
                 ) : (

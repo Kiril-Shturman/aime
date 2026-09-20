@@ -17,6 +17,13 @@ import { DEMOS } from '../lib/design-demos'
 import { useTheme } from '../store/ThemeStore'
 import { haptic } from '../lib/telegram'
 
+// окна показываем на фоне настоящего экрана: так видно затемнение,
+// как в китчен-синке, а не поверх пустоты
+const OKNA = new Set([
+  'popup', 'sheet-modal', 'actions', 'dialog', 'popover', 'panel', 'toast',
+  'notification', 'photo-browser', 'smart-select', 'tooltip',
+])
+
 interface Blok {
   id: string
   title: string
@@ -91,6 +98,23 @@ export default function DesignBlockPage() {
       <div className="mt-2 [&_.k-list]:!mx-0 [&>.block]:!mx-0 px-safe-4">
         {Demo ? <Demo /> : <Block>Пример — в коде ниже.</Block>}
       </div>
+
+      {OKNA.has(blok.id) && (
+        <>
+          <BlockTitle>Экран под окном</BlockTitle>
+          <List strong inset dividers>
+            {['Сверстать главную', 'Прикрутить кассу', 'Починить чат', 'Собрать отчёт'].map(
+              (t) => (
+                <ListItem key={t} link onClick={() => {}} title={t} after="в работе" />
+              ),
+            )}
+          </List>
+          <BlockFooter>
+            Окно открывается поверх этого экрана — видно затемнение и то, как
+            оно ложится на содержимое.
+          </BlockFooter>
+        </>
+      )}
 
       <BlockTitle>Код</BlockTitle>
       <List strong inset>
