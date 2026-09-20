@@ -33,7 +33,7 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/project/<id>/git         — {repo, branch} — подключить репозиторий
   GET    /api/project/<id>/git         — ветка, последний коммит, есть ли правки
   GET    /api/project/<id>/git/log     — лента коммитов рабочей копии
-  POST   /api/agent/hello              — {client, model} — агент представился
+  POST   /api/agent/hello              — {client, model, avatar} — агент представился
   POST   /api/chat                     — {model, messages} — ответ модели
   GET    /mcp_board.py                 — сам коннектор, чтобы агент скачал его сам
   POST   /api/project/<id>/stage       — {title, date, status, note}
@@ -611,13 +611,40 @@ OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
+def stahnout_avatar(mid, url):
+    """Аватарка агента по ссылке: качаем к себе, чтобы не ходить наружу
+    каждый раз и не зависеть от чужого хостинга."""
+    if not url or not url.startswith(("http://", "https://")):
+        return None
+    try:
+        pripona = os.path.splitext(urllib.parse.urlparse(url).path)[1][:5] or ".png"
+        if pripona.lower() not in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
+            return None
+        name = f"agent-{mid}{pripona}"
+        dest = os.path.join(ROOT, "avatars", name)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        with urllib.request.urlopen(url, timeout=20) as resp:
+            data = resp.read(2 * 1024 * 1024)  # больше двух мегабайт аватарке незачем
+        with open(dest, "wb") as f:
+            f.write(data)
+        return "/avatars/" + name
+    except Exception:
+        return None
+
+
 async def agent_hello(request):
-    """Агент сообщает о себе: клиент и модель. Видно в карточке участника."""
+    """Агент сообщает о себе: клиент, модель и аватарка. Видно в карточке."""
     who = request.get("who") or {}
     if who.get("kind") != "member":
         raise web.HTTPForbidden(text="только участник доски")
     body = await request.json()
-    videl_jsem(who["id"], client=body.get("client"), model=body.get("model"))
+    info = {"client": body.get("client"), "model": body.get("model")}
+    if body.get("avatar"):
+        cesta = await asyncio.get_running_loop().run_in_executor(
+            None, stahnout_avatar, who["id"], body["avatar"])
+        if cesta:
+            info["avatar"] = cesta
+    videl_jsem(who["id"], **info)
     return web.json_response({"ok": True})
 
 
