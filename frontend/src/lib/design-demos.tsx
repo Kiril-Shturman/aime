@@ -6,6 +6,8 @@ import {
   ActionsLabel,
   Badge,
   Block,
+  BlockFooter,
+  BlockHeader,
   BlockTitle,
   Breadcrumbs,
   BreadcrumbsItem,
@@ -1062,6 +1064,236 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
           <HelpCircle size={17} className="mr-1" />
           {open ? 'Скрыть подсказку' : 'Что это?'}
         </Button>
+      </Block>
+    )
+  },
+  // ——— блоки, которых не хватало против эталона framework7 ———
+  block: () => (
+    <>
+      <BlockTitle>Заголовок раздела</BlockTitle>
+      <BlockHeader>Подзаголовок над блоком</BlockHeader>
+      <Block strong inset>
+        Обычный текстовый блок: пояснение, предупреждение, что угодно.
+      </Block>
+      <BlockFooter>Мелкая подпись под блоком.</BlockFooter>
+    </>
+  ),
+  link: () => (
+    <Block className="!my-0 flex flex-wrap items-center gap-4">
+      <KLink onClick={() => {}}>Обычная</KLink>
+      <KLink iconOnly onClick={() => {}} aria-label="Меню">
+        <MoreHorizontal size={20} />
+      </KLink>
+      <KLink href="https://framework7.io" target="_blank">
+        Внешняя
+      </KLink>
+    </Block>
+  ),
+  icons: () => (
+    <Block className="!my-0 flex flex-wrap gap-4 text-primary">
+      <CalendarDays size={24} />
+      <Check size={24} />
+      <ChevronRight size={24} />
+      <GripVertical size={24} />
+      <HelpCircle size={24} />
+      <Plus size={24} />
+      <Send size={24} />
+      <User size={24} />
+    </Block>
+  ),
+  subnavbar: () => (
+    <div className="overflow-hidden rounded-2xl">
+      <Navbar
+        title="Проект"
+        colors={{ bgIos: 'bg-ios-light-surface-1 dark:bg-ios-dark-surface-1' }}
+        subnavbar={
+          <Segmented strong rounded>
+            <SegmentedButton active>Задачи</SegmentedButton>
+            <SegmentedButton>Файлы</SegmentedButton>
+          </Segmented>
+        }
+      />
+    </div>
+  ),
+  swiper: () => (
+    <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      {['Слайд один', 'Слайд два', 'Слайд три'].map((s) => (
+        <div
+          key={s}
+          className="flex h-28 w-60 shrink-0 snap-center items-center justify-center rounded-2xl bg-ios-light-surface-1 text-[15px] font-semibold dark:bg-ios-dark-surface-1"
+        >
+          {s}
+        </div>
+      ))}
+    </div>
+  ),
+  treeview: function TreeviewDemo() {
+    const uzly = [
+      { name: 'frontend', deti: ['pages', 'components', 'lib'] },
+      { name: 'tasks-board', deti: ['server.py', 'mcp_board.py'] },
+    ]
+    const [otevrene, setOtevrene] = useState<Set<string>>(new Set(['frontend']))
+    const prepnout = (name: string) =>
+      setOtevrene((p) => {
+        const d = new Set(p)
+        d.has(name) ? d.delete(name) : d.add(name)
+        return d
+      })
+    return (
+      <List strong inset>
+        {uzly.map((u) => (
+          <div key={u.name}>
+            <ListItem
+              link
+              title={u.name}
+              onClick={() => prepnout(u.name)}
+              media={
+                <ChevronRight
+                  size={16}
+                  className={`transition-transform ${otevrene.has(u.name) ? 'rotate-90' : ''}`}
+                />
+              }
+            />
+            {otevrene.has(u.name) &&
+              u.deti.map((d) => (
+                <ListItem key={d} title={d} innerClassName="!pl-8" />
+              ))}
+          </div>
+        ))}
+      </List>
+    )
+  },
+  'virtual-list': function VirtualListDemo() {
+    const vsech = 500
+    const vyska = 44
+    const [od, setOd] = useState(0)
+    const okno = Array.from({ length: 12 }, (_, i) => od + i).filter((i) => i < vsech)
+    return (
+      <div
+        onScroll={(e) => setOd(Math.floor(e.currentTarget.scrollTop / vyska))}
+        className="max-h-60 overflow-y-auto rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1"
+      >
+        <div style={{ height: vsech * vyska }} className="relative">
+          <div style={{ transform: `translateY(${od * vyska}px)` }}>
+            {okno.map((i) => (
+              <div
+                key={i}
+                style={{ height: vyska }}
+                className="flex items-center border-b border-black/[.06] px-4 text-[15px] dark:border-white/[.08]"
+              >
+                Строка {i + 1}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  },
+  'list-index': function ListIndexDemo() {
+    const pismena = ['А', 'Б', 'В', 'Г', 'Д']
+    const [skok, setSkok] = useState('А')
+    return (
+      <div className="relative">
+        <List strong inset>
+          {pismena.map((p) => (
+            <div key={p}>
+              <ListItem title={p} groupTitle />
+              <ListItem title={`${p}лексей`} />
+            </div>
+          ))}
+        </List>
+        <div className="absolute right-2 top-2 flex flex-col gap-0.5 text-[11px] font-semibold text-primary">
+          {pismena.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => {
+                setSkok(p)
+                haptic('light')
+              }}
+              className={skok === p ? 'opacity-100' : 'opacity-45'}
+            >
+              {p}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  },
+  'contacts-list': () => (
+    <List strong inset dividers>
+      {[
+        ['А', ['Алексей', 'Анна']],
+        ['Б', ['Борис']],
+      ].map(([pismeno, jmena]) => (
+        <div key={pismeno as string}>
+          <ListItem title={pismeno as string} groupTitle />
+          {(jmena as string[]).map((j) => (
+            <ListItem key={j} title={j} />
+          ))}
+        </div>
+      ))}
+    </List>
+  ),
+  'data-table': () => (
+    <Table>
+      <TableHead>
+        <TableRow header>
+          <TableCell header>Задача</TableCell>
+          <TableCell header className="text-right">Токены</TableCell>
+        </TableRow>
+      </TableHead>
+      <TableBody>
+        {[
+          { id: 1, title: 'Сверстать главную', tokens: '12 400' },
+          { id: 2, title: 'Прикрутить кассу', tokens: '8 900' },
+        ].map((r) => (
+          <TableRow key={r.id}>
+            <TableCell>{r.title}</TableCell>
+            <TableCell className="text-right tabular-nums">{r.tokens}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
+  ),
+  autocomplete: function AutocompleteDemo() {
+    const vse = ['aiMe', 'Working VPN', 'wMusic', 'Транскрибатор', 'perunfx']
+    const [q, setQ] = useState('')
+    const navrhy = q.trim()
+      ? vse.filter((v) => v.toLowerCase().includes(q.trim().toLowerCase()) && v !== q)
+      : []
+    return (
+      <List strong inset>
+        <ListInput
+          label="Проект"
+          type="text"
+          placeholder="Начни печатать"
+          value={q}
+          onChange={(e) => setQ((e.target as HTMLInputElement).value)}
+        />
+        {navrhy.map((n) => (
+          <ListItem key={n} link title={n} onClick={() => setQ(n)} />
+        ))}
+      </List>
+    )
+  },
+  'color-picker': function ColorPickerDemo() {
+    const barvy = ['#007aff', '#30d158', '#bf5af2', '#ff9f0a', '#ff375f', '#64d2ff']
+    const [color, setColor] = useState(barvy[0])
+    return (
+      <Block className="!my-0 flex flex-wrap gap-3">
+        {barvy.map((c) => (
+          <button
+            key={c}
+            type="button"
+            aria-label={`Цвет ${c}`}
+            onClick={() => setColor(c)}
+            className="h-9 w-9 rounded-full active:opacity-70"
+            style={{ background: c }}
+          >
+            {color === c && <Check size={18} className="mx-auto text-white" />}
+          </button>
+        ))}
       </Block>
     )
   },
