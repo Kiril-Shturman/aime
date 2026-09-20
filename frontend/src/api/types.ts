@@ -20,6 +20,9 @@ export interface Member {
   avatar?: string
   key?: string   // личный ключ исполнителя, виден только владельцу
   bot?: BotLink | null
+  seen?: number   // когда исполнитель последний раз выходил на связь, unix-секунды
+  client?: string // чем подключён: Claude Code, Cursor, OpenClaw…
+  model?: string  // какой моделью работает
 }
 
 export interface Stage {

@@ -6,53 +6,14 @@ import type { Member } from '../api/types'
 
 // Чем участник работает. Всё, что понимает MCP, подключается одинаково —
 // меняется только место, куда положить настройку.
-const TOOLS = [
-  { id: 'claude', label: 'Claude' },
-  { id: 'cursor', label: 'Cursor' },
-  { id: 'codex', label: 'Codex' },
-  { id: 'http', label: 'Своё' },
-] as const
-
-const CONNECTOR = '~/projects/aime/tasks-board/mcp_board.py'
-
-function snippet(tool: string, url: string, key: string) {
-  if (tool === 'claude') {
-    return `claude mcp add board \\
-  -e BOARD_URL=${url} \\
-  -e BOARD_KEY=${key} \\
-  -- python3 ${CONNECTOR}`
-  }
-  if (tool === 'cursor') {
-    return `// ~/.cursor/mcp.json
-{
-  "mcpServers": {
-    "board": {
-      "command": "python3",
-      "args": ["${CONNECTOR}"],
-      "env": {
-        "BOARD_URL": "${url}",
-        "BOARD_KEY": "${key}"
-      }
-    }
-  }
-}`
-  }
-  if (tool === 'codex') {
-    return `# ~/.codex/config.toml
-[mcp_servers.board]
-command = "python3"
-args = ["${CONNECTOR}"]
-env = { BOARD_URL = "${url}", BOARD_KEY = "${key}" }`
-  }
-  return `curl -s ${url}/api/state -H "X-Board-Key: ${key}"`
-}
+import { SPOSOBY, recept } from '../lib/connect'
 
 export default function MemberConnect({ member }: { member: Member }) {
-  const [tool, setTool] = useState<string>('claude')
+  const [tool, setTool] = useState<string>('promt')
   const [copied, setCopied] = useState(false)
 
   if (!member.key) return null
-  const text = snippet(tool, location.origin, member.key)
+  const text = recept(tool, location.origin, member.key, member.name, member.role)
 
   const copy = async () => {
     haptic('success')
@@ -70,7 +31,7 @@ export default function MemberConnect({ member }: { member: Member }) {
       <BlockTitle>Чем работает</BlockTitle>
       <div className="px-4 mt-2">
         <Segmented strong rounded>
-          {TOOLS.map((t) => (
+          {SPOSOBY.map((t) => (
             <SegmentedButton
               key={t.id}
               active={tool === t.id}
@@ -83,7 +44,7 @@ export default function MemberConnect({ member }: { member: Member }) {
         </Segmented>
 
         <div className="relative mt-3">
-          <pre className="bg-black/[.05] dark:bg-white/[.06] rounded-2xl p-3 pr-11 text-[12px] leading-snug text-black/80 dark:text-white/80 overflow-x-auto whitespace-pre">
+          <pre className="max-h-[40dvh] overflow-y-auto whitespace-pre-wrap break-words rounded-2xl bg-black/[.05] p-3 pr-11 text-[12px] leading-snug text-black/80 dark:bg-white/[.06] dark:text-white/80">
             {text}
           </pre>
           <button
