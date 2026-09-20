@@ -54,6 +54,12 @@ export default function MemberInfoSheet({
     setAuto(member.auto !== false)
   }, [member])
 
+  useEffect(() => {
+    if (!open || !member || !state?.tasks.some((t) => t.member === member.id && t.status === 'doing')) return
+    const timer = window.setInterval(() => void refresh(), 15_000)
+    return () => window.clearInterval(timer)
+  }, [open, member, state?.tasks, refresh])
+
   if (!member) return null
 
   // «в сети», если участник выходил на связь недавно: доска отмечает
@@ -322,7 +328,20 @@ export default function MemberInfoSheet({
               <ListItem
                 key={t.id}
                 title={t.title}
-                subtitle={TASK_STATUS_LABEL[t.status]}
+                subtitle={
+                  t.status === 'doing' && t.progress_step
+                    ? `${TASK_STATUS_LABEL[t.status]} · ${t.progress_step}`
+                    : TASK_STATUS_LABEL[t.status]
+                }
+                text={
+                  t.status === 'doing'
+                    ? [
+                        liveDuration(t.started_at),
+                        t.tokens ? `${fmtNum(t.tokens)} токенов` : null,
+                        liveHealth(t.progress_updated_at ?? t.started_at),
+                      ].filter(Boolean).join(' · ')
+                    : undefined
+                }
               />
             ))}
           </List>
@@ -353,6 +372,31 @@ function fmtNum(n: number) {
   if (n < 1000) return String(n)
   if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`
   return `${(n / 1_000_000).toFixed(1)}M`
+}
+
+function liveDuration(value?: string | number | null) {
+  const started = timestamp(value)
+  if (!started) return null
+  const seconds = Math.max(0, Math.floor((Date.now() - started) / 1000))
+  if (seconds < 60) return `${seconds} с`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} мин`
+  return `${Math.floor(seconds / 3600)} ч ${Math.floor((seconds % 3600) / 60)} мин`
+}
+
+function liveHealth(value?: string | number | null) {
+  const activity = timestamp(value)
+  if (!activity) return 'нет данных об активности'
+  const silence = Math.max(0, Math.floor((Date.now() - activity) / 1000))
+  if (silence >= 600) return 'возможно завис'
+  if (silence >= 120) return 'нет действий 2+ мин'
+  return 'активен'
+}
+
+function timestamp(value?: string | number | null) {
+  if (!value) return 0
+  if (typeof value === 'number') return value < 1_000_000_000_000 ? value * 1000 : value
+  const parsed = new Date(value).getTime()
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 function Stat({ title, value, small }: { title: string; value: string; small?: boolean }) {

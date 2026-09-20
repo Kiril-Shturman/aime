@@ -259,6 +259,10 @@ def migrate(state):
         t.setdefault("tokens", 0)      # сколько токенов ушло
         t.setdefault("seconds", 0)     # сколько времени заняло
         t.setdefault("started_at", None)
+        t.setdefault("progress_step", "")
+        t.setdefault("progress_updated_at", None)
+        t.setdefault("session_key", "")
+        t.setdefault("run_status", "")
         t.setdefault("submitted_at", None)
         t.setdefault("attempts", 0)
         t.setdefault("max_attempts", 3)
@@ -443,6 +447,10 @@ async def add_task(request):
         "tokens": 0,
         "seconds": 0,
         "started_at": None,
+        "progress_step": "",
+        "progress_updated_at": None,
+        "session_key": "",
+        "run_status": "",
         "submitted_at": None,
         "attempts": 0,
         "max_attempts": positive_int(body.get("max_attempts")),
@@ -516,10 +524,12 @@ async def patch_task(request):
     for t in state["tasks"]:
         if t["id"] != request.match_info["tid"]:
             continue
-        for key in ("title", "note", "report", "verification_report", "url", "commit"):
+        for key in ("title", "note", "report", "verification_report", "url", "commit",
+                    "progress_step", "session_key", "run_status"):
             if key in body:
                 t[key] = (body[key] or "").strip()
-        for key in ("tokens", "seconds", "attempts", "max_attempts"):
+        for key in ("tokens", "seconds", "attempts", "max_attempts",
+                    "progress_updated_at"):
             if key in body and body[key] is not None:
                 try:
                     t[key] = max(0, int(body[key]))
@@ -555,14 +565,24 @@ async def patch_task(request):
             now = int(time.time())
             if t["status"] == "doing" and not t.get("started_at"):
                 t["started_at"] = now          # засекаем, когда взяли в работу
+                t["progress_step"] = "Запускает задачу"
+                t["progress_updated_at"] = now
+                t["run_status"] = "active"
             if t["status"] == "todo":
                 t["started_at"] = None
+                t["progress_step"] = ""
+                t["progress_updated_at"] = None
+                t["session_key"] = ""
+                t["run_status"] = ""
             # взял задачу — значит она твоя, даже если её никто не назначал
             if t["status"] == "doing" and who.get("kind") == "member" and not t.get("member"):
                 t["member"] = who["id"]
             t["done_at"] = now if t["done"] else None
             if t["status"] == "review":
                 t["submitted_at"] = now
+                t["progress_step"] = "Работа сдана на проверку"
+                t["progress_updated_at"] = now
+                t["run_status"] = "review"
             # если исполнитель не сказал, сколько заняло, считаем сами
             if t["done"] and not t.get("seconds") and t.get("started_at"):
                 t["seconds"] = max(0, now - t["started_at"])
@@ -845,6 +865,10 @@ async def add_tasks(request):
             "tokens": 0,
             "seconds": 0,
             "started_at": None,
+            "progress_step": "",
+            "progress_updated_at": None,
+            "session_key": "",
+            "run_status": "",
             "submitted_at": None,
             "attempts": 0,
             "max_attempts": positive_int(item.get("max_attempts") if isinstance(item, dict) else None),
