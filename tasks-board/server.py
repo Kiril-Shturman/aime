@@ -950,6 +950,30 @@ async def get_connector(request):
     )
 
 
+def adresa_desky(request):
+    """Внешний адрес доски: собственный URL запроса за Caddy — локальный."""
+    host = (request.headers.get("X-Forwarded-Host")
+            or request.headers.get("Host") or request.url.host)
+    proto = request.headers.get("X-Forwarded-Proto") or request.url.scheme
+    return f"{proto}://{host}"
+
+
+async def get_installer(request):
+    """Однострочник для чужой машины:
+
+        curl -fsSL <доска>/agent.sh | BOARD_KEY=<ключ> sh
+
+    Ставит цикл ожидания и автозапуск. Туннель не нужен — соединение
+    исходящее, агент сам висит на /api/agent/wait."""
+    with open(os.path.join(ROOT, "agent.sh"), encoding="utf-8") as f:
+        text = f.read()
+    return web.Response(
+        text=text.replace("__BOARD_URL__", adresa_desky(request)),
+        content_type="text/x-shellscript",
+        charset="utf-8",
+    )
+
+
 # ---------------------------------------------------------------- чат с моделью
 
 OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
@@ -1240,7 +1264,7 @@ async def agent_say(request):
 
 
 async def agent_inbox(request):
-    """Что владелец написал агенту с прошлого раза."""
+    """Что написали агенту с прошлого раза: владелец и соседи по проектам."""
     who = request.get("who") or {}
     if who.get("kind") != "member":
         raise web.HTTPForbidden(text="нужен ключ агента")
@@ -1251,7 +1275,91 @@ async def agent_inbox(request):
         od = 0
     zpravy = [z for z in chat_agenta(state, who["id"])
               if z["from"] == "owner" and z["at"] > od]
+    zpravy += [z for z in peer_chat(state, who["id"]) if z["at"] > od]
+    zpravy.sort(key=lambda z: z["at"])
     return web.json_response({"items": zpravy})
+
+
+def projekty_clena(state, mid):
+    """В каких проектах состоит участник или общий агент."""
+    kde = set()
+    for p in state["projects"]:
+        for m in p["members"]:
+            if m["id"] == mid:
+                kde.add(p["id"])
+    for a in state.get("agents", []):
+        if a["id"] == mid:
+            kde.update(a.get("projects") or [])
+    return kde
+
+
+def sousede(state, mid):
+    """Кого агент вправе звать: все, с кем он в общем проекте. Чужие проекты
+    остаются чужими — ключ исполнителя не делает его владельцем доски."""
+    moje = projekty_clena(state, mid)
+    if not moje:
+        return
+    for m in vsichni_clenove(state):
+        if m["id"] != mid and (projekty_clena(state, m["id"]) & moje):
+            yield m
+
+
+def peer_chat(state, mid):
+    """Входящие от других агентов. Держим отдельно от переписки с владельцем,
+    чтобы чужая реплика не подписалась именем хозяина ветки."""
+    return state.setdefault("peer_chats", {}).setdefault(mid, [])
+
+
+async def agent_peers(request):
+    """С кем этот агент может переговариваться и кто из них сейчас на связи."""
+    who = request.get("who") or {}
+    if who.get("kind") != "member":
+        raise web.HTTPForbidden(text="нужен ключ агента")
+    state = load()
+    ted = int(time.time())
+    return web.json_response({"peers": [
+        {"id": m["id"], "name": m.get("name", ""), "role": m.get("role", ""),
+         "seen": int(m.get("seen") or 0),
+         "online": ted - int(m.get("seen") or 0) < 180}
+        for m in sousede(state, who["id"])
+    ]})
+
+
+async def agent_ping_peer(request):
+    """Агент зовёт соседа по проекту. Текст необязателен: пустой вызов — просто
+    «подойди к доске». Туннель не нужен: адресата будит его же длинный запрос."""
+    who = request.get("who") or {}
+    if who.get("kind") != "member":
+        raise web.HTTPForbidden(text="нужен ключ агента")
+    body = await request.json()
+    komu = (body.get("to") or "").strip()
+    text = (body.get("text") or "").strip()
+    if not komu:
+        raise web.HTTPBadRequest(text="кому: нужен id или имя соседа")
+    state = load()
+    cil = None
+    for m in sousede(state, who["id"]):
+        if m["id"] == komu or m.get("name") == komu:
+            cil = m
+            break
+    if cil is None:
+        raise web.HTTPNotFound(text="нет такого соседа по проекту")
+    ted = int(time.time())
+    if text:
+        peer_chat(state, cil["id"]).append({
+            "from": "peer", "by": who["id"], "name": who.get("name", ""),
+            "text": text[:4000], "at": ted,
+        })
+    cil["ping"] = ted
+    save(state)
+    probudit(cil["id"])
+    kanalem = poslat_kanalem(cil["id"], {
+        "event": "peer", "from": who["id"], "name": who.get("name", ""),
+        "text": text[:4000], "at": ted,
+    })
+    return web.json_response({"ok": True, "to": cil["id"],
+                              "name": cil.get("name", ""), "at": ted,
+                              "channel": bool(kanalem)})
 
 
 async def agent_connect(request):
@@ -2146,6 +2254,7 @@ def make_app():
     app.router.add_get("/api/commands", list_commands)
     app.router.add_post("/api/command/{cid}", run_command)
     app.router.add_get("/mcp_board.py", get_connector)
+    app.router.add_get("/agent.sh", get_installer)
     app.router.add_post("/api/agents", add_agent)
     app.router.add_patch("/api/agents/{aid}", patch_agent)
     app.router.add_delete("/api/agents/{aid}", delete_agent)
@@ -2154,6 +2263,8 @@ def make_app():
     app.router.add_get("/api/agent/ws", agent_ws)
     app.router.add_get("/api/agent/wait", agent_wait)
     app.router.add_get("/api/agent/inbox", agent_inbox)
+    app.router.add_get("/api/agent/peers", agent_peers)
+    app.router.add_post("/api/agent/ping", agent_ping_peer)
     app.router.add_post("/api/agent/say", agent_say)
     app.router.add_get("/api/agents/{aid}/chat", get_chat)
     app.router.add_post("/api/agents/{aid}/say", say_to_agent)
