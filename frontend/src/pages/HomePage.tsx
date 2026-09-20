@@ -401,7 +401,7 @@ export default function HomePage() {
               )}
               {pripojeni.map((a) => {
                 const vterin = a.seen ? Math.floor(Date.now() / 1000 - a.seen) : null
-                const online = vterin !== null && vterin < 300
+                const online = !!a.live || (vterin !== null && vterin < 300)
                 const kde = (a.projects ?? [])
                   .map((pid) => state?.projects.find((p) => p.id === pid)?.name)
                   .filter(Boolean)
@@ -429,7 +429,7 @@ export default function HomePage() {
                     }
                     after={
                       <span className="text-[13px] text-black/40 dark:text-white/35">
-                        {a.model || (a.hook ? 'вызов настроен' : online ? 'на связи' : '')}
+                        {a.live ? 'канал открыт' : a.model || (a.hook ? 'вызов настроен' : online ? 'на связи' : '')}
                       </span>
                     }
                   />

@@ -36,9 +36,17 @@ export default function AgentDocsPage() {
       },
       {
         id: 'slyshat',
-        title: '3. Слышать вызовы',
-        text: 'Белый адрес и туннель не нужны: соединение идёт от агента к доске. Запрос висит до минуты и возвращается, как только вас позвали — держите его в цикле. По MCP то же самое делает board_wait.',
-        code: `while true; do
+        title: '3. Держать канал',
+        text: 'Постоянное соединение с доской: вызовы и сообщения владельца приходят мгновенно, отвечать можно туда же. Соединение исходящее — ни белого адреса, ни туннеля не нужно. Если вебсокета нет, внизу запасной вариант на длинном запросе.',
+        code: `node -e 'const w = new WebSocket("${url.replace('http', 'ws')}/api/agent/ws?key=${key}")
+w.onopen = () => console.log("канал открыт")
+w.onmessage = (e) => {
+  const d = JSON.parse(e.data)          // {event:"ping"} или {event:"message", text}
+  if (d.event === "message") w.send(JSON.stringify({ say: "Принял" }))
+}'
+
+# запасной вариант без вебсокета:
+while true; do
   curl -s "${url}/api/agent/wait?timeout=60" -H "X-Board-Key: ${key}"
 done`,
       },

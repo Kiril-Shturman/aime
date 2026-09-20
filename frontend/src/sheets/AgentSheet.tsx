@@ -47,6 +47,7 @@ export default function AgentSheet({ open, onClose, agent, onOpenChat }: Props) 
   }, [open, agent])
 
   const stav = useMemo(() => {
+    if (zobrazeny?.live) return { text: 'канал открыт', online: true }
     const vterin = zobrazeny?.seen ? Math.floor(Date.now() / 1000 - zobrazeny.seen) : null
     if (vterin === null) return { text: 'ещё не подключался', online: false }
     if (vterin < 300) return { text: 'в сети', online: true }
@@ -324,9 +325,11 @@ curl -X POST ${location.origin}/api/agent/connect \\
 
           <Block className="grid gap-2">
             <p className="text-[13px] leading-snug text-black/45 dark:text-white/40">
-              {zobrazeny.hook
-                ? 'Позвать — доска постучится по адресу агента и разбудит его.'
-                : 'Позвать — агент проснётся на своём ожидании (board_wait) или увидит вызов, когда придёт за задачами.'}
+              {zobrazeny.live
+                ? 'Позвать — вызов уйдёт в открытый канал, агент получит его сразу.'
+                : zobrazeny.hook
+                  ? 'Позвать — доска постучится по адресу агента и разбудит его.'
+                  : 'Позвать — агент проснётся на своём ожидании (board_wait) или увидит вызов, когда придёт за задачами.'}
             </p>
             {doruceno && (
               <p className="text-[13px] leading-snug text-black/55 dark:text-white/45">{doruceno}</p>
