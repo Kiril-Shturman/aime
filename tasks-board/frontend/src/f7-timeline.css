@@ -339,3 +339,36 @@
   border-radius: 3px;
   border: 1px solid rgba(0, 0, 0, 0.1);
 }
+
+/* Раскрытый этап: полоска с датой уезжает вбок, карточка разъезжается
+   на всю ширину, а список задач ложится отдельным блоком под ней.
+   Делаем через ширину и прозрачность — так это едет плавно. */
+.timeline-item,
+.timeline-item-date,
+.timeline-item-divider,
+.timeline-item-content {
+  transition:
+    margin 0.32s ease,
+    max-width 0.32s ease,
+    opacity 0.22s ease;
+}
+.timeline-sides .timeline-item.raskryt,
+.timeline-sides .timeline-item.raskryt:not(.timeline-item-right):nth-child(2n) {
+  margin-left: 0;
+  margin-right: 0;
+}
+.timeline-item.raskryt .timeline-item-date,
+.timeline-item.raskryt .timeline-item-divider {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding: 0;
+  margin-left: 0;
+  margin-right: 0;
+}
+.timeline-item.raskryt .timeline-item-content {
+  flex: 1 1 100%;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
+}

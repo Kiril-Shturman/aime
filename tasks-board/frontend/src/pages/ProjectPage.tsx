@@ -13,6 +13,7 @@ import {
   ChevronRight,
   Workflow,
   Plus,
+  Settings,
   Sparkles,
 } from 'lucide-react'
 import {
@@ -159,6 +160,12 @@ export default function ProjectPage() {
           setTaskStage(null)
           setTaskOpen(true)
         },
+      },
+      {
+        label: 'Настройки проекта',
+        sub: 'название, код, дизайн-код',
+        icon: Settings,
+        onSelect: () => navigate(`/project/${project.id}/settings`),
       },
       {
         label: project.type === 'process' ? 'Изменить процесс' : 'Изменить проект',
@@ -398,6 +405,8 @@ export default function ProjectPage() {
 
       <List strong inset>
         <ListItem
+          link
+          onClick={() => navigate(`/project/${project.id}/settings`)}
           media={
             <span className="w-12 h-12 rounded-2xl bg-primary/12 text-primary flex items-center justify-center">
               <ProjectIcon size={28} />

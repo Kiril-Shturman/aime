@@ -64,6 +64,8 @@ export interface Project {
   color?: string
   note?: string
   repo?: string
+  path?: string
+  design?: string    // правила интерфейса: из чего агенты его собирают
   type?: ProjectType
   process_kind?: ProcessKind
   members: Member[]
