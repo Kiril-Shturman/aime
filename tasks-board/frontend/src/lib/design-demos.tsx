@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Actions,
   ActionsButton,
@@ -942,39 +942,70 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
   // барабаны: крутятся и подставляют выбранное значение
   picker: function PickerDemo() {
     const sloupce = [
-      ['18', '19', '20', '21', '22'],
-      ['августа', 'сентября', 'октября'],
+      Array.from({ length: 28 }, (_, i) => String(i + 1)),
+      ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля',
+       'августа', 'сентября', 'октября', 'ноября', 'декабря'],
       ['2025', '2026', '2027'],
     ]
-    const [vybr, setVybr] = useState([2, 1, 1])
+    const VYSKA = 36
+    const [vybr, setVybr] = useState([19, 8, 1])
+    // при открытии подкручиваем колонки к выбранному — иначе в окне
+    // стоит одно, а подписано другое
+    const pasy = useRef<(HTMLSpanElement | null)[]>([])
+    useEffect(() => {
+      pasy.current.forEach((el, i) => {
+        if (el) el.scrollTop = vybr[i] * VYSKA
+      })
+      // только на первом показе
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+    const nastav = (si: number, vi: number) =>
+      setVybr((p) => {
+        if (p[si] === vi) return p
+        haptic('light')
+        const d = [...p]
+        d[si] = vi
+        return d
+      })
     return (
       <List strong inset>
         <ListItem
           title={
-            <span className="grid grid-cols-3 gap-2 py-1">
-              {sloupce.map((sloupec, si) => (
-                <span key={si} className="flex flex-col items-center gap-1">
-                  {sloupec.map((v, vi) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => {
-                        const dalsi = [...vybr]
-                        dalsi[si] = vi
-                        setVybr(dalsi)
-                        haptic('light')
-                      }}
-                      className={`w-full rounded-lg py-1 text-[15px] ${
-                        vybr[si] === vi
-                          ? 'bg-black/[.06] font-semibold dark:bg-white/10'
-                          : 'opacity-40'
-                      }`}
-                    >
-                      {v}
-                    </button>
-                  ))}
-                </span>
-              ))}
+            <span className="relative block py-1">
+              {/* окно выбора — как у f7 */}
+              <span
+                className="pointer-events-none absolute inset-x-0 top-1/2 block -translate-y-1/2 rounded-lg bg-black/[.06] dark:bg-white/10"
+                style={{ height: VYSKA }}
+              />
+              <span className="grid grid-cols-3">
+                {sloupce.map((sloupec, si) => (
+                  <span
+                    key={si}
+                    ref={(el) => {
+                      pasy.current[si] = el
+                    }}
+                    onScroll={(e) =>
+                      nastav(si, Math.round((e.target as HTMLElement).scrollTop / VYSKA))
+                    }
+                    className="block h-[108px] snap-y snap-mandatory overflow-y-auto text-center [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    style={{ scrollPaddingBlock: VYSKA }}
+                  >
+                    <span className="block" style={{ height: VYSKA }} />
+                    {sloupec.map((v, vi) => (
+                      <span
+                        key={v}
+                        className={`flex snap-center items-center justify-center text-[17px] transition-opacity ${
+                          vybr[si] === vi ? 'font-semibold opacity-100' : 'opacity-35'
+                        }`}
+                        style={{ height: VYSKA }}
+                      >
+                        {v}
+                      </span>
+                    ))}
+                    <span className="block" style={{ height: VYSKA }} />
+                  </span>
+                ))}
+              </span>
             </span>
           }
         />
@@ -986,7 +1017,6 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
     )
   },
 
-  // редактор: кнопки реально меняют начертание выделенного текста
   'text-editor': function TextEditorDemo() {
     const pole = useRef<HTMLDivElement | null>(null)
     const prikaz = (cmd: string) => {
@@ -1111,23 +1141,29 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
   gauge: function GaugeDemo() {
     const [procenta, setProcenta] = useState(72)
     return (
-      <Block className="!my-0 flex flex-col items-center gap-3">
-        <button
-          type="button"
-          onClick={() => setProcenta((p) => (p >= 100 ? 10 : p + 15))}
-          className="grid h-32 w-32 place-items-center rounded-full active:opacity-80"
+      <Block className="!my-0 grid justify-items-center gap-3">
+        <span
+          className="grid h-32 w-32 place-items-center rounded-full"
           style={{
             background: `conic-gradient(#007aff 0 ${procenta}%, rgba(120,120,128,.18) ${procenta}% 100%)`,
           }}
         >
           <span className="grid h-[104px] w-[104px] place-items-center rounded-full bg-ios-light-surface-2 text-center dark:bg-ios-dark-surface-2">
             <span>
-              <span className="block text-[25px] font-bold">{procenta}%</span>
+              <span className="block text-[25px] font-bold tabular-nums">{procenta}%</span>
               <span className="block text-[12px] opacity-45">готово</span>
             </span>
           </span>
-        </button>
-        <span className="text-[13px] opacity-50">тапни по кругу</span>
+        </span>
+        <span className="w-full">
+          <Range
+            value={procenta}
+            min={0}
+            max={100}
+            step={1}
+            onChange={(e) => setProcenta(Number((e.target as HTMLInputElement).value))}
+          />
+        </span>
       </Block>
     )
   },
@@ -1138,65 +1174,82 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       { name: 'В работе', v: 30, c: '#2a8bff' },
       { name: 'Не начата', v: 25, c: '#8e8e93' },
     ]
-    const [aktivni, setAktivni] = useState(0)
-    let uhel = 0
-    const stops = casti
-      .map((c) => {
-        const od = uhel
-        uhel += c.v
-        return `${c.c} ${od}% ${uhel}%`
-      })
-      .join(', ')
+    const [aktivni, setAktivni] = useState<number | null>(null)
+    const polomer = 56
+    let uhel = -90
+    const sektory = casti.map((c) => {
+      const od = uhel
+      const do_ = uhel + (c.v / 100) * 360
+      uhel = do_
+      const bod = (a: number) => [
+        64 + polomer * Math.cos((a * Math.PI) / 180),
+        64 + polomer * Math.sin((a * Math.PI) / 180),
+      ]
+      const [x1, y1] = bod(od)
+      const [x2, y2] = bod(do_)
+      const velky = do_ - od > 180 ? 1 : 0
+      return { ...c, d: `M64,64 L${x1},${y1} A${polomer},${polomer} 0 ${velky} 1 ${x2},${y2} Z` }
+    })
     return (
-      <Block className="!my-0 flex flex-col items-center gap-3">
-        <span
-          className="grid h-32 w-32 place-items-center rounded-full"
-          style={{ background: `conic-gradient(${stops})` }}
-        >
-          <span className="grid h-20 w-20 place-items-center rounded-full bg-ios-light-surface-2 text-[15px] font-semibold dark:bg-ios-dark-surface-2">
-            {casti[aktivni].v}%
-          </span>
-        </span>
-        <span className="flex flex-wrap justify-center gap-1.5">
-          {casti.map((c, i) => (
-            <button key={c.name} type="button" onClick={() => setAktivni(i)}>
-              <Chip
-                className={`!m-0 ${i === aktivni ? '!bg-primary !text-white' : ''}`}
-                media={<span className="h-3 w-3 rounded-full" style={{ background: c.c }} />}
-              >
-                {c.name}
-              </Chip>
-            </button>
+      <Block className="!my-0 grid justify-items-center gap-2">
+        <svg viewBox="0 0 128 128" className="h-32 w-32">
+          {sektory.map((sek, i) => (
+            <path
+              key={sek.name}
+              d={sek.d}
+              fill={sek.c}
+              opacity={aktivni === null || aktivni === i ? 1 : 0.35}
+              onClick={() => setAktivni(aktivni === i ? null : i)}
+              style={{ cursor: 'pointer' }}
+            />
           ))}
+          <circle cx="64" cy="64" r="34" className="fill-ios-light-surface-2 dark:fill-ios-dark-surface-2" />
+          <text x="64" y="69" textAnchor="middle" className="fill-current text-[15px] font-semibold">
+            {aktivni === null ? '100%' : `${casti[aktivni].v}%`}
+          </text>
+        </svg>
+        <span className="text-[13px] opacity-55">
+          {aktivni === null ? 'тапни сектор' : casti[aktivni].name}
         </span>
       </Block>
     )
   },
 
   'area-chart': function AreaDemo() {
-    const rady = [
-      { name: 'Неделя', body: [4, 9, 6, 12, 8, 14, 11] },
-      { name: 'Месяц', body: [10, 6, 14, 8, 16, 9, 18] },
-    ]
-    const [aktivni, setAktivni] = useState(0)
-    const body = rady[aktivni].body
+    const body = [4, 9, 6, 12, 8, 14, 11]
+    const dny = ['пн', 'вт', 'ср', 'чт', 'пт', 'сб', 'вс']
+    const [aktivni, setAktivni] = useState<number | null>(null)
     const max = Math.max(...body)
-    const cesta = body
-      .map((v, i) => `${(i / (body.length - 1)) * 100},${40 - (v / max) * 36}`)
-      .join(' ')
+    const xy = (v: number, i: number): [number, number] => [
+      (i / (body.length - 1)) * 100,
+      40 - (v / max) * 34,
+    ]
+    const cesta = body.map((v, i) => xy(v, i).join(',')).join(' ')
     return (
-      <Block className="!my-0 grid gap-3">
-        <svg viewBox="0 0 100 40" className="h-28 w-full" preserveAspectRatio="none">
-          <polygon points={`0,40 ${cesta} 100,40`} fill="rgba(42,139,255,.25)" />
-          <polyline points={cesta} fill="none" stroke="#2a8bff" strokeWidth="1.5" />
+      <Block className="!my-0 grid gap-2">
+        <svg viewBox="0 0 100 44" className="h-28 w-full">
+          <polygon points={`0,44 ${cesta} 100,44`} fill="rgba(42,139,255,.22)" />
+          <polyline points={cesta} fill="none" stroke="#2a8bff" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+          {body.map((v, i) => {
+            const [x, y] = xy(v, i)
+            return (
+              <circle
+                key={i}
+                cx={x}
+                cy={y}
+                r={aktivni === i ? 3 : 2}
+                fill={aktivni === i ? '#2a8bff' : 'white'}
+                stroke="#2a8bff"
+                strokeWidth="1"
+                onClick={() => setAktivni(aktivni === i ? null : i)}
+                style={{ cursor: 'pointer' }}
+              />
+            )
+          })}
         </svg>
-        <Segmented strong rounded>
-          {rady.map((r, i) => (
-            <SegmentedButton key={r.name} active={aktivni === i} onClick={() => setAktivni(i)}>
-              {r.name}
-            </SegmentedButton>
-          ))}
-        </Segmented>
+        <span className="text-center text-[13px] opacity-55">
+          {aktivni === null ? 'тапни точку' : `${dny[aktivni]}: ${body[aktivni]} задач`}
+        </span>
       </Block>
     )
   },
@@ -1245,34 +1298,45 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
   },
 
   'infinite-scroll': function InfiniteDemo() {
-    const [kolik, setKolik] = useState(6)
+    const [kolik, setKolik] = useState(8)
     const [nacita, setNacita] = useState(false)
-    const dobrat = (e: React.UIEvent<HTMLDivElement>) => {
-      const el = e.currentTarget
-      if (nacita || el.scrollTop + el.clientHeight < el.scrollHeight - 24) return
+    const dobrat = () => {
+      if (nacita) return
       setNacita(true)
       window.setTimeout(() => {
-        setKolik((k) => k + 4)
+        setKolik((k) => k + 5)
         setNacita(false)
       }, 500)
     }
     return (
-      <div onScroll={dobrat} className="max-h-56 overflow-y-auto rounded-3xl">
-        <List strong inset dividers>
-          {Array.from({ length: kolik }, (_, i) => (
-            <ListItem key={i} title={`Элемент ${i + 1}`} />
-          ))}
-        </List>
-        <div className="flex justify-center py-2">
-          {nacita ? <Preloader className="h-5 w-5" /> : (
-            <span className="text-[13px] opacity-45">крути вниз — добавится ещё</span>
+      <div
+        onScroll={(e) => {
+          const el = e.currentTarget
+          if (el.scrollTop + el.clientHeight >= el.scrollHeight - 40) dobrat()
+        }}
+        className="max-h-56 overflow-y-auto rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1"
+      >
+        {Array.from({ length: kolik }, (_, i) => (
+          <div
+            key={i}
+            className="flex h-11 items-center border-b border-black/[.06] px-4 text-[15px] dark:border-white/[.08]"
+          >
+            Элемент {i + 1}
+          </div>
+        ))}
+        <div className="flex items-center justify-center gap-2 py-3">
+          {nacita ? (
+            <Preloader className="h-5 w-5" />
+          ) : (
+            <Button rounded small onClick={dobrat}>
+              Загрузить ещё
+            </Button>
           )}
         </div>
       </div>
     )
   },
 
-  // экран входа: поля реально печатаются, кнопка отзывается
   'login-screen': function LoginDemo() {
     const [mail, setMail] = useState('')
     const [heslo, setHeslo] = useState('')
@@ -1334,20 +1398,31 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
   tooltip: function TooltipDemo() {
     const [open, setOpen] = useState(false)
     return (
-      <Block className="!my-0 flex flex-col items-center gap-2">
-        {open && (
-          <span className="rounded-lg bg-black px-3 py-2 text-[12px] text-white dark:bg-white dark:text-black">
-            Здесь можно назначить агента
-          </span>
-        )}
-        <Button rounded outline onClick={() => setOpen((o) => !o)}>
-          <HelpCircle size={17} className="mr-1" />
-          {open ? 'Скрыть подсказку' : 'Что это?'}
-        </Button>
-      </Block>
+      <List strong inset>
+        <ListItem
+          title="Исполнитель"
+          after={
+            <span className="relative inline-flex">
+              {open && (
+                <span className="absolute bottom-full right-0 mb-2 w-52 rounded-xl bg-black px-3 py-2 text-[12px] leading-snug text-white shadow-lg dark:bg-white dark:text-black">
+                  Кому уйдёт задача, когда её возьмут в работу
+                  <span className="absolute -bottom-1 right-3 h-2 w-2 rotate-45 bg-black dark:bg-white" />
+                </span>
+              )}
+              <KLink
+                iconOnly
+                onClick={() => setOpen((o) => !o)}
+                aria-label="Подсказка"
+              >
+                <HelpCircle size={20} />
+              </KLink>
+            </span>
+          }
+        />
+      </List>
     )
   },
-  // ——— блоки, которых не хватало против эталона framework7 ———
+
   block: function BlockDemo() {
     const [vic, setVic] = useState(false)
     return (
@@ -1550,29 +1625,35 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
   },
 
   'list-index': function ListIndexDemo() {
-    const pismena = ['А', 'Б', 'В', 'Г', 'Д']
-    const [skok, setSkok] = useState('А')
+    const skupiny: [string, string[]][] = [
+      ['А', ['Алексей', 'Анна', 'Артём']],
+      ['Б', ['Борис', 'Богдан']],
+      ['В', ['Вера', 'Виктор']],
+      ['Г', ['Глеб']],
+    ]
+    const pas = useRef<HTMLDivElement | null>(null)
+    const skocit = (p: string) => {
+      haptic('light')
+      const cil = pas.current?.querySelector(`[data-pismeno="${p}"]`)
+      cil?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    }
     return (
       <div className="relative">
-        <List strong inset>
-          {pismena.map((p) => (
-            <div key={p}>
-              <ListItem title={p} groupTitle />
-              <ListItem title={`${p}лексей`} />
-            </div>
-          ))}
-        </List>
-        <div className="absolute right-2 top-2 flex flex-col gap-0.5 text-[11px] font-semibold text-primary">
-          {pismena.map((p) => (
-            <button
-              key={p}
-              type="button"
-              onClick={() => {
-                setSkok(p)
-                haptic('light')
-              }}
-              className={skok === p ? 'opacity-100' : 'opacity-45'}
-            >
+        <div ref={pas} className="max-h-64 overflow-y-auto rounded-3xl">
+          <List strong inset>
+            {skupiny.map(([pismeno, jmena]) => (
+              <div key={pismeno} data-pismeno={pismeno}>
+                <ListItem title={pismeno} groupTitle />
+                {jmena.map((j) => (
+                  <ListItem key={j} link title={j} onClick={() => {}} />
+                ))}
+              </div>
+            ))}
+          </List>
+        </div>
+        <div className="absolute right-1 top-1/2 flex -translate-y-1/2 flex-col gap-1 rounded-full bg-black/[.04] px-1 py-1.5 text-[11px] font-semibold text-primary dark:bg-white/[.06]">
+          {skupiny.map(([p]) => (
+            <button key={p} type="button" onClick={() => skocit(p)}>
               {p}
             </button>
           ))}
@@ -1580,6 +1661,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </div>
     )
   },
+
   'contacts-list': function ContactsDemo() {
     const [kdo, setKdo] = useState<string | null>(null)
     return (
@@ -1664,22 +1746,44 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
     )
   },
   'color-picker': function ColorPickerDemo() {
+    const [odstin, setOdstin] = useState(210)
     const barvy = ['#007aff', '#30d158', '#bf5af2', '#ff9f0a', '#ff375f', '#64d2ff']
-    const [color, setColor] = useState(barvy[0])
+    const [barva, setBarva] = useState(barvy[0])
+    const zOdstinu = `hsl(${odstin} 90% 55%)`
     return (
-      <Block className="!my-0 flex flex-wrap gap-3">
-        {barvy.map((c) => (
-          <button
-            key={c}
-            type="button"
-            aria-label={`Цвет ${c}`}
-            onClick={() => setColor(c)}
-            className="h-9 w-9 rounded-full active:opacity-70"
-            style={{ background: c }}
-          >
-            {color === c && <Check size={18} className="mx-auto text-white" />}
-          </button>
-        ))}
+      <Block className="!my-0 grid gap-3">
+        <span className="flex items-center gap-3">
+          <span className="h-12 w-12 rounded-2xl" style={{ background: barva }} />
+          <span className="text-[15px] font-medium">{barva}</span>
+        </span>
+        <span className="flex flex-wrap gap-3">
+          {barvy.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-label={`Цвет ${c}`}
+              onClick={() => setBarva(c)}
+              className="h-9 w-9 rounded-full active:opacity-70"
+              style={{ background: c }}
+            >
+              {barva === c && <Check size={18} className="mx-auto text-white" />}
+            </button>
+          ))}
+        </span>
+        <span className="block">
+          <Range
+            value={odstin}
+            min={0}
+            max={360}
+            step={1}
+            onChange={(e) => {
+              const v = Number((e.target as HTMLInputElement).value)
+              setOdstin(v)
+              setBarva(`hsl(${v} 90% 55%)`)
+            }}
+          />
+          <span className="mt-1 block text-[13px] opacity-55">оттенок: {zOdstinu}</span>
+        </span>
       </Block>
     )
   },
