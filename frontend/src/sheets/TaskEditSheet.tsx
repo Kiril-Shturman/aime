@@ -10,6 +10,7 @@ import {
 } from 'konsta/react'
 import Popup from '../components/Popup'
 import PickerSheet, { type PickerOption } from './PickerSheet'
+import { MemberChip, StatusChip } from '../components/TaskChips'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
@@ -127,6 +128,16 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
             onChange={(e) => setTitle((e.target as HTMLTextAreaElement).value)}
           />
         </List>
+
+        <Block className="!mt-2 !mb-0">
+          <span className="flex flex-wrap items-center gap-1.5">
+            <StatusChip status={task.status} />
+            <MemberChip member={member} />
+            {task.status === 'review' && (
+              <MemberChip member={kontroler} prefix="проверяет" />
+            )}
+          </span>
+        </Block>
 
         <BlockTitle>Куда относится</BlockTitle>
         <List strong inset>

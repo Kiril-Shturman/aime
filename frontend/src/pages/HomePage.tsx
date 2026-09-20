@@ -28,6 +28,7 @@ import {
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { Avatar } from '../components/Avatar'
+import Pill from '../components/Pill'
 import { getUser } from '../lib/telegram'
 import Menu, { type MenuItem } from '../components/Menu'
 import TaskRow from '../components/TaskRow'
@@ -425,9 +426,21 @@ export default function HomePage() {
                     subtitle={
                       kde.length ? kde.join(' · ') : 'ни к одному проекту не привязан'
                     }
-                    after={
-                      <span className="text-[13px] text-black/40 dark:text-white/35">
-                        {a.live ? 'канал открыт' : a.model || (a.hook ? 'вызов настроен' : online ? 'на связи' : '')}
+                    text={
+                      <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <Pill tone={a.live || online ? 'bot' : 'free'}>
+                          {a.live
+                            ? 'канал открыт'
+                            : online
+                              ? 'на связи'
+                              : a.hook
+                                ? 'вызов настроен'
+                                : 'офлайн'}
+                        </Pill>
+                        <Pill tone={a.auto === false ? 'free' : 'work'}>
+                          {a.auto === false ? 'новых не берёт' : 'берёт задачи'}
+                        </Pill>
+                        {a.model && <Pill tone="free">{a.model}</Pill>}
                       </span>
                     }
                   />
