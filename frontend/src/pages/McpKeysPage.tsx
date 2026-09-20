@@ -1,24 +1,49 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, Copy as CopyIcon, KeyRound, Trash2 } from 'lucide-react'
+import { Check, Copy as CopyIcon, KeyRound } from 'lucide-react'
 import { Navbar, NavbarBackLink, Page } from 'konsta/react'
 import { haptic } from '../lib/telegram'
+import { useApp } from '../store/AppStore'
 
-// Модель ключа — как в ai-webapi mcp-keys.component.ts (id/label/created).
-interface McpKey {
-  id: string
-  label: string
-  createdAt: string
-  lastUsedAt: string | null
-}
-
-// URL мини-аппы для MCP-подключения; при выкате в прод — заменить на боевой.
-const MCP_URL = 'https://aime.example/mcp'
+// Адрес доски берём из самой страницы: на любом домене подсказка верная.
+const MCP_URL = typeof location === 'undefined' ? '' : location.origin
 
 export default function McpKeysPage() {
   const nav = useNavigate()
-  const [keys, setKeys] = useState<McpKey[]>([])
+  const { state } = useApp()
   const [copiedUrl, setCopiedUrl] = useState(false)
+  const [copiedKey, setCopiedKey] = useState<string | null>(null)
+
+  // Ключи не придумываем: доска выдаёт личный ключ каждому исполнителю,
+  // когда его заводят в проекте. Здесь просто собираем их в одно место.
+  const keys = useMemo(
+    () =>
+      (state?.projects ?? []).flatMap((project) =>
+        project.members
+          .filter((m) => m.kind === 'agent' || m.kind === 'bot')
+          .filter((m) => !!m.key)
+          .map((m) => ({
+            id: `${project.id}:${m.id}`,
+            label: m.name,
+            project: project.name,
+            projectId: project.id,
+            kind: m.kind,
+            key: m.key as string,
+          })),
+      ),
+    [state?.projects],
+  )
+
+  const copyKey = async (id: string, key: string) => {
+    haptic('success')
+    try {
+      await navigator.clipboard.writeText(key)
+      setCopiedKey(id)
+      window.setTimeout(() => setCopiedKey(null), 1500)
+    } catch {
+      /* без буфера — пусть выделяет руками */
+    }
+  }
 
   const copyUrl = async () => {
     try {
@@ -29,25 +54,6 @@ export default function McpKeysPage() {
     } catch {
       /* clipboard недоступен */
     }
-  }
-
-  const createKey = () => {
-    haptic('light')
-    const now = new Date().toISOString()
-    setKeys((prev) => [
-      {
-        id: crypto.randomUUID(),
-        label: `Ключ ${prev.length + 1}`,
-        createdAt: now,
-        lastUsedAt: null,
-      },
-      ...prev,
-    ])
-  }
-
-  const revoke = (id: string) => {
-    haptic('warning')
-    setKeys((prev) => prev.filter((k) => k.id !== id))
   }
 
   return (
@@ -91,20 +97,11 @@ export default function McpKeysPage() {
           </div>
 
           <ol className="mt-4 pl-4 list-decimal text-[13px] text-black/60 dark:text-white/50 space-y-1">
-            <li>Создайте ключ ниже</li>
-            <li>Скопируйте URL и вставьте в MCP-клиент</li>
-            <li>В качестве Bearer-токена используйте ключ</li>
+            <li>Заведите в проекте участника вида «ИИ-агент» — ключ выдаётся сразу</li>
+            <li>Скопируйте адрес выше и вставьте в MCP-клиент</li>
+            <li>В качестве Bearer-токена используйте ключ агента</li>
           </ol>
         </div>
-
-        {/* Кнопка создать */}
-        <button
-          type="button"
-          onClick={createKey}
-          className="mt-4 w-full h-11 rounded-full bg-[#2a8bff] text-white text-[15px] font-semibold active:opacity-80"
-        >
-          Создать ключ
-        </button>
 
         {/* Список ключей / пустой стейт */}
         <div className="mt-4 rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 overflow-hidden">
@@ -114,10 +111,10 @@ export default function McpKeysPage() {
                 <KeyRound size={22} />
               </span>
               <div className="text-[15px] font-semibold text-black dark:text-white">
-                Ключей пока нет
+                Исполнителей пока нет
               </div>
               <div className="text-[13px] text-black/50 dark:text-white/45 mt-1">
-                Создайте первый ключ — он появится здесь
+                Заведите в проекте агента или бота — его ключ появится здесь
               </div>
             </div>
           ) : (
@@ -127,25 +124,33 @@ export default function McpKeysPage() {
                   <span className="w-9 h-9 rounded-full flex items-center justify-center bg-[#2a8bff]/12 text-[#2a8bff]">
                     <KeyRound size={16} />
                   </span>
-                  <div className="flex-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => nav(`/project/${k.projectId}`)}
+                    className="flex-1 min-w-0 text-left"
+                  >
                     <div className="text-[15px] font-semibold text-black dark:text-white truncate">
                       {k.label}
                     </div>
                     <div className="text-[12px] text-black/45 dark:text-white/40 truncate">
-                      Создан{' '}
-                      {new Date(k.createdAt).toLocaleDateString('ru-RU')}
-                      {k.lastUsedAt
-                        ? ` · использован ${new Date(k.lastUsedAt).toLocaleDateString('ru-RU')}`
-                        : ' · ещё не использован'}
+                      {k.kind === 'agent' ? 'ИИ-агент' : 'Бот'} · {k.project}
                     </div>
-                  </div>
+                  </button>
                   <button
                     type="button"
-                    onClick={() => revoke(k.id)}
-                    aria-label="Удалить ключ"
-                    className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-[#ff453a] active:bg-black/[.05] dark:active:bg-white/[.06]"
+                    onClick={() => copyKey(k.id, k.key)}
+                    aria-label="Скопировать ключ"
+                    className="shrink-0 h-9 px-3 rounded-full text-[13px] font-medium text-[#2a8bff] active:bg-black/[.05] dark:active:bg-white/[.06] inline-flex items-center gap-1"
                   >
-                    <Trash2 size={16} />
+                    {copiedKey === k.id ? (
+                      <>
+                        <Check size={14} /> Готово
+                      </>
+                    ) : (
+                      <>
+                        <CopyIcon size={14} /> Ключ
+                      </>
+                    )}
                   </button>
                 </li>
               ))}

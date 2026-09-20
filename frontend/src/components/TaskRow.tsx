@@ -28,11 +28,24 @@ function fmtNum(n: number) {
   return `${(n / 1_000_000).toFixed(1)}M`
 }
 
+// «взял 12 минут назад» — видно, что агент не завис
+function fmtSince(iso?: string | null) {
+  if (!iso) return ''
+  const minut = Math.floor((Date.now() - new Date(iso).getTime()) / 60000)
+  if (!Number.isFinite(minut) || minut < 0) return ''
+  if (minut < 1) return 'только что'
+  if (minut < 60) return `${minut} мин`
+  const hodin = Math.floor(minut / 60)
+  if (hodin < 24) return `${hodin} ч`
+  return `${Math.floor(hodin / 24)} дн`
+}
+
 export default function TaskRow({ task, showProject, onEdit }: Props) {
   const { state, refresh } = useApp()
   const m = state ? memberOf(task, state.projects) : null
   const project = state?.projects.find((p) => p.id === task.project)
   const when = [task.due, task.time].filter(Boolean).join(' ')
+  const vPraci = task.status === 'doing' ? fmtSince(task.started_at) : ''
   const parts = [
     showProject ? project?.name : null,
     m ? (m.handle || m.name) : null,
@@ -84,7 +97,7 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
         <>
           {task.status === 'doing' && (
             <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">
-              В работе
+              В работе{vPraci ? ` · ${vPraci}` : ''}
             </span>
           )}
           {task.note && (
@@ -108,7 +121,7 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
               {task.report}
             </span>
           )}
-          {task.done && (task.commit || task.tokens || task.seconds) && (
+          {(task.commit || task.tokens || task.seconds) && (
             <span className="block text-black/55 dark:text-white/50 text-[12px] mt-1">
               {[
                 task.commit ? task.commit.slice(0, 7) : null,
