@@ -1,26 +1,16 @@
-import { useMemo, useState, type ComponentType } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-  Check,
-  ChevronDown,
-  ChevronLeft,
-  Copy,
-  FormInput,
-  LayoutGrid,
-  ListTree,
-  MessageCircle,
-  MousePointerClick,
-  PanelsTopLeft,
-  Search,
-  Shapes,
-} from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, Copy } from 'lucide-react'
 import {
   Block,
+  BlockFooter,
   BlockTitle,
   Button,
+  Chip,
   Link as KLink,
   List,
   ListItem,
+  Navbar,
   Page,
   Searchbar,
 } from 'konsta/react'
@@ -28,7 +18,6 @@ import blocks from '../lib/design-blocks.json'
 import { DEMOS } from '../lib/design-demos'
 import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
-import Popup from '../components/Popup'
 
 interface Blok {
   id: string
@@ -37,33 +26,20 @@ interface Blok {
   code: string
 }
 
-const GROUP_META: Record<
-  string,
-  { icon: ComponentType<{ size?: number; className?: string }>; color: string; bg: string }
-> = {
-  Списки: { icon: ListTree, color: 'text-[#007aff]', bg: 'bg-[#007aff]/12' },
-  Формы: { icon: FormInput, color: 'text-[#af52de]', bg: 'bg-[#af52de]/12' },
-  Управление: { icon: MousePointerClick, color: 'text-[#ff9500]', bg: 'bg-[#ff9500]/12' },
-  'Показ данных': { icon: LayoutGrid, color: 'text-[#34c759]', bg: 'bg-[#34c759]/12' },
-  Навигация: { icon: PanelsTopLeft, color: 'text-[#5856d6]', bg: 'bg-[#5856d6]/12' },
-  Окна: { icon: Shapes, color: 'text-[#ff2d55]', bg: 'bg-[#ff2d55]/12' },
-  Чат: { icon: MessageCircle, color: 'text-[#00a7a5]', bg: 'bg-[#00a7a5]/12' },
-}
-
-const fallbackMeta = GROUP_META['Показ данных']
-
-// Каталог устроен как библиотека, а не длинная техническая простыня:
-// компактные плитки открывают живой пример и код в отдельном окне.
+// Каталог собран из тех же компонентов, что и вся доска: Navbar, List,
+// Block, Chip. Блоки показаны сразу живьём — по ним можно тыкать, а код
+// раскрывается под примером.
 export default function DesignKitPage() {
   const navigate = useNavigate()
   const { state } = useApp()
   const vsechny = blocks as Blok[]
   const pravidla = state?.projects.find((p) => p.design)?.design ?? ''
   const projektSPravidly = state?.projects.find((p) => p.design)?.id
-  const [pravidlaOtevrena, setPravidlaOtevrena] = useState(false)
+
   const [q, setQ] = useState('')
   const [skupina, setSkupina] = useState('Все')
-  const [vybrany, setVybrany] = useState<Blok | null>(null)
+  const [pravidlaOtevrena, setPravidlaOtevrena] = useState(false)
+  const [kod, setKod] = useState<string | null>(null)
   const [zkopirovan, setZkopirovan] = useState<string | null>(null)
 
   const skupiny = useMemo(
@@ -86,7 +62,7 @@ export default function DesignKitPage() {
 
   const poSkupinach = useMemo(() => {
     const map = new Map<string, Blok[]>()
-    nalezene.forEach((blok) => map.set(blok.group, [...(map.get(blok.group) ?? []), blok]))
+    nalezene.forEach((b) => map.set(b.group, [...(map.get(b.group) ?? []), b]))
     return Array.from(map.entries())
   }, [nalezene])
 
@@ -97,218 +73,160 @@ export default function DesignKitPage() {
       setZkopirovan(b.id)
       window.setTimeout(() => setZkopirovan(null), 1500)
     } catch {
-      haptic('error')
+      /* без буфера — выделит руками */
     }
   }
 
-  const Demo = vybrany ? DEMOS[vybrany.id] : null
-  const activeMeta = vybrany ? GROUP_META[vybrany.group] ?? fallbackMeta : fallbackMeta
-  const ActiveIcon = activeMeta.icon
-
   return (
-    <Page className="pb-safe-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <header className="sticky top-0 z-20 border-b border-black/[.06] bg-ios-light-surface/90 backdrop-blur-xl dark:border-white/[.08] dark:bg-ios-dark-surface/90">
-        <div className="relative flex h-[52px] items-center justify-center px-safe-3">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            aria-label="Назад"
-            className="absolute left-safe-2 grid h-10 w-10 place-items-center rounded-full text-primary active:bg-black/[.06] dark:active:bg-white/10"
-          >
-            <ChevronLeft size={28} strokeWidth={2.25} />
-          </button>
-          <div className="text-center">
-            <div className="text-[17px] font-semibold leading-5 tracking-[-0.01em]">Каталог блоков</div>
-            <div className="text-[11px] leading-4 text-black/45 dark:text-white/45">Framework7 · iOS</div>
-          </div>
-        </div>
-      </header>
-
-      <div className="mx-safe-4 mt-3 overflow-hidden rounded-[22px] bg-gradient-to-br from-[#087cff] to-[#6155e8] px-4 py-4 text-white shadow-sm">
-        <div className="flex items-center gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.11em] text-white/70">
-              UI kit проекта
-            </div>
-            <div className="mt-0.5 text-[21px] font-bold leading-tight tracking-[-0.025em]">
-              Собирай из готовых блоков
-            </div>
-            <div className="mt-2 flex gap-1.5 text-[12px] font-medium">
-              <span className="rounded-full bg-white/15 px-2.5 py-1">{vsechny.length} блоков</span>
-              <span className="rounded-full bg-white/15 px-2.5 py-1">{skupiny.length - 1} разделов</span>
-            </div>
-          </div>
-          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white/15">
-            <Shapes size={23} />
-          </div>
-        </div>
-      </div>
+    <Page className="pb-safe-12">
+      <Navbar
+        title="Блоки"
+        subtitle={`${vsechny.length} готовых кусков · framework7 iOS`}
+        left={
+          <KLink iconOnly onClick={() => navigate(-1)} aria-label="Назад">
+            <ChevronLeft size={24} />
+          </KLink>
+        }
+      />
 
       {pravidla && (
-        <List strong inset className="!my-2.5">
-          <ListItem
-            link
-            onClick={() => setPravidlaOtevrena((open) => !open)}
-            title="Правила дизайн-кода"
-            subtitle="Единый стиль для генерации страниц"
-            chevronIcon={
-              <ChevronDown
-                size={17}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 text-black/35 transition-transform dark:text-white/35 ${pravidlaOtevrena ? 'rotate-180' : ''}`}
-              />
-            }
-            innerClassName="pr-9"
-          />
-          {pravidlaOtevrena && (
-            <ListItem
-              title={
-                <span className="block whitespace-pre-wrap py-1 text-[14px] font-normal leading-relaxed text-black/65 dark:text-white/65">
-                  {pravidla}
-                </span>
-              }
-            />
-          )}
-          {pravidlaOtevrena && projektSPravidly && (
+        <>
+          <BlockTitle>Дизайн-код</BlockTitle>
+          <List strong inset>
             <ListItem
               link
-              onClick={() => navigate(`/project/${projektSPravidly}/settings`)}
-              title="Изменить правила"
+              onClick={() => setPravidlaOtevrena((o) => !o)}
+              title="Правила: из чего собираем интерфейс"
+              chevronIcon={
+                <ChevronDown
+                  size={17}
+                  className={`absolute right-3 top-1/2 -translate-y-1/2 text-black/35 transition-transform dark:text-white/35 ${
+                    pravidlaOtevrena ? 'rotate-180' : ''
+                  }`}
+                />
+              }
+              innerClassName="pr-9"
             />
-          )}
-        </List>
+            {pravidlaOtevrena && (
+              <ListItem
+                title={
+                  <span className="block whitespace-pre-wrap py-1 text-[14px] font-normal leading-relaxed text-black/70 dark:text-white/65">
+                    {pravidla}
+                  </span>
+                }
+              />
+            )}
+            {projektSPravidly && (
+              <ListItem
+                link
+                onClick={() => navigate(`/project/${projektSPravidly}/settings`)}
+                title="Изменить правила"
+                subtitle="в настройках проекта"
+              />
+            )}
+          </List>
+        </>
       )}
 
-      <div className="sticky top-[52px] z-10 border-y border-black/[.05] bg-ios-light-surface/95 py-2 backdrop-blur-xl dark:border-white/[.06] dark:bg-ios-dark-surface/95">
-        <div className="px-safe-4">
-          <Searchbar
-            value={q}
-            onInput={(e) => setQ((e.target as HTMLInputElement).value)}
-            onClear={() => setQ('')}
-            placeholder="Найти блок"
-          />
-        </div>
-        <div className="mt-1.5 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {skupiny.map((group) => (
-            <button
-              key={group}
-              type="button"
-              onClick={() => {
-                haptic('light')
-                setSkupina(group)
-              }}
-              className={`min-h-8 shrink-0 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${
-                skupina === group
-                  ? 'bg-primary text-white'
-                  : 'bg-black/[.06] text-black/70 dark:bg-white/10 dark:text-white/75'
-              }`}
-            >
-              {group}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Searchbar
+        value={q}
+        onInput={(e) => setQ((e.target as HTMLInputElement).value)}
+        onClear={() => setQ('')}
+        placeholder="Найти блок"
+      />
+
+      <Block className="!my-2 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {skupiny.map((g) => (
+          <Chip
+            key={g}
+            onClick={() => {
+              haptic('light')
+              setSkupina(g)
+            }}
+            className={`!m-0 shrink-0 cursor-pointer ${
+              skupina === g ? '!bg-primary !text-white' : ''
+            }`}
+          >
+            {g}
+          </Chip>
+        ))}
+      </Block>
 
       {nalezene.length === 0 && (
         <List strong inset>
           <ListItem
-            media={<Search size={20} />}
             title="Ничего не нашлось"
-            subtitle="Попробуй другое слово или выбери все разделы"
+            subtitle="Попробуй другое слово или выбери «Все»"
           />
         </List>
       )}
 
-      {poSkupinach.map(([group, groupBlocks]) => {
-        const meta = GROUP_META[group] ?? fallbackMeta
-        const Icon = meta.icon
-        return (
-          <section key={group} className="mt-5 first:mt-4">
-            <div className="mb-2 flex items-center justify-between px-safe-4 text-[17px] font-semibold text-black/65 dark:text-white/60">
-              <span>{group}</span>
-              <span className="text-[12px] font-medium opacity-45">{groupBlocks.length}</span>
-            </div>
-            <div className="mx-safe-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {groupBlocks.map((blok) => (
-                <button
-                  key={blok.id}
-                  type="button"
-                  onClick={() => {
-                    haptic('light')
-                    setVybrany(blok)
-                  }}
-                  className="flex min-h-[124px] min-w-0 flex-col overflow-hidden rounded-[18px] bg-ios-light-surface-1 p-3 text-left shadow-[0_1px_0_rgba(0,0,0,.04)] transition-transform active:scale-[.98] dark:bg-ios-dark-surface-1"
-                >
-                  <span className={`grid h-9 w-9 place-items-center rounded-[13px] ${meta.bg} ${meta.color}`}>
-                    <Icon size={19} />
-                  </span>
-                  <span className="mt-2.5 block break-words text-[14px] font-semibold leading-[1.2] text-black dark:text-white">
-                    {blok.title}
-                  </span>
-                  <span className="mt-auto block break-all pt-2 font-mono text-[10px] leading-tight text-black/35 dark:text-white/35">
-                    {blok.id}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        )
-      })}
+      {poSkupinach.map(([group, groupBlocks]) => (
+        <div key={group}>
+          <BlockTitle>
+            {group}
+            <span className="ml-2 font-normal opacity-45">{groupBlocks.length}</span>
+          </BlockTitle>
 
-      <Popup
-        open={vybrany !== null}
-        onClose={() => setVybrany(null)}
-        title={vybrany?.group ?? 'Блок'}
-        pageClassName="pb-safe-10"
-        headerRight={
-          vybrany ? (
-            <KLink iconOnly onClick={() => kopirovat(vybrany)} aria-label="Скопировать код">
-              {zkopirovan === vybrany.id ? <Check size={22} /> : <Copy size={21} />}
-            </KLink>
-          ) : null
-        }
-      >
-        {vybrany && (
-          <>
-            <div className="mx-safe-4 mt-4 flex items-center gap-3 rounded-2xl bg-ios-light-surface-1 p-3 dark:bg-ios-dark-surface-1">
-              <span className={`grid h-11 w-11 place-items-center rounded-2xl ${activeMeta.bg} ${activeMeta.color}`}>
-                <ActiveIcon size={23} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="break-words text-[16px] font-semibold leading-tight">{vybrany.title}</div>
-                <div className="text-[13px] text-black/45 dark:text-white/45">
-                  {vybrany.group} · Framework7 iOS
+          {groupBlocks.map((b) => {
+            const Demo = DEMOS[b.id]
+            const otevreny = kod === b.id
+            return (
+              <div key={b.id} className="mb-4">
+                <BlockTitle className="!mb-1 flex items-center justify-between">
+                  <span>{b.title}</span>
+                  <span className="font-mono text-[11px] font-normal opacity-40">
+                    {b.id}
+                  </span>
+                </BlockTitle>
+
+                {/* живой пример — по нему можно тыкать */}
+                <div className="mx-safe-4 overflow-hidden rounded-3xl bg-ios-light-surface-2 py-2 dark:bg-ios-dark-surface-2">
+                  {Demo ? <Demo /> : <Block>Пример в коде ниже.</Block>}
                 </div>
+
+                <List strong inset className="!mt-2 !mb-0">
+                  <ListItem
+                    link
+                    onClick={() => setKod(otevreny ? null : b.id)}
+                    title={otevreny ? 'Скрыть код' : 'Показать код'}
+                    after={
+                      <KLink
+                        onClick={(e: React.MouseEvent) => {
+                          e.stopPropagation()
+                          kopirovat(b)
+                        }}
+                        aria-label={`Скопировать ${b.title}`}
+                      >
+                        {zkopirovan === b.id ? <Check size={18} /> : <Copy size={18} />}
+                      </KLink>
+                    }
+                  />
+                  {otevreny && (
+                    <ListItem
+                      title={
+                        <pre className="block max-h-72 overflow-auto whitespace-pre py-1 font-mono text-[12px] font-normal leading-snug text-black/75 dark:text-white/75">
+                          {b.code}
+                        </pre>
+                      }
+                    />
+                  )}
+                </List>
               </div>
-            </div>
+            )
+          })}
+        </div>
+      ))}
 
-            <BlockTitle>Живой пример</BlockTitle>
-            <div className="min-h-24 overflow-hidden py-2">
-              {Demo ? <Demo /> : <Block>Для блока доступен готовый код.</Block>}
-            </div>
-
-            <BlockTitle>Код блока</BlockTitle>
-            <div className="relative mx-safe-4 overflow-hidden rounded-[20px] bg-[#17171a]">
-              <pre className="max-h-[42vh] overflow-auto whitespace-pre p-4 pr-12 text-[12px] leading-relaxed text-white/85">
-                {vybrany.code}
-              </pre>
-              <button
-                type="button"
-                onClick={() => kopirovat(vybrany)}
-                aria-label={`Скопировать ${vybrany.title}`}
-                className="absolute right-2.5 top-2.5 grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white active:opacity-60"
-              >
-                {zkopirovan === vybrany.id ? <Check size={17} /> : <Copy size={17} />}
-              </button>
-            </div>
-
-            <Block className="!mb-8">
-              <Button large rounded onClick={() => kopirovat(vybrany)}>
-                {zkopirovan === vybrany.id ? 'Код скопирован' : 'Скопировать код'}
-              </Button>
-            </Block>
-          </>
-        )}
-      </Popup>
+      <Block className="!mt-6">
+        <Button large rounded clear onClick={() => navigate(-1)}>
+          Назад
+        </Button>
+      </Block>
+      <BlockFooter>
+        Агент берёт те же куски командой board_blocks — список, board_blocks
+        id=&lt;id&gt; — код.
+      </BlockFooter>
     </Page>
   )
 }
