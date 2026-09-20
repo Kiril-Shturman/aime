@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, MessageCircle } from 'lucide-react'
-import { Block, Button, List, ListInput, ListItem, Segmented, SegmentedButton } from 'konsta/react'
+import { Block, Button, Checkbox, List, ListInput, ListItem, Segmented, SegmentedButton } from 'konsta/react'
 import Popup from '../components/Popup'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
@@ -268,15 +268,15 @@ curl -X POST ${location.origin}/api/agent/connect \\
         {(state?.projects ?? []).map((p) => (
           <ListItem
             key={p.id}
-            link
             onClick={() => prepnoutProjekt(p.id)}
+            className="cursor-pointer"
             title={p.name}
             after={
-              vProjektech.includes(p.id) ? (
-                <Check size={18} className="text-black dark:text-white" />
-              ) : (
-                <span className="text-[13px] text-black/30 dark:text-white/25">нет</span>
-              )
+              <Checkbox
+                component="div"
+                checked={vProjektech.includes(p.id)}
+                onChange={() => prepnoutProjekt(p.id)}
+              />
             }
           />
         ))}
