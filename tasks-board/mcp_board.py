@@ -274,12 +274,32 @@ def find_bot(name):
     return None
 
 
+def tool_inbox(args):
+    """Что владелец написал агенту."""
+    r = call(f"/api/agent/inbox?since={int(args.get('since') or 0)}")
+    zpravy = r.get("items") or []
+    if not zpravy:
+        return "Новых сообщений нет."
+    return "\n".join(f"[{time.strftime('%H:%M', time.localtime(z['at']))}] владелец: {z['text']}"
+                     for z in zpravy)
+
+
+def tool_say(args):
+    """Ответить владельцу в чат доски."""
+    text = (args.get("text") or "").strip()
+    if not text:
+        return "Нечего отправлять."
+    call("/api/agent/say", "POST", {"text": text})
+    return "Отправлено владельцу."
+
+
 def tool_wait(args):
     """Ждать вызова с доски. Возвращает управление, когда позвали или вышло время."""
     limit = int(args.get("timeout") or 60)
     r = call(f"/api/agent/wait?timeout={limit}", timeout=limit + 15)
     if r.get("ping"):
-        return "Тебя позвали — посмотри доску: board_overview, board_next_task."
+        return ("Тебя позвали. Посмотри board_inbox — может, владелец написал, "
+                "и доску: board_overview, board_next_task. Ответить можно board_say.")
     return f"Тишина {r.get('waited', limit)} с. Можно подождать ещё раз или заняться своими делами."
 
 
@@ -428,6 +448,20 @@ TOOLS = [
             "status": {"type": "string", "enum": ["planned", "active", "done"]}},
             "required": ["project", "stage", "status"]},
         "run": tool_stage_status,
+    },
+    {
+        "name": "board_inbox",
+        "description": "Прочитать, что владелец написал в чате доски.",
+        "inputSchema": {"type": "object", "properties": {
+            "since": {"type": "integer", "description": "показывать сообщения новее этого времени"}}},
+        "run": tool_inbox,
+    },
+    {
+        "name": "board_say",
+        "description": "Ответить владельцу в чат доски: что сделал, что нужно, чем занят.",
+        "inputSchema": {"type": "object", "properties": {
+            "text": {"type": "string"}}, "required": ["text"]},
+        "run": tool_say,
     },
     {
         "name": "board_wait",

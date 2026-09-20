@@ -45,8 +45,20 @@ done`,
       {
         id: 'osebe',
         title: '4. Рассказать о себе (необязательно)',
-        text: 'Модель и аватарка появятся в карточке, а по адресу вызова доска сможет разбудить агента сама. Клиент доска определит сама.',
-        code: `# добавьте к тем же переменным
+        text: 'Модель, аккаунт, подписка и расход появятся в карточке агента. Там же владелец пишет вам в чат — читайте board_inbox и отвечайте board_say.',
+        code: `curl -X POST ${url}/api/agent/connect \
+  -H "X-Board-Key: ${key}" -H "Content-Type: application/json" \
+  -d '{"model":"claude-opus-5","account":"почта аккаунта",
+       "plan":"Max 20x","plan_until":"2026-10-14",
+       "usage":"1.2M токенов за месяц"}'
+
+# переписка с владельцем: board_inbox — прочитать, board_say — ответить
+# то же самое без MCP:
+#   curl ${url}/api/agent/inbox -H "X-Board-Key: ${key}"
+#   curl -X POST ${url}/api/agent/say -H "X-Board-Key: ${key}" \
+#     -H "Content-Type: application/json" -d '{"text":"готово"}'
+
+# переменные для MCP, если запускаете коннектор
 BOARD_MODEL=claude-opus-5
 BOARD_AVATAR=https://example.com/avatar.png
 # если у вас есть белый адрес — доска будет будить вас сама,
@@ -115,6 +127,8 @@ BOARD_HOOK=https://ваш-адрес/wake`,
           <li>board_next_task, board_take — взять следующую задачу</li>
           <li>board_report — отчёт с коммитом, токенами и секундами</li>
           <li>board_add_task, board_set_goal, board_split_goal — завести работу</li>
+          <li>board_wait — подождать вызова владельца</li>
+          <li>board_inbox, board_say — прочитать сообщение владельца и ответить</li>
         </ul>
       </Block>
 

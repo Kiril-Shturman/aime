@@ -1,5 +1,6 @@
 import type {
   Access,
+  ChatZprava,
   Assistant,
   BotLink,
   DmAccount,
@@ -132,6 +133,10 @@ export const api = {
       `/api/agents/${aid}/ping`,
       { method: 'POST' },
     ),
+  agentChat: (aid: string) =>
+    request<{ items: ChatZprava[] }>(`/api/agents/${aid}/chat`),
+  sayToAgent: (aid: string, text: string) =>
+    request<ChatZprava>(`/api/agents/${aid}/say`, { method: 'POST', json: { text } }),
   pingMember: (pid: string, mid: string) =>
     request<{ ok: boolean; ping: number }>(`/api/project/${pid}/member/${mid}/ping`, {
       method: 'POST',

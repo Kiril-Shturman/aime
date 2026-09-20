@@ -28,7 +28,11 @@ export interface Member {
   hook?: string       // адрес, по которому доска может разбудить агента
   hook_ok?: boolean   // достучались ли в прошлый раз
   hook_note?: string  // что ответил адрес
-  connected?: string  // когда агент прислал адрес и считается подключённым
+  connected?: string  // когда агент подключился
+  account?: string    // на каком аккаунте работает
+  plan?: string       // тариф или подписка
+  plan_until?: string // до какого дня оплачено
+  usage?: string      // что агент сам сообщил о расходе
 }
 
 export interface Stage {
@@ -84,6 +88,12 @@ export interface Task {
 
 export interface Agent extends Member {
   projects: string[]
+}
+
+export interface ChatZprava {
+  from: 'owner' | 'agent'
+  text: string
+  at: number
 }
 
 export interface Counts {
