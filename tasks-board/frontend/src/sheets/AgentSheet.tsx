@@ -234,9 +234,13 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
           </Block>
 
           <Block className="grid gap-2">
-            <Button large rounded onClick={pozvat}>
+            <button
+              type="button"
+              onClick={pozvat}
+              className="w-full rounded-2xl bg-black/[.06] py-3 text-[15px] font-semibold text-primary active:opacity-70 dark:bg-white/[.08]"
+            >
               {pozvano ? 'Позвали — ждём' : 'Позвать агента'}
-            </Button>
+            </button>
             {agent && (
               <Button
                 large
