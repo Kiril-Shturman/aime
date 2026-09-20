@@ -35,7 +35,6 @@ import TaskSheet from '../sheets/TaskSheet'
 import TaskEditSheet from '../sheets/TaskEditSheet'
 import ProjectSheet from '../sheets/ProjectSheet'
 import AgentSheet from '../sheets/AgentSheet'
-import AgentChatSheet from '../sheets/AgentChatSheet'
 import GoalSheet from '../sheets/GoalSheet'
 import OutSheet from '../sheets/OutSheet'
 import PickerSheet, { type PickerOption } from '../sheets/PickerSheet'
@@ -150,7 +149,6 @@ export default function HomePage() {
   const pripojeni = vsichniAgenti.filter((a) => !!a.connected || !!a.hook || !!a.seen)
   const cekajici = vsichniAgenti.filter((a) => !a.connected && !a.hook && !a.seen)
   const [agent, setAgent] = useState<Agent | null>(null)
-  const [chatAgent, setChatAgent] = useState<Agent | null>(null)
   const [goalOpen, setGoalOpen] = useState(false)
   const [outOpen, setOutOpen] = useState<{
     title: string
@@ -479,17 +477,12 @@ export default function HomePage() {
 
       <TaskSheet open={taskOpen} onClose={() => setTaskOpen(false)} />
       <ProjectSheet open={projectOpen} onClose={() => setProjectOpen(false)} />
-      <AgentChatSheet
-        open={chatAgent != null}
-        agent={chatAgent}
-        onClose={() => setChatAgent(null)}
-      />
       <AgentSheet
         open={agentOpen}
         agent={agent}
         onOpenChat={(a) => {
           setAgentOpen(false)
-          window.setTimeout(() => setChatAgent(a), 260)
+          nav(`/chat-agent/${a.id}`)
         }}
         onClose={() => {
           setAgentOpen(false)
