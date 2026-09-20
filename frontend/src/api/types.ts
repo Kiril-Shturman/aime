@@ -25,6 +25,9 @@ export interface Member {
   model?: string  // какой моделью работает
   ping?: number   // когда владелец звал его в последний раз
   projects?: string[] // у общих агентов — в каких проектах участвует
+  hook?: string       // адрес, по которому доска может разбудить агента
+  hook_ok?: boolean   // достучались ли в прошлый раз
+  hook_note?: string  // что ответил адрес
 }
 
 export interface Stage {

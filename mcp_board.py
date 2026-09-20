@@ -501,6 +501,8 @@ def handle(msg):
                 "model": os.environ.get("BOARD_MODEL", ""),
                 # BOARD_AVATAR — ссылка на картинку агента, если она есть
                 "avatar": os.environ.get("BOARD_AVATAR", ""),
+                # BOARD_HOOK — адрес, по которому доска может разбудить агента
+                "hook": os.environ.get("BOARD_HOOK", ""),
             })
         except Exception:
             pass  # не смогли представиться — работать это не мешает

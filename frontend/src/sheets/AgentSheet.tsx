@@ -25,6 +25,8 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
   const [sposob, setSposob] = useState<string>('promt')
   const [zkopirovano, setZkopirovano] = useState(false)
   const [pozvano, setPozvano] = useState(false)
+  const [hook, setHook] = useState('')
+  const [doruceno, setDoruceno] = useState<string | null>(null)
   const [chyba, setChyba] = useState<string | null>(null)
 
   const zobrazeny = agent ?? hotovy
@@ -33,6 +35,8 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
     if (!open) return
     setName(agent?.name ?? '')
     setRole(agent?.role ?? '')
+    setHook(agent?.hook ?? '')
+    setDoruceno(null)
     setVProjektech(agent?.projects ?? [])
     setHotovy(null)
     setChyba(null)
@@ -67,6 +71,7 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
         await api.patchAgent(agent.id, {
           name: name.trim(),
           role: role.trim(),
+          hook: hook.trim(),
           projects: vProjektech,
         })
         haptic('success')
@@ -92,7 +97,14 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
     haptic('success')
     setPozvano(true)
     try {
-      await api.pingAgent(zobrazeny.id)
+      const r = await api.pingAgent(zobrazeny.id)
+      setDoruceno(
+        r.hook
+          ? r.hook.delivered
+            ? 'Достучались — агент разбужен'
+            : `Не достучались: ${r.hook.note}`
+          : 'Адреса нет — увидит, когда придёт за задачами',
+      )
       await refresh()
     } catch {
       setPozvano(false)
@@ -165,6 +177,13 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
             value={role}
             onChange={(e) => setRole((e.target as HTMLInputElement).value)}
           />
+          <ListInput
+            label="Адрес для вызова"
+            type="text"
+            placeholder="https://… — куда постучаться, когда зовём"
+            value={hook}
+            onChange={(e) => setHook((e.target as HTMLInputElement).value)}
+          />
         </List>
       )}
 
@@ -220,7 +239,7 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
             </Segmented>
 
             <div className="relative mt-3">
-              <pre className="max-h-[40dvh] overflow-y-auto whitespace-pre-wrap break-words rounded-2xl bg-ios-light-surface-1 p-3 pr-11 text-[12px] leading-snug text-black/80 dark:bg-ios-dark-surface-1 dark:text-white/80">
+              <pre className="max-h-[40dvh] overflow-y-auto whitespace-pre-wrap break-words rounded-2xl border border-black/[.06] bg-ios-light-surface-1 p-3 pr-11 dark:border-white/[.08] text-[12px] leading-snug text-black/80 dark:bg-ios-dark-surface-1 dark:text-white/80">
                 {text}
               </pre>
               <button
@@ -234,10 +253,13 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
           </Block>
 
           <Block className="grid gap-2">
+            {doruceno && (
+              <p className="text-[13px] leading-snug text-black/55 dark:text-white/45">{doruceno}</p>
+            )}
             <button
               type="button"
               onClick={pozvat}
-              className="w-full rounded-2xl bg-ios-light-surface-1 py-3 text-[15px] font-semibold text-black active:opacity-70 dark:text-white dark:bg-ios-dark-surface-1"
+              className="w-full rounded-2xl border border-black/[.06] bg-ios-light-surface-1 py-3 dark:border-white/[.08] text-[15px] font-semibold text-black active:opacity-70 dark:text-white dark:bg-ios-dark-surface-1"
             >
               {pozvano ? 'Позвали — ждём' : 'Позвать агента'}
             </button>
