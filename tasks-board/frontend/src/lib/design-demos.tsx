@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Actions,
   ActionsButton,
@@ -81,6 +82,10 @@ import '../f7-timeline.css'
 // агент копирует кусок и собирает из таких кирпичей экран.
 const ucastnik = { id: 'demo', name: 'Разраб', kind: 'agent' as const }
 
+function Vrstva({ children }: { children: React.ReactNode }) {
+  return createPortal(<>{children}</>, document.body)
+}
+
 function Okno({
   label,
   children,
@@ -94,7 +99,7 @@ function Okno({
       <Button rounded onClick={() => setOpen(true)}>
         {label}
       </Button>
-      {children(open, () => setOpen(false))}
+      <Vrstva>{children(open, () => setOpen(false))}</Vrstva>
     </>
   )
 }
@@ -381,17 +386,31 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
 
   progressbar: function ProgressDemo() {
     const [p, setP] = useState(0.45)
+    const bezi = useRef<number | null>(null)
+    const spustit = () => {
+      if (bezi.current) window.clearInterval(bezi.current)
+      setP(0)
+      bezi.current = window.setInterval(() => {
+        setP((x) => {
+          if (x >= 1) {
+            if (bezi.current) window.clearInterval(bezi.current)
+            return 1
+          }
+          return x + 0.05
+        })
+      }, 120)
+    }
     return (
       <Block className="!my-0 grid gap-3">
         <Progressbar progress={p} />
-        <span className="flex gap-2">
-          <Button rounded small onClick={() => setP((x) => Math.max(0, x - 0.15))}>
-            −15%
+        <span className="flex items-center gap-2">
+          <Button rounded small onClick={spustit}>
+            Запустить
           </Button>
-          <Button rounded small onClick={() => setP((x) => Math.min(1, x + 0.15))}>
+          <Button rounded small clear onClick={() => setP((x) => Math.min(1, x + 0.15))}>
             +15%
           </Button>
-          <span className="self-center text-[13px] tabular-nums opacity-60">
+          <span className="ml-auto text-[13px] tabular-nums opacity-60">
             {Math.round(p * 100)}%
           </span>
         </span>
@@ -648,6 +667,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
         <Button rounded ref={btn as never} onClick={() => setOpen(true)}>
           Открыть поповер
         </Button>
+        <Vrstva>
         <Popover
           opened={open}
           target={btn.current}
@@ -658,6 +678,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
             <ListItem link title="Удалить" onClick={() => setOpen(false)} />
           </List>
         </Popover>
+        </Vrstva>
       </Block>
     )
   },
@@ -668,6 +689,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
         <Button rounded onClick={() => setOpen(true)}>
           Открыть панель
         </Button>
+        <Vrstva>
         <Panel side="left" opened={open} onBackdropClick={() => setOpen(false)}>
           <Page>
             <Navbar
@@ -680,6 +702,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
             </List>
           </Page>
         </Panel>
+        </Vrstva>
       </Block>
     )
   },
@@ -775,54 +798,57 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
     const [posun, setPosun] = useState(0)
     const [smazano, setSmazano] = useState(false)
     const start = useRef<number | null>(null)
-    if (smazano) {
-      return (
-        <List strong inset>
-          <ListItem
-            link
-            title="Строку удалили"
-            after="вернуть"
-            onClick={() => {
-              setSmazano(false)
-              setPosun(0)
-            }}
-          />
-        </List>
-      )
+    const ukazat = () => {
+      setPosun(96)
+      window.setTimeout(() => setPosun(0), 1400)
     }
     return (
-      <div className="relative overflow-hidden rounded-3xl">
-        <button
-          type="button"
-          onClick={() => setSmazano(true)}
-          className="absolute inset-y-0 right-0 w-24 bg-[#ff3b30] text-[15px] font-semibold text-white"
-        >
-          Удалить
-        </button>
-        <div
-          className="relative touch-pan-y bg-ios-light-surface-1 dark:bg-ios-dark-surface-1"
-          style={{ transform: `translateX(${-posun}px)`, transition: start.current === null ? 'transform .2s' : 'none' }}
-          onPointerDown={(e) => {
-            start.current = e.clientX + posun
-          }}
-          onPointerMove={(e) => {
-            if (start.current === null) return
-            setPosun(Math.max(0, Math.min(96, start.current - e.clientX)))
-          }}
-          onPointerUp={() => {
-            setPosun(posun > 48 ? 96 : 0)
-            start.current = null
-          }}
-        >
-          <div className="flex min-h-14 items-center px-4 text-[17px]">
-            Задача со свайпом
+      <>
+        <div className="relative overflow-hidden rounded-3xl">
+          <button
+            type="button"
+            onClick={() => setSmazano(true)}
+            className="absolute inset-y-0 right-0 w-24 bg-[#ff3b30] text-[15px] font-semibold text-white"
+          >
+            Удалить
+          </button>
+          <div
+            className="relative touch-pan-y bg-ios-light-surface-1 dark:bg-ios-dark-surface-1"
+            style={{
+              transform: `translateX(${-posun}px)`,
+              transition: start.current === null ? 'transform .25s' : 'none',
+            }}
+            onPointerDown={(e) => {
+              start.current = e.clientX + posun
+            }}
+            onPointerMove={(e) => {
+              if (start.current === null) return
+              setPosun(Math.max(0, Math.min(96, start.current - e.clientX)))
+            }}
+            onPointerUp={() => {
+              setPosun(posun > 48 ? 96 : 0)
+              start.current = null
+            }}
+          >
+            <div className="flex min-h-14 items-center px-4 text-[17px]">
+              {smazano ? 'Удалено' : 'Задача со свайпом'}
+            </div>
           </div>
         </div>
-      </div>
+        <Block className="!mt-2 flex gap-2">
+          <Button rounded small onClick={ukazat}>
+            Показать свайп
+          </Button>
+          {smazano && (
+            <Button rounded small clear onClick={() => setSmazano(false)}>
+              Вернуть
+            </Button>
+          )}
+        </Block>
+      </>
     )
   },
 
-  // список с перестановкой: тянем за ручку вверх-вниз
   'sortable-list': function SortableDemo() {
     const [radky, setRadky] = useState(['Авторизация', 'Профиль', 'Оплата'])
     const presun = (od: number, kam: number) => {
@@ -866,6 +892,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
         <List strong inset>
           <ListItem link title="Роль" after={value} onClick={() => setOpen(true)} />
         </List>
+        <Vrstva>
         <Sheet open={open} onClose={() => setOpen(false)} title="Роль">
           <List strong inset>
             {volby.map((o) => (
@@ -882,6 +909,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
             ))}
           </List>
         </Sheet>
+        </Vrstva>
       </>
     )
   },
@@ -1390,7 +1418,14 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
             </button>
           ))}
         </div>
-        <PhotoBrowser items={snimky} index={index} onClose={() => setIndex(null)} />
+        <Block className="!mt-2">
+          <Button rounded small onClick={() => setIndex(0)}>
+            Открыть просмотр
+          </Button>
+        </Block>
+        <Vrstva>
+          <PhotoBrowser items={snimky} index={index} onClose={() => setIndex(null)} />
+        </Vrstva>
       </>
     )
   },
