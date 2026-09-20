@@ -24,6 +24,7 @@ export interface Member {
   client?: string // чем подключён: Claude Code, Cursor, OpenClaw…
   model?: string  // какой моделью работает
   ping?: number   // когда владелец звал его в последний раз
+  projects?: string[] // у общих агентов — в каких проектах участвует
 }
 
 export interface Stage {
@@ -77,6 +78,10 @@ export interface Task {
   done?: boolean
 }
 
+export interface Agent extends Member {
+  projects: string[]
+}
+
 export interface Counts {
   today: number
   planned: number
@@ -89,6 +94,7 @@ export interface State {
   projects: Project[]
   tasks: Task[]
   counts: Counts
+  agents?: Agent[]
 }
 
 // настройки бота, который висит у владельца в личке

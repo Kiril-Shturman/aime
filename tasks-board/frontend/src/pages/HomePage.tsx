@@ -34,10 +34,11 @@ import TaskRow from '../components/TaskRow'
 import TaskSheet from '../sheets/TaskSheet'
 import TaskEditSheet from '../sheets/TaskEditSheet'
 import ProjectSheet from '../sheets/ProjectSheet'
+import AgentSheet from '../sheets/AgentSheet'
 import GoalSheet from '../sheets/GoalSheet'
 import OutSheet from '../sheets/OutSheet'
 import PickerSheet, { type PickerOption } from '../sheets/PickerSheet'
-import type { Counts, Task } from '../api/types'
+import type { Agent, Counts, Task } from '../api/types'
 
 type TileKey = keyof Counts
 
@@ -141,6 +142,8 @@ export default function HomePage() {
 
   const [taskOpen, setTaskOpen] = useState(false)
   const [projectOpen, setProjectOpen] = useState(false)
+  const [agentOpen, setAgentOpen] = useState(false)
+  const [agent, setAgent] = useState<Agent | null>(null)
   const [goalOpen, setGoalOpen] = useState(false)
   const [outOpen, setOutOpen] = useState<{
     title: string
@@ -359,6 +362,69 @@ export default function HomePage() {
                 />
               ))}
             </List>
+
+            <div className="flex items-end justify-between">
+              <BlockTitle>Мои агенты</BlockTitle>
+              <button
+                type="button"
+                onClick={() => {
+                  setAgent(null)
+                  setAgentOpen(true)
+                }}
+                className="mb-1 mr-4 text-[15px] font-medium text-primary active:opacity-60"
+              >
+                Подключить
+              </button>
+            </div>
+            <List strong inset>
+              {(state?.agents ?? []).length === 0 && (
+                <ListItem
+                  link
+                  onClick={() => {
+                    setAgent(null)
+                    setAgentOpen(true)
+                  }}
+                  title="Подключить первого агента"
+                  subtitle="Получит ключ и промпт, дальше берёт задачи сам"
+                />
+              )}
+              {(state?.agents ?? []).map((a) => {
+                const vterin = a.seen ? Math.floor(Date.now() / 1000 - a.seen) : null
+                const online = vterin !== null && vterin < 300
+                const kde = (a.projects ?? [])
+                  .map((pid) => state?.projects.find((p) => p.id === pid)?.name)
+                  .filter(Boolean)
+                return (
+                  <ListItem
+                    key={a.id}
+                    link
+                    onClick={() => {
+                      setAgent(a)
+                      setAgentOpen(true)
+                    }}
+                    media={
+                      <span className="relative">
+                        <Avatar member={a} size={44} />
+                        <span
+                          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-black ${
+                            online ? 'bg-[#30d158]' : 'bg-white/25'
+                          }`}
+                        />
+                      </span>
+                    }
+                    title={a.name}
+                    subtitle={
+                      kde.length ? kde.join(' · ') : 'ни к одному проекту не привязан'
+                    }
+                    after={
+                      <span className="text-[13px] text-black/40 dark:text-white/35">
+                        {a.model || (online ? 'в сети' : '')}
+                      </span>
+                    }
+                  />
+                )
+              })}
+            </List>
           </div>
         </>
       )}
@@ -390,6 +456,14 @@ export default function HomePage() {
 
       <TaskSheet open={taskOpen} onClose={() => setTaskOpen(false)} />
       <ProjectSheet open={projectOpen} onClose={() => setProjectOpen(false)} />
+      <AgentSheet
+        open={agentOpen}
+        agent={agent}
+        onClose={() => {
+          setAgentOpen(false)
+          setAgent(null)
+        }}
+      />
       <GoalSheet open={goalOpen} onClose={() => setGoalOpen(false)} />
       <TaskEditSheet
         open={editTask != null}

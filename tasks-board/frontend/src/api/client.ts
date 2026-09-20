@@ -122,6 +122,13 @@ export const api = {
 
   getGit: (pid: string) =>
     request<{ status: GitStatus | null }>(`/api/project/${pid}/git`),
+  addAgent: (body: { name: string; role?: string; projects?: string[] }) =>
+    request<Member>('/api/agents', { method: 'POST', json: body }),
+  patchAgent: (aid: string, patch: Partial<Member> & { projects?: string[] }) =>
+    request<Member>(`/api/agents/${aid}`, { method: 'PATCH', json: patch }),
+  deleteAgent: (aid: string) => request<{ ok: boolean }>(`/api/agents/${aid}`, { method: 'DELETE' }),
+  pingAgent: (aid: string) =>
+    request<{ ok: boolean; ping: number }>(`/api/agents/${aid}/ping`, { method: 'POST' }),
   pingMember: (pid: string, mid: string) =>
     request<{ ok: boolean; ping: number }>(`/api/project/${pid}/member/${mid}/ping`, {
       method: 'POST',
