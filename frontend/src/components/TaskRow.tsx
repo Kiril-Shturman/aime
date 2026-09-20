@@ -49,6 +49,7 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
   const project = state?.projects.find((p) => p.id === task.project)
   const when = [task.due, task.time].filter(Boolean).join(' ')
   const vPraci = task.status === 'doing' ? fmtSince(task.started_at) : ''
+  const activity = task.status === 'doing' ? fmtSince(task.progress_updated_at ?? task.started_at) : ''
   // кто проверяет: он может быть и в этом проекте, и общим агентом доски
   const kontroler = task.checker
     ? project?.members.find((x) => x.id === task.checker) ??
@@ -134,6 +135,19 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
                   className="mt-1.5 max-h-40 w-full rounded-lg object-cover object-top"
                 />
               )}
+            </span>
+          )}
+          {task.status === 'doing' && (
+            <span className="mt-1 block rounded-lg bg-black/[.04] px-2 py-1.5 text-[13px] text-black/70 dark:bg-white/[.06] dark:text-white/70">
+              <span className="font-semibold">Сейчас: </span>
+              {task.progress_step || 'запускает задачу'}
+              <span className="block text-[12px] text-black/45 dark:text-white/40">
+                {[
+                  vPraci ? `в работе ${vPraci}` : null,
+                  task.tokens ? `${fmtNum(task.tokens)} токенов` : null,
+                  activity ? `активность ${activity} назад` : null,
+                ].filter(Boolean).join(' · ')}
+              </span>
             </span>
           )}
           {task.note && (

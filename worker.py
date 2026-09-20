@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.request
 from pathlib import Path
@@ -109,24 +110,106 @@ def openclaw_binary(explicit: str | None) -> str:
     raise FileNotFoundError("openclaw CLI не найден")
 
 
-def run_agent(binary: str, agent: str, session: str, prompt: str, timeout: int) -> bool:
+def session_snapshot(agent: str, session: str) -> dict:
+    """Read safe live counters from OpenClaw without exposing prompts or commands."""
+    key = f"agent:{agent}:{session}"
+    store = Path.home() / ".openclaw" / "agents" / agent / "sessions" / "sessions.json"
+    try:
+        item = json.loads(store.read_text(encoding="utf-8")).get(key) or {}
+    except (OSError, ValueError, TypeError):
+        return {}
+    step = trajectory_step(item.get("sessionFile"))
+    updated_ms = int(item.get("updatedAt") or 0)
+    return {
+        "tokens": max(0, int(item.get("totalTokens") or 0)),
+        "last_activity_at": updated_ms // 1000 if updated_ms else 0,
+        "step": step,
+        "status": item.get("status") or "",
+    }
+
+
+def trajectory_step(session_file: str | None) -> str:
+    """Turn the last trajectory event into a human label; never return its content."""
+    if not session_file:
+        return ""
+    try:
+        with open(session_file, "rb") as source:
+            source.seek(0, os.SEEK_END)
+            size = source.tell()
+            source.seek(max(0, size - 131072))
+            lines = source.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return ""
+    labels = {
+        "apply_patch": "Вносит изменения в код",
+        "exec_command": "Проверяет проект и выполняет команды",
+        "bash": "Проверяет проект и выполняет команды",
+        "web": "Изучает документацию",
+        "browser": "Проверяет интерфейс",
+        "view_image": "Проверяет изображение",
+        "message": "Готовит отчёт",
+    }
+    for line in reversed(lines):
+        try:
+            message = json.loads(line).get("message") or {}
+        except (ValueError, TypeError):
+            continue
+        role = message.get("role")
+        if role == "toolResult":
+            return "Анализирует результат проверки"
+        if role != "assistant":
+            continue
+        for part in reversed(message.get("content") or []):
+            if not isinstance(part, dict):
+                continue
+            if part.get("type") in ("toolCall", "tool_use"):
+                name = part.get("name") or part.get("toolName") or ""
+                return labels.get(name, "Работает с инструментами")
+            if part.get("type") in ("text", "thinking"):
+                return "Анализирует задачу"
+    return ""
+
+
+def run_agent(binary: str, agent: str, session: str, prompt: str, timeout: int,
+              heartbeat=None) -> bool:
     command = [binary, "agent", "--agent", agent, "--session-key",
                f"agent:{agent}:{session}", "--message", prompt,
                "--thinking", "high", "--timeout", str(timeout)]
-    try:
-        result = subprocess.run(command, text=True, capture_output=True, timeout=timeout + 30)
-    except subprocess.TimeoutExpired:
-        print(f"[worker] сессия {session} превысила лимит времени", file=sys.stderr)
-        return False
-    except OSError as exc:
-        print(f"[worker] не удалось запустить сессию {session}: {exc}", file=sys.stderr)
-        return False
-    output = (result.stdout or result.stderr or "").strip()
+    started = time.monotonic()
+    with tempfile.TemporaryFile(mode="w+t", encoding="utf-8") as output_file:
+        try:
+            process = subprocess.Popen(command, text=True, stdout=output_file,
+                                       stderr=subprocess.STDOUT)
+        except OSError as exc:
+            print(f"[worker] не удалось запустить сессию {session}: {exc}", file=sys.stderr)
+            return False
+        while True:
+            try:
+                returncode = process.wait(timeout=15)
+                break
+            except subprocess.TimeoutExpired:
+                if heartbeat:
+                    try:
+                        heartbeat(session_snapshot(agent, session))
+                    except Exception as exc:
+                        print(f"[worker] heartbeat не записан: {exc}", file=sys.stderr)
+                if time.monotonic() - started > timeout + 30:
+                    process.kill()
+                    process.wait()
+                    print(f"[worker] сессия {session} превысила лимит времени", file=sys.stderr)
+                    return False
+        if heartbeat:
+            try:
+                heartbeat(session_snapshot(agent, session))
+            except Exception as exc:
+                print(f"[worker] финальный heartbeat не записан: {exc}", file=sys.stderr)
+        output_file.seek(0)
+        output = output_file.read().strip()
     if output:
         print(output[-4000:], flush=True)
-    if result.returncode:
-        print(f"[worker] сессия {session} завершилась с кодом {result.returncode}", file=sys.stderr)
-    return result.returncode == 0
+    if returncode:
+        print(f"[worker] сессия {session} завершилась с кодом {returncode}", file=sys.stderr)
+    return returncode == 0
 
 
 def execution_prompt(project: dict, task: dict) -> str:
@@ -236,8 +319,40 @@ def main() -> int:
             return 0
         task = patch_json(args.board_url, board_key, f"/api/task/{task['id']}",
                           {"status": "doing"})
+        session_name = "board-executor"
+        session_key = f"agent:{args.agent}:{session_name}"
+        run_started = int(task.get("started_at") or time.time())
+        before = session_snapshot(args.agent, session_name)
+        baseline_tokens = int(before.get("tokens") or 0)
+        last_activity = run_started
+        last_step = "Запускает рабочую сессию"
+        patch_json(args.board_url, board_key, f"/api/task/{task['id']}", {
+            "session_key": session_key,
+            "progress_step": last_step,
+            "progress_updated_at": last_activity,
+            "run_status": "active",
+        })
+
+        def heartbeat(snapshot: dict) -> None:
+            nonlocal last_activity, last_step
+            activity = int(snapshot.get("last_activity_at") or 0)
+            # Не принимаем хвост предыдущего запуска этой постоянной сессии.
+            if activity >= run_started:
+                last_activity = activity
+                last_step = snapshot.get("step") or last_step
+            silence = max(0, int(time.time()) - last_activity)
+            run_status = "stalled" if silence >= 600 else "warning" if silence >= 120 else "active"
+            patch_json(args.board_url, board_key, f"/api/task/{task['id']}", {
+                "tokens": max(0, int(snapshot.get("tokens") or 0) - baseline_tokens),
+                "progress_step": last_step,
+                "progress_updated_at": last_activity,
+                "session_key": session_key,
+                "run_status": run_status,
+            })
+
         succeeded = run_agent(binary, args.agent, "board-executor",
-                              execution_prompt(project, task), args.timeout)
+                              execution_prompt(project, task), args.timeout,
+                              heartbeat=heartbeat)
         actions += 1
         after = fetch_state(args.board_url, board_key)
         updated = next((t for t in after["tasks"] if t["id"] == task["id"]), {})

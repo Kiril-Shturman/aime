@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Flag, User, ListChecks, Trash2 } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Activity, Clock3, Coins, Flag, RotateCcw, User, ListChecks, Trash2 } from 'lucide-react'
 import {
   Block,
   BlockTitle,
@@ -44,12 +44,22 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
     setReport(task.report ?? '')
   }, [task])
 
+  const current = state?.tasks.find((item) => item.id === task?.id) ?? task
+
+  // Пока карточка открыта, данные воркера подтягиваются сами — обновлять
+  // страницу руками не нужно.
+  useEffect(() => {
+    if (!open || (current?.status !== 'doing' && current?.status !== 'review')) return
+    const timer = window.setInterval(() => void refresh(), 15_000)
+    return () => window.clearInterval(timer)
+  }, [open, current?.status, refresh])
+
   const project = state?.projects.find((p) => p.id === task?.project) ?? null
   const stage = project?.roadmap.find((s) => s.id === stageId) ?? null
   const member = project?.members.find((m) => m.id === memberId) ?? null
-  const kontroler = task?.checker
-    ? project?.members.find((m) => m.id === task.checker) ??
-      state?.agents?.find((a) => a.id === task.checker)
+  const kontroler = current?.checker
+    ? project?.members.find((m) => m.id === current.checker) ??
+      state?.agents?.find((a) => a.id === current.checker)
     : null
 
   const stageOptions: PickerOption[] = useMemo(
@@ -174,24 +184,26 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
           />
         </List>
 
-        {task.done && (task.commit || task.tokens || task.seconds) && (
+        {current?.status === 'doing' && <LiveProgress task={current} />}
+
+        {current?.done && (current.commit || current.tokens || current.seconds) && (
           <>
             <BlockTitle>Итог</BlockTitle>
             <List strong inset>
-              {task.commit && (
-                <ListItem title="Коммит" after={task.commit.slice(0, 12)} />
+              {current.commit && (
+                <ListItem title="Коммит" after={current.commit.slice(0, 12)} />
               )}
-              {task.tokens != null && (
-                <ListItem title="Токены" after={String(task.tokens)} />
+              {current.tokens != null && (
+                <ListItem title="Токены" after={String(current.tokens)} />
               )}
-              {task.seconds != null && (
-                <ListItem title="Секунды" after={String(task.seconds)} />
+              {current.seconds != null && (
+                <ListItem title="Секунды" after={String(current.seconds)} />
               )}
             </List>
           </>
         )}
 
-        {(task.status === 'review' || task.check) && (
+        {(current?.status === 'review' || current?.check) && (
           <>
             <BlockTitle>Проверка</BlockTitle>
             <List strong inset>
@@ -199,23 +211,23 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
                 title="Проверяет"
                 after={kontroler?.name ?? 'никто не назначен'}
               />
-              {task.check?.status === 'ok' && (
+              {current.check?.status === 'ok' && (
                 <ListItem title="Вердикт" after="принято" />
               )}
-              {task.check?.why && (
-                <ListItem title="Что не так" text={task.check.why} />
+              {current.check?.why && (
+                <ListItem title="Что не так" text={current.check.why} />
               )}
             </List>
-            {task.check?.shot && (
+            {current.check?.shot && (
               <Block className="!mt-2">
                 <img
-                  src={task.check.shot}
+                  src={current.check.shot}
                   alt="скрин проверки"
                   className="w-full rounded-2xl"
                 />
               </Block>
             )}
-            {task.status === 'review' && (
+            {current.status === 'review' && (
               <Block className="grid gap-2">
                 <Button large rounded onClick={() => verdikt(true)}>
                   Принять
@@ -290,4 +302,96 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
       />
     </>
   )
+}
+
+function LiveProgress({ task }: { task: Task }) {
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const timer = window.setInterval(() => tick((value) => value + 1), 1_000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  const started = toMs(task.started_at)
+  const activity = toMs(task.progress_updated_at ?? task.started_at)
+  const elapsed = started ? Math.max(0, Math.floor((Date.now() - started) / 1000)) : 0
+  const silence = activity ? Math.max(0, Math.floor((Date.now() - activity) / 1000)) : 0
+  const health = task.run_status === 'limited'
+    ? 'limited'
+    : silence >= 600
+      ? 'stalled'
+      : silence >= 120
+        ? 'warning'
+        : 'active'
+  const healthText = health === 'limited'
+    ? 'Лимит подписки — ждёт сброса'
+    : health === 'stalled'
+      ? 'Возможно, агент завис: больше 10 минут без действий'
+      : health === 'warning'
+        ? 'Агент молчит больше 2 минут'
+        : 'Агент работает'
+  const healthClass = health === 'active'
+    ? 'bg-[#34c759]/12 text-[#248a3d] dark:text-[#30d158]'
+    : health === 'warning'
+      ? 'bg-[#ff9f0a]/12 text-[#b26a00] dark:text-[#ff9f0a]'
+      : 'bg-[#ff453a]/12 text-[#c5221f] dark:text-[#ff6961]'
+
+  return (
+    <>
+      <BlockTitle>Ход работы</BlockTitle>
+      <Block strong inset className="!py-3">
+        <div className={`mb-3 rounded-xl px-3 py-2 text-[13px] font-semibold ${healthClass}`}>
+          {healthText}
+        </div>
+        <div className="flex items-start gap-3">
+          <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+            <Activity size={18} />
+          </span>
+          <div className="min-w-0">
+            <div className="text-[12px] uppercase tracking-wide text-black/40 dark:text-white/35">Сейчас</div>
+            <div className="mt-0.5 text-[16px] font-semibold text-black dark:text-white">
+              {task.progress_step || 'Запускает задачу'}
+            </div>
+            <div className="mt-1 text-[13px] text-black/45 dark:text-white/40">
+              Последнее действие {silence < 5 ? 'только что' : `${formatDuration(silence)} назад`}
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <ProgressStat icon={<Clock3 size={15} />} label="в работе" value={formatDuration(elapsed)} />
+          <ProgressStat icon={<Coins size={15} />} label="токены" value={formatNumber(task.tokens ?? 0)} />
+          <ProgressStat icon={<RotateCcw size={15} />} label="попытка" value={`${Math.max(1, task.attempts ?? 0)}/${task.max_attempts ?? 3}`} />
+        </div>
+      </Block>
+    </>
+  )
+}
+
+function ProgressStat({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-black/[.04] px-2 py-2.5 dark:bg-white/[.06]">
+      <div className="flex items-center gap-1 text-black/40 dark:text-white/35">{icon}<span className="text-[11px]">{label}</span></div>
+      <div className="mt-1 truncate text-[14px] font-semibold text-black dark:text-white">{value}</div>
+    </div>
+  )
+}
+
+function toMs(value?: string | number | null) {
+  if (!value) return 0
+  if (typeof value === 'number') return value < 1_000_000_000_000 ? value * 1000 : value
+  const parsed = new Date(value).getTime()
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function formatDuration(seconds: number) {
+  if (seconds < 60) return `${seconds} с`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} мин`
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  return minutes ? `${hours} ч ${minutes} мин` : `${hours} ч`
+}
+
+function formatNumber(value: number) {
+  if (value < 1000) return String(value)
+  if (value < 1_000_000) return `${(value / 1000).toFixed(1)}k`
+  return `${(value / 1_000_000).toFixed(1)}M`
 }

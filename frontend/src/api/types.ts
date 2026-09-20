@@ -87,6 +87,10 @@ export interface Task {
   tokens?: number
   seconds?: number
   started_at?: string | number
+  progress_step?: string
+  progress_updated_at?: string | number
+  session_key?: string
+  run_status?: 'active' | 'warning' | 'stalled' | 'limited' | 'review' | ''
   submitted_at?: string | number
   attempts?: number
   max_attempts?: number
