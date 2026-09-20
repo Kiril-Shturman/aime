@@ -34,6 +34,7 @@ API минимальный, чтобы им мог пользоваться аг
   GET    /api/project/<id>/git         — ветка, последний коммит, есть ли правки
   GET    /api/project/<id>/git/log     — лента коммитов рабочей копии
   POST   /api/chat                     — {model, messages} — ответ модели
+  GET    /mcp_board.py                 — сам коннектор, чтобы агент скачал его сам
   POST   /api/project/<id>/stage       — {title, date, status, note}
   PATCH  /api/project/<id>/stage/<sid> — {title, date, status, note}
   DELETE /api/project/<id>/stage/<sid>
@@ -590,6 +591,17 @@ async def delete_stage(request):
             t["stage"] = None
     save(state)
     return web.json_response({"ok": True})
+
+
+# ------------------------------------------------------------ коннектор для агентов
+
+
+async def get_connector(request):
+    """Отдаём сам mcp_board.py: агенту на чужой машине нужен только этот файл."""
+    return web.FileResponse(
+        os.path.join(ROOT, "mcp_board.py"),
+        headers={"Content-Type": "text/x-python; charset=utf-8"},
+    )
 
 
 # ---------------------------------------------------------------- чат с моделью
@@ -1399,6 +1411,7 @@ def make_app():
     app.router.add_delete("/api/assistant/reply/{rid}", delete_reply)
     app.router.add_get("/api/commands", list_commands)
     app.router.add_post("/api/command/{cid}", run_command)
+    app.router.add_get("/mcp_board.py", get_connector)
     app.router.add_post("/api/chat", chat_completion)
     app.router.add_post("/api/task", add_task)
     app.router.add_patch("/api/task/{tid}", patch_task)

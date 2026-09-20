@@ -22,6 +22,7 @@ import TransactionsPage from './pages/TransactionsPage'
 import TokenUsagePage from './pages/TokenUsagePage'
 import BalancePage from './pages/BalancePage'
 import McpKeysPage from './pages/McpKeysPage'
+import AgentDocsPage from './pages/AgentDocsPage'
 import ConnectedAppsPage from './pages/ConnectedAppsPage'
 import FaqPage from './pages/FaqPage'
 import ChatPage from './pages/ChatPage'
@@ -100,6 +101,7 @@ function AppRoutes() {
           <Route path="/tokens" element={<TokenUsagePage />} />
           <Route path="/balance" element={<BalancePage />} />
           <Route path="/mcp-keys" element={<McpKeysPage />} />
+          <Route path="/agent" element={<AgentDocsPage />} />
           <Route path="/connected-apps" element={<ConnectedAppsPage />} />
           <Route path="/faq" element={<FaqPage />} />
           <Route path="/chat/:provider" element={<ChatPage />} />
@@ -114,7 +116,7 @@ function AppRoutes() {
 }
 
 // Публичные страницы: авторизация и правовые — их гейт не закрывает.
-const PUBLIC_PATHS = ['/login', '/register', '/terms', '/privacy']
+const PUBLIC_PATHS = ['/login', '/register', '/terms', '/privacy', '/agent']
 
 // Доска закрыта ключом. Из Телеграма подпись приходит сама, в браузере
 // ключ передаётся один раз: адрес?key=…
