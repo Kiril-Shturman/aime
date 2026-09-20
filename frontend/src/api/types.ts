@@ -38,6 +38,7 @@ export interface Member {
   limits?: string     // остатки по окнам, JSON: { "5ч": {used, limit, reset}, "неделя": {…} }
   live?: boolean      // держит ли агент открытый канал прямо сейчас
   job?: MemberJob     // роль в проекте: исполнитель или проверяющий
+  auto?: boolean      // берёт ли новые задачи сам
 }
 
 export interface Stage {

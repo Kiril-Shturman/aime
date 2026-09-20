@@ -62,7 +62,17 @@ def member_id(project: dict, wanted: str) -> str | None:
     return None
 
 
+def takes_tasks(state: dict, project: dict, worker_member: str | None) -> bool:
+    """Владелец мог выключить приём новых задач — тогда конвейер стоит."""
+    for member in project.get("members", []):
+        if member["id"] == worker_member:
+            return member.get("auto", True)
+    return True
+
+
 def next_work_task(state: dict, project: dict, worker_member: str | None) -> dict | None:
+    if not takes_tasks(state, project, worker_member):
+        return None
     active = {stage["id"] for stage in project.get("roadmap", [])
               if stage.get("status") == "active"}
     candidates = [task for task in state["tasks"]

@@ -1,5 +1,7 @@
 import { Flag } from 'lucide-react'
 import { ListItem } from 'konsta/react'
+import { Chip } from 'konsta/react'
+import { MemberChip, StatusChip } from './TaskChips'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
@@ -101,20 +103,24 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
       subtitle={parts.length > 0 ? parts.join(' · ') : undefined}
       text={
         <>
-          {task.status === 'doing' && (
-            <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary">
-              В работе{vPraci ? ` · ${vPraci}` : ''}
-            </span>
-          )}
-          {task.status === 'review' && (
-            <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#ff9f0a]/15 text-[#b36b00] dark:text-[#ffb84d]">
-              На проверке{kontroler ? ` · ${kontroler.name}` : ''} · попытка{' '}
-              {task.attempts ?? 1}/{task.max_attempts ?? 3}
-            </span>
-          )}
-          {task.status === 'blocked' && (
-            <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#ff375f]/15 text-[#c72546] dark:text-[#ff6b87]">
-              Заблокирована после {task.attempts ?? 0} попыток
+          {/* чипы: в каком состоянии задача и кто её взял */}
+          {task.status !== 'todo' && (
+            <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <StatusChip status={task.status} />
+              {task.status === 'doing' && vPraci && (
+                <Chip className="!m-0 !h-7 !text-[12px] bg-black/[.06] text-black/55 dark:bg-white/10 dark:text-white/50">
+                  {vPraci}
+                </Chip>
+              )}
+              {task.status === 'review' && (
+                <Chip className="!m-0 !h-7 !text-[12px] bg-black/[.06] text-black/55 dark:bg-white/10 dark:text-white/50">
+                  попытка {task.attempts ?? 1}/{task.max_attempts ?? 3}
+                </Chip>
+              )}
+              {task.status === 'review' && kontroler && (
+                <MemberChip member={kontroler} prefix="проверяет" />
+              )}
+              {task.status !== 'review' && <MemberChip member={m} />}
             </span>
           )}
           {task.check?.status === 'fail' && (

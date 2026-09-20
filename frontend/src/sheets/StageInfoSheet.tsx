@@ -6,8 +6,9 @@ import PickerSheet, { type PickerOption } from './PickerSheet'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
-import { STAGE_STATUS_LABEL, TASK_STATUS_LABEL } from '../lib/constants'
-import type { Stage, StageStatus } from '../api/types'
+import { TaskChips } from '../components/TaskChips'
+import { STAGE_STATUS_LABEL } from '../lib/constants'
+import type { Stage, StageStatus, Task } from '../api/types'
 
 interface Props {
   open: boolean
@@ -41,6 +42,13 @@ export default function StageInfoSheet({ open, onClose, projectId, stage }: Prop
   if (!stage) return null
 
   const own = state?.tasks.filter((t) => t.stage === stage.id) ?? []
+  const projekt = state?.projects.find((p) => p.id === projectId)
+  const kdoVzal = (t: Task) =>
+    t.member
+      ? projekt?.members.find((m) => m.id === t.member) ??
+        state?.agents?.find((a) => a.id === t.member) ??
+        null
+      : null
   const meta = [
     stage.date ? `срок ${stage.date}` : null,
     stage.progress.total
@@ -95,19 +103,19 @@ export default function StageInfoSheet({ open, onClose, projectId, stage }: Prop
           />
         </List>
 
-        <BlockTitle>Задачи этапа</BlockTitle>
-        <List strong inset>
+        <BlockTitle>
+          Задачи этапа
+          <span className="ml-2 font-normal opacity-50">{own.length}</span>
+        </BlockTitle>
+        <List strong inset dividers>
           {own.length === 0 && (
             <ListItem title="Задач нет — попроси агента разложить цель" />
           )}
           {own.map((t) => (
             <ListItem
               key={t.id}
-              title={t.title}
-              subtitle={
-                TASK_STATUS_LABEL[t.status] +
-                (t.commit ? ` · ${t.commit.slice(0, 7)}` : '')
-              }
+              title={<span className="leading-snug">{t.title}</span>}
+              text={<TaskChips task={t} member={kdoVzal(t)} />}
             />
           ))}
         </List>

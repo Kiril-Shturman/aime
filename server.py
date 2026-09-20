@@ -188,6 +188,7 @@ def migrate(state):
         a.setdefault("kind", "agent")
         # в каком проекте он работает, а в каком проверяет: {pid: "check"}
         a.setdefault("jobs", {})
+        a.setdefault("auto", True)   # берёт ли новые задачи сам
     if "assistant" not in state:
         state["assistant"] = json.loads(json.dumps(ASSISTANT))
         changed = True
@@ -215,6 +216,7 @@ def migrate(state):
                 m["key"] = secrets.token_hex(16)
                 changed = True
             m.setdefault("job", "work")
+            m.setdefault("auto", True)   # берёт ли новые задачи сам
     for t in state["tasks"]:
         if "bot" in t:
             t["member"] = t.pop("bot")
@@ -332,6 +334,7 @@ async def get_state(request):
                     # у общего агента роль лежит по проектам — она главнее
                     "job": ("check" if "check" in jobs.values()
                             else (m.get("job") or "work")),
+                    "auto": m.get("auto", True),
                     "jobs": jobs,
                 }
                 break
@@ -350,6 +353,7 @@ def make_member(body):
         "handle": handle,
         "role": (body.get("role") or "").strip(),
         "job": body.get("job") if body.get("job") in JOBS else "work",
+        "auto": bool(body.get("auto", True)),
         "kind": kind,
         "avatar": None,
         # личный ключ: по нему доска понимает, кто из исполнителей пришёл
@@ -702,6 +706,8 @@ async def patch_member(request):
                 m[key] = (body[key] or "").strip()
         if body.get("job") in JOBS:
             m["job"] = body["job"]
+        if "auto" in body:
+            m["auto"] = bool(body["auto"])
         if body.get("kind") in KINDS:
             m["kind"] = body["kind"]
         save(state)
@@ -923,6 +929,8 @@ async def patch_agent(request):
                          if k in znama and v in JOBS}
         if body.get("job") in JOBS and body.get("project"):
             a.setdefault("jobs", {})[body["project"]] = body["job"]
+        if "auto" in body:
+            a["auto"] = bool(body["auto"])
         save(state)
         return web.json_response(a)
     raise web.HTTPNotFound(text="нет такого агента")

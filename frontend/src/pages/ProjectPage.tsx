@@ -609,6 +609,11 @@ export default function ProjectPage() {
                       <Pill tone={member.kind}>{kindLabel(member.kind)}</Pill>
                     )}
                     {member.job === 'check' && <Pill tone="free">проверяет</Pill>}
+                    {(member.kind === 'agent' || member.kind === 'bot') && (
+                      <Pill tone={member.auto === false ? 'free' : 'bot'}>
+                        {member.auto === false ? 'новых не берёт' : 'берёт задачи'}
+                      </Pill>
+                    )}
                   </span>
                 }
                 chevronIcon={
