@@ -322,5 +322,77 @@
   "title": "Подсказка",
   "group": "Окна",
   "code": "{open && (\n  <span className=\"rounded-lg bg-black px-3 py-2 text-[12px] text-white dark:bg-white dark:text-black\">\n    Здесь можно назначить агента\n  </span>\n)}\n<Button rounded outline onClick={() => setOpen((o) => !o)}>\n  <HelpCircle size={17} className=\"mr-1\" />\n  {open ? 'Скрыть подсказку' : 'Что это?'}\n</Button>"
+ },
+ {
+  "id": "block",
+  "title": "Блоки текста",
+  "group": "Показ данных",
+  "code": "<BlockTitle>Заголовок раздела</BlockTitle>\n<BlockHeader>Подзаголовок над блоком</BlockHeader>\n<Block strong inset>\n  Обычный текстовый блок: пояснение, предупреждение, что угодно.\n</Block>\n<BlockFooter>Мелкая подпись под блоком.</BlockFooter>"
+ },
+ {
+  "id": "link",
+  "title": "Ссылки",
+  "group": "Управление",
+  "code": "<Block className=\"flex flex-wrap items-center gap-4\">\n  <Link onClick={() => {}}>Обычная</Link>\n  <Link iconOnly onClick={() => {}} aria-label=\"Меню\"><MoreHorizontal size={20} /></Link>\n  <Link href=\"https://framework7.io\" target=\"_blank\">Внешняя</Link>\n</Block>"
+ },
+ {
+  "id": "icons",
+  "title": "Иконки",
+  "group": "Показ данных",
+  "code": "<Block className=\"flex flex-wrap gap-4\">\n  {[Flag, Bot, Calendar, Search, Check].map((Icon, i) => (\n    <Icon key={i} size={24} className=\"text-primary\" />\n  ))}\n</Block>"
+ },
+ {
+  "id": "subnavbar",
+  "title": "Подшапка",
+  "group": "Навигация",
+  "code": "<Navbar\n  title=\"Проект\"\n  subnavbar={\n    <Segmented strong rounded>\n      <SegmentedButton active>Задачи</SegmentedButton>\n      <SegmentedButton>Файлы</SegmentedButton>\n    </Segmented>\n  }\n/>"
+ },
+ {
+  "id": "swiper",
+  "title": "Карусель",
+  "group": "Показ данных",
+  "code": "<div className=\"flex snap-x snap-mandatory gap-3 overflow-x-auto px-4\">\n  {slajdy.map((s) => (\n    <div key={s} className=\"h-32 w-64 shrink-0 snap-center rounded-2xl bg-ios-light-surface-1\n      p-4 dark:bg-ios-dark-surface-1\">{s}</div>\n  ))}\n</div>"
+ },
+ {
+  "id": "treeview",
+  "title": "Дерево",
+  "group": "Списки",
+  "code": "<List strong inset>\n  {uzly.map((u) => (\n    <div key={u.name}>\n      <ListItem link title={u.name} onClick={() => prepnout(u.name)}\n        media={<ChevronRight size={16} className={otevrene.has(u.name) ? 'rotate-90' : ''} />} />\n      {otevrene.has(u.name) && u.deti.map((d) => (\n        <ListItem key={d} title={d} innerClassName=\"!pl-8\" />\n      ))}\n    </div>\n  ))}\n</List>"
+ },
+ {
+  "id": "virtual-list",
+  "title": "Длинный список",
+  "group": "Списки",
+  "code": "// рисуем только видимое окно строк\n<div onScroll={(e) => setOd(Math.floor(e.currentTarget.scrollTop / 44))}\n  className=\"max-h-60 overflow-y-auto rounded-3xl\">\n  <div style={{ height: vsech * 44 }} className=\"relative\">\n    <div style={{ transform: `translateY(${od * 44}px)` }}>\n      {okno.map((i) => <ListItem key={i} title={`Строка ${i + 1}`} />)}\n    </div>\n  </div>\n</div>"
+ },
+ {
+  "id": "list-index",
+  "title": "Алфавитный указатель",
+  "group": "Списки",
+  "code": "<div className=\"relative\">\n  <List strong inset>{/* строки, сгруппированные по буквам */}</List>\n  <div className=\"absolute right-1 top-0 flex flex-col gap-0.5 text-[11px] text-primary\">\n    {pismena.map((p) => (\n      <button key={p} onClick={() => skocit(p)}>{p}</button>\n    ))}\n  </div>\n</div>"
+ },
+ {
+  "id": "contacts-list",
+  "title": "Контакты",
+  "group": "Списки",
+  "code": "<List strong inset dividers>\n  {skupiny.map(([pismeno, jmena]) => (\n    <div key={pismeno}>\n      <ListItem title={pismeno} groupTitle />\n      {jmena.map((j) => <ListItem key={j} title={j} />)}\n    </div>\n  ))}\n</List>"
+ },
+ {
+  "id": "data-table",
+  "title": "Таблица данных",
+  "group": "Показ данных",
+  "code": "<Table>\n  <TableHead>\n    <TableRow header>\n      <TableCell header>Задача</TableCell>\n      <TableCell header className=\"text-right\">Токены</TableCell>\n    </TableRow>\n  </TableHead>\n  <TableBody>\n    {radky.map((r) => (\n      <TableRow key={r.id}>\n        <TableCell>{r.title}</TableCell>\n        <TableCell className=\"text-right tabular-nums\">{r.tokens}</TableCell>\n      </TableRow>\n    ))}\n  </TableBody>\n</Table>"
+ },
+ {
+  "id": "autocomplete",
+  "title": "Автодополнение",
+  "group": "Формы",
+  "code": "<List strong inset>\n  <ListInput label=\"Проект\" type=\"text\" placeholder=\"Начни печатать\"\n    value={q} onChange={(e) => setQ(e.target.value)} />\n  {navrhy.map((n) => (\n    <ListItem key={n} link title={n} onClick={() => setQ(n)} />\n  ))}\n</List>"
+ },
+ {
+  "id": "color-picker",
+  "title": "Выбор цвета",
+  "group": "Формы",
+  "code": "<Block className=\"flex flex-wrap gap-3\">\n  {COLORS.map((c) => (\n    <button key={c} onClick={() => setColor(c)} style={{ background: c }}\n      className=\"h-9 w-9 rounded-full\">\n      {color === c && <Check size={18} className=\"mx-auto text-white\" />}\n    </button>\n  ))}\n</Block>"
  }
 ]
