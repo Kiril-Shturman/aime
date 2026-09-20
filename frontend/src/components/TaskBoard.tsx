@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Flag, GripVertical } from 'lucide-react'
 import { motion, type PanInfo } from 'motion/react'
 import { api } from '../api/client'
@@ -43,6 +43,7 @@ function TaskCard({
   task,
   compact = false,
   moving,
+  showProject,
   onOpen,
   onMove,
   onSwipe,
@@ -50,6 +51,7 @@ function TaskCard({
   task: Task
   compact?: boolean
   moving: boolean
+  showProject: boolean
   onOpen: () => void
   onMove: (bucket: Bucket) => void
   onSwipe?: (direction: -1 | 1) => void
@@ -79,7 +81,7 @@ function TaskCard({
         <div className="min-w-0 flex-1">
           <div className="mb-2 flex flex-wrap items-center gap-1.5">
             <StatusChip status={task.status} />
-            {project && (
+            {showProject && project && (
               <span className="max-w-40 truncate rounded-full bg-black/[.055] px-2 py-1 text-[11px] font-medium text-black/55 dark:bg-white/[.08] dark:text-white/55">
                 {project.name}
               </span>
@@ -162,23 +164,29 @@ function TaskCard({
   )
 }
 
-export default function TaskBoard({ onEdit }: { onEdit: (task: Task) => void }) {
-  const { state, refresh } = useApp()
+export default function TaskBoard({
+  tasks,
+  onEdit,
+  showProject = true,
+}: {
+  tasks: Task[]
+  onEdit: (task: Task) => void
+  showProject?: boolean
+}) {
+  const { refresh } = useApp()
   const [filter, setFilter] = useState<MobileFilter>('all')
   const [moving, setMoving] = useState<Set<string>>(new Set())
   const [dragging, setDragging] = useState<string | null>(null)
-  const tasks = useMemo(() => state?.tasks ?? [], [state?.tasks])
-
-  const counts = useMemo(() => ({
+  const counts = {
     all: tasks.length,
     doing: tasks.filter((task) => bucketOf(task) === 'doing').length,
     done: tasks.filter((task) => bucketOf(task) === 'done').length,
-  }), [tasks])
+  }
 
-  const mobileTasks = useMemo(() => {
+  const mobileTasks = (() => {
     if (filter === 'all') return tasks
     return tasks.filter((task) => bucketOf(task) === filter)
-  }, [filter, tasks])
+  })()
 
   const move = async (task: Task, bucket: Bucket) => {
     if (bucketOf(task) === bucket || moving.has(task.id)) return
@@ -238,6 +246,7 @@ export default function TaskBoard({ onEdit }: { onEdit: (task: Task) => void }) 
                 key={task.id}
                 task={task}
                 moving={moving.has(task.id)}
+                showProject={showProject}
                 onOpen={() => onEdit(task)}
                 onMove={(bucket) => void move(task, bucket)}
                 onSwipe={(direction) => swipe(task, direction)}
@@ -289,6 +298,7 @@ export default function TaskBoard({ onEdit }: { onEdit: (task: Task) => void }) 
                       task={task}
                       compact
                       moving={moving.has(task.id)}
+                      showProject={showProject}
                       onOpen={() => onEdit(task)}
                       onMove={(bucket) => void move(task, bucket)}
                     />
