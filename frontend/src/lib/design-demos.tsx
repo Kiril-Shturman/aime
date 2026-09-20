@@ -32,6 +32,8 @@ import {
   MessagesTitle,
   Navbar,
   NavbarBackLink,
+  Page,
+  Panel,
   Notification,
   Popover,
   Preloader,
@@ -68,6 +70,7 @@ import {
   Send,
   User,
 } from 'lucide-react'
+import PhotoBrowser from '../components/PhotoBrowser'
 import Popup from '../components/Popup'
 import Sheet from '../components/Sheet'
 import Pill from '../components/Pill'
@@ -104,38 +107,58 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       <ListItem link onClick={() => {}} title="Пункт-ссылка" after="значение" />
     </List>
   ),
-  'list-media': () => (
-    <List strong inset dividers>
-      <ListItem
-        media={
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/15 font-semibold text-primary">
-            Р
-          </span>
-        }
-        title="Разраб"
-        subtitle="пишет код"
-        after={<Pill tone="bot">берёт задачи</Pill>}
-      />
-      <ListItem
-        media={
-          <span className="grid h-10 w-10 place-items-center rounded-full bg-black/10 font-semibold dark:bg-white/10">
-            N
-          </span>
-        }
-        title="NightWorkrr"
-        subtitle="проверяет"
-        after={<Pill tone="free">новых не берёт</Pill>}
-      />
-    </List>
-  ),
-  'list-group': () => (
-    <List strong inset>
-      <ListItem title="А" groupTitle />
-      <ListItem title="Алексей" />
-      <ListItem title="Б" groupTitle />
-      <ListItem title="Борис" />
-    </List>
-  ),
+  'list-media': function ListMediaDemo() {
+    const [vybrany, setVybrany] = useState<string | null>(null)
+    const lide = [
+      { id: 'r', name: 'Разраб', role: 'пишет код', pill: 'берёт задачи', tone: 'bot' },
+      { id: 'n', name: 'NightWorkrr', role: 'проверяет', pill: 'новых не берёт', tone: 'free' },
+    ]
+    return (
+      <List strong inset dividers>
+        {lide.map((m) => (
+          <ListItem
+            key={m.id}
+            link
+            onClick={() => setVybrany(vybrany === m.id ? null : m.id)}
+            media={
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/15 font-semibold text-primary">
+                {m.name[0]}
+              </span>
+            }
+            title={m.name}
+            subtitle={vybrany === m.id ? 'выбран' : m.role}
+            after={<Pill tone={m.tone}>{m.pill}</Pill>}
+          />
+        ))}
+      </List>
+    )
+  },
+
+  'list-group': function ListGroupDemo() {
+    const [kdo, setKdo] = useState('Алексей')
+    return (
+      <List strong inset>
+        {[
+          ['А', ['Алексей', 'Анна']],
+          ['Б', ['Борис']],
+        ].map(([pismeno, jmena]) => (
+          <div key={pismeno as string}>
+            <ListItem title={pismeno as string} groupTitle />
+            {(jmena as string[]).map((j) => (
+              <ListItem
+                key={j}
+                link
+                title={j}
+                onClick={() => setKdo(j)}
+                after={kdo === j ? <Check size={18} className="text-primary" /> : undefined}
+              />
+            ))}
+          </div>
+        ))}
+      </List>
+    )
+  },
+
   'list-button': () => (
     <List strong inset>
       <ListButton onClick={() => {}}>Обычное действие</ListButton>
@@ -319,73 +342,167 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </Chip>
     </Block>
   ),
-  badge: () => (
-    <List strong inset>
-      <ListItem title="Непрочитанные" after={<Badge>7</Badge>} />
-    </List>
-  ),
-  card: () => (
-    <Card header="Заголовок карточки" footer="Подпись снизу">
-      Содержимое карточки: текст, список, что угодно.
-    </Card>
-  ),
-  progressbar: () => (
-    <Block className="!my-0">
-      <Progressbar progress={0.45} />
-    </Block>
-  ),
-  preloader: () => (
-    <Block className="!my-0 flex justify-center">
-      <Preloader />
-    </Block>
-  ),
-  table: () => (
-    <Table>
-      <TableHead>
-        <TableRow header>
-          <TableCell header>Задача</TableCell>
-          <TableCell header>Статус</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        <TableRow>
-          <TableCell>Сверстать главную</TableCell>
-          <TableCell>В работе</TableCell>
-        </TableRow>
-        <TableRow>
-          <TableCell>Прикрутить кассу</TableCell>
-          <TableCell>Не начата</TableCell>
-        </TableRow>
-      </TableBody>
-    </Table>
-  ),
-  breadcrumbs: () => (
-    <Block className="!my-0">
-      <Breadcrumbs>
-        <BreadcrumbsItem onClick={() => {}}>Проект</BreadcrumbsItem>
-        <BreadcrumbsSeparator />
-        <BreadcrumbsItem active>Этап</BreadcrumbsItem>
-      </Breadcrumbs>
-    </Block>
-  ),
-  timeline: () => (
-    <div className="timeline">
-      <div className="timeline-item">
-        <div className="timeline-item-date text-[11px]">20 сен</div>
-        <div className="timeline-item-divider" style={{ background: '#2a8bff' }} />
-        <div className="timeline-item-content">
-          <div className="timeline-item-inner rounded-2xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1">
-            <div className="timeline-item-title text-[15px] font-semibold">
-              Название этапа
-            </div>
-            <div className="timeline-item-subtitle text-[12px] opacity-60">
-              3 из 5 задач
+  badge: function BadgeDemo() {
+    const [kolik, setKolik] = useState(7)
+    return (
+      <List strong inset>
+        <ListItem
+          link
+          onClick={() => setKolik((k) => (k > 20 ? 1 : k + 3))}
+          title="Непрочитанные"
+          after={<Badge>{kolik}</Badge>}
+        />
+        <ListItem link onClick={() => setKolik(0)} title="Прочитать всё" after={<Badge colors={{ bg: 'bg-black/20 dark:bg-white/20' }}>0</Badge>} />
+      </List>
+    )
+  },
+
+  card: function CardDemo() {
+    const [rozbaleno, setRozbaleno] = useState(false)
+    return (
+      <Card
+        header="Заголовок карточки"
+        footer={
+          <KLink onClick={() => setRozbaleno((r) => !r)}>
+            {rozbaleno ? 'Свернуть' : 'Читать дальше'}
+          </KLink>
+        }
+      >
+        Содержимое карточки: текст, список, что угодно.
+        {rozbaleno && (
+          <span className="mt-2 block opacity-70">
+            Развёрнутая часть — тут может быть длинное описание, картинка или
+            таблица.
+          </span>
+        )}
+      </Card>
+    )
+  },
+
+  progressbar: function ProgressDemo() {
+    const [p, setP] = useState(0.45)
+    return (
+      <Block className="!my-0 grid gap-3">
+        <Progressbar progress={p} />
+        <span className="flex gap-2">
+          <Button rounded small onClick={() => setP((x) => Math.max(0, x - 0.15))}>
+            −15%
+          </Button>
+          <Button rounded small onClick={() => setP((x) => Math.min(1, x + 0.15))}>
+            +15%
+          </Button>
+          <span className="self-center text-[13px] tabular-nums opacity-60">
+            {Math.round(p * 100)}%
+          </span>
+        </span>
+      </Block>
+    )
+  },
+
+  preloader: function PreloaderDemo() {
+    const [velke, setVelke] = useState(false)
+    return (
+      <Block className="!my-0 flex flex-col items-center gap-3">
+        <Preloader className={velke ? 'h-10 w-10' : 'h-6 w-6'} />
+        <Button rounded small onClick={() => setVelke((v) => !v)}>
+          {velke ? 'Поменьше' : 'Побольше'}
+        </Button>
+      </Block>
+    )
+  },
+
+  table: function TableDemo() {
+    const [razeni, setRazeni] = useState<'title' | 'status'>('title')
+    const radky = [
+      { title: 'Сверстать главную', status: 'В работе' },
+      { title: 'Прикрутить кассу', status: 'Не начата' },
+      { title: 'Починить чат', status: 'Готово' },
+    ]
+    const serazene = [...radky].sort((a, b) => a[razeni].localeCompare(b[razeni]))
+    return (
+      <Table>
+        <TableHead>
+          <TableRow header>
+            <TableCell header>
+              <button type="button" onClick={() => setRazeni('title')} className={razeni === 'title' ? 'text-primary' : ''}>
+                Задача
+              </button>
+            </TableCell>
+            <TableCell header>
+              <button type="button" onClick={() => setRazeni('status')} className={razeni === 'status' ? 'text-primary' : ''}>
+                Статус
+              </button>
+            </TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {serazene.map((r) => (
+            <TableRow key={r.title}>
+              <TableCell>{r.title}</TableCell>
+              <TableCell>{r.status}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    )
+  },
+
+  breadcrumbs: function BreadcrumbsDemo() {
+    const cesta = ['Проект', 'Модуль', 'Этап']
+    const [kde, setKde] = useState(2)
+    return (
+      <Block className="!my-0">
+        <Breadcrumbs>
+          {cesta.slice(0, kde + 1).map((c, i) => (
+            <span key={c} className="flex items-center">
+              {i > 0 && <BreadcrumbsSeparator />}
+              <BreadcrumbsItem active={i === kde} onClick={() => setKde(i)}>
+                {c}
+              </BreadcrumbsItem>
+            </span>
+          ))}
+        </Breadcrumbs>
+        {kde < cesta.length - 1 && (
+          <Button rounded small className="mt-2" onClick={() => setKde(cesta.length - 1)}>
+            Глубже
+          </Button>
+        )}
+      </Block>
+    )
+  },
+
+  timeline: function TimelineDemo() {
+    const etapy = [
+      { date: '20 сен', title: 'Связь с агентами', sub: '3 из 5 задач', color: '#2a8bff' },
+      { date: '27 сен', title: 'Проверка работы', sub: '0 из 4 задач', color: 'rgba(255,255,255,.3)' },
+    ]
+    const [otevreny, setOtevreny] = useState<string | null>(null)
+    return (
+      <div className="timeline">
+        {etapy.map((e) => (
+          <div key={e.title} className="timeline-item">
+            <div className="timeline-item-date text-[11px]">{e.date}</div>
+            <div className="timeline-item-divider" style={{ background: e.color }} />
+            <div className="timeline-item-content">
+              <button
+                type="button"
+                onClick={() => setOtevreny(otevreny === e.title ? null : e.title)}
+                className="timeline-item-inner w-full rounded-2xl bg-ios-light-surface-1 text-left dark:bg-ios-dark-surface-1"
+              >
+                <span className="timeline-item-title block text-[15px] font-semibold">
+                  {e.title}
+                </span>
+                <span className="timeline-item-subtitle block text-[12px] opacity-60">
+                  {otevreny === e.title ? 'этап открыт — тапни ещё раз' : e.sub}
+                </span>
+              </button>
             </div>
           </div>
-        </div>
+        ))}
       </div>
-    </div>
-  ),
+    )
+  },
+
   accordion: function Accordion() {
     const [open, setOpen] = useState(false)
     return (
@@ -544,11 +661,29 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </Block>
     )
   },
-  panel: () => (
-    <Block className="!my-0 text-[13px] opacity-60">
-      Боковая панель занимает весь экран — смотри код рядом.
-    </Block>
-  ),
+  panel: function PanelDemo() {
+    const [open, setOpen] = useState(false)
+    return (
+      <Block className="!my-0">
+        <Button rounded onClick={() => setOpen(true)}>
+          Открыть панель
+        </Button>
+        <Panel side="left" opened={open} onBackdropClick={() => setOpen(false)}>
+          <Page>
+            <Navbar
+              title="Меню"
+              right={<KLink onClick={() => setOpen(false)}>Закрыть</KLink>}
+            />
+            <List strong inset>
+              <ListItem link title="Проекты" onClick={() => setOpen(false)} />
+              <ListItem link title="Агенты" onClick={() => setOpen(false)} />
+            </List>
+          </Page>
+        </Panel>
+      </Block>
+    )
+  },
+
   toast: () => (
     <Block className="!my-0">
       <Okno label="Показать тост">
@@ -584,15 +719,40 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </Okno>
     </Block>
   ),
-  messages: () => (
-    <div className="rounded-2xl bg-ios-light-surface-2 py-2 dark:bg-ios-dark-surface-2">
-      <Messages>
-        <MessagesTitle>воскресенье, 20 сент.</MessagesTitle>
-        <Message type="received" name="Агент" text="Задачу взял, начинаю" />
-        <Message type="sent" text="Ок, жду отчёт" />
-      </Messages>
-    </div>
-  ),
+  messages: function MessagesDemo() {
+    const [zpravy, setZpravy] = useState([
+      { type: 'received' as const, name: 'Агент', text: 'Задачу взял, начинаю' },
+      { type: 'sent' as const, text: 'Ок, жду отчёт' },
+    ])
+    return (
+      <>
+        <div className="rounded-2xl bg-ios-light-surface-2 py-2 dark:bg-ios-dark-surface-2">
+          <Messages>
+            <MessagesTitle>воскресенье, 20 сент.</MessagesTitle>
+            {zpravy.map((z, i) => (
+              <Message key={i} type={z.type} name={z.name} text={z.text} />
+            ))}
+          </Messages>
+        </div>
+        <Block className="!mt-2">
+          <Button
+            rounded
+            onClick={() =>
+              setZpravy((p) => [
+                ...p,
+                p.length % 2
+                  ? { type: 'received' as const, name: 'Агент', text: 'Готово, отчёт на доске' }
+                  : { type: 'sent' as const, text: 'Как продвигается?' },
+              ])
+            }
+          >
+            Добавить сообщение
+          </Button>
+        </Block>
+      </>
+    )
+  },
+
   messagebar: () => (
     <div className="relative h-24 overflow-hidden rounded-2xl">
       <Messagebar
@@ -894,60 +1054,166 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </div>
     )
   },
-  grid: () => (
-    <div className="mx-4 grid grid-cols-2 gap-2">
-      {['Проекты', 'Задачи', 'Агенты', 'Файлы'].map((title, index) => (
-        <div key={title} className="rounded-2xl bg-ios-light-surface-1 p-4 dark:bg-ios-dark-surface-1">
-          <div className="text-[24px] font-bold text-primary">{[4, 18, 3, 27][index]}</div>
-          <div className="mt-1 text-[13px] opacity-50">{title}</div>
-        </div>
-      ))}
-    </div>
-  ),
-  skeleton: () => (
-    <div className="mx-4 flex animate-pulse items-center gap-3 rounded-2xl bg-ios-light-surface-1 p-4 dark:bg-ios-dark-surface-1">
-      <div className="h-11 w-11 rounded-full bg-black/10 dark:bg-white/10" />
-      <div className="flex-1 space-y-2">
-        <div className="h-3 w-2/3 rounded-full bg-black/10 dark:bg-white/10" />
-        <div className="h-3 w-full rounded-full bg-black/[.07] dark:bg-white/[.07]" />
-      </div>
-    </div>
-  ),
-  gauge: () => (
-    <div className="flex justify-center">
-      <div className="grid h-32 w-32 place-items-center rounded-full" style={{ background: 'conic-gradient(#007aff 0 72%, rgba(120,120,128,.18) 72% 100%)' }}>
-        <div className="grid h-[104px] w-[104px] place-items-center rounded-full bg-ios-light-surface-2 text-center dark:bg-ios-dark-surface-2">
-          <div><div className="text-[25px] font-bold">72%</div><div className="text-[12px] opacity-45">готово</div></div>
-        </div>
-      </div>
-    </div>
-  ),
-  'pie-chart': () => (
-    <div className="flex items-center justify-center gap-5 px-4">
-      <div className="h-28 w-28 rounded-full" style={{ background: 'conic-gradient(#007aff 0 42%, #34c759 42% 70%, #d1d1d6 70% 100%)' }} />
-      <div className="grid gap-2 text-[12px]">
-        {[['#007aff', 'Готово · 42%'], ['#34c759', 'В работе · 28%'], ['#d1d1d6', 'План · 30%']].map(([color, label]) => (
-          <div key={label} className="flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full" style={{ background: color }} />{label}</div>
+  grid: function GridDemo() {
+    const [vybrana, setVybrana] = useState<number | null>(null)
+    return (
+      <Block className="!my-0 grid grid-cols-3 gap-2">
+        {Array.from({ length: 6 }, (_, i) => (
+          <button
+            key={i}
+            type="button"
+            onClick={() => setVybrana(vybrana === i ? null : i)}
+            className={`grid h-16 place-items-center rounded-2xl text-[14px] font-semibold ${
+              vybrana === i
+                ? 'bg-primary text-white'
+                : 'bg-ios-light-surface-1 dark:bg-ios-dark-surface-1'
+            }`}
+          >
+            {i + 1}
+          </button>
         ))}
-      </div>
-    </div>
-  ),
-  'area-chart': () => (
-    <div className="mx-4 rounded-2xl bg-ios-light-surface-1 p-4 dark:bg-ios-dark-surface-1">
-      <div className="mb-2 text-[13px] font-semibold">Токены за неделю</div>
-      <svg viewBox="0 0 300 110" className="h-28 w-full" role="img" aria-label="График токенов">
-        <defs><linearGradient id="area-blue" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#007aff" stopOpacity=".35" /><stop offset="1" stopColor="#007aff" stopOpacity="0" /></linearGradient></defs>
-        <path d="M0 91 L45 71 L90 79 L135 48 L180 36 L225 12 L300 27 L300 110 L0 110 Z" fill="url(#area-blue)" />
-        <path d="M0 91 L45 71 L90 79 L135 48 L180 36 L225 12 L300 27" fill="none" stroke="#007aff" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </div>
-  ),
-  // потянуть вниз: тащим содержимое — появляется крутилка и «обновлено»
+      </Block>
+    )
+  },
+
+  skeleton: function SkeletonDemo() {
+    const [nacteno, setNacteno] = useState(false)
+    return (
+      <>
+        <List strong inset>
+          {nacteno ? (
+            <ListItem
+              media={
+                <span className="grid h-11 w-11 place-items-center rounded-full bg-primary/15 font-semibold text-primary">
+                  Р
+                </span>
+              }
+              title="Разраб"
+              subtitle="взял задачу «Сверстать главную»"
+            />
+          ) : (
+            <ListItem
+              media={<span className="h-11 w-11 animate-pulse rounded-full bg-black/10 dark:bg-white/10" />}
+              title={<span className="block h-3 w-2/3 animate-pulse rounded-full bg-black/10 dark:bg-white/10" />}
+              subtitle={<span className="mt-2 block h-3 w-full animate-pulse rounded-full bg-black/[.07] dark:bg-white/[.07]" />}
+            />
+          )}
+        </List>
+        <Block className="!mt-2">
+          <Button rounded onClick={() => setNacteno((n) => !n)}>
+            {nacteno ? 'Показать скелет' : 'Загрузить данные'}
+          </Button>
+        </Block>
+      </>
+    )
+  },
+
+  gauge: function GaugeDemo() {
+    const [procenta, setProcenta] = useState(72)
+    return (
+      <Block className="!my-0 flex flex-col items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setProcenta((p) => (p >= 100 ? 10 : p + 15))}
+          className="grid h-32 w-32 place-items-center rounded-full active:opacity-80"
+          style={{
+            background: `conic-gradient(#007aff 0 ${procenta}%, rgba(120,120,128,.18) ${procenta}% 100%)`,
+          }}
+        >
+          <span className="grid h-[104px] w-[104px] place-items-center rounded-full bg-ios-light-surface-2 text-center dark:bg-ios-dark-surface-2">
+            <span>
+              <span className="block text-[25px] font-bold">{procenta}%</span>
+              <span className="block text-[12px] opacity-45">готово</span>
+            </span>
+          </span>
+        </button>
+        <span className="text-[13px] opacity-50">тапни по кругу</span>
+      </Block>
+    )
+  },
+
+  'pie-chart': function PieDemo() {
+    const casti = [
+      { name: 'Готово', v: 45, c: '#30d158' },
+      { name: 'В работе', v: 30, c: '#2a8bff' },
+      { name: 'Не начата', v: 25, c: '#8e8e93' },
+    ]
+    const [aktivni, setAktivni] = useState(0)
+    let uhel = 0
+    const stops = casti
+      .map((c) => {
+        const od = uhel
+        uhel += c.v
+        return `${c.c} ${od}% ${uhel}%`
+      })
+      .join(', ')
+    return (
+      <Block className="!my-0 flex flex-col items-center gap-3">
+        <span
+          className="grid h-32 w-32 place-items-center rounded-full"
+          style={{ background: `conic-gradient(${stops})` }}
+        >
+          <span className="grid h-20 w-20 place-items-center rounded-full bg-ios-light-surface-2 text-[15px] font-semibold dark:bg-ios-dark-surface-2">
+            {casti[aktivni].v}%
+          </span>
+        </span>
+        <span className="flex flex-wrap justify-center gap-1.5">
+          {casti.map((c, i) => (
+            <button key={c.name} type="button" onClick={() => setAktivni(i)}>
+              <Chip
+                className={`!m-0 ${i === aktivni ? '!bg-primary !text-white' : ''}`}
+                media={<span className="h-3 w-3 rounded-full" style={{ background: c.c }} />}
+              >
+                {c.name}
+              </Chip>
+            </button>
+          ))}
+        </span>
+      </Block>
+    )
+  },
+
+  'area-chart': function AreaDemo() {
+    const rady = [
+      { name: 'Неделя', body: [4, 9, 6, 12, 8, 14, 11] },
+      { name: 'Месяц', body: [10, 6, 14, 8, 16, 9, 18] },
+    ]
+    const [aktivni, setAktivni] = useState(0)
+    const body = rady[aktivni].body
+    const max = Math.max(...body)
+    const cesta = body
+      .map((v, i) => `${(i / (body.length - 1)) * 100},${40 - (v / max) * 36}`)
+      .join(' ')
+    return (
+      <Block className="!my-0 grid gap-3">
+        <svg viewBox="0 0 100 40" className="h-28 w-full" preserveAspectRatio="none">
+          <polygon points={`0,40 ${cesta} 100,40`} fill="rgba(42,139,255,.25)" />
+          <polyline points={cesta} fill="none" stroke="#2a8bff" strokeWidth="1.5" />
+        </svg>
+        <Segmented strong rounded>
+          {rady.map((r, i) => (
+            <SegmentedButton key={r.name} active={aktivni === i} onClick={() => setAktivni(i)}>
+              {r.name}
+            </SegmentedButton>
+          ))}
+        </Segmented>
+      </Block>
+    )
+  },
+
   'pull-to-refresh': function PullDemo() {
     const [tah, setTah] = useState(0)
     const [obnovuje, setObnovuje] = useState(false)
     const [kdy, setKdy] = useState<string | null>(null)
     const start = useRef<number | null>(null)
+    const obnovit = () => {
+      setObnovuje(true)
+      window.setTimeout(() => {
+        setObnovuje(false)
+        setTah(0)
+        setKdy(new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }))
+      }, 900)
+    }
     return (
       <div
         className="overflow-hidden rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1"
@@ -958,16 +1224,8 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
         }}
         onPointerUp={() => {
           start.current = null
-          if (tah > 45) {
-            setObnovuje(true)
-            window.setTimeout(() => {
-              setObnovuje(false)
-              setTah(0)
-              setKdy(new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }))
-            }, 900)
-          } else {
-            setTah(0)
-          }
+          if (tah > 45) obnovit()
+          else setTah(0)
         }}
       >
         <div
@@ -976,8 +1234,11 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
         >
           {obnovuje ? <Preloader className="h-5 w-5" /> : 'тяни вниз'}
         </div>
-        <div className="px-4 py-5 text-[15px]">
-          {kdy ? `Обновлено в ${kdy}` : 'Потяни этот блок вниз'}
+        <div className="flex items-center justify-between px-4 py-4 text-[15px]">
+          <span>{kdy ? `Обновлено в ${kdy}` : 'Потяни вниз или нажми'}</span>
+          <Button rounded small onClick={obnovit}>
+            Обновить
+          </Button>
         </div>
       </div>
     )
@@ -1044,13 +1305,32 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
     )
   },
 
-  'photo-browser': () => (
-    <div className="mx-4 overflow-hidden rounded-2xl bg-[#101014] p-3 text-white">
-      <div className="aspect-[16/9] rounded-xl bg-gradient-to-br from-[#6dd5ed] via-[#8e7dff] to-[#ff758c]" />
-      <div className="mt-2 flex items-center justify-between text-[12px]"><span className="opacity-55">1 из 4</span><span>Скриншот интерфейса</span></div>
-    </div>
-  ),
-  // подсказка: появляется по тапу и прячется вторым тапом
+  'photo-browser': function PhotoBrowserDemo() {
+    const snimky = [
+      { id: '1', url: '/providers/gpt.png', kind: 'image' as const },
+      { id: '2', url: '/providers/claude.png', kind: 'image' as const },
+      { id: '3', url: '/providers/gemini.png', kind: 'image' as const },
+    ]
+    const [index, setIndex] = useState<number | null>(null)
+    return (
+      <>
+        <div className="flex gap-2">
+          {snimky.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setIndex(i)}
+              className="h-20 flex-1 overflow-hidden rounded-2xl bg-ios-light-surface-1 active:opacity-70 dark:bg-ios-dark-surface-1"
+            >
+              <img src={s.url} alt="" className="h-full w-full object-contain p-3" />
+            </button>
+          ))}
+        </div>
+        <PhotoBrowser items={snimky} index={index} onClose={() => setIndex(null)} />
+      </>
+    )
+  },
+
   tooltip: function TooltipDemo() {
     const [open, setOpen] = useState(false)
     return (
@@ -1068,16 +1348,30 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
     )
   },
   // ——— блоки, которых не хватало против эталона framework7 ———
-  block: () => (
-    <>
-      <BlockTitle>Заголовок раздела</BlockTitle>
-      <BlockHeader>Подзаголовок над блоком</BlockHeader>
-      <Block strong inset>
-        Обычный текстовый блок: пояснение, предупреждение, что угодно.
-      </Block>
-      <BlockFooter>Мелкая подпись под блоком.</BlockFooter>
-    </>
-  ),
+  block: function BlockDemo() {
+    const [vic, setVic] = useState(false)
+    return (
+      <>
+        <BlockTitle>Заголовок раздела</BlockTitle>
+        <BlockHeader>Подзаголовок над блоком</BlockHeader>
+        <Block strong inset>
+          Обычный текстовый блок: пояснение, предупреждение, что угодно.
+          {vic && (
+            <span className="mt-2 block opacity-70">
+              Второй абзац — появляется по кнопке, чтобы блок было куда тыкнуть.
+            </span>
+          )}
+          <span className="mt-2 block">
+            <Button rounded small onClick={() => setVic((v) => !v)}>
+              {vic ? 'Свернуть' : 'Показать ещё'}
+            </Button>
+          </span>
+        </Block>
+        <BlockFooter>Мелкая подпись под блоком.</BlockFooter>
+      </>
+    )
+  },
+
   link: () => (
     <Block className="!my-0 flex flex-wrap items-center gap-4">
       <KLink onClick={() => {}}>Обычная</KLink>
@@ -1089,18 +1383,46 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </KLink>
     </Block>
   ),
-  icons: () => (
-    <Block className="!my-0 flex flex-wrap gap-4 text-primary">
-      <CalendarDays size={24} />
-      <Check size={24} />
-      <ChevronRight size={24} />
-      <GripVertical size={24} />
-      <HelpCircle size={24} />
-      <Plus size={24} />
-      <Send size={24} />
-      <User size={24} />
-    </Block>
-  ),
+  icons: function IconsDemo() {
+    const ikony: [string, typeof Check][] = [
+      ['check', Check],
+      ['plus', Plus],
+      ['user', User],
+      ['send', Send],
+      ['calendar-days', CalendarDays],
+      ['help-circle', HelpCircle],
+    ]
+    const [vybrana, setVybrana] = useState<string | null>(null)
+    return (
+      <Block className="!my-0">
+        <span className="flex flex-wrap gap-3">
+          {ikony.map(([name, Icon]) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => {
+                setVybrana(name)
+                navigator.clipboard?.writeText(`<${name} />`).catch(() => {})
+                haptic('light')
+              }}
+              className={`grid h-11 w-11 place-items-center rounded-2xl ${
+                vybrana === name
+                  ? 'bg-primary text-white'
+                  : 'bg-ios-light-surface-1 text-primary dark:bg-ios-dark-surface-1'
+              }`}
+              aria-label={name}
+            >
+              <Icon size={22} />
+            </button>
+          ))}
+        </span>
+        <span className="mt-2 block text-[13px] opacity-55">
+          {vybrana ? `скопировано: ${vybrana}` : 'тапни иконку — имя уйдёт в буфер'}
+        </span>
+      </Block>
+    )
+  },
+
   subnavbar: () => (
     <div className="overflow-hidden rounded-2xl">
       <Navbar
@@ -1115,18 +1437,51 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       />
     </div>
   ),
-  swiper: () => (
-    <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {['Слайд один', 'Слайд два', 'Слайд три'].map((s) => (
+  swiper: function SwiperDemo() {
+    const slajdy = ['Слайд один', 'Слайд два', 'Слайд три']
+    const [aktivni, setAktivni] = useState(0)
+    const pas = useRef<HTMLDivElement | null>(null)
+    const skocit = (i: number) => {
+      setAktivni(i)
+      const el = pas.current
+      if (el) el.scrollTo({ left: i * (el.clientWidth * 0.72 + 12), behavior: 'smooth' })
+    }
+    return (
+      <>
         <div
-          key={s}
-          className="flex h-28 w-60 shrink-0 snap-center items-center justify-center rounded-2xl bg-ios-light-surface-1 text-[15px] font-semibold dark:bg-ios-dark-surface-1"
+          ref={pas}
+          onScroll={(e) => {
+            const el = e.currentTarget
+            setAktivni(Math.round(el.scrollLeft / (el.clientWidth * 0.72 + 12)))
+          }}
+          className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
-          {s}
+          {slajdy.map((s) => (
+            <div
+              key={s}
+              className="flex h-28 w-[72%] shrink-0 snap-center items-center justify-center rounded-2xl bg-ios-light-surface-1 text-[15px] font-semibold dark:bg-ios-dark-surface-1"
+            >
+              {s}
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
-  ),
+        <div className="mt-2 flex justify-center gap-1.5">
+          {slajdy.map((s, i) => (
+            <button
+              key={s}
+              type="button"
+              aria-label={`Слайд ${i + 1}`}
+              onClick={() => skocit(i)}
+              className={`h-2 rounded-full transition-all ${
+                i === aktivni ? 'w-5 bg-primary' : 'w-2 bg-black/20 dark:bg-white/25'
+              }`}
+            />
+          ))}
+        </div>
+      </>
+    )
+  },
+
   treeview: function TreeviewDemo() {
     const uzly = [
       { name: 'frontend', deti: ['pages', 'components', 'lib'] },
@@ -1167,6 +1522,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
     const vsech = 500
     const vyska = 44
     const [od, setOd] = useState(0)
+    const [kliknuto, setKliknuto] = useState<number | null>(null)
     const okno = Array.from({ length: 12 }, (_, i) => od + i).filter((i) => i < vsech)
     return (
       <div
@@ -1176,19 +1532,23 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
         <div style={{ height: vsech * vyska }} className="relative">
           <div style={{ transform: `translateY(${od * vyska}px)` }}>
             {okno.map((i) => (
-              <div
+              <button
                 key={i}
+                type="button"
+                onClick={() => setKliknuto(i)}
                 style={{ height: vyska }}
-                className="flex items-center border-b border-black/[.06] px-4 text-[15px] dark:border-white/[.08]"
+                className="flex w-full items-center justify-between border-b border-black/[.06] px-4 text-left text-[15px] active:bg-black/5 dark:border-white/[.08] dark:active:bg-white/10"
               >
-                Строка {i + 1}
-              </div>
+                <span>Строка {i + 1}</span>
+                {kliknuto === i && <Check size={17} className="text-primary" />}
+              </button>
             ))}
           </div>
         </div>
       </div>
     )
   },
+
   'list-index': function ListIndexDemo() {
     const pismena = ['А', 'Б', 'В', 'Г', 'Д']
     const [skok, setSkok] = useState('А')
@@ -1220,42 +1580,68 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </div>
     )
   },
-  'contacts-list': () => (
-    <List strong inset dividers>
-      {[
-        ['А', ['Алексей', 'Анна']],
-        ['Б', ['Борис']],
-      ].map(([pismeno, jmena]) => (
-        <div key={pismeno as string}>
-          <ListItem title={pismeno as string} groupTitle />
-          {(jmena as string[]).map((j) => (
-            <ListItem key={j} title={j} />
-          ))}
-        </div>
-      ))}
-    </List>
-  ),
-  'data-table': () => (
-    <Table>
-      <TableHead>
-        <TableRow header>
-          <TableCell header>Задача</TableCell>
-          <TableCell header className="text-right">Токены</TableCell>
-        </TableRow>
-      </TableHead>
-      <TableBody>
+  'contacts-list': function ContactsDemo() {
+    const [kdo, setKdo] = useState<string | null>(null)
+    return (
+      <List strong inset dividers>
         {[
-          { id: 1, title: 'Сверстать главную', tokens: '12 400' },
-          { id: 2, title: 'Прикрутить кассу', tokens: '8 900' },
-        ].map((r) => (
-          <TableRow key={r.id}>
-            <TableCell>{r.title}</TableCell>
-            <TableCell className="text-right tabular-nums">{r.tokens}</TableCell>
-          </TableRow>
+          ['А', ['Алексей', 'Анна']],
+          ['Б', ['Борис']],
+        ].map(([pismeno, jmena]) => (
+          <div key={pismeno as string}>
+            <ListItem title={pismeno as string} groupTitle />
+            {(jmena as string[]).map((j) => (
+              <ListItem
+                key={j}
+                link
+                title={j}
+                onClick={() => setKdo(j)}
+                after={kdo === j ? 'выбран' : undefined}
+              />
+            ))}
+          </div>
         ))}
-      </TableBody>
-    </Table>
-  ),
+      </List>
+    )
+  },
+
+  'data-table': function DataTableDemo() {
+    const [vybrane, setVybrane] = useState<number[]>([])
+    const radky = [
+      { id: 1, title: 'Сверстать главную', tokens: '12 400' },
+      { id: 2, title: 'Прикрутить кассу', tokens: '8 900' },
+    ]
+    const prepnout = (id: number) =>
+      setVybrane((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]))
+    return (
+      <Table>
+        <TableHead>
+          <TableRow header>
+            <TableCell header>Задача</TableCell>
+            <TableCell header className="text-right">Токены</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {radky.map((r) => (
+            <TableRow key={r.id}>
+              <TableCell>
+                <button
+                  type="button"
+                  onClick={() => prepnout(r.id)}
+                  className="flex items-center gap-2 text-left"
+                >
+                  <Checkbox component="span" checked={vybrane.includes(r.id)} onChange={() => prepnout(r.id)} />
+                  {r.title}
+                </button>
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{r.tokens}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    )
+  },
+
   autocomplete: function AutocompleteDemo() {
     const vse = ['aiMe', 'Working VPN', 'wMusic', 'Транскрибатор', 'perunfx']
     const [q, setQ] = useState('')
