@@ -80,7 +80,10 @@ export default function DesignKitPage() {
   return (
     <Page className="pb-safe-12">
       <Navbar
-        className="!bg-ios-light-surface dark:!bg-ios-dark-surface"
+        className="!bg-ios-light-surface dark:!bg-ios-dark-surface [&>div[class*=backdrop-blur]]:!hidden"
+        // у konsta шапка по умолчанию полупрозрачная: под неё уезжает
+        // содержимое и читается сквозь. Здесь делаем её плотной.
+        colors={{ bgIos: 'bg-ios-light-surface dark:bg-ios-dark-surface' }}
         title="Блоки"
         subtitle={`${vsechny.length} готовых кусков · framework7 iOS`}
         left={
