@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import {
-  CalendarDays,
-  Calendar,
-  Inbox,
   Flag,
   Check,
   Search,
@@ -33,6 +30,7 @@ import Pill from '../components/Pill'
 import { getUser } from '../lib/telegram'
 import Menu, { type MenuItem } from '../components/Menu'
 import TaskRow from '../components/TaskRow'
+import TaskBoard from '../components/TaskBoard'
 import TaskSheet from '../sheets/TaskSheet'
 import TaskEditSheet from '../sheets/TaskEditSheet'
 import ProjectSheet from '../sheets/ProjectSheet'
@@ -40,83 +38,7 @@ import AgentSheet from '../sheets/AgentSheet'
 import GoalSheet from '../sheets/GoalSheet'
 import OutSheet from '../sheets/OutSheet'
 import PickerSheet, { type PickerOption } from '../sheets/PickerSheet'
-import type { Agent, Counts, Task } from '../api/types'
-
-type TileKey = keyof Counts
-
-const TILES: {
-  key: TileKey
-  route: string
-  title: string
-  gradient: string
-  Icon: typeof CalendarDays
-}[] = [
-  {
-    key: 'today',
-    route: 'today',
-    title: 'Сегодня',
-    gradient: 'linear-gradient(180deg,#4ea3ff,#2a8bff)',
-    Icon: CalendarDays,
-  },
-  {
-    key: 'planned',
-    route: 'planned',
-    title: 'В планах',
-    gradient: 'linear-gradient(180deg,#f4776f,#e8635c)',
-    Icon: Calendar,
-  },
-  {
-    key: 'all',
-    route: 'all',
-    title: 'Все',
-    gradient: 'linear-gradient(180deg,#48484a,#3a3a3c)',
-    Icon: Inbox,
-  },
-  {
-    key: 'flagged',
-    route: 'flagged',
-    title: 'С флажком',
-    gradient: 'linear-gradient(180deg,#f5b556,#eda344)',
-    Icon: Flag,
-  },
-  {
-    key: 'done',
-    route: 'done',
-    title: 'Завершено',
-    gradient: 'linear-gradient(180deg,#a7a9ae,#8e9196)',
-    Icon: Check,
-  },
-]
-
-function Tile({
-  title,
-  count,
-  gradient,
-  Icon,
-  to,
-}: {
-  title: string
-  count: number
-  gradient: string
-  Icon: typeof CalendarDays
-  to: string
-}) {
-  return (
-    <Link
-      to={to}
-      className="relative rounded-2xl h-[88px] px-3.5 pt-3 pb-3 text-white active:scale-[.98] transition-transform block"
-      style={{ background: gradient }}
-    >
-      <span className="flex items-center justify-center w-8 h-8 rounded-full bg-white/20">
-        <Icon size={18} strokeWidth={2.5} />
-      </span>
-      <span className="absolute right-3.5 top-2 text-3xl font-bold tracking-tight">
-        {count}
-      </span>
-      <span className="block text-[15px] font-semibold mt-2">{title}</span>
-    </Link>
-  )
-}
+import type { Agent, Task } from '../api/types'
 
 export default function HomePage() {
   const { state, refresh } = useApp()
@@ -159,8 +81,6 @@ export default function HomePage() {
   const [commandsOpen, setCommandsOpen] = useState(false)
   const [commands, setCommands] = useState<PickerOption[]>([])
   const [editTask, setEditTask] = useState<Task | null>(null)
-
-  const c = state?.counts
 
   const openTasksProjectCount = useMemo(() => {
     const map = new Map<string, number>()
@@ -317,19 +237,7 @@ export default function HomePage() {
         </>
       ) : (
         <>
-          {/* На десктопе фильтры живут в левом сайдбаре, здесь их не дублируем. */}
-          <div className="grid grid-cols-2 gap-3 px-4 mt-6 md:hidden">
-            {TILES.map((t) => (
-              <Tile
-                key={t.key}
-                title={t.title}
-                count={c?.[t.key] ?? 0}
-                gradient={t.gradient}
-                Icon={t.Icon}
-                to={`/filter/${t.route}`}
-              />
-            ))}
-          </div>
+          <TaskBoard onEdit={setEditTask} />
 
           {/* Проекты на десктопе дублировать не надо — они в сайдбаре слева. */}
           <div className="md:hidden">
