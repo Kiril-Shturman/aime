@@ -51,3 +51,4 @@ tasks-board/userbot.pending
 # правило *token* выше ловит и обычные исходники вроде TokenUsagePage.tsx —
 # во фронте секретов нет, поэтому его содержимое всегда версионируем
 !tasks-board/frontend/src/**
+tasks-board/shots/

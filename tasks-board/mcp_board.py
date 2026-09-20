@@ -11,6 +11,7 @@
 
 Запуск: python3 mcp_board.py    (адрес доски — в BOARD_URL)
 """
+import base64
 import json
 import os
 import time
@@ -116,7 +117,8 @@ def tool_overview(args):
         lines.append(f"\n{p['name']} ({p['count']} открытых){' · ' + roles if roles else ''}")
         for m in p["members"]:
             n = busy.get(m["id"], 0)
-            lines.append(f"  участник {m['name']} [{m['id']}]"
+            delo = "проверяет работу" if m.get("job") == "check" else "исполнитель"
+            lines.append(f"  участник {m['name']} [{m['id']}], {delo}"
                          + (f", открытых задач {n}" if n else ", свободен"))
         if p.get("path"):
             lines.append(f"  исходники: {p['path']}")
@@ -128,6 +130,20 @@ def tool_overview(args):
             done, total = pr.get("done", 0), pr.get("total", 0)
             lines.append(f"  этап «{stage['title']}» — {mark}, задач {done} из {total}"
                          + (f", срок {stage['date']}" if stage.get("date") else ""))
+    muj = (st.get("me") or {}).get("id")
+    kontrola = [t for t in st["tasks"] if t.get("status") == "review"]
+    moje = [t for t in kontrola if not t.get("checker") or t["checker"] == muj]
+    if moje:
+        lines.append("\nЖдут твоей проверки (board_to_check → board_review):")
+        for t in moje:
+            lines.append(f"  {t['title']} [id {t['id']}]"
+                         + (f" — {t.get('url')}" if t.get("url") else ""))
+    vrat = [t for t in st["tasks"]
+            if (t.get("check") or {}).get("status") == "fail" and t.get("member") == muj]
+    if vrat:
+        lines.append("\nВернули на доработку:")
+        for t in vrat:
+            lines.append(f"  {t['title']} — {(t.get('check') or {}).get('why', '')} [id {t['id']}]")
     doing = [t for t in st["tasks"] if t.get("status") in ("doing", "review", "blocked")]
     if doing:
         lines.append("\nСейчас в работе:")
@@ -225,10 +241,25 @@ def tool_next_review(args):
 
 
 def tool_review(args):
-    t = call(f"/api/task/{args['id']}/review", "POST", {
-        "passed": args["passed"], "report": args["report"],
-    })
+    """Вердикт по задаче. Скрин — путь к файлу: доска сохранит его у себя
+    и покажет владельцу рядом с задачей."""
+    prijato = args.get("passed")
+    if prijato is None:
+        prijato = args.get("ok")
+    telo = {"passed": bool(prijato),
+            "report": args.get("report") or args.get("why") or ""}
+    shot = (args.get("shot") or "").strip()
+    if shot:
+        if shot.startswith(("http://", "https://")):
+            telo["shot"] = shot
+        elif os.path.exists(shot):
+            with open(shot, "rb") as f:
+                telo["shot"] = base64.b64encode(f.read()).decode()
+        else:
+            return f"Скрин не найден: {shot}"
+    t = call(f"/api/task/{args['id']}/review", "POST", telo)
     result = {"done": "Принято", "todo": "Возвращено на повтор",
+              "doing": "Возвращено исполнителю",
               "blocked": "Заблокировано после лимита попыток"}[t["status"]]
     return f"{result}: {t['title']}"
 
@@ -294,6 +325,50 @@ def tool_stage_status(args):
         return "Этап не найден"
     call(f"/api/project/{p['id']}/stage/{stage['id']}", "PATCH", {"status": args["status"]})
     return f"Этап «{stage['title']}» теперь {args['status']}"
+
+
+def tool_add_stage(args):
+    """Завести модуль/этап роудмапа — агенту это нужно, чтобы раскладывать
+    работу самому, а не ждать, пока владелец нарежет."""
+    st = state()
+    p = find_project(st, args.get("project")) if args.get("project") else None
+    if not p:
+        return "Укажи проект: board_overview покажет, какие есть"
+    stage = call(f"/api/project/{p['id']}/stage", "POST", {
+        "title": args["title"],
+        "module": args.get("module") or "",
+        "note": args.get("note") or "",
+        "date": args.get("date") or None,
+        "status": args.get("status") or "planned",
+    })
+    return f"Этап «{stage['title']}» заведён в проекте {p['name']} [id {stage['id']}]"
+
+
+def tool_to_check(args):
+    """Что ждёт моей проверки: задачи, которые исполнитель сдал."""
+    st = state()
+    muj = me().get("id")
+    jmena = {m["id"]: m["name"] for p in st["projects"] for m in p["members"]}
+    cesty = {p["id"]: p for p in st["projects"]}
+    rows = []
+    for t in st["tasks"]:
+        if t.get("status") != "review":
+            continue
+        if t.get("checker") and muj and t["checker"] != muj:
+            continue
+        p = cesty.get(t["project"]) or {}
+        rows.append({
+            "id": t["id"],
+            "title": t["title"],
+            "project": p.get("name"),
+            "path": p.get("path") or "",
+            "url": t.get("url") or "",
+            "report": t.get("report") or "",
+            "author": jmena.get(t.get("member"), ""),
+        })
+    if not rows:
+        return "На проверке ничего нет."
+    return json.dumps(rows, ensure_ascii=False, indent=1)
 
 
 # ------------------------------------------------------------ телеграм-боты
@@ -460,11 +535,14 @@ TOOLS = [
     },
     {
         "name": "board_review",
-        "description": "Записать независимую проверку: принять задачу или вернуть на повтор.",
+        "description": ("Записать независимую проверку: принять задачу или вернуть на повтор. "
+                        "Если задача про интерфейс — открой страницу, сними скрин "
+                        "и приложи его путь в shot."),
         "inputSchema": {"type": "object", "properties": {
             "id": {"type": "string"},
             "passed": {"type": "boolean"},
-            "report": {"type": "string", "description": "Что именно проверено и почему результат принят/отклонён"}},
+            "report": {"type": "string", "description": "Что именно проверено и почему результат принят/отклонён"},
+            "shot": {"type": "string", "description": "Путь к скриншоту или ссылка на него"}},
             "required": ["id", "passed", "report"]},
         "run": tool_review,
     },
@@ -513,6 +591,25 @@ TOOLS = [
             "status": {"type": "string", "enum": ["planned", "active", "done"]}},
             "required": ["project", "stage", "status"]},
         "run": tool_stage_status,
+    },
+    {
+        "name": "board_add_stage",
+        "description": "Завести модуль (этап роудмапа) в проекте.",
+        "inputSchema": {"type": "object", "properties": {
+            "project": {"type": "string"},
+            "title": {"type": "string", "description": "Название модуля/этапа"},
+            "module": {"type": "string", "description": "К какому модулю относится, если дробишь"},
+            "note": {"type": "string"},
+            "date": {"type": "string", "description": "Срок, ГГГГ-ММ-ДД"},
+            "status": {"type": "string", "enum": ["planned", "active", "done"]}},
+            "required": ["project", "title"]},
+        "run": tool_add_stage,
+    },
+    {
+        "name": "board_to_check",
+        "description": "Задачи, сданные исполнителем и ждущие твоей проверки.",
+        "inputSchema": {"type": "object", "properties": {}},
+        "run": tool_to_check,
     },
     {
         "name": "board_inbox",

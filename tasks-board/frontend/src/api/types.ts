@@ -1,6 +1,8 @@
 export type MemberKind = 'bot' | 'agent' | 'service' | 'human'
 export type StageStatus = 'planned' | 'active' | 'done'
 export type TaskStatus = 'todo' | 'doing' | 'review' | 'blocked' | 'done'
+// что участник делает в проекте: работает или проверяет чужую работу
+export type MemberJob = 'work' | 'check'
 
 // бот, которым доска реально управляет: токен лежит на сервере, сюда не едет
 export interface BotLink {
@@ -35,6 +37,7 @@ export interface Member {
   usage?: string      // что агент сам сообщил о расходе
   limits?: string     // остатки по окнам, JSON: { "5ч": {used, limit, reset}, "неделя": {…} }
   live?: boolean      // держит ли агент открытый канал прямо сейчас
+  job?: MemberJob     // роль в проекте: исполнитель или проверяющий
 }
 
 export interface Stage {
@@ -90,10 +93,23 @@ export interface Task {
   time?: string
   flagged?: boolean
   done?: boolean
+  checker?: string | null      // кто проверяет эту задачу
+  check?: TaskCheck | null     // последний вердикт
+  checks?: TaskCheck[]         // все вердикты по порядку
+}
+
+// Вердикт проверяющего: принял, вернул или ещё смотрит.
+export interface TaskCheck {
+  status: 'wait' | 'ok' | 'fail'
+  by?: string
+  why?: string
+  shot?: string | null
+  at: number
 }
 
 export interface Agent extends Member {
   projects: string[]
+  jobs?: Record<string, MemberJob>  // роль отдельно в каждом проекте
 }
 
 export interface ChatZprava {

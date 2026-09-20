@@ -47,6 +47,11 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
   const project = state?.projects.find((p) => p.id === task.project)
   const when = [task.due, task.time].filter(Boolean).join(' ')
   const vPraci = task.status === 'doing' ? fmtSince(task.started_at) : ''
+  // кто проверяет: он может быть и в этом проекте, и общим агентом доски
+  const kontroler = task.checker
+    ? project?.members.find((x) => x.id === task.checker) ??
+      state?.agents?.find((x) => x.id === task.checker)
+    : null
   const parts = [
     showProject ? project?.name : null,
     m ? (m.handle || m.name) : null,
@@ -103,12 +108,26 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
           )}
           {task.status === 'review' && (
             <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#ff9f0a]/15 text-[#b36b00] dark:text-[#ffb84d]">
-              На проверке · попытка {task.attempts ?? 1}/{task.max_attempts ?? 3}
+              На проверке{kontroler ? ` · ${kontroler.name}` : ''} · попытка{' '}
+              {task.attempts ?? 1}/{task.max_attempts ?? 3}
             </span>
           )}
           {task.status === 'blocked' && (
             <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#ff375f]/15 text-[#c72546] dark:text-[#ff6b87]">
               Заблокирована после {task.attempts ?? 0} попыток
+            </span>
+          )}
+          {task.check?.status === 'fail' && (
+            <span className="mt-1 block rounded-lg bg-black/[.04] px-2 py-1.5 text-[13px] text-black/70 dark:bg-white/[.06] dark:text-white/70">
+              <span className="font-semibold">Вернули: </span>
+              {task.check.why}
+              {task.check.shot && (
+                <img
+                  src={task.check.shot}
+                  alt="скрин проверки"
+                  className="mt-1.5 max-h-40 w-full rounded-lg object-cover object-top"
+                />
+              )}
             </span>
           )}
           {task.note && (

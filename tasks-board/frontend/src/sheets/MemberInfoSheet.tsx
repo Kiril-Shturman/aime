@@ -18,7 +18,7 @@ import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
 import { KINDS, kindLabel, TASK_STATUS_LABEL } from '../lib/constants'
-import type { Member, MemberKind } from '../api/types'
+import type { Member, MemberJob, MemberKind } from '../api/types'
 
 interface Props {
   open: boolean
@@ -38,6 +38,7 @@ export default function MemberInfoSheet({
   const [role, setRole] = useState('')
   const [handle, setHandle] = useState('')
   const [kind, setKind] = useState<MemberKind>('bot')
+  const [job, setJob] = useState<MemberJob>('work')
   const [pozvano, setPozvano] = useState(false)
   const [chyba, setChyba] = useState<string | null>(null)
 
@@ -47,6 +48,7 @@ export default function MemberInfoSheet({
     setRole(member.role ?? '')
     setHandle(member.handle ?? '')
     setKind(member.kind ?? 'bot')
+    setJob(member.job ?? 'work')
   }, [member])
 
   if (!member) return null
@@ -111,6 +113,8 @@ export default function MemberInfoSheet({
         await api.patchAgent(obecny.id, {
           name: name.trim(),
           role: role.trim() || undefined,
+          job,
+          project: projectId,
         })
       } else {
         await api.patchMember(projectId, member.id, {
@@ -118,6 +122,7 @@ export default function MemberInfoSheet({
           role: role.trim() || undefined,
           handle: handle.trim() || undefined,
           kind,
+          job,
         })
       }
       haptic('success')
@@ -240,6 +245,31 @@ export default function MemberInfoSheet({
             </SegmentedButton>
           ))}
         </Segmented>
+      </Block>
+
+      <BlockTitle>Что делает в проекте</BlockTitle>
+      <Block>
+        <Segmented strong rounded>
+          <SegmentedButton
+            active={job === 'work'}
+            onClick={() => setJob('work')}
+            className="!text-[14px] whitespace-nowrap"
+          >
+            Исполнитель
+          </SegmentedButton>
+          <SegmentedButton
+            active={job === 'check'}
+            onClick={() => setJob('check')}
+            className="!text-[14px] whitespace-nowrap"
+          >
+            Проверяющий
+          </SegmentedButton>
+        </Segmented>
+        <p className="mt-2 text-[13px] leading-snug text-black/55 dark:text-white/45">
+          {job === 'check'
+            ? 'Задачи этого проекта не закрываются сразу: исполнитель сдаёт работу, а он смотрит результат — открывает страницу, снимает скрин — и пишет «принято» или что переделать.'
+            : 'Берёт задачи и отчитывается. Если в проекте есть проверяющий, его работа уходит сначала к нему.'}
+        </p>
       </Block>
 
       <List strong inset>
