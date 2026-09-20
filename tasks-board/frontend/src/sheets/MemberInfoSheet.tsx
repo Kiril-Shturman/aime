@@ -40,6 +40,7 @@ export default function MemberInfoSheet({
   const [role, setRole] = useState('')
   const [handle, setHandle] = useState('')
   const [kind, setKind] = useState<MemberKind>('bot')
+  const [pozvano, setPozvano] = useState(false)
 
   useEffect(() => {
     if (!member) return
@@ -70,6 +71,34 @@ export default function MemberInfoSheet({
   const done = own.filter((t) => t.done)
   const tokens = own.reduce((s, t) => s + (t.tokens ?? 0), 0)
 
+  // расход за последние семь дней: по задачам, которые агент в это время вёл
+  const tyden = Date.now() - 7 * 86400000
+  const cerstve = own.filter((t) => {
+    const kdy = t.started_at ?? t.done_at
+    return kdy ? new Date(kdy).getTime() >= tyden : false
+  })
+  const tokenyTyden = cerstve.reduce((s, t) => s + (t.tokens ?? 0), 0)
+  const sekundyTyden = cerstve.reduce((s, t) => s + (t.seconds ?? 0), 0)
+  const cas = sekundyTyden >= 3600
+    ? `${(sekundyTyden / 3600).toFixed(1)} ч`
+    : sekundyTyden >= 60
+      ? `${Math.round(sekundyTyden / 60)} мин`
+      : sekundyTyden
+        ? `${sekundyTyden} с`
+        : '—'
+
+  const pozvat = async () => {
+    haptic('success')
+    setPozvano(true)
+    try {
+      await api.pingMember(projectId, member.id)
+      await refresh()
+    } catch {
+      setPozvano(false)
+    }
+    window.setTimeout(() => setPozvano(false), 4000)
+  }
+
   const save = async () => {
     await api.patchMember(projectId, member.id, {
       name: name.trim(),
@@ -90,7 +119,13 @@ export default function MemberInfoSheet({
   }
 
   return (
-    <Popup open={open} onClose={onClose} title={member.name}>
+    <Popup
+      open={open}
+      onClose={onClose}
+      title={member.name}
+      onSave={save}
+      canSave={!!name.trim()}
+    >
       <Block className="!mt-4">
         <div className="mb-4 flex items-center gap-3">
           <span className="relative">
@@ -123,6 +158,28 @@ export default function MemberInfoSheet({
             {member.client && <Stat title="подключён" value={member.client} small />}
           </div>
         )}
+
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          <Stat title="токенов за неделю" value={tokenyTyden ? fmtNum(tokenyTyden) : '—'} small />
+          <Stat title="времени за неделю" value={cas} small />
+        </div>
+
+        {member.kind === 'agent' && (
+          <Button large rounded className="!mt-3" onClick={pozvat}>
+            {pozvano ? 'Позвали — ждём' : 'Позвать агента'}
+          </Button>
+        )}
+
+        {member.ping && !pozvano ? (
+          <p className="mt-2 text-[13px] leading-snug text-black/45 dark:text-white/40">
+            Последний раз звали {new Date(member.ping * 1000).toLocaleString('ru-RU', {
+              day: 'numeric',
+              month: 'long',
+              hour: '2-digit',
+              minute: '2-digit',
+            })}. Агент увидит это, когда придёт за задачами.
+          </p>
+        ) : null}
       </Block>
 
       {kind === 'bot' ? (
@@ -184,11 +241,6 @@ export default function MemberInfoSheet({
       )}
 
       <Block>
-        <Button large rounded onClick={save}>
-          Сохранить
-        </Button>
-      </Block>
-      <Block>
         <Button
           large
           rounded
@@ -206,6 +258,12 @@ export default function MemberInfoSheet({
       </Block>
     </Popup>
   )
+}
+
+function fmtNum(n: number) {
+  if (n < 1000) return String(n)
+  if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`
+  return `${(n / 1_000_000).toFixed(1)}M`
 }
 
 function Stat({ title, value, small }: { title: string; value: string; small?: boolean }) {

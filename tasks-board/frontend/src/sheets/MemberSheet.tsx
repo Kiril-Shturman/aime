@@ -84,7 +84,13 @@ export default function MemberSheet({ open, onClose, projectId }: Props) {
         : 'Кого добавляем'
 
   return (
-    <Popup open={open} onClose={onClose} title={titulek}>
+    <Popup
+      open={open}
+      onClose={onClose}
+      title={titulek}
+      onSave={kind && !hotovy ? ulozit : undefined}
+      canSave={!!name.trim()}
+    >
       {/* шаг 1 — кто это */}
       {!kind && (
         <Block className="!mt-4 grid gap-3">

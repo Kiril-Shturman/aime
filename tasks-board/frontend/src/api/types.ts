@@ -23,6 +23,7 @@ export interface Member {
   seen?: number   // когда исполнитель последний раз выходил на связь, unix-секунды
   client?: string // чем подключён: Claude Code, Cursor, OpenClaw…
   model?: string  // какой моделью работает
+  ping?: number   // когда владелец звал его в последний раз
 }
 
 export interface Stage {
