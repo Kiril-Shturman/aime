@@ -21,7 +21,6 @@ import {
   Link as KLink,
   List,
   ListItem,
-  Navbar,
   Page,
   Searchbar,
 } from 'konsta/react'
@@ -108,38 +107,45 @@ export default function DesignKitPage() {
 
   return (
     <Page className="pb-safe-12 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <Navbar
-        title="Каталог блоков"
-        subtitle="Framework7 · iOS"
-        left={
-          <KLink iconOnly onClick={() => navigate(-1)} aria-label="Назад">
-            <ChevronLeft size={24} />
-          </KLink>
-        }
-      />
-
-      <div className="mx-safe-4 mt-4 overflow-hidden rounded-[26px] bg-gradient-to-br from-[#087cff] to-[#6155e8] p-5 text-white shadow-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-white/70">
-              UI kit проекта
-            </div>
-            <div className="mt-1 text-[26px] font-bold tracking-[-0.03em]">
-              Собирай, не рисуй заново
-            </div>
-          </div>
-          <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white/15">
-            <Shapes size={26} />
+      <header className="sticky top-0 z-20 border-b border-black/[.06] bg-ios-light-surface/90 backdrop-blur-xl dark:border-white/[.08] dark:bg-ios-dark-surface/90">
+        <div className="relative flex h-[52px] items-center justify-center px-safe-3">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            aria-label="Назад"
+            className="absolute left-safe-2 grid h-10 w-10 place-items-center rounded-full text-primary active:bg-black/[.06] dark:active:bg-white/10"
+          >
+            <ChevronLeft size={28} strokeWidth={2.25} />
+          </button>
+          <div className="text-center">
+            <div className="text-[17px] font-semibold leading-5 tracking-[-0.01em]">Каталог блоков</div>
+            <div className="text-[11px] leading-4 text-black/45 dark:text-white/45">Framework7 · iOS</div>
           </div>
         </div>
-        <div className="mt-4 flex gap-2 text-[13px] font-medium">
-          <span className="rounded-full bg-white/15 px-3 py-1.5">{vsechny.length} блоков</span>
-          <span className="rounded-full bg-white/15 px-3 py-1.5">{skupiny.length - 1} разделов</span>
+      </header>
+
+      <div className="mx-safe-4 mt-3 overflow-hidden rounded-[22px] bg-gradient-to-br from-[#087cff] to-[#6155e8] px-4 py-4 text-white shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.11em] text-white/70">
+              UI kit проекта
+            </div>
+            <div className="mt-0.5 text-[21px] font-bold leading-tight tracking-[-0.025em]">
+              Собирай из готовых блоков
+            </div>
+            <div className="mt-2 flex gap-1.5 text-[12px] font-medium">
+              <span className="rounded-full bg-white/15 px-2.5 py-1">{vsechny.length} блоков</span>
+              <span className="rounded-full bg-white/15 px-2.5 py-1">{skupiny.length - 1} разделов</span>
+            </div>
+          </div>
+          <div className="grid h-11 w-11 shrink-0 place-items-center rounded-[14px] bg-white/15">
+            <Shapes size={23} />
+          </div>
         </div>
       </div>
 
       {pravidla && (
-        <List strong inset className="!mt-3">
+        <List strong inset className="!my-2.5">
           <ListItem
             link
             onClick={() => setPravidlaOtevrena((open) => !open)}
@@ -172,14 +178,14 @@ export default function DesignKitPage() {
         </List>
       )}
 
-      <div className="sticky top-0 z-10 mt-3 border-y border-black/[.05] bg-ios-light-surface/90 py-2 backdrop-blur-xl dark:border-white/[.06] dark:bg-ios-dark-surface/90">
+      <div className="sticky top-[52px] z-10 border-y border-black/[.05] bg-ios-light-surface/95 py-2 backdrop-blur-xl dark:border-white/[.06] dark:bg-ios-dark-surface/95">
         <Searchbar
           value={q}
           onInput={(e) => setQ((e.target as HTMLInputElement).value)}
           onClear={() => setQ('')}
           placeholder="Найти блок"
         />
-        <div className="mt-2 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-1.5 flex gap-1.5 overflow-x-auto px-4 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {skupiny.map((group) => (
             <button
               key={group}
@@ -188,7 +194,7 @@ export default function DesignKitPage() {
                 haptic('light')
                 setSkupina(group)
               }}
-              className={`min-h-9 shrink-0 rounded-full px-4 text-[14px] font-semibold transition-colors ${
+              className={`min-h-8 shrink-0 rounded-full px-3.5 text-[13px] font-semibold transition-colors ${
                 skupina === group
                   ? 'bg-primary text-white'
                   : 'bg-black/[.06] text-black/70 dark:bg-white/10 dark:text-white/75'
@@ -215,11 +221,11 @@ export default function DesignKitPage() {
         const Icon = meta.icon
         return (
           <section key={group}>
-            <BlockTitle className="flex items-center justify-between">
+            <BlockTitle className="!mb-1.5 flex items-center justify-between">
               <span>{group}</span>
               <span className="text-[12px] font-medium opacity-45">{groupBlocks.length}</span>
             </BlockTitle>
-            <div className="mx-safe-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+            <div className="mx-safe-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {groupBlocks.map((blok) => (
                 <button
                   key={blok.id}
@@ -228,12 +234,12 @@ export default function DesignKitPage() {
                     haptic('light')
                     setVybrany(blok)
                   }}
-                  className="min-h-[126px] rounded-[22px] bg-ios-light-surface-1 p-4 text-left shadow-[0_1px_0_rgba(0,0,0,.04)] transition-transform active:scale-[.98] dark:bg-ios-dark-surface-1"
+                  className="min-h-[108px] rounded-[18px] bg-ios-light-surface-1 p-3 text-left shadow-[0_1px_0_rgba(0,0,0,.04)] transition-transform active:scale-[.98] dark:bg-ios-dark-surface-1"
                 >
-                  <span className={`grid h-10 w-10 place-items-center rounded-2xl ${meta.bg} ${meta.color}`}>
-                    <Icon size={21} />
+                  <span className={`grid h-9 w-9 place-items-center rounded-[13px] ${meta.bg} ${meta.color}`}>
+                    <Icon size={19} />
                   </span>
-                  <span className="mt-4 block text-[15px] font-semibold leading-tight text-black dark:text-white">
+                  <span className="mt-2.5 block text-[14px] font-semibold leading-tight text-black dark:text-white">
                     {blok.title}
                   </span>
                   <span className="mt-1 block font-mono text-[10px] text-black/35 dark:text-white/35">
