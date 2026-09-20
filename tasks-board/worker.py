@@ -35,6 +35,18 @@ def post_json(board_url: str, board_key: str, path: str, body: dict) -> dict:
         return json.load(response)
 
 
+def patch_json(board_url: str, board_key: str, path: str, body: dict) -> dict:
+    request = urllib.request.Request(
+        board_url.rstrip("/") + path,
+        data=json.dumps(body).encode("utf-8"),
+        headers={"Content-Type": "application/json", "X-Board-Key": board_key,
+                 "X-Actor": "agent"},
+        method="PATCH",
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        return json.load(response)
+
+
 def find_project(state: dict, wanted: str) -> dict | None:
     key = wanted.strip().lower()
     return next((p for p in state["projects"]
@@ -117,8 +129,9 @@ def execution_prompt(project: dict, task: dict) -> str:
 Описание и критерии: {task.get('note') or 'нет отдельного описания'}
 Предыдущая проверка: {task.get('verification_report') or 'это первая попытка'}
 
-Работай только над этой задачей. Сначала вызови board_take для указанного id.
-Изучи проект, реализуй результат, запусти подходящие тесты. Для кода работай в
+Работай только над этой задачей. Воркер уже перевёл её в статус «В работе»,
+повторно вызывать board_take не нужно. Изучи проект, реализуй результат,
+запусти подходящие тесты. Для кода работай в
 отдельной ветке, сделай commit и push. Затем вызови board_report с done=true,
 точным отчётом, хешем коммита и результатами тестов: это отправит результат на
 проверку, но не закроет задачу. Если объективно выполнить нельзя, не изображай
@@ -211,6 +224,8 @@ def main() -> int:
         print(f"[worker] выполнение: {task['title']} [{task['id']}]")
         if args.dry_run:
             return 0
+        task = patch_json(args.board_url, board_key, f"/api/task/{task['id']}",
+                          {"status": "doing"})
         succeeded = run_agent(binary, args.agent, "board-executor",
                               execution_prompt(project, task), args.timeout)
         actions += 1
