@@ -80,6 +80,7 @@ export default function DesignKitPage() {
   return (
     <Page className="pb-safe-12">
       <Navbar
+        className="!bg-ios-light-surface dark:!bg-ios-dark-surface"
         title="Блоки"
         subtitle={`${vsechny.length} готовых кусков · framework7 iOS`}
         left={
@@ -135,7 +136,7 @@ export default function DesignKitPage() {
         placeholder="Найти блок"
       />
 
-      <Block className="!my-2 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <Block className="!my-2 flex flex-wrap gap-1.5">
         {skupiny.map((g) => (
           <Chip
             key={g}
@@ -163,10 +164,14 @@ export default function DesignKitPage() {
 
       {poSkupinach.map(([group, groupBlocks]) => (
         <div key={group}>
-          <BlockTitle>
-            {group}
-            <span className="ml-2 font-normal opacity-45">{groupBlocks.length}</span>
-          </BlockTitle>
+          <div className="mx-safe-4 mb-1 mt-7 flex items-baseline justify-between">
+            <h2 className="text-[22px] font-bold tracking-tight text-black dark:text-white">
+              {group}
+            </h2>
+            <span className="text-[13px] text-black/40 dark:text-white/35">
+              {groupBlocks.length}
+            </span>
+          </div>
 
           {groupBlocks.map((b) => {
             const Demo = DEMOS[b.id]
@@ -180,9 +185,11 @@ export default function DesignKitPage() {
                   </span>
                 </BlockTitle>
 
-                {/* живой пример — по нему можно тыкать */}
-                <div className="mx-safe-4 overflow-hidden rounded-3xl bg-ios-light-surface-2 py-2 dark:bg-ios-dark-surface-2">
-                  {Demo ? <Demo /> : <Block>Пример в коде ниже.</Block>}
+                {/* Живой пример. Элементы с собственными отступами
+                    (inset-списки, Block) оставляем как есть, а те, что
+                    идут во всю ширину, поджимаем такими же полями. */}
+                <div className="mt-1 px-safe-4 [&_.k-list]:!mx-0 [&_.k-list]:!my-0 [&>.block]:!mx-0">
+                  {Demo ? <Demo /> : <Block>Пример — в коде ниже.</Block>}
                 </div>
 
                 <List strong inset className="!mt-2 !mb-0">
