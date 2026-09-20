@@ -85,7 +85,7 @@ export default function ProjectSettingsPage() {
   return (
     <Page>
       <Navbar
-        title="Настройки проекта"
+        title="Настройки"
         left={
           <KLink onClick={() => navigate(`/project/${project.id}`)}>
             <ChevronLeft size={22} />
@@ -93,7 +93,7 @@ export default function ProjectSettingsPage() {
         }
         right={
           <KLink onClick={ulozit} className="!text-primary font-semibold">
-            {ulozeno ? 'Готово' : 'Сохранить'}
+            {ulozeno ? <Check size={22} strokeWidth={3} /> : 'Сохранить'}
           </KLink>
         }
       />
@@ -115,8 +115,8 @@ export default function ProjectSettingsPage() {
       </List>
 
       <BlockTitle>Цвет</BlockTitle>
-      <Block className="!mt-2">
-        <div className="flex flex-wrap gap-3">
+      <Block className="!mt-3">
+        <div className="flex flex-wrap gap-3 pt-1">
           {COLORS.map((c) => (
             <button
               key={c}
