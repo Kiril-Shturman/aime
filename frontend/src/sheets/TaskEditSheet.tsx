@@ -46,6 +46,10 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
   const project = state?.projects.find((p) => p.id === task?.project) ?? null
   const stage = project?.roadmap.find((s) => s.id === stageId) ?? null
   const member = project?.members.find((m) => m.id === memberId) ?? null
+  const kontroler = task?.checker
+    ? project?.members.find((m) => m.id === task.checker) ??
+      state?.agents?.find((a) => a.id === task.checker)
+    : null
 
   const stageOptions: PickerOption[] = useMemo(
     () => project?.roadmap.map((s) => ({ id: s.id, label: s.title })) ?? [],
@@ -79,6 +83,18 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
       report: report.trim() || undefined,
     })
     haptic('success')
+    onClose()
+    await refresh()
+  }
+
+  // Владелец может решить сам, не дожидаясь проверяющего: принять
+  // работу или вернуть её с причиной.
+  const verdikt = async (ok: boolean) => {
+    if (!task) return
+    const why = ok ? '' : (prompt('Что не так?') || '').trim()
+    if (!ok && !why) return
+    haptic(ok ? 'success' : 'light')
+    await api.reviewTask(task.id, { ok, why })
     onClose()
     await refresh()
   }
@@ -146,6 +162,43 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
                 <ListItem title="Секунды" after={String(task.seconds)} />
               )}
             </List>
+          </>
+        )}
+
+        {(task.status === 'review' || task.check) && (
+          <>
+            <BlockTitle>Проверка</BlockTitle>
+            <List strong inset>
+              <ListItem
+                title="Проверяет"
+                after={kontroler?.name ?? 'никто не назначен'}
+              />
+              {task.check?.status === 'ok' && (
+                <ListItem title="Вердикт" after="принято" />
+              )}
+              {task.check?.why && (
+                <ListItem title="Что не так" text={task.check.why} />
+              )}
+            </List>
+            {task.check?.shot && (
+              <Block className="!mt-2">
+                <img
+                  src={task.check.shot}
+                  alt="скрин проверки"
+                  className="w-full rounded-2xl"
+                />
+              </Block>
+            )}
+            {task.status === 'review' && (
+              <Block className="grid gap-2">
+                <Button large rounded onClick={() => verdikt(true)}>
+                  Принять
+                </Button>
+                <Button large rounded clear onClick={() => verdikt(false)}>
+                  Вернуть в работу
+                </Button>
+              </Block>
+            )}
           </>
         )}
 

@@ -146,7 +146,8 @@ curl -X POST ${location.origin}/api/agent/connect \\
   }
 
   const text = zobrazeny
-    ? recept(sposob, location.origin, zobrazeny.key ?? '', zobrazeny.name, zobrazeny.role)
+    ? recept(sposob, location.origin, zobrazeny.key ?? '', zobrazeny.name, zobrazeny.role,
+        Object.values(zobrazeny.jobs ?? {}).includes('check') ? 'check' : 'work')
     : ''
 
   const kopirovat = async () => {

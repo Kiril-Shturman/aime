@@ -5,6 +5,7 @@ import type {
   BotLink,
   DmAccount,
   Member,
+  MemberJob,
   Project,
   QuickReply,
   Stage,
@@ -121,11 +122,25 @@ export const api = {
       json: { text, project },
     }),
 
+  // вердикт по задаче: принять или вернуть с причиной
+  reviewTask: (tid: string, body: { ok: boolean; why?: string; shot?: string }) =>
+    request<Task>(`/api/task/${tid}/review`, { method: 'POST', json: body }),
+
   getGit: (pid: string) =>
     request<{ status: GitStatus | null }>(`/api/project/${pid}/git`),
   addAgent: (body: { name: string; role?: string; projects?: string[] }) =>
     request<Member>('/api/agents', { method: 'POST', json: body }),
-  patchAgent: (aid: string, patch: Partial<Member> & { projects?: string[] }) =>
+  // роль агента задаётся по проектам: {job, project} меняет одну,
+  // {jobs} — сразу все
+  patchAgent: (
+    aid: string,
+    patch: Partial<Member> & {
+      projects?: string[]
+      jobs?: Record<string, MemberJob>
+      job?: MemberJob
+      project?: string
+    },
+  ) =>
     request<Member>(`/api/agents/${aid}`, { method: 'PATCH', json: patch }),
   deleteAgent: (aid: string) => request<{ ok: boolean }>(`/api/agents/${aid}`, { method: 'DELETE' }),
   pingAgent: (aid: string) =>

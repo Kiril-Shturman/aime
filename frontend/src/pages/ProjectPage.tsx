@@ -608,6 +608,7 @@ export default function ProjectPage() {
                     {member.kind && (
                       <Pill tone={member.kind}>{kindLabel(member.kind)}</Pill>
                     )}
+                    {member.job === 'check' && <Pill tone="free">проверяет</Pill>}
                   </span>
                 }
                 chevronIcon={

@@ -16,6 +16,7 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/task/<id>/review         — принять результат или вернуть на повтор
   POST   /api/task/<id>/return         — вернуть оборванную попытку в очередь
   POST   /api/task/<id>/toggle         — отметить/снять отметку
+  POST   /api/task/<id>/review         — {ok, why, shot} — вердикт проверяющего
   DELETE /api/task/<id>
   POST   /api/project                  — {name, color, note, repo, path, members:[…]}
   PATCH  /api/project/<id>             — {name, color, note, repo, path}
@@ -56,6 +57,7 @@ API минимальный, чтобы им мог пользоваться аг
   DELETE /api/project/<id>/stage/<sid>
 """
 import asyncio
+import base64
 import hashlib
 import hmac
 import json
@@ -116,6 +118,8 @@ def by_agent(request):
 KINDS = ("bot", "agent", "service", "human")
 STAGES = ("planned", "active", "done")
 TASK_STATUS = ("todo", "doing", "review", "blocked", "done")
+# Что участник делает в проекте: работает или проверяет чужую работу.
+JOBS = ("work", "check")
 
 DEFAULT = {"projects": [], "tasks": []}
 
@@ -150,8 +154,9 @@ def fallback_project(state):
 
 def load():
     if not os.path.exists(DATA):
-        save(DEFAULT)
-        return json.loads(json.dumps(DEFAULT))
+        # свежая доска: пустой каркас тоже прогоняем через migrate,
+        # иначе в нём не будет ни access, ни agents
+        return migrate(json.loads(json.dumps(DEFAULT)))
     with open(DATA, encoding="utf-8") as f:
         return migrate(json.load(f))
 
@@ -181,6 +186,8 @@ def migrate(state):
     for a in state["agents"]:
         a.setdefault("projects", [])
         a.setdefault("kind", "agent")
+        # в каком проекте он работает, а в каком проверяет: {pid: "check"}
+        a.setdefault("jobs", {})
     if "assistant" not in state:
         state["assistant"] = json.loads(json.dumps(ASSISTANT))
         changed = True
@@ -207,6 +214,7 @@ def migrate(state):
             if not m.get("key"):
                 m["key"] = secrets.token_hex(16)
                 changed = True
+            m.setdefault("job", "work")
     for t in state["tasks"]:
         if "bot" in t:
             t["member"] = t.pop("bot")
@@ -227,6 +235,9 @@ def migrate(state):
         t.setdefault("attempts", 0)
         t.setdefault("max_attempts", 3)
         t.setdefault("verification_report", "")
+        t.setdefault("checker", None)   # кто проверяет эту задачу
+        t.setdefault("check", None)     # последний вердикт проверяющего
+        t.setdefault("checks", [])      # все вердикты по порядку
     if changed:
         save(state)
     return state
@@ -291,6 +302,10 @@ async def get_state(request):
         ]
         for m in vlastni:
             m = dict(m, bot=bot_card(m["id"], bots), live=bool(_kanaly.get(m["id"])))
+            # у общего агента роль своя в каждом проекте
+            if "jobs" in m:
+                m["job"] = m.get("jobs", {}).get(p["id"], "work")
+            m.setdefault("job", "work")
             # личный ключ исполнителя пускает на доску, поэтому он только хозяину
             if not owner:
                 m.pop("key", None)
@@ -309,8 +324,16 @@ async def get_state(request):
     if kdo.get("kind") == "member":
         for m in vsichni_clenove(state):
             if m["id"] == kdo["id"]:
-                odpoved["me"] = {"id": m["id"], "name": m["name"],
-                                 "role": m.get("role", ""), "ping": m.get("ping", 0)}
+                jobs = m.get("jobs", {})
+                odpoved["me"] = {
+                    "id": m["id"], "name": m["name"],
+                    "role": m.get("role", ""), "ping": m.get("ping", 0),
+                    # чем он занят: работает или проверяет чужую работу
+                    # у общего агента роль лежит по проектам — она главнее
+                    "job": ("check" if "check" in jobs.values()
+                            else (m.get("job") or "work")),
+                    "jobs": jobs,
+                }
                 break
     return web.json_response(odpoved)
 
@@ -326,6 +349,7 @@ def make_member(body):
         "name": name,
         "handle": handle,
         "role": (body.get("role") or "").strip(),
+        "job": body.get("job") if body.get("job") in JOBS else "work",
         "kind": kind,
         "avatar": None,
         # личный ключ: по нему доска понимает, кто из исполнителей пришёл
@@ -376,6 +400,55 @@ async def add_task(request):
     return web.json_response(task)
 
 
+def kontrolor(state, pid, krome=None):
+    """Кто в проекте проверяет чужую работу. Первый подходящий — он и есть."""
+    for p in state["projects"]:
+        if p["id"] != pid:
+            continue
+        for m in p["members"]:
+            if m.get("job") == "check" and m["id"] != krome:
+                return m["id"]
+    for a in state.get("agents", []):
+        if pid in a.get("projects", []) and a.get("jobs", {}).get(pid) == "check" \
+                and a["id"] != krome:
+            return a["id"]
+    return None
+
+
+def pozvat(state, mid, telo):
+    """Позвать исполнителя: отметка в карточке, канал и длинный запрос."""
+    if not mid:
+        return
+    for m in vsichni_clenove(state):
+        if m["id"] == mid:
+            m["ping"] = int(time.time())
+    probudit(mid)
+    poslat_kanalem(mid, telo)
+
+
+def ulozit_snimek(tid, data):
+    """Скрин от проверяющего: принимаем ссылку, base64 или data:URL."""
+    if not data or not isinstance(data, str):
+        return None
+    if data.startswith(("http://", "https://", "/shots/")):
+        return data
+    syrove = data.split(",", 1)[1] if data.startswith("data:") else data
+    try:
+        raw = base64.b64decode(syrove, validate=False)
+    except Exception:
+        return None
+    # шесть мегабайт на скрин страницы хватает с запасом
+    if not raw or len(raw) > 6 * 1024 * 1024:
+        return None
+    pripona = ".jpg" if raw[:3] == b"\xff\xd8\xff" else ".png"
+    name = f"{tid}-{int(time.time())}{pripona}"
+    dest = os.path.join(ROOT, "shots", name)
+    os.makedirs(os.path.dirname(dest), exist_ok=True)
+    with open(dest, "wb") as f:
+        f.write(raw)
+    return "/shots/" + name
+
+
 async def patch_task(request):
     body = await request.json()
     state = load()
@@ -397,7 +470,26 @@ async def patch_task(request):
         if "flagged" in body:
             t["flagged"] = bool(body["flagged"])
         if body.get("status") in TASK_STATUS:
-            t["status"] = body["status"]
+            who = request.get("who") or {}
+            novy = body["status"]
+            # Исполнитель говорит «готово», а в проекте есть проверяющий —
+            # задача не закрывается, а уходит к нему: он смотрит результат
+            # своими глазами и выносит вердикт.
+            if novy == "done" and who.get("kind") == "member":
+                kdo = kontrolor(state, t.get("project"), krome=who.get("id"))
+                if kdo:
+                    novy = "review"
+                    # попытка засчитывается так же, как через /submit
+                    t["attempts"] = int(t.get("attempts") or 0) + 1
+                    t["checker"] = kdo
+                    t["check"] = {"status": "wait", "by": kdo,
+                                  "at": int(time.time())}
+                    pozvat(state, kdo, {"event": "review", "task": t["id"],
+                                        "title": t["title"],
+                                        "url": t.get("url", ""),
+                                        "note": t.get("note", ""),
+                                        "report": t.get("report", "")})
+            t["status"] = novy
             t["done"] = t["status"] == "done"
             now = int(time.time())
             if t["status"] == "doing" and not t.get("started_at"):
@@ -405,7 +497,6 @@ async def patch_task(request):
             if t["status"] == "todo":
                 t["started_at"] = None
             # взял задачу — значит она твоя, даже если её никто не назначал
-            who = request.get("who") or {}
             if t["status"] == "doing" and who.get("kind") == "member" and not t.get("member"):
                 t["member"] = who["id"]
             t["done_at"] = now if t["done"] else None
@@ -433,29 +524,65 @@ async def submit_task(request):
             raise web.HTTPBadRequest(text="report required")
         body["report"] = report
         submit_candidate(t, body, int(time.time()))
+        # Кто будет смотреть результат: проверяющий проекта, если он есть.
+        kdo = request.get("who") or {}
+        t["checker"] = kontrolor(state, t.get("project"), krome=kdo.get("id"))
+        t["check"] = {"status": "wait", "by": t["checker"], "at": int(time.time())}
+        if t["checker"]:
+            pozvat(state, t["checker"], {"event": "review", "task": t["id"],
+                                         "title": t["title"], "url": t.get("url", ""),
+                                         "report": t.get("report", "")})
         save(state)
         return web.json_response(t)
     raise web.HTTPNotFound()
 
 
 async def review_task(request):
-    """Проверяющий либо закрывает задачу, либо возвращает её в очередь."""
+    """Вердикт проверяющего: принял или вернул, и почему.
+
+    Тело: {ok|passed: true|false, why|report: "что не так",
+    shot: base64|data:URL|ссылка на скрин}. Не принял — задача уходит на
+    повтор (а после лимита попыток встаёт заблокированной), исполнитель
+    просыпается и видит причину."""
     body = await request.json()
-    if not isinstance(body.get("passed"), bool):
-        raise web.HTTPBadRequest(text="passed must be boolean")
-    review = (body.get("report") or "").strip()
-    if not review:
-        raise web.HTTPBadRequest(text="report required")
+    who = request.get("who") or {}
+    # «ok» — как пишет человек с доски, «passed» — как пишет рабочий цикл
+    prijato = body.get("ok")
+    if prijato is None:
+        prijato = body.get("passed")
+    if not isinstance(prijato, bool):
+        raise web.HTTPBadRequest(text="нужно ok/passed: true или false")
+    why = (body.get("why") or body.get("report") or "").strip()[:2000]
+    if not prijato and not why:
+        raise web.HTTPBadRequest(text="скажи, что именно не так")
     state = load()
     for t in state["tasks"]:
         if t["id"] != request.match_info["tid"]:
             continue
-        if t.get("status") != "review":
+        muj = who.get("id")
+        if who.get("kind") != "owner":
+            dovoleno = t.get("checker") == muj or kontrolor(state, t.get("project")) == muj
+            if who.get("kind") != "member" or not dovoleno:
+                raise web.HTTPForbidden(text="проверяет владелец или проверяющий проекта")
+        if t.get("status") not in ("review", "doing"):
             raise web.HTTPConflict(text="проверять можно только сданную задачу")
-        apply_review(t, body["passed"], review, int(time.time()))
+        verdikt = {
+            "status": "ok" if prijato else "fail",
+            "by": muj,
+            "why": why,
+            "shot": ulozit_snimek(t["id"], body.get("shot") or body.get("shot_b64")),
+            "at": int(time.time()),
+        }
+        t.setdefault("checks", []).append(verdikt)
+        t["check"] = verdikt
+        apply_review(t, prijato, why, int(time.time()))
         save(state)
-        if t["status"] == "todo":
-            wake_agent(f"повтор задачи после проверки: {t['title']}")
+        if not prijato:
+            # вернули — будим исполнителя и говорим, что переделать
+            pozvat(state, t.get("member"), {"event": "rework", "task": t["id"],
+                                            "title": t["title"], "why": why})
+            if t["status"] == "todo":
+                wake_agent(f"повтор задачи после проверки: {t['title']}")
         return web.json_response(t)
     raise web.HTTPNotFound()
 
@@ -573,6 +700,8 @@ async def patch_member(request):
         for key in ("name", "role"):
             if key in body:
                 m[key] = (body[key] or "").strip()
+        if body.get("job") in JOBS:
+            m["job"] = body["job"]
         if body.get("kind") in KINDS:
             m["kind"] = body["kind"]
         save(state)
@@ -787,6 +916,13 @@ async def patch_agent(request):
         if "projects" in body:
             znama = {p["id"] for p in state["projects"]}
             a["projects"] = [p for p in (body["projects"] or []) if p in znama]
+        # роль задаётся по проектам: в одном пишет код, в другом проверяет
+        if isinstance(body.get("jobs"), dict):
+            znama = {p["id"] for p in state["projects"]}
+            a["jobs"] = {k: v for k, v in body["jobs"].items()
+                         if k in znama and v in JOBS}
+        if body.get("job") in JOBS and body.get("project"):
+            a.setdefault("jobs", {})[body["project"]] = body["job"]
         save(state)
         return web.json_response(a)
     raise web.HTTPNotFound(text="нет такого агента")
@@ -1934,6 +2070,7 @@ def make_app():
     app.router.add_post("/api/chat", chat_completion)
     app.router.add_post("/api/task", add_task)
     app.router.add_patch("/api/task/{tid}", patch_task)
+    app.router.add_post("/api/task/{tid}/review", review_task)
     app.router.add_post("/api/task/{tid}/toggle", toggle_task)
     app.router.add_post("/api/task/{tid}/submit", submit_task)
     app.router.add_post("/api/task/{tid}/review", review_task)
@@ -1968,6 +2105,8 @@ def make_app():
     app.router.add_delete("/api/project/{pid}/stage/{sid}", delete_stage)
     os.makedirs(os.path.join(ROOT, "avatars"), exist_ok=True)
     app.router.add_static("/avatars", os.path.join(ROOT, "avatars"))
+    os.makedirs(os.path.join(ROOT, "shots"), exist_ok=True)
+    app.router.add_static("/shots", os.path.join(ROOT, "shots"))
     app.router.add_get("/{tail:.*}", spa)
     return app
 

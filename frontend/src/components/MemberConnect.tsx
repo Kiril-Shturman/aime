@@ -13,7 +13,7 @@ export default function MemberConnect({ member }: { member: Member }) {
   const [copied, setCopied] = useState(false)
 
   if (!member.key) return null
-  const text = recept(tool, location.origin, member.key, member.name, member.role)
+  const text = recept(tool, location.origin, member.key, member.name, member.role, member.job ?? 'work')
 
   const copy = async () => {
     haptic('success')
