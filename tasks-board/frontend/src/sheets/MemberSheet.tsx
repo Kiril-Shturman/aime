@@ -13,8 +13,6 @@ interface Props {
   projectId: string
 }
 
-const CONNECTOR = '~/projects/aime/tasks-board/mcp_board.py'
-
 // Что отдаём наружу, чтобы чужой агент подключился к доске сам.
 const SPOSOBY = [
   { id: 'promt', label: 'Промпт' },
@@ -23,29 +21,19 @@ const SPOSOBY = [
   { id: 'codex', label: 'Codex' },
 ] as const
 
+// Коннектор агент скачивает с самой доски: curl -sO <адрес>/mcp_board.py
 function recept(sposob: string, url: string, key: string, jmeno: string, role: string) {
   if (sposob === 'promt') {
-    return `Подключись к доске задач aiMe по MCP и работай по ней.
-
-Сервер: python3 ${CONNECTOR}
-Переменные окружения: BOARD_URL=${url}, BOARD_KEY=${key}
-
-Ты участник доски: «${jmeno}»${role ? ` — ${role}` : ''}.
-
-Как работать:
-1. board_overview — посмотреть проекты, этапы и что сейчас в работе.
-2. board_next_task — взять следующую свободную задачу, board_take — пометить её в работу.
-3. Сделать работу и отчитаться: board_report с текстом отчёта, коммитом, числом токенов и секундами.
-4. Нужна новая задача или цель — board_add_task, board_set_goal, board_split_goal.
-
-Проверяй доску, когда освобождаешься, и всегда отчитывайся: по отчётам владелец видит,
-чем ты занят и сколько это стоило.`
+    return `Подключись к доске задач aiMe — ты там участник «${jmeno}»${role ? ` (${role})` : ''}.
+Инструкция и команды: ${url}/agent?k=${key}
+Дальше бери задачи и отчитывайся по ним сам.`
   }
   if (sposob === 'claude') {
-    return `claude mcp add board \\
+    return `curl -sO ${url}/mcp_board.py
+claude mcp add board \\
   -e BOARD_URL=${url} \\
   -e BOARD_KEY=${key} \\
-  -- python3 ${CONNECTOR}`
+  -- python3 ./mcp_board.py`
   }
   if (sposob === 'cursor') {
     return `// ~/.cursor/mcp.json
@@ -53,7 +41,7 @@ function recept(sposob: string, url: string, key: string, jmeno: string, role: s
   "mcpServers": {
     "board": {
       "command": "python3",
-      "args": ["${CONNECTOR}"],
+      "args": ["./mcp_board.py"],
       "env": { "BOARD_URL": "${url}", "BOARD_KEY": "${key}" }
     }
   }
@@ -62,7 +50,7 @@ function recept(sposob: string, url: string, key: string, jmeno: string, role: s
   return `# ~/.codex/config.toml
 [mcp_servers.board]
 command = "python3"
-args = ["${CONNECTOR}"]
+args = ["./mcp_board.py"]
 env = { BOARD_URL = "${url}", BOARD_KEY = "${key}" }`
 }
 
