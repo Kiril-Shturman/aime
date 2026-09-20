@@ -353,7 +353,6 @@ export default function ProjectPage() {
           onClose={() => setMemberInfo(null)}
           projectId={id}
           member={memberInfo}
-          projectColor={project.color}
         />
         <StageSheet
           open={stageOpen}
@@ -665,7 +664,6 @@ export default function ProjectPage() {
         onClose={() => setMemberInfo(null)}
         projectId={id}
         member={memberInfo}
-        projectColor={project.color}
       />
       <StageSheet
         open={stageOpen}

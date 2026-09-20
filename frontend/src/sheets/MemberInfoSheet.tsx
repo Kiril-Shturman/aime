@@ -25,7 +25,6 @@ interface Props {
   onClose: () => void
   projectId: string
   member: Member | null
-  projectColor?: string
 }
 
 export default function MemberInfoSheet({
@@ -33,7 +32,6 @@ export default function MemberInfoSheet({
   onClose,
   projectId,
   member,
-  projectColor,
 }: Props) {
   const { state, refresh } = useApp()
   const [name, setName] = useState('')
@@ -134,10 +132,10 @@ export default function MemberInfoSheet({
       <Block className="!mt-4">
         <div className="mb-4 flex items-center gap-3">
           <span className="relative">
-            <Avatar member={member} color={projectColor} size={56} />
+            <Avatar member={member} size={56} />
             <span
               className={`absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-ios-dark-surface-1 ${
-                naSviazi ? 'bg-[#30d158]' : 'bg-black/25 dark:bg-white/25'
+                naSviazi ? 'bg-white' : 'bg-white/25'
               }`}
             />
           </span>
@@ -173,7 +171,7 @@ export default function MemberInfoSheet({
           <button
             type="button"
             onClick={pozvat}
-            className="mt-3 w-full rounded-2xl bg-black/[.06] py-3 text-[15px] font-semibold text-primary active:opacity-70 dark:bg-white/[.08]"
+            className="mt-3 w-full rounded-2xl bg-black/[.06] py-3 text-[15px] font-semibold text-black active:opacity-70 dark:text-white dark:bg-white/[.08]"
           >
             {pozvano ? 'Позвали — ждём' : 'Позвать агента'}
           </button>

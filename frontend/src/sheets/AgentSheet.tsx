@@ -136,7 +136,7 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
           <div className="flex items-center gap-2 text-[15px]">
             <span
               className={`h-2.5 w-2.5 rounded-full ${
-                stav.online ? 'bg-[#30d158]' : 'bg-black/25 dark:bg-white/25'
+                stav.online ? 'bg-black dark:bg-white' : 'bg-black/25 dark:bg-white/25'
               }`}
             />
             <span className="text-black/70 dark:text-white/60">{stav.text}</span>
@@ -183,7 +183,7 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
             title={p.name}
             after={
               vProjektech.includes(p.id) ? (
-                <Check size={18} className="text-primary" />
+                <Check size={18} className="text-black dark:text-white" />
               ) : (
                 <span className="text-[13px] text-black/30 dark:text-white/25">нет</span>
               )
@@ -237,7 +237,7 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
             <button
               type="button"
               onClick={pozvat}
-              className="w-full rounded-2xl bg-black/[.06] py-3 text-[15px] font-semibold text-primary active:opacity-70 dark:bg-white/[.08]"
+              className="w-full rounded-2xl bg-black/[.06] py-3 text-[15px] font-semibold text-black active:opacity-70 dark:text-white dark:bg-white/[.08]"
             >
               {pozvano ? 'Позвали — ждём' : 'Позвать агента'}
             </button>

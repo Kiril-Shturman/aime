@@ -331,7 +331,7 @@ export default function HomePage() {
               <button
                 type="button"
                 onClick={() => setProjectOpen(true)}
-                className="mb-1 mr-4 text-[15px] font-medium text-primary active:opacity-60"
+                className="mb-1 mr-4 text-[15px] font-medium text-black/70 active:opacity-60 dark:text-white/70"
               >
                 Новый
               </button>
@@ -376,7 +376,7 @@ export default function HomePage() {
                   setAgent(null)
                   setAgentOpen(true)
                 }}
-                className="mb-1 mr-4 text-[15px] font-medium text-primary active:opacity-60"
+                className="mb-1 mr-4 text-[15px] font-medium text-black/70 active:opacity-60 dark:text-white/70"
               >
                 Подключить
               </button>
@@ -416,7 +416,7 @@ export default function HomePage() {
                         <Avatar member={a} size={44} />
                         <span
                           className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-black ${
-                            online ? 'bg-[#30d158]' : 'bg-white/25'
+                            online ? 'bg-white' : 'bg-white/25'
                           }`}
                         />
                       </span>
