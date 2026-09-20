@@ -143,6 +143,11 @@ export default function HomePage() {
   const [taskOpen, setTaskOpen] = useState(false)
   const [projectOpen, setProjectOpen] = useState(false)
   const [agentOpen, setAgentOpen] = useState(false)
+  // «Мои агенты» — только те, кто реально выходил на связь; остальные
+  // ещё не подключились, им нужно отдать ключ
+  const vsichniAgenti = state?.agents ?? []
+  const pripojeni = vsichniAgenti.filter((a) => !!a.seen)
+  const cekajici = vsichniAgenti.filter((a) => !a.seen)
   const [agent, setAgent] = useState<Agent | null>(null)
   const [goalOpen, setGoalOpen] = useState(false)
   const [outOpen, setOutOpen] = useState<{
@@ -377,18 +382,22 @@ export default function HomePage() {
               </button>
             </div>
             <List strong inset>
-              {(state?.agents ?? []).length === 0 && (
+              {pripojeni.length === 0 && (
                 <ListItem
                   link
                   onClick={() => {
                     setAgent(null)
                     setAgentOpen(true)
                   }}
-                  title="Подключить первого агента"
-                  subtitle="Получит ключ и промпт, дальше берёт задачи сам"
+                  title="Пока никто не подключился"
+                  subtitle={
+                    cekajici.length
+                      ? `${cekajici.length} ${cekajici.length === 1 ? 'агент ждёт' : 'агента ждут'} подключения — отдайте им ключ`
+                      : 'Заведите агента: получит ключ и промпт, дальше берёт задачи сам'
+                  }
                 />
               )}
-              {(state?.agents ?? []).map((a) => {
+              {pripojeni.map((a) => {
                 const vterin = a.seen ? Math.floor(Date.now() / 1000 - a.seen) : null
                 const online = vterin !== null && vterin < 300
                 const kde = (a.projects ?? [])
@@ -424,6 +433,18 @@ export default function HomePage() {
                   />
                 )
               })}
+              {cekajici.map((a) => (
+                <ListItem
+                  key={a.id}
+                  link
+                  onClick={() => {
+                    setAgent(a)
+                    setAgentOpen(true)
+                  }}
+                  title={<span className="opacity-60">{a.name}</span>}
+                  subtitle="ждёт подключения — отдайте ключ"
+                />
+              ))}
             </List>
           </div>
         </>
