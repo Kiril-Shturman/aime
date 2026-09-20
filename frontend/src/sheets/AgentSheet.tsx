@@ -178,9 +178,9 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
             onChange={(e) => setRole((e.target as HTMLInputElement).value)}
           />
           <ListInput
-            label="Адрес для вызова"
+            label="Адрес для вызова (если есть)"
             type="text"
-            placeholder="https://… — куда постучаться, когда зовём"
+            placeholder="Обычно не нужен: агент слушает сам"
             value={hook}
             onChange={(e) => setHook((e.target as HTMLInputElement).value)}
           />
