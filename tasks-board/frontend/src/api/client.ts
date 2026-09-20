@@ -128,7 +128,10 @@ export const api = {
     request<Member>(`/api/agents/${aid}`, { method: 'PATCH', json: patch }),
   deleteAgent: (aid: string) => request<{ ok: boolean }>(`/api/agents/${aid}`, { method: 'DELETE' }),
   pingAgent: (aid: string) =>
-    request<{ ok: boolean; ping: number }>(`/api/agents/${aid}/ping`, { method: 'POST' }),
+    request<{ ok: boolean; ping: number; hook?: { delivered: boolean; note: string } | null }>(
+      `/api/agents/${aid}/ping`,
+      { method: 'POST' },
+    ),
   pingMember: (pid: string, mid: string) =>
     request<{ ok: boolean; ping: number }>(`/api/project/${pid}/member/${mid}/ping`, {
       method: 'POST',

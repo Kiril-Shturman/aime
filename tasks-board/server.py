@@ -36,7 +36,7 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/agents                   — завести агента доски
   PATCH  /api/agents/<id>               — имя, роль, в каких проектах участвует
   DELETE /api/agents/<id>               — убрать агента с доски
-  POST   /api/agents/<id>/ping          — позвать агента
+  POST   /api/agents/<id>/ping          — позвать агента (стучимся в его hook)
   POST   /api/project/<id>/member/<mid>/ping — позвать исполнителя
   POST   /api/agent/hello              — {client, model, avatar} — агент представился
   POST   /api/chat                     — {model, messages} — ответ модели
@@ -682,7 +682,7 @@ async def patch_agent(request):
     for a in state.get("agents", []):
         if a["id"] != request.match_info["aid"]:
             continue
-        for pole in ("name", "role", "model", "avatar"):
+        for pole in ("name", "role", "model", "avatar", "hook"):
             if pole in body:
                 a[pole] = (body[pole] or "").strip()
         if "projects" in body:
@@ -704,15 +704,45 @@ async def delete_agent(request):
     return web.json_response({"ok": True})
 
 
+def zavolat_hook(hook, telo, klic):
+    """Стучимся к агенту по его адресу. Возвращаем (получилось, что ответили)."""
+    if not hook or not hook.startswith(("http://", "https://")):
+        return False, "адрес не задан"
+    try:
+        req = urllib.request.Request(
+            hook,
+            data=json.dumps(telo).encode(),
+            headers={"Content-Type": "application/json", "X-Board-Key": klic or ""},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            return 200 <= resp.status < 300, f"ответил {resp.status}"
+    except urllib.error.HTTPError as exc:
+        return False, f"ответил {exc.code}"
+    except Exception as exc:
+        return False, f"не отвечает: {exc}"
+
+
 async def ping_agent(request):
-    """Позвать агента: отметку он увидит, когда придёт за задачами."""
+    """Позвать агента. Если он оставил адрес — стучимся туда сами, иначе
+    оставляем отметку: увидит, когда придёт за задачами."""
     only_owner(request)
     state = load()
     for a in state.get("agents", []):
-        if a["id"] == request.match_info["aid"]:
-            a["ping"] = int(time.time())
-            save(state)
-            return web.json_response({"ok": True, "ping": a["ping"]})
+        if a["id"] != request.match_info["aid"]:
+            continue
+        a["ping"] = int(time.time())
+        vysledek = None
+        if a.get("hook"):
+            ok, proc = await asyncio.get_running_loop().run_in_executor(
+                None, zavolat_hook, a["hook"],
+                {"event": "ping", "agent": a["name"], "agent_id": a["id"],
+                 "board": str(request.url.with_path("/")), "at": a["ping"]},
+                a.get("key"))
+            a["hook_ok"] = bool(ok)
+            a["hook_note"] = proc[:80]
+            vysledek = {"delivered": bool(ok), "note": proc[:80]}
+        save(state)
+        return web.json_response({"ok": True, "ping": a["ping"], "hook": vysledek})
     raise web.HTTPNotFound(text="нет такого агента")
 
 
@@ -737,6 +767,8 @@ async def agent_hello(request):
         raise web.HTTPForbidden(text="только участник доски")
     body = await request.json()
     info = {"client": body.get("client"), "model": body.get("model")}
+    if body.get("hook"):
+        info["hook"] = body["hook"]
     if body.get("avatar"):
         cesta = await asyncio.get_running_loop().run_in_executor(
             None, stahnout_avatar, who["id"], body["avatar"])

@@ -171,7 +171,7 @@ export default function MemberInfoSheet({
           <button
             type="button"
             onClick={pozvat}
-            className="mt-3 w-full rounded-2xl bg-ios-light-surface-1 py-3 text-[15px] font-semibold text-black active:opacity-70 dark:text-white dark:bg-ios-dark-surface-1"
+            className="mt-3 w-full rounded-2xl border border-black/[.06] bg-ios-light-surface-1 py-3 dark:border-white/[.08] text-[15px] font-semibold text-black active:opacity-70 dark:text-white dark:bg-ios-dark-surface-1"
           >
             {pozvano ? 'Позвали — ждём' : 'Позвать агента'}
           </button>
@@ -279,7 +279,7 @@ function fmtNum(n: number) {
 
 function Stat({ title, value, small }: { title: string; value: string; small?: boolean }) {
   return (
-    <div className="rounded-xl bg-ios-light-surface-1 px-3 py-3 dark:bg-ios-dark-surface-1">
+    <div className="rounded-xl border border-black/[.06] bg-ios-light-surface-1 px-3 py-3 dark:border-white/[.08] dark:bg-ios-dark-surface-1">
       <div className={`${small ? 'truncate text-[15px]' : 'text-[20px]'} font-bold`}>{value}</div>
       <div className="mt-0.5 text-[12px] opacity-60">{title}</div>
     </div>
