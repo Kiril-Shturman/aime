@@ -70,6 +70,7 @@ import {
   Plus,
   Send,
   User,
+  X,
 } from 'lucide-react'
 import PhotoBrowser from '../components/PhotoBrowser'
 import Popup from '../components/Popup'
@@ -726,10 +727,15 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
         </Button>
         <Vrstva>
         <Panel side="left" opened={open} onBackdropClick={() => setOpen(false)}>
-          <Page>
+          <Page className="!bg-ios-light-surface dark:!bg-ios-dark-surface">
             <Navbar
               title="Меню"
-              right={<KLink onClick={() => setOpen(false)}>Закрыть</KLink>}
+              colors={{ bgIos: 'bg-ios-light-surface dark:bg-ios-dark-surface' }}
+              right={
+                <KLink iconOnly onClick={() => setOpen(false)} aria-label="Закрыть">
+                  <X size={20} />
+                </KLink>
+              }
             />
             <List strong inset>
               <ListItem link title="Проекты" onClick={() => setOpen(false)} />
