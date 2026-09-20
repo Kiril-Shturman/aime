@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Bot, Check, Copy, User as UserIcon } from 'lucide-react'
-import { Block, Button, List, ListInput, Segmented, SegmentedButton } from 'konsta/react'
+import { Block, Button, List, ListInput, ListItem, Segmented, SegmentedButton } from 'konsta/react'
 import Popup from '../components/Popup'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
-import type { Member, MemberKind } from '../api/types'
+import { Avatar } from '../components/Avatar'
+import type { Agent, Member, MemberKind } from '../api/types'
 
 interface Props {
   open: boolean
@@ -16,7 +17,7 @@ interface Props {
 import { SPOSOBY, recept } from '../lib/connect'
 
 export default function MemberSheet({ open, onClose, projectId }: Props) {
-  const { refresh } = useApp()
+  const { state, refresh } = useApp()
   const [kind, setKind] = useState<MemberKind | null>(null)
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
@@ -40,6 +41,26 @@ export default function MemberSheet({ open, onClose, projectId }: Props) {
     }, 300)
     return () => window.clearTimeout(t)
   }, [open])
+
+  // Агенты доски живут отдельно от проектов: в команду их не заводят
+  // заново, а отмечают галочкой — тем же PATCH, что и в карточке агента.
+  const agenti: Agent[] = state?.agents ?? []
+
+  const zmenitProjekty = async (a: Agent, dalsi: string[]) => {
+    haptic('light')
+    try {
+      await api.patchAgent(a.id, { projects: dalsi })
+      await refresh()
+    } catch (e) {
+      setChyba(String(e).replace(/^Error:\s*\d+\s*[^:]*:\s*/, ''))
+    }
+  }
+
+  const pripojit = (a: Agent) =>
+    zmenitProjekty(a, [...(a.projects ?? []), projectId])
+
+  const odpojit = (a: Agent) =>
+    zmenitProjekty(a, (a.projects ?? []).filter((x) => x !== projectId))
 
   const ulozit = async () => {
     if (!name.trim() || !kind) return
@@ -91,6 +112,56 @@ export default function MemberSheet({ open, onClose, projectId }: Props) {
       onSave={kind && !hotovy ? ulozit : undefined}
       canSave={!!name.trim()}
     >
+      {/* шаг 0 — взять готового агента с доски, не заводя нового */}
+      {!kind && agenti.length > 0 && (
+        <>
+          <Block className="!mb-1 !mt-4">
+            <p className="text-[13px] font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">
+              Ваши агенты
+            </p>
+          </Block>
+          <List strong inset>
+            {agenti.map((a) => {
+              const uz = (a.projects ?? []).includes(projectId)
+              return (
+                <ListItem
+                  key={a.id}
+                  onClick={() => (uz ? odpojit(a) : pripojit(a))}
+                  className="cursor-pointer"
+                  media={<Avatar member={a} size={40} />}
+                  title={a.name}
+                  subtitle={
+                    a.role || (a.live ? 'канал открыт' : a.model || 'подключён к доске')
+                  }
+                  after={
+                    <span
+                      className={`text-[14px] font-medium ${
+                        uz
+                          ? 'text-black/35 dark:text-white/30'
+                          : 'text-black dark:text-white'
+                      }`}
+                    >
+                      {uz ? 'в команде' : 'добавить'}
+                    </span>
+                  }
+                />
+              )
+            })}
+          </List>
+          <Block className="!mb-1 !mt-5">
+            <p className="text-[13px] font-semibold uppercase tracking-wide text-black/40 dark:text-white/40">
+              Или завести нового
+            </p>
+          </Block>
+        </>
+      )}
+
+      {!kind && chyba && (
+        <Block className="!mt-0">
+          <p className="text-[14px] leading-snug text-[#ff9f0a]">{chyba}</p>
+        </Block>
+      )}
+
       {/* шаг 1 — кто это */}
       {!kind && (
         <Block className="!mt-4 grid gap-3">
