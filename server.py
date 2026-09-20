@@ -43,7 +43,7 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/agent/say                — агент отвечает владельцу
   GET    /api/agents/<id>/chat         — переписка с агентом
   POST   /api/agents/<id>/say          — написать агенту
-  POST   /api/agent/connect            — {hook, client, model} — агент подключился
+  POST   /api/agent/connect            — {model, account, plan, plan_until, limits} — агент подключился
   POST   /api/agent/hello              — {client, model, avatar} — агент представился
   POST   /api/chat                     — {model, messages} — ответ модели
   GET    /mcp_board.py                 — сам коннектор, чтобы агент скачал его сам
@@ -896,6 +896,8 @@ async def agent_connect(request):
     for pole in ("account", "plan", "plan_until", "usage"):
         if body.get(pole):
             info[pole] = body[pole]
+    if isinstance(body.get("limits"), dict):
+        info["limits"] = json.dumps(body["limits"], ensure_ascii=False)[:600]
     for pole in ("client", "model"):
         if body.get(pole):
             info[pole] = body[pole]
@@ -924,6 +926,8 @@ async def agent_hello(request):
     for pole in ("hook", "account", "plan", "plan_until", "usage"):
         if body.get(pole):
             info[pole] = body[pole]
+    if isinstance(body.get("limits"), dict):
+        info["limits"] = json.dumps(body["limits"], ensure_ascii=False)[:600]
     if body.get("avatar"):
         cesta = await asyncio.get_running_loop().run_in_executor(
             None, stahnout_avatar, who["id"], body["avatar"])
@@ -1193,7 +1197,7 @@ def videl_jsem(mid, **info):
             m["seen"] = ted
             for k, v in info.items():
                 if v:
-                    m[k] = str(v)[:80]
+                    m[k] = str(v)[:600 if k == "limits" else 80]
             save(state)
             return
 

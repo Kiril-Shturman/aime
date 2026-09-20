@@ -161,6 +161,8 @@ export default function AgentSheet({ open, onClose, agent, onOpenChat }: Props) 
             )}
           </div>
 
+          <Limity limits={zobrazeny.limits} />
+
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Udaj nazev="модель" hodnota={zobrazeny.model} />
             <Udaj nazev="аккаунт" hodnota={zobrazeny.account} />
@@ -318,6 +320,56 @@ export default function AgentSheet({ open, onClose, agent, onOpenChat }: Props) 
         </>
       )}
     </Popup>
+  )
+}
+
+// Остатки по окнам лимита: агент присылает их сам — доска у провайдера
+// их не спросит. Формат: { "5 часов": {used, limit, reset}, "неделя": {…} }
+function Limity({ limits }: { limits?: string }) {
+  if (!limits) return null
+  let data: Record<string, { used?: number; limit?: number; reset?: string }>
+  try {
+    data = JSON.parse(limits)
+  } catch {
+    return null
+  }
+  const polozky = Object.entries(data)
+  if (!polozky.length) return null
+
+  const cislo = (n?: number) =>
+    n === undefined ? '—' : n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+
+  return (
+    <div className="mt-3 grid gap-2">
+      {polozky.map(([okno, v]) => {
+        const podil = v.limit ? Math.min(1, (v.used ?? 0) / v.limit) : 0
+        const zbyva = v.limit ? Math.max(0, v.limit - (v.used ?? 0)) : undefined
+        return (
+          <div
+            key={okno}
+            className="rounded-xl border border-black/[.06] bg-ios-light-surface-1 px-3 py-2.5 dark:border-white/[.08] dark:bg-ios-dark-surface-1"
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="text-[15px] font-semibold text-black dark:text-white">
+                {zbyva !== undefined ? `осталось ${cislo(zbyva)}` : cislo(v.used)}
+              </span>
+              <span className="text-[12px] text-black/45 dark:text-white/40">
+                {okno}
+                {v.reset ? ` · сброс ${v.reset}` : ''}
+              </span>
+            </div>
+            {v.limit ? (
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-black/10 dark:bg-white/12">
+                <div
+                  className="h-full rounded-full bg-black dark:bg-white"
+                  style={{ width: `${Math.round(podil * 100)}%` }}
+                />
+              </div>
+            ) : null}
+          </div>
+        )
+      })}
+    </div>
   )
 }
 
