@@ -27,7 +27,7 @@ VERSION = "1.0.0"
 
 # ---------------------------------------------------------------- HTTP доски
 
-def call(path, method="GET", body=None):
+def call(path, method="GET", body=None, timeout=20):
     req = urllib.request.Request(
         BOARD + path,
         data=json.dumps(body).encode() if body is not None else None,
@@ -40,7 +40,7 @@ def call(path, method="GET", body=None):
         },
         method=method,
     )
-    with urllib.request.urlopen(req, timeout=20) as resp:
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
         raw = resp.read().decode("utf-8")
     return json.loads(raw) if raw else {}
 
@@ -274,6 +274,15 @@ def find_bot(name):
     return None
 
 
+def tool_wait(args):
+    """Ждать вызова с доски. Возвращает управление, когда позвали или вышло время."""
+    limit = int(args.get("timeout") or 60)
+    r = call(f"/api/agent/wait?timeout={limit}", timeout=limit + 15)
+    if r.get("ping"):
+        return "Тебя позвали — посмотри доску: board_overview, board_next_task."
+    return f"Тишина {r.get('waited', limit)} с. Можно подождать ещё раз или заняться своими делами."
+
+
 def tool_bot_list(_args):
     bots = call("/api/bots").get("bots", [])
     if not bots:
@@ -419,6 +428,13 @@ TOOLS = [
             "status": {"type": "string", "enum": ["planned", "active", "done"]}},
             "required": ["project", "stage", "status"]},
         "run": tool_stage_status,
+    },
+    {
+        "name": "board_wait",
+        "description": "Подождать вызова с доски: зависаем на минуту и просыпаемся, когда владелец позвал.",
+        "inputSchema": {"type": "object", "properties": {
+            "timeout": {"type": "integer", "description": "сколько секунд ждать, по умолчанию 60"}}},
+        "run": tool_wait,
     },
     {
         "name": "board_bot_list",
