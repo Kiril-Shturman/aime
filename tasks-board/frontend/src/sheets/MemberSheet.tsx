@@ -115,7 +115,7 @@ export default function MemberSheet({ open, onClose, projectId }: Props) {
             onClick={() => setKind('human')}
             className="flex items-center gap-4 rounded-3xl bg-ios-light-surface-1 dark:bg-ios-dark-surface-1 p-5 text-left active:opacity-75"
           >
-            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-black/[.06] text-black/70 dark:bg-white/10 dark:text-white/70">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-ios-light-surface-1 text-black/70 dark:bg-white/10 dark:text-white/70">
               <UserIcon size={26} />
             </span>
             <span>
@@ -202,7 +202,7 @@ export default function MemberSheet({ open, onClose, projectId }: Props) {
             </Segmented>
 
             <div className="relative mt-3">
-              <pre className="max-h-[46dvh] overflow-y-auto whitespace-pre-wrap break-words rounded-2xl bg-black/[.05] p-3 pr-11 text-[12px] leading-snug text-black/80 dark:bg-white/[.06] dark:text-white/80">
+              <pre className="max-h-[46dvh] overflow-y-auto whitespace-pre-wrap break-words rounded-2xl bg-ios-light-surface-1 p-3 pr-11 text-[12px] leading-snug text-black/80 dark:bg-ios-dark-surface-1 dark:text-white/80">
                 {text}
               </pre>
               <button

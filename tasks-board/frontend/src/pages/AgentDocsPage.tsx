@@ -83,7 +83,7 @@ BOARD_AVATAR=https://example.com/avatar.png`,
           <p className="text-[17px] font-semibold text-black dark:text-white">{krok.title}</p>
           <p className="mt-1 text-[13px] leading-snug text-black/55 dark:text-white/45">{krok.text}</p>
           <div className="relative mt-2">
-            <pre className="overflow-x-auto whitespace-pre rounded-2xl bg-black/[.05] p-3 pr-11 text-[12px] leading-snug text-black/80 dark:bg-white/[.06] dark:text-white/80">
+            <pre className="overflow-x-auto whitespace-pre rounded-2xl bg-ios-light-surface-1 p-3 pr-11 text-[12px] leading-snug text-black/80 dark:bg-ios-dark-surface-1 dark:text-white/80">
               {krok.code}
             </pre>
             <button

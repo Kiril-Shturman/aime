@@ -220,7 +220,7 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
             </Segmented>
 
             <div className="relative mt-3">
-              <pre className="max-h-[40dvh] overflow-y-auto whitespace-pre-wrap break-words rounded-2xl bg-black/[.05] p-3 pr-11 text-[12px] leading-snug text-black/80 dark:bg-white/[.06] dark:text-white/80">
+              <pre className="max-h-[40dvh] overflow-y-auto whitespace-pre-wrap break-words rounded-2xl bg-ios-light-surface-1 p-3 pr-11 text-[12px] leading-snug text-black/80 dark:bg-ios-dark-surface-1 dark:text-white/80">
                 {text}
               </pre>
               <button
@@ -237,7 +237,7 @@ export default function AgentSheet({ open, onClose, agent }: Props) {
             <button
               type="button"
               onClick={pozvat}
-              className="w-full rounded-2xl bg-black/[.06] py-3 text-[15px] font-semibold text-black active:opacity-70 dark:text-white dark:bg-white/[.08]"
+              className="w-full rounded-2xl bg-ios-light-surface-1 py-3 text-[15px] font-semibold text-black active:opacity-70 dark:text-white dark:bg-ios-dark-surface-1"
             >
               {pozvano ? 'Позвали — ждём' : 'Позвать агента'}
             </button>
