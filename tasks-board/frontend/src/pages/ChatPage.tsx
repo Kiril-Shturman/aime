@@ -37,6 +37,7 @@ import {
   type ProviderModel,
 } from '../lib/providers'
 import { sendMessage, type OutgoingMessage } from '../lib/chatClient'
+import { api } from '../api/client'
 
 // Вложение в сообщении: url для картинки/видео, name для файлов.
 export interface MsgAttachment {
@@ -514,6 +515,7 @@ function ChatHeader({
   onSelectProvider,
   onBack,
   lockModel = false,
+  lockProvider = false,
   projectContext,
 }: {
   provider: ChatProvider
@@ -522,6 +524,8 @@ function ChatHeader({
   onSelectModel: (m: ProviderModel) => void
   onSelectProvider: (p: ChatProvider) => void
   onBack: () => void
+  // Чат с агентом: провайдера менять нельзя — собеседник один.
+  lockProvider?: boolean
   // В режиме собеседования модель зафиксирована: центральная пилюля
   // — не кнопка, шеврон и Popover со списком моделей не показываем.
   lockModel?: boolean
@@ -628,9 +632,13 @@ function ChatHeader({
             <button
               ref={avatarBtnRef}
               type="button"
-              onClick={() => setAboutOpen(true)}
-              className="ml-0.5 rounded-full active:opacity-70"
-              aria-label={`Сменить провайдера · сейчас ${provider.name}`}
+              onClick={() => !lockProvider && setAboutOpen(true)}
+              className={`ml-0.5 rounded-full ${lockProvider ? 'cursor-default' : 'active:opacity-70'}`}
+              aria-label={
+                lockProvider
+                  ? provider.name
+                  : `Сменить провайдера · сейчас ${provider.name}`
+              }
             >
               <ProviderAvatar provider={provider} size={32} />
             </button>
@@ -741,6 +749,15 @@ function ChatHeader({
 // /chat/:provider работает по-прежнему — все пропсы необязательные.
 export interface ChatPageProps {
   providerSlug?: string
+  // Чат с агентом доски: тот же экран, что у ИИ, только собеседник —
+  // наш агент, а лента и отправка идут через доску, а не через модель.
+  agentContext?: {
+    id: string
+    name: string
+    avatar?: string
+    model?: string
+    onBack?: () => void
+  }
   projectContext?: {
     name: string
     pct: number
@@ -757,12 +774,39 @@ export interface ChatPageProps {
 export default function ChatPage({
   providerSlug,
   projectContext,
+  agentContext,
 }: ChatPageProps = {}) {
   const { provider: routeSlug } = useParams<{ provider: string }>()
   const navigate = useNavigate()
   const location = useLocation()
-  const slug = providerSlug ?? routeSlug
-  const provider = findProvider(slug)
+  const slug = agentContext ? `agent:${agentContext.id}` : (providerSlug ?? routeSlug)
+  // Агент — такой же собеседник, как ИИ: лепим из него псевдо-провайдера
+  // с единственной «моделью», и вся раскладка чата работает без правок.
+  const agentId = agentContext?.id
+  const agentName = agentContext?.name
+  const agentAvatar = agentContext?.avatar
+  const agentModel = agentContext?.model
+  const agentProvider = useMemo<ChatProvider | null>(
+    () =>
+      agentId && agentName
+        ? {
+            slug: `agent:${agentId}`,
+            name: agentName,
+            avatar: agentAvatar ?? null,
+            color: '#2a8bff',
+            openrouter: '',
+            models: [
+              {
+                id: agentId,
+                name: agentName,
+                desc: agentModel ?? 'агент доски',
+              },
+            ],
+          }
+        : null,
+    [agentId, agentName, agentAvatar, agentModel],
+  )
+  const provider = agentProvider ?? findProvider(slug)
 
   // Режим «собеседование по проекту»: приходит из ProjectKickoff через
   // navigate state ИЛИ включается сразу, если страницу отрисовали из
@@ -949,6 +993,42 @@ export default function ChatPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interviewMode])
 
+  // Лента чата с агентом живёт на доске: тянем её и складываем в те же
+  // messages, что и у ИИ. Пока идёт отправка — не перетираем, чтобы своё
+  // сообщение не моргало.
+  const posilame = useRef(false)
+  useEffect(() => {
+    if (!agentId) return
+    let zive = true
+    const nacti = async () => {
+      if (posilame.current) return
+      try {
+        const r = await api.agentChat(agentId)
+        if (!zive) return
+        setMessages(
+          r.items.map<ChatMsg>((z) =>
+            z.from === 'owner'
+              ? { type: 'sent', text: z.text }
+              : {
+                  type: 'received',
+                  name: agentName,
+                  text: z.text,
+                  avatar: agentAvatar,
+                },
+          ),
+        )
+      } catch {
+        /* доска недоступна — оставляем то, что уже показано */
+      }
+    }
+    nacti()
+    const t = window.setInterval(nacti, 2500)
+    return () => {
+      zive = false
+      window.clearInterval(t)
+    }
+  }, [agentId, agentName, agentAvatar])
+
   const pageRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
     const el = pageRef.current as unknown as HTMLElement | null
@@ -1011,6 +1091,27 @@ export default function ChatPage({
     setAttachments([])
     setReused([])
     setSending(true)
+    // Агенту пишем на доску: она положит реплику в его ящик и, если он
+    // держит канал, толкнёт сразу. Ответ придёт следующим опросом ленты.
+    if (agentId) {
+      posilame.current = true
+      try {
+        await api.sayToAgent(agentId, trimmed)
+      } catch (error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            type: 'received',
+            name: provider.name,
+            text: `Не отправилось: ${String(error).replace(/^Error:\s*/, '')}`,
+          },
+        ])
+      } finally {
+        posilame.current = false
+        setSending(false)
+      }
+      return
+    }
     try {
       const outgoing: OutgoingMessage[] = nextMessages.map((m) => ({
         role: m.type === 'sent' ? 'user' : 'assistant',
@@ -1106,8 +1207,13 @@ export default function ChatPage({
           models={provider.models}
           onSelectModel={setModel}
           onSelectProvider={(p) => navigate(`/chat/${p.slug}`)}
-          onBack={() => (projectContext?.onBack ? projectContext.onBack() : navigate(-1))}
-          lockModel={interviewMode}
+          onBack={() => {
+            if (projectContext?.onBack) return projectContext.onBack()
+            if (agentContext?.onBack) return agentContext.onBack()
+            navigate(-1)
+          }}
+          lockModel={interviewMode || !!agentContext}
+          lockProvider={!!agentContext}
           projectContext={projectContext}
         />
       )}

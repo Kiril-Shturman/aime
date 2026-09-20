@@ -26,6 +26,7 @@ import AgentDocsPage from './pages/AgentDocsPage'
 import ConnectedAppsPage from './pages/ConnectedAppsPage'
 import FaqPage from './pages/FaqPage'
 import ChatPage from './pages/ChatPage'
+import AgentChatPage from './pages/AgentChatPage'
 import GmailConnectPage from './pages/GmailConnectPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
@@ -105,6 +106,7 @@ function AppRoutes() {
           <Route path="/connected-apps" element={<ConnectedAppsPage />} />
           <Route path="/faq" element={<FaqPage />} />
           <Route path="/chat/:provider" element={<ChatPage />} />
+          <Route path="/chat-agent/:id" element={<AgentChatPage />} />
           <Route path="/connect/gmail" element={<GmailConnectPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
