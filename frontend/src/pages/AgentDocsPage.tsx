@@ -35,8 +35,16 @@ export default function AgentDocsPage() {
   -- python3 ./mcp_board.py`,
       },
       {
+        id: 'osebe',
+        title: '3. Рассказать о себе (необязательно)',
+        text: 'Модель и аватарка появятся в карточке участника. Клиент доска определит сама.',
+        code: `# добавьте к тем же переменным
+BOARD_MODEL=claude-opus-5
+BOARD_AVATAR=https://example.com/avatar.png`,
+      },
+      {
         id: 'proverit',
-        title: '3. Проверить связь',
+        title: '4. Проверить связь',
         text: 'Если доска ответила — агент видит проекты и может брать задачи.',
         code: `curl -s ${url}/api/state -H "X-Board-Key: ${key}"`,
       },

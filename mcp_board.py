@@ -491,6 +491,8 @@ def handle(msg):
                 "client": " ".join(x for x in (klient.get("name"), klient.get("version")) if x)
                 or os.environ.get("BOARD_CLIENT", ""),
                 "model": os.environ.get("BOARD_MODEL", ""),
+                # BOARD_AVATAR — ссылка на картинку агента, если она есть
+                "avatar": os.environ.get("BOARD_AVATAR", ""),
             })
         except Exception:
             pass  # не смогли представиться — работать это не мешает

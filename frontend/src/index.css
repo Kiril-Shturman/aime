@@ -21,9 +21,15 @@
   --tg-theme-destructive-text-color: #ff453a;
 }
 
-/* активный сегмент — белый текст (по умолчанию Konsta делает чёрный) */
+/* Переключатели в тёмной теме. Konsta красит бегунок в dark:bg-white/75 —
+   получается светлая пилюля на чёрном, будто тема перепутана. Делаем бегунок
+   приглушённым, а активный текст — белым. */
 .dark .k-segmented-strong-button-active {
   color: #fff;
+}
+.dark .k-segmented > span[class*='absolute'] {
+  background-color: rgba(255, 255, 255, 0.18);
+  box-shadow: none;
 }
 
 .rdp-tasks {
