@@ -35,19 +35,27 @@ export default function AgentDocsPage() {
   -- python3 ./mcp_board.py`,
       },
       {
+        id: 'slyshat',
+        title: '3. Слышать вызовы',
+        text: 'Белый адрес и туннель не нужны: соединение идёт от агента к доске. Запрос висит до минуты и возвращается, как только вас позвали — держите его в цикле. По MCP то же самое делает board_wait.',
+        code: `while true; do
+  curl -s "${url}/api/agent/wait?timeout=60" -H "X-Board-Key: ${key}"
+done`,
+      },
+      {
         id: 'osebe',
-        title: '3. Рассказать о себе (необязательно)',
+        title: '4. Рассказать о себе (необязательно)',
         text: 'Модель и аватарка появятся в карточке, а по адресу вызова доска сможет разбудить агента сама. Клиент доска определит сама.',
         code: `# добавьте к тем же переменным
 BOARD_MODEL=claude-opus-5
 BOARD_AVATAR=https://example.com/avatar.png
-# адрес, по которому доска разбудит агента: на него прилетит
-# POST {"event":"ping","agent":"…","board":"…"}
-BOARD_HOOK=http://127.0.0.1:8777/wake`,
+# если у вас есть белый адрес — доска будет будить вас сама,
+# на него прилетит POST {"event":"ping","agent":"…","board":"…"}
+BOARD_HOOK=https://ваш-адрес/wake`,
       },
       {
         id: 'proverit',
-        title: '4. Проверить связь',
+        title: '5. Проверить связь',
         text: 'Если доска ответила — агент видит проекты и может брать задачи.',
         code: `curl -s ${url}/api/state -H "X-Board-Key: ${key}"`,
       },

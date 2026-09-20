@@ -38,6 +38,7 @@ API минимальный, чтобы им мог пользоваться аг
   DELETE /api/agents/<id>               — убрать агента с доски
   POST   /api/agents/<id>/ping          — позвать агента (стучимся в его hook)
   POST   /api/project/<id>/member/<mid>/ping — позвать исполнителя
+  GET    /api/agent/wait               — агент висит и ждёт вызова (без белого адреса)
   POST   /api/agent/connect            — {hook, client, model} — агент подключился
   POST   /api/agent/hello              — {client, model, avatar} — агент представился
   POST   /api/chat                     — {model, messages} — ответ модели
@@ -705,6 +706,55 @@ async def delete_agent(request):
     return web.json_response({"ok": True})
 
 
+# кто сейчас «висит на проводе» и ждёт вызова: agent_id → событие
+_cekaji = {}
+
+
+def probudit(mid):
+    """Разбудить агента, который держит длинный запрос."""
+    udalost = _cekaji.get(mid)
+    if udalost and not udalost.is_set():
+        udalost.set()
+
+
+async def agent_wait(request):
+    """Длинный запрос: агент висит здесь, пока его не позовут.
+
+    Так не нужен ни белый адрес, ни туннель — соединение исходящее, от
+    агента к доске. Держим не дольше минуты: дальше агент придёт снова.
+    """
+    who = request.get("who") or {}
+    if who.get("kind") != "member":
+        raise web.HTTPForbidden(text="нужен ключ исполнителя")
+    try:
+        limit = max(5, min(90, int(request.query.get("timeout", 60))))
+    except ValueError:
+        limit = 60
+
+    # если позвали, пока агента не было — отвечаем сразу
+    state = load()
+    for m in vsichni_clenove(state):
+        if m["id"] == who["id"] and m.get("ping"):
+            videl_jsem(who["id"])
+            return web.json_response({"ping": m["ping"], "waited": 0})
+
+    udalost = asyncio.Event()
+    _cekaji[who["id"]] = udalost
+    zacatek = time.time()
+    try:
+        await asyncio.wait_for(udalost.wait(), timeout=limit)
+        stav = load()
+        ping = 0
+        for m in vsichni_clenove(stav):
+            if m["id"] == who["id"]:
+                ping = m.get("ping", 0)
+        return web.json_response({"ping": ping, "waited": round(time.time() - zacatek)})
+    except asyncio.TimeoutError:
+        return web.json_response({"ping": 0, "waited": round(time.time() - zacatek)})
+    finally:
+        _cekaji.pop(who["id"], None)
+
+
 def zavolat_hook(hook, telo, klic):
     """Стучимся к агенту по его адресу. Возвращаем (получилось, что ответили)."""
     if not hook or not hook.startswith(("http://", "https://")):
@@ -732,6 +782,7 @@ async def ping_agent(request):
         if a["id"] != request.match_info["aid"]:
             continue
         a["ping"] = int(time.time())
+        probudit(a["id"])
         vysledek = None
         if a.get("hook"):
             ok, proc = await asyncio.get_running_loop().run_in_executor(
@@ -756,6 +807,7 @@ async def ping_member(request):
     for m in p["members"]:
         if m["id"] == request.match_info["mid"]:
             m["ping"] = int(time.time())
+            probudit(m["id"])
             save(state)
             return web.json_response({"ok": True, "ping": m["ping"]})
     raise web.HTTPNotFound(text="нет такого участника")
@@ -769,9 +821,11 @@ async def agent_connect(request):
         raise web.HTTPForbidden(text="нужен ключ агента")
     body = await request.json()
     hook = (body.get("hook") or "").strip()
-    if not hook.startswith(("http://", "https://")):
-        raise web.HTTPBadRequest(text="нужен hook — адрес, по которому тебя разбудить")
-    info = {"hook": hook, "connected": str(int(time.time()))}
+    if hook and not hook.startswith(("http://", "https://")):
+        raise web.HTTPBadRequest(text="hook должен быть адресом http(s) — или не присылай его вовсе")
+    info = {"connected": str(int(time.time()))}
+    if hook:
+        info["hook"] = hook
     for pole in ("client", "model"):
         if body.get(pole):
             info[pole] = body[pole]
@@ -781,7 +835,13 @@ async def agent_connect(request):
         if cesta:
             info["avatar"] = cesta
     videl_jsem(who["id"], **info)
-    return web.json_response({"ok": True, "connected": True, "hook": hook})
+    return web.json_response({
+        "ok": True,
+        "connected": True,
+        "hook": hook or None,
+        # без своего адреса агент просто висит здесь и ждёт вызова
+        "wait": str(request.url.with_path("/api/agent/wait")),
+    })
 
 
 async def agent_hello(request):
@@ -1641,6 +1701,7 @@ def make_app():
     app.router.add_delete("/api/agents/{aid}", delete_agent)
     app.router.add_post("/api/agents/{aid}/ping", ping_agent)
     app.router.add_post("/api/project/{pid}/member/{mid}/ping", ping_member)
+    app.router.add_get("/api/agent/wait", agent_wait)
     app.router.add_post("/api/agent/connect", agent_connect)
     app.router.add_post("/api/agent/hello", agent_hello)
     app.router.add_post("/api/chat", chat_completion)
