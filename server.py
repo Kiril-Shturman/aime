@@ -2108,8 +2108,27 @@ def make_app():
     os.makedirs(os.path.join(ROOT, "shots"), exist_ok=True)
     app.router.add_static("/shots", os.path.join(ROOT, "shots"))
     app.router.add_get("/{tail:.*}", spa)
+    app.on_shutdown.append(rozpustit_spojeni)
     return app
 
 
+async def rozpustit_spojeni(app):
+    """При перезапуске отпускаем агентов сразу.
+
+    Иначе доска ждёт, пока сами закроются открытые каналы и минутные
+    длинные запросы, и всё это время сайт отвечает 502."""
+    for mid in list(_cekaji):
+        probudit(mid)
+    for sokety in list(_kanaly.values()):
+        for ws in list(sokety):
+            try:
+                await ws.close(code=1001, message=b"restart")
+            except Exception:
+                pass
+    _kanaly.clear()
+
+
 if __name__ == "__main__":
-    web.run_app(make_app(), host="0.0.0.0", port=int(os.environ.get("PORT", 8095)))
+    web.run_app(make_app(), host="0.0.0.0", port=int(os.environ.get("PORT", 8095)),
+                # агенты висят на длинных запросах — не ждём их дольше пяти секунд
+                shutdown_timeout=5)
