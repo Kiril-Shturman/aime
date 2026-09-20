@@ -220,5 +220,107 @@
   "title": "Поле ввода сообщения",
   "group": "Чат",
   "code": "<Messagebar placeholder=\"Сообщение\" value={text}\n  onInput={(e) => setText(e.target.value)}\n  right={<ToolbarPane><Link onClick={send} iconOnly aria-label=\"Отправить\">\n    <Send size={22} /></Link></ToolbarPane>} />"
+ },
+ {
+  "id": "swipeout",
+  "title": "Свайп-действия",
+  "group": "Списки",
+  "code": "<List strong inset dividers>\n  <ListItem\n    swipeout\n    title=\"Задача со свайпом\"\n    swipeoutActionsRight={\n      <SwipeoutActions>\n        <SwipeoutButton color=\"orange\" onClick={archive}>Архив</SwipeoutButton>\n        <SwipeoutButton color=\"red\" onClick={remove}>Удалить</SwipeoutButton>\n      </SwipeoutActions>\n    }\n  />\n</List>"
+ },
+ {
+  "id": "sortable-list",
+  "title": "Сортируемый список",
+  "group": "Списки",
+  "code": "<List strong inset sortable sortableEnabled>\n  {items.map((item) => (\n    <ListItem key={item.id} title={item.title} sortable />\n  ))}\n</List>"
+ },
+ {
+  "id": "smart-select",
+  "title": "Умный выбор",
+  "group": "Формы",
+  "code": "<List strong inset>\n  <ListItem\n    title=\"Исполнитель\"\n    smartSelect\n    smartSelectParams={{ pageTitle: 'Выбери исполнителя', searchbar: true }}\n  >\n    <select name=\"member\" value={member} onChange={changeMember}>\n      <option value=\"developer\">Разработчик</option>\n      <option value=\"reviewer\">Проверяющий</option>\n    </select>\n  </ListItem>\n</List>"
+ },
+ {
+  "id": "calendar",
+  "title": "Календарь",
+  "group": "Формы",
+  "code": "<Calendar\n  value={[date]}\n  onCalendarChange={(calendar, value) => setDate(value[0])}\n  firstDay={1}\n  closeOnSelect\n/>"
+ },
+ {
+  "id": "picker",
+  "title": "Колёсико выбора",
+  "group": "Формы",
+  "code": "<ListInput\n  label=\"Приоритет\"\n  type=\"text\"\n  readonly\n  value={priority}\n  onClick={() => picker.open()}\n/>\n\nconst picker = f7.picker.create({\n  cols: [{ values: ['Низкий', 'Обычный', 'Высокий'] }],\n  on: { change: (_, values) => setPriority(String(values[0])) },\n})"
+ },
+ {
+  "id": "text-editor",
+  "title": "Редактор текста",
+  "group": "Формы",
+  "code": "<TextEditor\n  value={html}\n  placeholder=\"Описание задачи\"\n  buttons={[['bold', 'italic', 'underline'], ['orderedList', 'unorderedList']]}\n  onTextEditorChange={(value) => setHtml(value)}\n/>"
+ },
+ {
+  "id": "tabs",
+  "title": "Вкладки",
+  "group": "Управление",
+  "code": "<>\n  <Toolbar tabbar top>\n    <Link tabLink=\"#tab-overview\" tabLinkActive>Обзор</Link>\n    <Link tabLink=\"#tab-files\">Файлы</Link>\n  </Toolbar>\n  <Tabs>\n    <Tab id=\"tab-overview\" tabActive><Block>Обзор проекта</Block></Tab>\n    <Tab id=\"tab-files\"><Block>Файлы проекта</Block></Tab>\n  </Tabs>\n</>"
+ },
+ {
+  "id": "grid",
+  "title": "Адаптивная сетка",
+  "group": "Показ данных",
+  "code": "<div className=\"grid grid-cols-2 md:grid-cols-3 gap-3\">\n  {items.map((item) => (\n    <Card key={item.id} className=\"m-0\">{item.title}</Card>\n  ))}\n</div>"
+ },
+ {
+  "id": "skeleton",
+  "title": "Скелетон загрузки",
+  "group": "Показ данных",
+  "code": "<List strong inset mediaList>\n  <ListItem\n    className=\"skeleton-text skeleton-effect-wave\"\n    media={<div className=\"skeleton-block h-10 w-10 rounded-full\" />}\n    title=\"Загружается название\"\n    subtitle=\"Загружается описание элемента\"\n  />\n</List>"
+ },
+ {
+  "id": "gauge",
+  "title": "Круговой индикатор",
+  "group": "Показ данных",
+  "code": "<Gauge\n  type=\"circle\"\n  value={0.72}\n  valueText=\"72%\"\n  labelText=\"готово\"\n  borderColor=\"#007aff\"\n  borderWidth={10}\n/>"
+ },
+ {
+  "id": "pie-chart",
+  "title": "Круговая диаграмма",
+  "group": "Показ данных",
+  "code": "<PieChart\n  size={180}\n  datasets={[\n    { value: 42, color: '#007aff', label: 'Готово' },\n    { value: 28, color: '#34c759', label: 'В работе' },\n    { value: 30, color: '#e5e5ea', label: 'План' },\n  ]}\n/>"
+ },
+ {
+  "id": "area-chart",
+  "title": "График области",
+  "group": "Показ данных",
+  "code": "<AreaChart\n  datasets={[{\n    label: 'Токены',\n    color: '#007aff',\n    values: [8, 14, 11, 22, 28, 36, 31],\n  }]}\n  axis\n  tooltip\n/>"
+ },
+ {
+  "id": "pull-to-refresh",
+  "title": "Потянуть для обновления",
+  "group": "Навигация",
+  "code": "<Page\n  ptr\n  onPtrRefresh={async (done) => {\n    await reload()\n    done()\n  }}\n>\n  <Block>Потяни страницу вниз, чтобы обновить</Block>\n</Page>"
+ },
+ {
+  "id": "infinite-scroll",
+  "title": "Бесконечная прокрутка",
+  "group": "Навигация",
+  "code": "<Page infinite onInfinite={loadMore} infiniteDistance={80}>\n  <List strong inset>\n    {items.map((item) => <ListItem key={item.id} title={item.title} />)}\n  </List>\n  {loading && <Preloader className=\"mx-auto\" />}\n</Page>"
+ },
+ {
+  "id": "login-screen",
+  "title": "Экран входа",
+  "group": "Окна",
+  "code": "<LoginScreen opened={open} onLoginScreenClosed={() => setOpen(false)}>\n  <Page loginScreen>\n    <LoginScreenTitle>aiMe</LoginScreenTitle>\n    <List form>\n      <ListInput label=\"Email\" type=\"email\" value={email} />\n      <ListInput label=\"Пароль\" type=\"password\" value={password} />\n    </List>\n    <List><ListButton onClick={login}>Войти</ListButton></List>\n  </Page>\n</LoginScreen>"
+ },
+ {
+  "id": "photo-browser",
+  "title": "Просмотр изображений",
+  "group": "Окна",
+  "code": "const photos = ['/shots/one.jpg', '/shots/two.jpg']\nconst browser = f7.photoBrowser.create({ photos, theme: 'dark' })\n\n<Button onClick={() => browser.open()}>Открыть изображения</Button>"
+ },
+ {
+  "id": "tooltip",
+  "title": "Подсказка",
+  "group": "Окна",
+  "code": "<Button\n  id=\"help-button\"\n  tooltip=\"Здесь можно назначить агента\"\n  tooltipTrigger=\"click\"\n>\n  Что это?\n</Button>"
  }
 ]
