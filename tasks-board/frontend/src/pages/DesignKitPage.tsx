@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, ChevronDown, ChevronLeft, Copy } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, Copy, Maximize2, Moon, Sun } from 'lucide-react'
 import {
   Block,
   BlockFooter,
@@ -17,7 +17,22 @@ import {
 import blocks from '../lib/design-blocks.json'
 import { DEMOS } from '../lib/design-demos'
 import { useApp } from '../store/AppStore'
+import { useTheme } from '../store/ThemeStore'
 import { haptic } from '../lib/telegram'
+
+// этим блокам мало места в ленте — показываем их отдельной страницей
+const NA_STRANKU = new Set([
+  'calendar',
+  'photo-browser',
+  'virtual-list',
+  'messages',
+  'messagebar',
+  'login-screen',
+  'picker',
+  'infinite-scroll',
+  'list-index',
+  'swiper',
+])
 
 interface Blok {
   id: string
@@ -32,6 +47,7 @@ interface Blok {
 export default function DesignKitPage() {
   const navigate = useNavigate()
   const { state } = useApp()
+  const { theme, toggle } = useTheme()
   const vsechny = blocks as Blok[]
   const pravidla = state?.projects.find((p) => p.design)?.design ?? ''
   const projektSPravidly = state?.projects.find((p) => p.design)?.id
@@ -89,6 +105,18 @@ export default function DesignKitPage() {
         left={
           <KLink iconOnly onClick={() => navigate(-1)} aria-label="Назад">
             <ChevronLeft size={24} />
+          </KLink>
+        }
+        right={
+          <KLink
+            iconOnly
+            onClick={() => {
+              haptic('light')
+              toggle()
+            }}
+            aria-label={theme === 'dark' ? 'Светлая тема' : 'Тёмная тема'}
+          >
+            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
           </KLink>
         }
       />
@@ -191,11 +219,29 @@ export default function DesignKitPage() {
                 {/* Живой пример. Элементы с собственными отступами
                     (inset-списки, Block) оставляем как есть, а те, что
                     идут во всю ширину, поджимаем такими же полями. */}
-                <div className="mt-1 px-safe-4 [&_.k-list]:!mx-0 [&_.k-list]:!my-0 [&>.block]:!mx-0">
-                  {Demo ? <Demo /> : <Block>Пример — в коде ниже.</Block>}
-                </div>
+                {NA_STRANKU.has(b.id) ? (
+                  <List strong inset className="!mt-1 !mb-0">
+                    <ListItem
+                      link
+                      onClick={() => navigate(`/design/${b.id}`)}
+                      media={<Maximize2 size={20} className="text-primary" />}
+                      title="Открыть на отдельной странице"
+                      subtitle="блоку нужен весь экран"
+                    />
+                  </List>
+                ) : (
+                  <div className="mt-1 px-safe-4 [&_.k-list]:!mx-0 [&_.k-list]:!my-0 [&>.block]:!mx-0">
+                    {Demo ? <Demo /> : <Block>Пример — в коде ниже.</Block>}
+                  </div>
+                )}
 
                 <List strong inset className="!mt-2 !mb-0">
+                  <ListItem
+                    link
+                    onClick={() => navigate(`/design/${b.id}`)}
+                    title="Во весь экран"
+                    after={<Maximize2 size={17} className="text-primary" />}
+                  />
                   <ListItem
                     link
                     onClick={() => setKod(otevreny ? null : b.id)}

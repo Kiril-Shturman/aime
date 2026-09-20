@@ -10,6 +10,7 @@ import HomePage from './pages/HomePage'
 import ProjectPage from './pages/ProjectPage'
 import ProjectSettingsPage from './pages/ProjectSettingsPage'
 import DesignKitPage from './pages/DesignKitPage'
+import DesignBlockPage from './pages/DesignBlockPage'
 import FilterPage from './pages/FilterPage'
 import ProfilePage from './pages/ProfilePage'
 import BoardSettingsPage from './pages/BoardSettingsPage'
@@ -92,6 +93,7 @@ function AppRoutes() {
           <Route path="/project/:id" element={<ProjectPage />} />
           <Route path="/project/:id/settings" element={<ProjectSettingsPage />} />
           <Route path="/design" element={<DesignKitPage />} />
+          <Route path="/design/:id" element={<DesignBlockPage />} />
           <Route path="/filter/:kind" element={<FilterPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/board-settings" element={<BoardSettingsPage />} />
