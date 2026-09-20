@@ -1,6 +1,6 @@
 export type MemberKind = 'bot' | 'agent' | 'service' | 'human'
 export type StageStatus = 'planned' | 'active' | 'done'
-export type TaskStatus = 'todo' | 'doing' | 'done'
+export type TaskStatus = 'todo' | 'doing' | 'review' | 'blocked' | 'done'
 
 export interface Member {
   id: string
@@ -56,6 +56,10 @@ export interface Task {
   tokens?: number
   seconds?: number
   started_at?: string | number
+  submitted_at?: string | number
+  attempts?: number
+  max_attempts?: number
+  verification_report?: string
   done_at?: string | number
   due?: string
   time?: string

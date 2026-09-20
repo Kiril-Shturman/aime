@@ -87,6 +87,16 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
               В работе
             </span>
           )}
+          {task.status === 'review' && (
+            <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#ff9f0a]/15 text-[#b36b00] dark:text-[#ffb84d]">
+              На проверке · попытка {task.attempts ?? 1}/{task.max_attempts ?? 3}
+            </span>
+          )}
+          {task.status === 'blocked' && (
+            <span className="inline-block mt-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#ff375f]/15 text-[#c72546] dark:text-[#ff6b87]">
+              Заблокирована после {task.attempts ?? 0} попыток
+            </span>
+          )}
           {task.note && (
             <span className="block text-black/55 dark:text-white/50 text-[13px] mt-0.5 truncate">
               {task.note}
@@ -106,6 +116,11 @@ export default function TaskRow({ task, showProject, onEdit }: Props) {
           {task.report && (
             <span className="block text-black/70 dark:text-white/70 text-[13px] mt-1 bg-black/[.04] dark:bg-white/[.04] rounded-lg px-2 py-1.5 whitespace-pre-wrap">
               {task.report}
+            </span>
+          )}
+          {task.verification_report && (
+            <span className="block text-black/70 dark:text-white/70 text-[13px] mt-1 border-l-2 border-[#ff9f0a] pl-2 whitespace-pre-wrap">
+              Проверка: {task.verification_report}
             </span>
           )}
           {task.done && (task.commit || task.tokens || task.seconds) && (
