@@ -153,6 +153,15 @@ export default function ProjectSettingsPage() {
         По этим двум полям агент находит исходники и показывает историю гита.
       </BlockFooter>
 
+      <List strong inset>
+        <ListItem
+          link
+          onClick={() => navigate('/design')}
+          title="Каталог блоков"
+          subtitle="Живые примеры и готовый код — копируй и собирай"
+        />
+      </List>
+
       <BlockTitle>
         Дизайн-код
         <span className="ml-2 font-normal opacity-50">читают агенты</span>

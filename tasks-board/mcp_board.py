@@ -121,7 +121,7 @@ def tool_overview(args):
             lines.append(f"  участник {m['name']} [{m['id']}], {delo}"
                          + (f", открытых задач {n}" if n else ", свободен"))
         if p.get("design"):
-            lines.append("  перед правками интерфейса читай board_design — там дизайн-код проекта")
+            lines.append("  перед правками интерфейса: board_design — правила, board_blocks — готовые куски с кодом")
         if p.get("path"):
             lines.append(f"  исходники: {p['path']}")
         elif p.get("repo"):
@@ -356,6 +356,27 @@ def tool_design(args):
         return "Укажи проект: board_overview покажет, какие есть"
     text = (p.get("design") or "").strip()
     return text or "Дизайн-код у проекта не задан — спроси владельца."
+
+
+def tool_blocks(args):
+    """Каталог готовых блоков интерфейса. Без id — список, с id — код."""
+    bid = (args.get("id") or "").strip()
+    if bid:
+        b = call(f"/api/design/blocks?id={urllib.parse.quote(bid)}")
+        return f"{b['title']} ({b['group']})\n\n{b['code']}"
+    dotaz = (args.get("q") or "").strip()
+    out = call("/api/design/blocks" + (f"?q={urllib.parse.quote(dotaz)}" if dotaz else ""))
+    rows = out.get("items", [])
+    if not rows:
+        return "Ничего не нашлось."
+    podle = {}
+    for b in rows:
+        podle.setdefault(b["group"], []).append(f"{b['id']} — {b['title']}")
+    lines = ["Готовые блоки (board_blocks id=<id> отдаст код):"]
+    for skupina, items in podle.items():
+        lines.append(f"\n{skupina}:")
+        lines.extend("  " + x for x in items)
+    return "\n".join(lines)
 
 
 def tool_to_check(args):
@@ -626,6 +647,16 @@ TOOLS = [
         "inputSchema": {"type": "object", "properties": {
             "project": {"type": "string"}}, "required": ["project"]},
         "run": tool_design,
+    },
+    {
+        "name": "board_blocks",
+        "description": ("Готовые блоки интерфейса: без параметров — список, "
+                        "с id — код блока, который нужно скопировать. "
+                        "Собирай экраны только из них."),
+        "inputSchema": {"type": "object", "properties": {
+            "id": {"type": "string", "description": "id блока, например sheet-modal"},
+            "q": {"type": "string", "description": "поиск по названию или группе"}}},
+        "run": tool_blocks,
     },
     {
         "name": "board_to_check",
