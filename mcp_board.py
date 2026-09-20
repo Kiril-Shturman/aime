@@ -13,6 +13,7 @@
 """
 import json
 import os
+import time
 import sys
 import urllib.error
 import urllib.parse
@@ -96,7 +97,14 @@ def find_stage(project, name_or_id):
 def tool_overview(args):
     """Сводка: что горит, какие этапы в работе, чем занят агент."""
     st = state()
-    lines = [f"Открытых задач: {st['counts']['all']}, на сегодня: {st['counts']['today']}"]
+    lines = []
+    ja = st.get("me") or {}
+    # владелец мог позвать: покажем это первой строкой, чтобы не пропустить
+    if ja.get("ping"):
+        pred = int(time.time()) - int(ja["ping"])
+        kdy = f"{pred // 60} мин назад" if pred >= 60 else "только что"
+        lines.append(f"⚑ Владелец звал тебя ({kdy}) — посмотри задачи и отзовись отчётом.\n")
+    lines.append(f"Открытых задач: {st['counts']['all']}, на сегодня: {st['counts']['today']}")
     for p in st["projects"]:
         if not p["count"] and not p.get("roadmap"):
             continue

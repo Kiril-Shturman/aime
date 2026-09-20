@@ -122,6 +122,10 @@ export const api = {
 
   getGit: (pid: string) =>
     request<{ status: GitStatus | null }>(`/api/project/${pid}/git`),
+  pingMember: (pid: string, mid: string) =>
+    request<{ ok: boolean; ping: number }>(`/api/project/${pid}/member/${mid}/ping`, {
+      method: 'POST',
+    }),
   gitLog: (pid: string, limit = 30) =>
     request<{ items: Commit[] }>(`/api/project/${pid}/git/log?limit=${limit}`),
   connectGit: (pid: string, repo: string, branch?: string) =>

@@ -33,6 +33,7 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/project/<id>/git         — {repo, branch} — подключить репозиторий
   GET    /api/project/<id>/git         — ветка, последний коммит, есть ли правки
   GET    /api/project/<id>/git/log     — лента коммитов рабочей копии
+  POST   /api/project/<id>/member/<mid>/ping — позвать исполнителя
   POST   /api/agent/hello              — {client, model, avatar} — агент представился
   POST   /api/chat                     — {model, messages} — ответ модели
   GET    /mcp_board.py                 — сам коннектор, чтобы агент скачал его сам
@@ -260,9 +261,15 @@ async def get_state(request):
             members.append(m)
         projects.append(dict(p, members=members, roadmap=roadmap,
                              count=per_project.get(p["id"], 0)))
-    return web.json_response(
-        {"projects": projects, "tasks": state["tasks"], "counts": counts(state)}
-    )
+    odpoved = {"projects": projects, "tasks": state["tasks"], "counts": counts(state)}
+    kdo = request.get("who") or {}
+    if kdo.get("kind") == "member":
+        for p in state["projects"]:
+            for m in p["members"]:
+                if m["id"] == kdo["id"]:
+                    odpoved["me"] = {"id": m["id"], "name": m["name"],
+                                     "role": m.get("role", ""), "ping": m.get("ping", 0)}
+    return web.json_response(odpoved)
 
 
 def make_member(body):
@@ -630,6 +637,20 @@ def stahnout_avatar(mid, url):
         return "/avatars/" + name
     except Exception:
         return None
+
+
+async def ping_member(request):
+    """Позвать исполнителя. Доска не может постучаться к агенту сама, поэтому
+    оставляем отметку: он увидит её, как только в следующий раз придёт."""
+    only_owner(request)
+    state = load()
+    p = find_project(state, request.match_info["pid"])
+    for m in p["members"]:
+        if m["id"] == request.match_info["mid"]:
+            m["ping"] = int(time.time())
+            save(state)
+            return web.json_response({"ok": True, "ping": m["ping"]})
+    raise web.HTTPNotFound(text="нет такого участника")
 
 
 async def agent_hello(request):
@@ -1474,6 +1495,7 @@ def make_app():
     app.router.add_get("/api/commands", list_commands)
     app.router.add_post("/api/command/{cid}", run_command)
     app.router.add_get("/mcp_board.py", get_connector)
+    app.router.add_post("/api/project/{pid}/member/{mid}/ping", ping_member)
     app.router.add_post("/api/agent/hello", agent_hello)
     app.router.add_post("/api/chat", chat_completion)
     app.router.add_post("/api/task", add_task)
