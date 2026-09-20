@@ -553,6 +553,10 @@ def handle(msg):
                 "avatar": os.environ.get("BOARD_AVATAR", ""),
                 # BOARD_HOOK — адрес, по которому доска может разбудить агента
                 "hook": os.environ.get("BOARD_HOOK", ""),
+                # BOARD_ACCOUNT / BOARD_PLAN / BOARD_PLAN_UNTIL — что показать в карточке
+                "account": os.environ.get("BOARD_ACCOUNT", ""),
+                "plan": os.environ.get("BOARD_PLAN", ""),
+                "plan_until": os.environ.get("BOARD_PLAN_UNTIL", ""),
             })
         except Exception:
             pass  # не смогли представиться — работать это не мешает
