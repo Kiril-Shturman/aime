@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Trash2, Flag } from 'lucide-react'
 import { Block, BlockTitle, Button, List, ListInput, ListItem } from 'konsta/react'
-import Sheet from '../components/Sheet'
+import Popup from '../components/Popup'
 import PickerSheet, { type PickerOption } from './PickerSheet'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
@@ -69,7 +69,13 @@ export default function StageInfoSheet({ open, onClose, projectId, stage }: Prop
 
   return (
     <>
-      <Sheet open={open} onClose={onClose} title={stage.title}>
+      <Popup
+        open={open}
+        onClose={onClose}
+        title={stage.title}
+        onSave={save}
+        canSave
+      >
         <Block className="!mt-0 opacity-60 text-[13px]">{meta}</Block>
 
         <List strong inset>
@@ -127,7 +133,7 @@ export default function StageInfoSheet({ open, onClose, projectId, stage }: Prop
             <Trash2 size={18} className="mr-2" /> Удалить этап
           </Button>
         </Block>
-      </Sheet>
+      </Popup>
 
       <PickerSheet
         open={picking}

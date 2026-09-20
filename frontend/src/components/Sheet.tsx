@@ -1,6 +1,5 @@
 import { useEffect, type ReactNode } from 'react'
-import { X } from 'lucide-react'
-import { Sheet as KSheet } from 'konsta/react'
+import { Sheet as KSheet, Link as KLink, Toolbar } from 'konsta/react'
 import { haptic } from '../lib/telegram'
 
 interface Props {
@@ -12,6 +11,9 @@ interface Props {
   headerLeft?: ReactNode
 }
 
+// Маленькое окно снизу — ровно как sheet-modal у konsta: тулбар сверху,
+// слева название, справа «Готово», под ним контент. Большие карточки
+// (задача, модуль) живут не здесь, а в Popup на весь экран.
 export default function Sheet({
   open,
   onClose,
@@ -28,23 +30,19 @@ export default function Sheet({
     <KSheet
       opened={open}
       onBackdropClick={onClose}
-      className="pb-safe max-h-[92dvh] overflow-y-auto"
+      className="pb-safe w-full max-h-[92dvh] overflow-y-auto"
     >
       {(title || headerRight || headerLeft) && (
-        <div className="flex items-center gap-3 px-4 pt-3 pb-2">
-          {headerLeft ?? (
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-black/10 dark:bg-white/10 flex items-center justify-center text-black dark:text-white active:opacity-70"
-            >
-              <X size={16} />
-            </button>
-          )}
-          <div className="flex-1 text-center text-[17px] font-semibold">
-            {title}
+        <Toolbar top>
+          <div className="left pl-1 text-[17px] font-semibold text-black dark:text-white">
+            {headerLeft ?? title}
           </div>
-          {headerRight ?? <div className="w-8 h-8" />}
-        </div>
+          <div className="right">
+            {headerRight ?? (
+              <KLink onClick={onClose}>Готово</KLink>
+            )}
+          </div>
+        </Toolbar>
       )}
       {children}
     </KSheet>

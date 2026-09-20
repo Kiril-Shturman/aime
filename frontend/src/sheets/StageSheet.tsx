@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Block, Button, List, ListInput } from 'konsta/react'
-import Sheet from '../components/Sheet'
+import Popup from '../components/Popup'
 import { api } from '../api/client'
 import { useApp } from '../store/AppStore'
 import { haptic } from '../lib/telegram'
@@ -38,7 +38,13 @@ export default function StageSheet({ open, onClose, projectId }: Props) {
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Новый этап">
+    <Popup
+      open={open}
+      onClose={onClose}
+      title="Новый этап"
+      onSave={save}
+      canSave={!!title.trim()}
+    >
       <List strong inset>
         <ListInput
           label="Модуль"
@@ -66,6 +72,6 @@ export default function StageSheet({ open, onClose, projectId }: Props) {
           Добавить
         </Button>
       </Block>
-    </Sheet>
+    </Popup>
   )
 }
