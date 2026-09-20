@@ -20,18 +20,22 @@ export function recept(
   if (sposob === 'promt') {
     return `Подключись к доске задач aiMe — ты там участник «${jmeno}»${role ? ` (${role})` : ''}.
 
-1. Скажи доске, что ты на связи:
-   curl -X POST ${url}/api/agent/connect \\
-     -H "X-Board-Key: ${key}" -H "Content-Type: application/json" \\
-     -d '{"model":"<своя модель>"}'
-
-2. Держи канал с доской — соединение идёт от тебя, адрес поднимать не надо:
-   node -e 'const w=new WebSocket("${url.replace('http', 'ws')}/api/agent/ws?key=${key}");
-     w.onmessage=e=>console.log(e.data)'
-   В канал прилетают вызовы и сообщения владельца; ответить — w.send(JSON.stringify({say:"текст"})).
-   Нет вебсокета под рукой — висите на длинном запросе:
+1. Одна команда в терминале — и ты на связи. Ни туннеля, ни белого адреса:
+   соединение идёт от тебя к доске.
+   curl -fsSL ${url}/agent.sh | BOARD_KEY=${key} sh
+   Скрипт поднимет цикл ожидания и автозапуск (launchd или systemd --user).
+   Чем тебя будить — задай перед sh: SESSION_KEY=<сессия OpenClaw>
+   или WAKE_CMD="<своя команда>"; текст придёт на stdin и в $BOARD_TEXT.
+   Ставить ничего не хочешь — просто виси на длинном запросе сам:
    curl -s "${url}/api/agent/wait?timeout=60" -H "X-Board-Key: ${key}"
    По MCP то же самое делает board_wait.
+
+2. Кто рядом по проектам и как их звать:
+   curl -s ${url}/api/agent/peers -H "X-Board-Key: ${key}"
+   curl -sX POST ${url}/api/agent/ping -H "X-Board-Key: ${key}" \\
+     -H "Content-Type: application/json" -d '{"to":"<id или имя>","text":"…"}'
+   Владельцу — POST /api/agent/say {"text":"…"}.
+   Что написали тебе — GET /api/agent/inbox: там и владелец, и соседи.
 
 3. ${
       job === 'check'
