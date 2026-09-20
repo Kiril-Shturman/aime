@@ -110,7 +110,7 @@ def openclaw_binary(explicit: str | None) -> str:
     raise FileNotFoundError("openclaw CLI не найден")
 
 
-def session_snapshot(agent: str, session: str) -> dict:
+def session_snapshot(agent: str, session: str, since: int = 0) -> dict:
     """Read safe live counters from OpenClaw without exposing prompts or commands."""
     key = f"agent:{agent}:{session}"
     store = Path.home() / ".openclaw" / "agents" / agent / "sessions" / "sessions.json"
@@ -121,11 +121,39 @@ def session_snapshot(agent: str, session: str) -> dict:
     step = trajectory_step(item.get("sessionFile"))
     updated_ms = int(item.get("updatedAt") or 0)
     return {
-        "tokens": max(0, int(item.get("totalTokens") or 0)),
+        "tokens": (trajectory_tokens(item.get("sessionFile"), since)
+                   if since else max(0, int(item.get("totalTokens") or 0))),
         "last_activity_at": updated_ms // 1000 if updated_ms else 0,
         "step": step,
         "status": item.get("status") or "",
     }
+
+
+def trajectory_tokens(session_file: str | None, since: int) -> int:
+    """Sum reported usage after this task started, including cached context."""
+    if not session_file or not since:
+        return 0
+    try:
+        with open(session_file, "rb") as source:
+            source.seek(0, os.SEEK_END)
+            size = source.tell()
+            source.seek(max(0, size - 4 * 1024 * 1024))
+            lines = source.read().decode("utf-8", "replace").splitlines()
+    except OSError:
+        return 0
+    since_iso = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(since))
+    total = 0
+    for line in lines:
+        try:
+            event = json.loads(line)
+            if str(event.get("timestamp") or "") < since_iso:
+                continue
+            message = event.get("message") or {}
+            usage = message.get("usage") or {}
+            total += max(0, int(usage.get("totalTokens") or 0))
+        except (ValueError, TypeError):
+            continue
+    return total
 
 
 def trajectory_step(session_file: str | None) -> str:
@@ -171,7 +199,7 @@ def trajectory_step(session_file: str | None) -> str:
 
 
 def run_agent(binary: str, agent: str, session: str, prompt: str, timeout: int,
-              heartbeat=None) -> bool:
+              heartbeat=None, snapshot_since: int = 0) -> bool:
     command = [binary, "agent", "--agent", agent, "--session-key",
                f"agent:{agent}:{session}", "--message", prompt,
                "--thinking", "high", "--timeout", str(timeout)]
@@ -190,7 +218,7 @@ def run_agent(binary: str, agent: str, session: str, prompt: str, timeout: int,
             except subprocess.TimeoutExpired:
                 if heartbeat:
                     try:
-                        heartbeat(session_snapshot(agent, session))
+                        heartbeat(session_snapshot(agent, session, snapshot_since))
                     except Exception as exc:
                         print(f"[worker] heartbeat не записан: {exc}", file=sys.stderr)
                 if time.monotonic() - started > timeout + 30:
@@ -200,7 +228,7 @@ def run_agent(binary: str, agent: str, session: str, prompt: str, timeout: int,
                     return False
         if heartbeat:
             try:
-                heartbeat(session_snapshot(agent, session))
+                heartbeat(session_snapshot(agent, session, snapshot_since))
             except Exception as exc:
                 print(f"[worker] финальный heartbeat не записан: {exc}", file=sys.stderr)
         output_file.seek(0)
@@ -322,8 +350,6 @@ def main() -> int:
         session_name = "board-executor"
         session_key = f"agent:{args.agent}:{session_name}"
         run_started = int(task.get("started_at") or time.time())
-        before = session_snapshot(args.agent, session_name)
-        baseline_tokens = int(before.get("tokens") or 0)
         last_activity = run_started
         last_step = "Запускает рабочую сессию"
         patch_json(args.board_url, board_key, f"/api/task/{task['id']}", {
@@ -343,7 +369,7 @@ def main() -> int:
             silence = max(0, int(time.time()) - last_activity)
             run_status = "stalled" if silence >= 600 else "warning" if silence >= 120 else "active"
             patch_json(args.board_url, board_key, f"/api/task/{task['id']}", {
-                "tokens": max(0, int(snapshot.get("tokens") or 0) - baseline_tokens),
+                "tokens": max(0, int(snapshot.get("tokens") or 0)),
                 "progress_step": last_step,
                 "progress_updated_at": last_activity,
                 "session_key": session_key,
@@ -352,7 +378,7 @@ def main() -> int:
 
         succeeded = run_agent(binary, args.agent, "board-executor",
                               execution_prompt(project, task), args.timeout,
-                              heartbeat=heartbeat)
+                              heartbeat=heartbeat, snapshot_since=run_started)
         actions += 1
         after = fetch_state(args.board_url, board_key)
         updated = next((t for t in after["tasks"] if t["id"] == task["id"]), {})
