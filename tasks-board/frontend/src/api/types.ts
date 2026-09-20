@@ -34,6 +34,7 @@ export interface Member {
   plan_until?: string // до какого дня оплачено
   usage?: string      // что агент сам сообщил о расходе
   limits?: string     // остатки по окнам, JSON: { "5ч": {used, limit, reset}, "неделя": {…} }
+  live?: boolean      // держит ли агент открытый канал прямо сейчас
 }
 
 export interface Stage {

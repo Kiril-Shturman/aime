@@ -22,10 +22,13 @@ export function recept(
      -H "X-Board-Key: ${key}" -H "Content-Type: application/json" \\
      -d '{"model":"<своя модель>"}'
 
-2. Слушай вызовы. Свой адрес поднимать не надо — соединение идёт от тебя:
+2. Держи канал с доской — соединение идёт от тебя, адрес поднимать не надо:
+   node -e 'const w=new WebSocket("${url.replace('http', 'ws')}/api/agent/ws?key=${key}");
+     w.onmessage=e=>console.log(e.data)'
+   В канал прилетают вызовы и сообщения владельца; ответить — w.send(JSON.stringify({say:"текст"})).
+   Нет вебсокета под рукой — висите на длинном запросе:
    curl -s "${url}/api/agent/wait?timeout=60" -H "X-Board-Key: ${key}"
-   Запрос висит до минуты и возвращается сразу, как тебя позвали. Держи его в цикле.
-   Подключён по MCP — то же самое делает инструмент board_wait.
+   По MCP то же самое делает board_wait.
 
 3. Позвали — смотри доску, бери задачу и отчитывайся по ней сам.
    Инструкция и команды: ${url}/agent?k=${key}`

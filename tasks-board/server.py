@@ -38,6 +38,7 @@ API минимальный, чтобы им мог пользоваться аг
   DELETE /api/agents/<id>               — убрать агента с доски
   POST   /api/agents/<id>/ping          — позвать агента (стучимся в его hook)
   POST   /api/project/<id>/member/<mid>/ping — позвать исполнителя
+  GET    /api/agent/ws                 — постоянный канал с агентом (вебсокет)
   GET    /api/agent/wait               — агент висит и ждёт вызова (без белого адреса)
   GET    /api/agent/inbox              — что владелец написал агенту
   POST   /api/agent/say                — агент отвечает владельцу
@@ -274,7 +275,7 @@ async def get_state(request):
             a for a in state.get("agents", []) if p["id"] in a.get("projects", [])
         ]
         for m in vlastni:
-            m = dict(m, bot=bot_card(m["id"], bots))
+            m = dict(m, bot=bot_card(m["id"], bots), live=bool(_kanaly.get(m["id"])))
             # личный ключ исполнителя пускает на доску, поэтому он только хозяину
             if not owner:
                 m.pop("key", None)
@@ -283,7 +284,7 @@ async def get_state(request):
                              count=per_project.get(p["id"], 0)))
     agents = []
     for a in state.get("agents", []):
-        a = dict(a)
+        a = dict(a, live=bool(_kanaly.get(a["id"])))
         if not owner:
             a.pop("key", None)
         agents.append(a)
@@ -721,6 +722,58 @@ def probudit(mid):
         udalost.set()
 
 
+# живые каналы агентов: agent_id → набор открытых сокетов
+_kanaly = {}
+
+
+async def agent_ws(request):
+    """Постоянный канал с агентом. Соединение открывает агент, поэтому ни
+    белого адреса, ни туннеля не нужно: доска шлёт команды в ответ."""
+    kdo = request.get("who") or {}
+    if kdo.get("kind") != "member":
+        raise web.HTTPForbidden(text="нужен ключ исполнителя")
+
+    ws = web.WebSocketResponse(heartbeat=30)
+    await ws.prepare(request)
+    _kanaly.setdefault(kdo["id"], set()).add(ws)
+    videl_jsem(kdo["id"], channel="ws")
+
+    # если звали, пока канала не было — говорим сразу
+    stav = load()
+    for m in vsichni_clenove(stav):
+        if m["id"] == kdo["id"] and m.get("ping"):
+            await ws.send_json({"event": "ping", "at": m["ping"]})
+
+    try:
+        async for zprava in ws:
+            if zprava.type == web.WSMsgType.TEXT:
+                # агент может отвечать прямо в канал: {"say": "текст"}
+                try:
+                    telo = json.loads(zprava.data)
+                except ValueError:
+                    continue
+                text = (telo.get("say") or "").strip()
+                if text:
+                    state = load()
+                    chat_agenta(state, kdo["id"]).append(
+                        {"from": "agent", "text": text[:4000], "at": int(time.time())})
+                    save(state)
+                    await ws.send_json({"ok": True})
+    finally:
+        _kanaly.get(kdo["id"], set()).discard(ws)
+        if not _kanaly.get(kdo["id"]):
+            _kanaly.pop(kdo["id"], None)
+    return ws
+
+
+def poslat_kanalem(mid, telo):
+    """Отправить команду в открытые каналы агента. Вернуть, сколько дошло."""
+    sokety = list(_kanaly.get(mid, ()))
+    for ws in sokety:
+        asyncio.create_task(ws.send_json(telo))
+    return len(sokety)
+
+
 async def agent_wait(request):
     """Длинный запрос: агент висит здесь, пока его не позовут.
 
@@ -787,7 +840,8 @@ async def ping_agent(request):
             continue
         a["ping"] = int(time.time())
         probudit(a["id"])
-        vysledek = None
+        kanalem = poslat_kanalem(a["id"], {"event": "ping", "at": a["ping"]})
+        vysledek = {"delivered": True, "note": "в канал"} if kanalem else None
         if a.get("hook"):
             ok, proc = await asyncio.get_running_loop().run_in_executor(
                 None, zavolat_hook, a["hook"],
@@ -846,6 +900,7 @@ async def say_to_agent(request):
             a["ping"] = int(time.time())
     save(state)
     probudit(aid)
+    poslat_kanalem(aid, {"event": "message", "text": zprava["text"], "at": zprava["at"]})
     return web.json_response(zprava)
 
 
@@ -1232,7 +1287,7 @@ def whoami(request):
     # Ключ, который ничего не открывает, — не приговор: пробуем дальше
     # подпись мини-аппы и общий тумблер. Иначе старый ключ, застрявший
     # в памяти браузера, запирает дверь даже владельцу.
-    key = request.headers.get("X-Board-Key", "").strip()
+    key = (request.headers.get("X-Board-Key") or request.query.get("key") or "").strip()
     if key:
         if hmac.compare_digest(key, owner_key()):
             return {"kind": "owner", "id": "owner", "name": "владелец"}
@@ -1776,6 +1831,7 @@ def make_app():
     app.router.add_delete("/api/agents/{aid}", delete_agent)
     app.router.add_post("/api/agents/{aid}/ping", ping_agent)
     app.router.add_post("/api/project/{pid}/member/{mid}/ping", ping_member)
+    app.router.add_get("/api/agent/ws", agent_ws)
     app.router.add_get("/api/agent/wait", agent_wait)
     app.router.add_get("/api/agent/inbox", agent_inbox)
     app.router.add_post("/api/agent/say", agent_say)
