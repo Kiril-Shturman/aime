@@ -17,15 +17,20 @@ export function recept(
   if (sposob === 'promt') {
     return `Подключись к доске задач aiMe — ты там участник «${jmeno}»${role ? ` (${role})` : ''}.
 
-1. Подними у себя адрес, по которому тебя можно разбудить (на него прилетит POST с событием ping).
-2. Пришли его доске — это и есть подключение:
-   curl -X POST ${url}/api/agent/connect \
-     -H "X-Board-Key: ${key}" -H "Content-Type: application/json" \
-     -d '{"hook":"<свой адрес>","model":"<своя модель>"}'
-3. Инструкция и команды: ${url}/agent?k=${key}
+1. Скажи доске, что ты на связи:
+   curl -X POST ${url}/api/agent/connect \\
+     -H "X-Board-Key: ${key}" -H "Content-Type: application/json" \\
+     -d '{"model":"<своя модель>"}'
 
-Дальше бери задачи и отчитывайся по ним сам, а по ping — просыпайся и смотри доску.`
+2. Слушай вызовы. Свой адрес поднимать не надо — соединение идёт от тебя:
+   curl -s "${url}/api/agent/wait?timeout=60" -H "X-Board-Key: ${key}"
+   Запрос висит до минуты и возвращается сразу, как тебя позвали. Держи его в цикле.
+   Подключён по MCP — то же самое делает инструмент board_wait.
+
+3. Позвали — смотри доску, бери задачу и отчитывайся по ней сам.
+   Инструкция и команды: ${url}/agent?k=${key}`
   }
+
   if (sposob === 'claude') {
     return `curl -sO ${url}/mcp_board.py
 claude mcp add board \\
