@@ -321,15 +321,50 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </Button>
     </Block>
   ),
-  fab: () => (
-    <Block className="!my-0 flex justify-center">
-      <Fab
-        className="!static"
-        icon={<Plus size={22} />}
-        onClick={() => {}}
-      />
-    </Block>
-  ),
+  fab: function FabDemo() {
+    const [open, setOpen] = useState(false)
+    return (
+      <Block className="!my-0">
+        <div className="relative flex h-40 items-end justify-end rounded-3xl bg-ios-light-surface-1 p-4 dark:bg-ios-dark-surface-1">
+          <div className="absolute bottom-4 right-4 flex flex-col items-end gap-2">
+            {['Задача', 'Этап', 'Участник'].map((label, i) => (
+              <span
+                key={label}
+                className="flex items-center gap-2 transition-all duration-200"
+                style={{
+                  opacity: open ? 1 : 0,
+                  transform: open ? 'translateY(0)' : `translateY(${(3 - i) * 12}px)`,
+                  transitionDelay: `${open ? i * 45 : 0}ms`,
+                  pointerEvents: open ? 'auto' : 'none',
+                }}
+              >
+                <span className="rounded-lg bg-black/70 px-2 py-1 text-[12px] text-white dark:bg-white/85 dark:text-black">
+                  {label}
+                </span>
+                <span className="grid h-10 w-10 place-items-center rounded-full bg-primary/15 text-primary">
+                  <Plus size={18} />
+                </span>
+              </span>
+            ))}
+            <Fab
+              className="!static"
+              icon={
+                <Plus
+                  size={22}
+                  className={`transition-transform duration-200 ${open ? 'rotate-45' : ''}`}
+                />
+              }
+              onClick={() => setOpen((o) => !o)}
+            />
+          </div>
+        </div>
+        <Button rounded small className="mt-2" onClick={() => setOpen((o) => !o)}>
+          {open ? 'Свернуть' : 'Запустить анимацию'}
+        </Button>
+      </Block>
+    )
+  },
+
   chips: () => (
     <Block className="!my-0 flex flex-wrap gap-1.5">
       <Chip>Просто чип</Chip>
@@ -1168,6 +1203,20 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
 
   gauge: function GaugeDemo() {
     const [procenta, setProcenta] = useState(72)
+    const bezi = useRef<number | null>(null)
+    const spustit = () => {
+      if (bezi.current) window.clearInterval(bezi.current)
+      const cil = Math.round(20 + Math.random() * 80)
+      bezi.current = window.setInterval(() => {
+        setProcenta((p) => {
+          if (p === cil) {
+            if (bezi.current) window.clearInterval(bezi.current)
+            return p
+          }
+          return p + Math.sign(cil - p)
+        })
+      }, 12)
+    }
     return (
       <Block className="!my-0 grid justify-items-center gap-3">
         <span
@@ -1192,6 +1241,9 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
             onChange={(e) => setProcenta(Number((e.target as HTMLInputElement).value))}
           />
         </span>
+        <Button rounded small onClick={spustit}>
+          Запустить анимацию
+        </Button>
       </Block>
     )
   },
@@ -1822,6 +1874,36 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </Block>
     )
   },
+  statusbar: function StatusbarDemo() {
+    const [svetla, setSvetla] = useState(false)
+    return (
+      <Block className="!my-0 grid gap-2">
+        <span className="overflow-hidden rounded-2xl">
+          <span
+            className={`flex h-9 items-center justify-between px-4 text-[13px] font-semibold ${
+              svetla ? 'bg-white text-black' : 'bg-black text-white'
+            }`}
+          >
+            <span>16:22</span>
+            <span className="flex items-center gap-1 opacity-70">
+              <span>LTE</span>
+              <span>100%</span>
+            </span>
+          </span>
+          <span className="block">
+            <Navbar
+              title="Экран"
+              colors={{ bgIos: svetla ? 'bg-white' : 'bg-ios-dark-surface-1' }}
+            />
+          </span>
+        </span>
+        <Button rounded small onClick={() => setSvetla((s) => !s)}>
+          {svetla ? 'Тёмный статус-бар' : 'Светлый статус-бар'}
+        </Button>
+      </Block>
+    )
+  },
+
 }
 
 export { ucastnik }

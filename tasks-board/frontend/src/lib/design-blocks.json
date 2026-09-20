@@ -394,5 +394,11 @@
   "title": "Выбор цвета",
   "group": "Формы",
   "code": "<Block className=\"flex flex-wrap gap-3\">\n  {COLORS.map((c) => (\n    <button key={c} onClick={() => setColor(c)} style={{ background: c }}\n      className=\"h-9 w-9 rounded-full\">\n      {color === c && <Check size={18} className=\"mx-auto text-white\" />}\n    </button>\n  ))}\n</Block>"
+ },
+ {
+  "id": "statusbar",
+  "title": "Статус-бар",
+  "group": "Навигация",
+  "code": "// подложка под системную строку: цвет и высота берутся из safe-area\n<div className=\"h-[env(safe-area-inset-top)] bg-ios-light-surface dark:bg-ios-dark-surface\" />\n<Navbar title=\"Экран\" />"
  }
 ]
