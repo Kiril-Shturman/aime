@@ -483,6 +483,17 @@ def reply(msg):
 def handle(msg):
     method, mid = msg.get("method"), msg.get("id")
     if method == "initialize":
+        # представляемся доске: кто подключился и какой моделью работает —
+        # владелец увидит это в карточке участника
+        klient = msg.get("params", {}).get("clientInfo", {}) or {}
+        try:
+            call("/api/agent/hello", "POST", {
+                "client": " ".join(x for x in (klient.get("name"), klient.get("version")) if x)
+                or os.environ.get("BOARD_CLIENT", ""),
+                "model": os.environ.get("BOARD_MODEL", ""),
+            })
+        except Exception:
+            pass  # не смогли представиться — работать это не мешает
         return {"jsonrpc": "2.0", "id": mid, "result": {
             "protocolVersion": msg.get("params", {}).get("protocolVersion", "2024-11-05"),
             "capabilities": {"tools": {}},

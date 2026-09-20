@@ -13,46 +13,7 @@ interface Props {
   projectId: string
 }
 
-// Что отдаём наружу, чтобы чужой агент подключился к доске сам.
-const SPOSOBY = [
-  { id: 'promt', label: 'Промпт' },
-  { id: 'claude', label: 'Claude' },
-  { id: 'cursor', label: 'Cursor' },
-  { id: 'codex', label: 'Codex' },
-] as const
-
-// Коннектор агент скачивает с самой доски: curl -sO <адрес>/mcp_board.py
-function recept(sposob: string, url: string, key: string, jmeno: string, role: string) {
-  if (sposob === 'promt') {
-    return `Подключись к доске задач aiMe — ты там участник «${jmeno}»${role ? ` (${role})` : ''}.
-Инструкция и команды: ${url}/agent?k=${key}
-Дальше бери задачи и отчитывайся по ним сам.`
-  }
-  if (sposob === 'claude') {
-    return `curl -sO ${url}/mcp_board.py
-claude mcp add board \\
-  -e BOARD_URL=${url} \\
-  -e BOARD_KEY=${key} \\
-  -- python3 ./mcp_board.py`
-  }
-  if (sposob === 'cursor') {
-    return `// ~/.cursor/mcp.json
-{
-  "mcpServers": {
-    "board": {
-      "command": "python3",
-      "args": ["./mcp_board.py"],
-      "env": { "BOARD_URL": "${url}", "BOARD_KEY": "${key}" }
-    }
-  }
-}`
-  }
-  return `# ~/.codex/config.toml
-[mcp_servers.board]
-command = "python3"
-args = ["./mcp_board.py"]
-env = { BOARD_URL = "${url}", BOARD_KEY = "${key}" }`
-}
+import { SPOSOBY, recept } from '../lib/connect'
 
 export default function MemberSheet({ open, onClose, projectId }: Props) {
   const { refresh } = useApp()

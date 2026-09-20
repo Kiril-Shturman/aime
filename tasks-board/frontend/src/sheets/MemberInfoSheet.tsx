@@ -10,7 +10,7 @@ import {
   Segmented,
   SegmentedButton,
 } from 'konsta/react'
-import Sheet from '../components/Sheet'
+import Popup from '../components/Popup'
 import { Avatar } from '../components/Avatar'
 import MemberConnect from '../components/MemberConnect'
 import BotConnect from '../components/BotConnect'
@@ -51,6 +51,21 @@ export default function MemberInfoSheet({
 
   if (!member) return null
 
+  // «в сети», если участник выходил на связь недавно: доска отмечает
+  // каждое его обращение по ключу
+  const vterin = member.seen ? Math.floor(Date.now() / 1000 - member.seen) : null
+  const naSviazi = vterin !== null && vterin < 300
+  const stavSpojeni =
+    vterin === null
+      ? 'ещё не подключался'
+      : naSviazi
+        ? 'в сети'
+        : vterin < 3600
+          ? `был ${Math.max(1, Math.floor(vterin / 60))} мин назад`
+          : vterin < 86400
+            ? `был ${Math.floor(vterin / 3600)} ч назад`
+            : `был ${Math.floor(vterin / 86400)} дн назад`
+
   const own = state?.tasks.filter((t) => t.member === member.id) ?? []
   const done = own.filter((t) => t.done)
   const tokens = own.reduce((s, t) => s + (t.tokens ?? 0), 0)
@@ -75,14 +90,23 @@ export default function MemberInfoSheet({
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title={member.name}>
-      <Block className="!mt-0">
-        <div className="flex items-center gap-3 mb-3">
-          <Avatar member={member} color={projectColor} size={48} />
-          <div>
-            <div className="text-[17px] font-semibold">{member.name}</div>
-            <div className="opacity-60 text-[13px]">
-              {member.role || kindLabel(member.kind)}
+    <Popup open={open} onClose={onClose} title={member.name}>
+      <Block className="!mt-4">
+        <div className="mb-4 flex items-center gap-3">
+          <span className="relative">
+            <Avatar member={member} color={projectColor} size={56} />
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2 border-ios-dark-surface-1 ${
+                naSviazi ? 'bg-[#30d158]' : 'bg-black/25 dark:bg-white/25'
+              }`}
+            />
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-[19px] font-semibold text-black dark:text-white">
+              {member.name}
+            </div>
+            <div className="truncate text-[13px] text-black/55 dark:text-white/45">
+              {member.role || kindLabel(member.kind)} · {stavSpojeni}
             </div>
           </div>
         </div>
@@ -92,6 +116,13 @@ export default function MemberInfoSheet({
           <Stat title="закрыто" value={String(done.length)} />
           <Stat title="токенов" value={tokens ? String(tokens) : '—'} />
         </div>
+
+        {(member.model || member.client) && (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {member.model && <Stat title="модель" value={member.model} small />}
+            {member.client && <Stat title="подключён" value={member.client} small />}
+          </div>
+        )}
       </Block>
 
       {kind === 'bot' ? (
@@ -103,7 +134,7 @@ export default function MemberInfoSheet({
       <BlockTitle>Кто это</BlockTitle>
       <Block>
         <Segmented strong rounded>
-          {KINDS.map((k) => (
+          {KINDS.filter((k) => k.id === 'agent' || k.id === 'human').map((k) => (
             <SegmentedButton
               key={k.id}
               active={kind === k.id}
@@ -173,15 +204,15 @@ export default function MemberInfoSheet({
           <Trash2 size={18} className="mr-2" /> Убрать из проекта
         </Button>
       </Block>
-    </Sheet>
+    </Popup>
   )
 }
 
-function Stat({ title, value }: { title: string; value: string }) {
+function Stat({ title, value, small }: { title: string; value: string; small?: boolean }) {
   return (
-    <div className="bg-black/[.06] dark:bg-white/[.06] rounded-xl px-3 py-3">
-      <div className="text-[20px] font-bold">{value}</div>
-      <div className="opacity-60 text-[12px] mt-0.5">{title}</div>
+    <div className="rounded-xl bg-black/[.06] px-3 py-3 dark:bg-white/[.06]">
+      <div className={`${small ? 'truncate text-[15px]' : 'text-[20px]'} font-bold`}>{value}</div>
+      <div className="mt-0.5 text-[12px] opacity-60">{title}</div>
     </div>
   )
 }

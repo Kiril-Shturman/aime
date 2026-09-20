@@ -33,6 +33,7 @@ API минимальный, чтобы им мог пользоваться аг
   POST   /api/project/<id>/git         — {repo, branch} — подключить репозиторий
   GET    /api/project/<id>/git         — ветка, последний коммит, есть ли правки
   GET    /api/project/<id>/git/log     — лента коммитов рабочей копии
+  POST   /api/agent/hello              — {client, model} — агент представился
   POST   /api/chat                     — {model, messages} — ответ модели
   GET    /mcp_board.py                 — сам коннектор, чтобы агент скачал его сам
   POST   /api/project/<id>/stage       — {title, date, status, note}
@@ -610,6 +611,16 @@ OPENROUTER_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 
+async def agent_hello(request):
+    """Агент сообщает о себе: клиент и модель. Видно в карточке участника."""
+    who = request.get("who") or {}
+    if who.get("kind") != "member":
+        raise web.HTTPForbidden(text="только участник доски")
+    body = await request.json()
+    videl_jsem(who["id"], client=body.get("client"), model=body.get("model"))
+    return web.json_response({"ok": True})
+
+
 async def chat_completion(request):
     """Ответ модели для чата мини-аппы.
 
@@ -830,6 +841,9 @@ async def run_command(request):
 #   1. ключ в заголовке X-Board-Key — так ходят исполнители (MCP, скрипты);
 #   2. подпись мини-аппы Телеграма — так ходит владелец из телефона.
 
+# когда каждого исполнителя видели в последний раз — чтобы не писать файл зря
+_viden = {}
+
 OWNER_KEY_FILE = os.path.join(ROOT, "owner.key")
 BOT_TOKEN = os.environ.get("BOARD_BOT_TOKEN", "")
 OWNERS = {x.strip() for x in os.environ.get("BOARD_OWNERS", "").split(",") if x.strip()}
@@ -842,6 +856,26 @@ def owner_key():
             f.write(secrets.token_hex(16))
     with open(OWNER_KEY_FILE, encoding="utf-8") as f:
         return f.read().strip()
+
+
+def videl_jsem(mid, **info):
+    """Отмечаем участника «на связи». Пишем не чаще раза в минуту: запрос
+    от агента может быть каждую секунду, а файл дёргать незачем."""
+    ted = int(time.time())
+    posledni = _viden.get(mid, 0)
+    if not info and ted - posledni < 60:
+        return
+    _viden[mid] = ted
+    state = load()
+    for p in state["projects"]:
+        for m in p["members"]:
+            if m["id"] == mid:
+                m["seen"] = ted
+                for k, v in info.items():
+                    if v:
+                        m[k] = str(v)[:80]
+                save(state)
+                return
 
 
 def check_init_data(raw):
@@ -881,6 +915,7 @@ def whoami(request):
         for p in load()["projects"]:
             for m in p["members"]:
                 if m.get("key") and hmac.compare_digest(key, m["key"]):
+                    videl_jsem(m["id"])
                     return {"kind": "member", "id": m["id"], "name": m["name"]}
 
     signed = check_init_data(request.headers.get("X-Telegram-Init-Data", ""))
@@ -1412,6 +1447,7 @@ def make_app():
     app.router.add_get("/api/commands", list_commands)
     app.router.add_post("/api/command/{cid}", run_command)
     app.router.add_get("/mcp_board.py", get_connector)
+    app.router.add_post("/api/agent/hello", agent_hello)
     app.router.add_post("/api/chat", chat_completion)
     app.router.add_post("/api/task", add_task)
     app.router.add_patch("/api/task/{tid}", patch_task)
