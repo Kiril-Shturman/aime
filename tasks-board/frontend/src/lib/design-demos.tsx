@@ -993,23 +993,39 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
 
   // календарь: листается по месяцам, дата выбирается тапом
   calendar: function CalendarDemo() {
-    const [mesic, setMesic] = useState(new Date(2026, 8, 1))
-    const [vybrano, setVybrano] = useState(20)
+    const dnes = new Date()
+    const [mesic, setMesic] = useState(new Date(dnes.getFullYear(), dnes.getMonth(), 1))
+    const [vybrano, setVybrano] = useState<string>(
+      new Date(dnes.getFullYear(), dnes.getMonth(), dnes.getDate()).toDateString(),
+    )
+    const start = useRef<number | null>(null)
+
+    const posunMesic = (o: number) =>
+      setMesic((m) => new Date(m.getFullYear(), m.getMonth() + o, 1))
+
+    // сетка 6×7: с хвостом прошлого месяца и началом следующего — как в f7
     const prvni = new Date(mesic.getFullYear(), mesic.getMonth(), 1)
     const posun = (prvni.getDay() + 6) % 7
-    const dni = new Date(mesic.getFullYear(), mesic.getMonth() + 1, 0).getDate()
+    const zacatek = new Date(prvni)
+    zacatek.setDate(prvni.getDate() - posun)
+    const bunky = Array.from({ length: 42 }, (_, i) => {
+      const d = new Date(zacatek)
+      d.setDate(zacatek.getDate() + i)
+      return d
+    })
+
     return (
       <List strong inset>
         <ListItem
           title={
-            <span className="flex items-center justify-between">
-              <KLink onClick={() => setMesic(new Date(mesic.getFullYear(), mesic.getMonth() - 1, 1))} aria-label="Раньше">
+            <span className="flex h-8 items-center justify-between">
+              <KLink iconOnly onClick={() => posunMesic(-1)} aria-label="Предыдущий месяц">
                 <ChevronLeft size={20} />
               </KLink>
               <span className="text-[17px] font-semibold">
                 {mesic.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
               </span>
-              <KLink onClick={() => setMesic(new Date(mesic.getFullYear(), mesic.getMonth() + 1, 1))} aria-label="Позже">
+              <KLink iconOnly onClick={() => posunMesic(1)} aria-label="Следующий месяц">
                 <ChevronRight size={20} />
               </KLink>
             </span>
@@ -1017,34 +1033,63 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
         />
         <ListItem
           title={
-            <span className="grid grid-cols-7 gap-y-1 py-1 text-center text-[13px]">
-              {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((d) => (
-                <span key={d} className="text-black/35 dark:text-white/35">{d}</span>
-              ))}
-              {Array.from({ length: posun }, (_, i) => <span key={`x${i}`} />)}
-              {Array.from({ length: dni }, (_, i) => i + 1).map((d) => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => {
-                    setVybrano(d)
-                    haptic('light')
-                  }}
-                  className={`mx-auto grid h-8 w-8 place-items-center rounded-full ${
-                    d === vybrano ? 'bg-primary text-white' : 'active:bg-black/10 dark:active:bg-white/10'
-                  }`}
-                >
-                  {d}
-                </button>
-              ))}
+            <span
+              className="block select-none py-1"
+              onPointerDown={(e) => (start.current = e.clientX)}
+              onPointerUp={(e) => {
+                if (start.current === null) return
+                const dx = e.clientX - start.current
+                start.current = null
+                if (Math.abs(dx) > 40) posunMesic(dx > 0 ? -1 : 1)
+              }}
+            >
+              <span className="grid grid-cols-7 text-center text-[11px] leading-[18px] text-black/40 dark:text-white/40">
+                {['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((d) => (
+                  <span key={d}>{d}</span>
+                ))}
+              </span>
+              <span className="mt-1 grid grid-cols-7 gap-y-1">
+                {bunky.map((d) => {
+                  const cizi = d.getMonth() !== mesic.getMonth()
+                  const jeDnes = d.toDateString() === dnes.toDateString()
+                  const jeVybrano = d.toDateString() === vybrano
+                  return (
+                    <button
+                      key={d.toISOString()}
+                      type="button"
+                      onClick={() => {
+                        setVybrano(d.toDateString())
+                        if (cizi) posunMesic(d < prvni ? -1 : 1)
+                        haptic('light')
+                      }}
+                      className={`mx-auto grid h-[30px] w-[30px] place-items-center rounded-full text-[15px] ${
+                        jeVybrano
+                          ? 'bg-primary text-white'
+                          : jeDnes
+                            ? 'bg-black/[.08] dark:bg-white/[.18]'
+                            : ''
+                      } ${cizi ? 'opacity-30' : ''}`}
+                    >
+                      {d.getDate()}
+                    </button>
+                  )
+                })}
+              </span>
             </span>
           }
+        />
+        <ListItem
+          title="Выбрано"
+          after={new Date(vybrano).toLocaleDateString('ru-RU', {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+          })}
         />
       </List>
     )
   },
 
-  // барабаны: крутятся и подставляют выбранное значение
   picker: function PickerDemo() {
     const sloupce = [
       Array.from({ length: 28 }, (_, i) => String(i + 1)),
