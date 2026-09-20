@@ -1,0 +1,341 @@
+{
+ "nazev": "Сверка блоков с эталоном framework7",
+ "pravidlo": "Каждый блок: открыть документацию framework7, сверить вид и поведение, повторить. verified — когда совпало.",
+ "bloky": {
+  "list": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "list-media": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "list-group": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "list-button": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "menu-list": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "inputs": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "checkbox": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "radio": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "toggle": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "stepper": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "range": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "searchbar": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "segmented": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "buttons": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "fab": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "chips": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "badge": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "card": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "progressbar": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "preloader": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "table": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "breadcrumbs": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "timeline": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "accordion": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "navbar": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "toolbar": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "tabbar": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "popup": {
+   "stav": "сверен",
+   "kdy": "2026-09-20",
+   "poznamka": "на весь экран с шапкой"
+  },
+  "sheet-modal": {
+   "stav": "сверен",
+   "kdy": "2026-09-20",
+   "poznamka": "снизу, тулбар с «Готово»"
+  },
+  "actions": {
+   "stav": "сверен",
+   "kdy": "2026-09-20",
+   "poznamka": "группы со скруглением, label, «Отмена» отдельной группой"
+  },
+  "dialog": {
+   "stav": "сверен",
+   "kdy": "2026-09-20",
+   "poznamka": "по центру, затемнение, две кнопки"
+  },
+  "popover": {
+   "stav": "сверен",
+   "kdy": "2026-09-20",
+   "poznamka": "якорится к элементу"
+  },
+  "panel": {
+   "stav": "сверен",
+   "kdy": "2026-09-20",
+   "poznamka": "выезжает слева, своя подложка"
+  },
+  "toast": {
+   "stav": "сверен",
+   "kdy": "2026-09-20",
+   "poznamka": "снизу, сам гаснет, вариант с кнопкой — как в docs/toast"
+  },
+  "notification": {
+   "stav": "сверен",
+   "kdy": "2026-09-20",
+   "poznamka": "иконка, заголовок, время справа, подзаголовок, текст, авто-скрытие — как в docs/notification"
+  },
+  "messages": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "messagebar": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "swipeout": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "sortable-list": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "smart-select": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "calendar": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "picker": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "text-editor": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "tabs": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "grid": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "skeleton": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "gauge": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "pie-chart": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "area-chart": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "pull-to-refresh": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "infinite-scroll": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "login-screen": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "photo-browser": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "tooltip": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "block": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "link": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "icons": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "subnavbar": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "swiper": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "treeview": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "virtual-list": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "list-index": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "contacts-list": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "data-table": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "autocomplete": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "color-picker": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  },
+  "statusbar": {
+   "stav": "не сверен",
+   "kdy": null,
+   "poznamka": ""
+  }
+ }
+}

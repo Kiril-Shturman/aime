@@ -748,41 +748,77 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
     )
   },
 
-  toast: () => (
-    <Block className="!my-0">
-      <Okno label="Показать тост">
-        {(open, close) => (
+  toast: function ToastDemo() {
+    const [open, setOpen] = useState(false)
+    const [sTlacitkem, setSTlacitkem] = useState(false)
+    const ukazat = (tlacitko: boolean) => {
+      setSTlacitkem(tlacitko)
+      setOpen(true)
+      if (!tlacitko) window.setTimeout(() => setOpen(false), 2500)
+    }
+    return (
+      <Block className="!my-0 grid gap-2">
+        <Button rounded onClick={() => ukazat(false)}>
+          Показать тост
+        </Button>
+        <Button rounded outline onClick={() => ukazat(true)}>
+          Тост с кнопкой
+        </Button>
+        <Vrstva>
           <Toast
             opened={open}
             position="center"
             button={
-              <Button clear onClick={close}>
-                Закрыть
-              </Button>
+              sTlacitkem ? (
+                <Button clear small inline onClick={() => setOpen(false)}>
+                  Отмена
+                </Button>
+              ) : undefined
             }
           >
-            <span>Сохранено</span>
+            <span className="text-[14px]">Отчёт сохранён</span>
           </Toast>
-        )}
-      </Okno>
-    </Block>
-  ),
-  notification: () => (
-    <Block className="!my-0">
-      <Okno label="Показать уведомление">
-        {(open, close) => (
+        </Vrstva>
+      </Block>
+    )
+  },
+
+  notification: function NotificationDemo() {
+    const [open, setOpen] = useState(false)
+    const zavrit = useRef<number | null>(null)
+    const ukazat = () => {
+      setOpen(true)
+      if (zavrit.current) window.clearTimeout(zavrit.current)
+      zavrit.current = window.setTimeout(() => setOpen(false), 4000)
+    }
+    return (
+      <Block className="!my-0 grid gap-2">
+        <Button rounded onClick={ukazat}>
+          Показать уведомление
+        </Button>
+        <span className="text-[13px] opacity-55">
+          гаснет само через 4 секунды, смахивается вверх
+        </span>
+        <Vrstva>
           <Notification
             opened={open}
-            title="Доска"
+            icon={
+              <span className="grid h-5 w-5 place-items-center rounded-md bg-primary text-[11px] font-bold text-white">
+                a
+              </span>
+            }
+            title="aiMe"
             titleRightText="сейчас"
             subtitle="Агент взял задачу"
             text="Сверстать главную"
-            onClose={close}
+            onClick={() => setOpen(false)}
+            onClose={() => setOpen(false)}
           />
-        )}
-      </Okno>
-    </Block>
-  ),
+        </Vrstva>
+      </Block>
+    )
+  },
+
   messages: function MessagesDemo() {
     const [zpravy, setZpravy] = useState([
       { type: 'received' as const, name: 'Агент', text: 'Задачу взял, начинаю' },
