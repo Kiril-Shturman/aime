@@ -169,6 +169,8 @@ def tool_next_task(args):
         )
 
     mine = me().get("id") if me().get("kind") == "member" else None
+    if (st.get("me") or {}).get("auto") is False:
+        return "Приём новых задач выключен владельцем — текущую доделай, новую не бери."
     free = [t for t in st["tasks"]
             if t.get("status") == "todo"
             and (not project or t["project"] == project["id"])

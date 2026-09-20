@@ -9,6 +9,7 @@ import {
   ListItem,
   Segmented,
   SegmentedButton,
+  Toggle,
 } from 'konsta/react'
 import Popup from '../components/Popup'
 import { Avatar } from '../components/Avatar'
@@ -39,6 +40,7 @@ export default function MemberInfoSheet({
   const [handle, setHandle] = useState('')
   const [kind, setKind] = useState<MemberKind>('bot')
   const [job, setJob] = useState<MemberJob>('work')
+  const [auto, setAuto] = useState(true)
   const [pozvano, setPozvano] = useState(false)
   const [chyba, setChyba] = useState<string | null>(null)
 
@@ -49,6 +51,7 @@ export default function MemberInfoSheet({
     setHandle(member.handle ?? '')
     setKind(member.kind ?? 'bot')
     setJob(member.job ?? 'work')
+    setAuto(member.auto !== false)
   }, [member])
 
   if (!member) return null
@@ -114,6 +117,7 @@ export default function MemberInfoSheet({
           name: name.trim(),
           role: role.trim() || undefined,
           job,
+          auto,
           project: projectId,
         })
       } else {
@@ -123,6 +127,7 @@ export default function MemberInfoSheet({
           handle: handle.trim() || undefined,
           kind,
           job,
+          auto,
         })
       }
       haptic('success')
@@ -246,6 +251,22 @@ export default function MemberInfoSheet({
           ))}
         </Segmented>
       </Block>
+
+      {(kind === 'agent' || kind === 'bot') && (
+        <List strong inset>
+          <ListItem
+            label
+            title="Берёт новые задачи"
+            after={
+              <Toggle
+                component="div"
+                checked={auto}
+                onChange={() => setAuto((p) => !p)}
+              />
+            }
+          />
+        </List>
+      )}
 
       <BlockTitle>Что делает в проекте</BlockTitle>
       <Block>
