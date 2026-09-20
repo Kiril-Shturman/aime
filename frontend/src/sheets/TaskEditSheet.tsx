@@ -122,6 +122,7 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
           <ListInput
             type="textarea"
             placeholder="Название"
+            inputClassName="!min-h-[84px] !leading-snug"
             value={title}
             onChange={(e) => setTitle((e.target as HTMLTextAreaElement).value)}
           />
@@ -141,7 +142,11 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
               onClick={() => setPicker('stage')}
               media={<Flag size={20} />}
               title="Этап"
-              after={stage?.title ?? 'Без этапа'}
+              after={
+              <span className="block max-w-[52vw] truncate">
+                {stage?.title ?? 'Без этапа'}
+              </span>
+            }
               chevron
             />
           )}
@@ -149,7 +154,11 @@ export default function TaskEditSheet({ open, onClose, task }: Props) {
             onClick={() => setPicker('member')}
             media={<User size={20} />}
             title="Исполнитель"
-            after={member?.name ?? 'Не выбран'}
+            after={
+              <span className="block max-w-[52vw] truncate">
+                {member?.name ?? 'Не выбран'}
+              </span>
+            }
             chevron
           />
         </List>

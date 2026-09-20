@@ -34,13 +34,13 @@ export default function Sheet({
     >
       {(title || headerRight || headerLeft) && (
         <Toolbar top>
-          <div className="left pl-1 text-[17px] font-semibold text-black dark:text-white">
-            {headerLeft ?? title}
-          </div>
-          <div className="right">
-            {headerRight ?? (
-              <KLink onClick={onClose}>Готово</KLink>
-            )}
+          <div className="flex w-full items-center justify-between gap-3 px-1">
+            <span className="truncate text-[17px] font-semibold text-black dark:text-white">
+              {headerLeft ?? title}
+            </span>
+            <span className="shrink-0">
+              {headerRight ?? <KLink onClick={onClose}>Готово</KLink>}
+            </span>
           </div>
         </Toolbar>
       )}
