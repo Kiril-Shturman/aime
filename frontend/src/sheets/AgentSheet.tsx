@@ -29,6 +29,7 @@ export default function AgentSheet({ open, onClose, agent, onOpenChat }: Props) 
   const [hook, setHook] = useState('')
   const [doruceno, setDoruceno] = useState<string | null>(null)
   const [chyba, setChyba] = useState<string | null>(null)
+  const [poprosili, setPoprosili] = useState(false)
 
 
   const zobrazeny = agent ?? hotovy
@@ -92,6 +93,27 @@ export default function AgentSheet({ open, onClose, agent, onOpenChat }: Props) 
     } catch (e) {
       setChyba(String(e).replace(/^Error:\s*\d+\s*[^:]*:\s*/, ''))
     }
+  }
+
+  // просим агента прислать, чего доска сама не узнает: аккаунт, тариф, лимиты
+  const poprosit = async () => {
+    if (!zobrazeny) return
+    haptic('light')
+    setPoprosili(true)
+    const prikaz = `Пришли доске свои данные — аккаунт, тариф и остаток лимита:
+curl -X POST ${location.origin}/api/agent/connect \\
+  -H "X-Board-Key: ${zobrazeny.key ?? '<твой ключ>'}" -H "Content-Type: application/json" \\
+  -d '{"account":"<почта аккаунта>","plan":"<тариф>","plan_until":"<до какого дня>",
+       "limits":{"5 часов":{"used":0,"limit":0,"reset":"чч:мм"},
+                  "неделя":{"used":0,"limit":0,"reset":"пн"}}}'
+Цифры возьми из /usage (Claude Code, OpenClaw), из заголовков anthropic-ratelimit-* или из /api/v1/key у OpenRouter.`
+    try {
+      await api.sayToAgent(zobrazeny.id, prikaz)
+      await refresh()
+    } catch {
+      setPoprosili(false)
+    }
+    window.setTimeout(() => setPoprosili(false), 6000)
   }
 
   const pozvat = async () => {
@@ -181,6 +203,22 @@ export default function AgentSheet({ open, onClose, agent, onOpenChat }: Props) 
             <Udaj nazev="расход" hodnota={zobrazeny.usage} />
             <Udaj nazev="чем подключён" hodnota={zobrazeny.client} />
           </div>
+
+          {!zobrazeny.account && !zobrazeny.plan && !zobrazeny.limits && (
+            <div className="mt-3 rounded-xl border border-black/[.06] bg-ios-light-surface-1 px-3 py-3 dark:border-white/[.08] dark:bg-ios-dark-surface-1">
+              <p className="text-[13px] leading-snug text-black/55 dark:text-white/45">
+                Аккаунт, подписку и остаток лимита доска сама не видит — это знает только
+                клиент агента. Попросите его прислать: он ответит одной командой.
+              </p>
+              <button
+                type="button"
+                onClick={poprosit}
+                className="mt-2.5 text-[15px] font-semibold text-black active:opacity-60 dark:text-white"
+              >
+                {poprosili ? 'Попросили — ждём ответа' : 'Запросить данные'}
+              </button>
+            </div>
+          )}
 
           <button
             type="button"
