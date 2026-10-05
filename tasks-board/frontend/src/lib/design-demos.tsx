@@ -1020,6 +1020,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
     return (
       <List strong inset>
         <ListItem
+          titleWrapClassName="w-full [&>div:first-child]:w-full"
           title={
             <span className="flex h-8 items-center justify-between">
               <KLink iconOnly onClick={() => posunMesic(-1)} aria-label="Предыдущий месяц">
@@ -1035,6 +1036,7 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
           }
         />
         <ListItem
+          titleWrapClassName="w-full [&>div:first-child]:w-full"
           title={
             <span
               className="block select-none py-1"
