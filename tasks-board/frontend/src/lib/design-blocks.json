@@ -168,10 +168,52 @@
   "code": "<Popup open={open} onClose={() => setOpen(false)} title=\"Задача\"\n  onSave={save} canSave={!!title.trim()}>\n  <List strong inset>\n    <ListInput type=\"textarea\" placeholder=\"Название\" value={title}\n      onChange={(e) => setTitle(e.target.value)} />\n  </List>\n</Popup>"
  },
  {
+  "id": "popup-swipe",
+  "title": "Popup со свайпом",
+  "group": "Окна",
+  "code": "<Popup open={open} onClose={() => setOpen(false)}\n  title=\"Просмотр\" swipeToClose>\n  <Block strong inset>\n    Проведите вверх или вниз, чтобы закрыть окно.\n  </Block>\n</Popup>"
+ },
+ {
+  "id": "popup-swipe-handler",
+  "title": "Popup с ручкой",
+  "group": "Окна",
+  "code": "<Popup open={open} onClose={() => setOpen(false)} title=\"Просмотр\"\n  swipeToClose=\"to-bottom\" swipeHandler=\".popup-swipe-handle\">\n  <div className=\"popup-swipe-handle flex justify-center py-3\">\n    <span className=\"h-1.5 w-12 rounded-full bg-black/20\" />\n  </div>\n  <Block strong inset>Тяните за ручку вниз.</Block>\n</Popup>"
+ },
+ {
+  "id": "popup-push",
+  "title": "Popup Push",
+  "group": "Окна",
+  "code": "<Popup open={open} onClose={() => setOpen(false)}\n  title=\"Новый экран\" push>\n  <Block strong inset>Popup отодвигает основной экран назад.</Block>\n</Popup>"
+ },
+ {
   "id": "sheet-modal",
   "title": "Нижняя шторка",
   "group": "Окна",
   "code": "<Sheet open={open} onClose={() => setOpen(false)} title=\"Статус\">\n  <List strong inset>\n    {options.map((o) => (\n      <ListItem key={o.id} link onClick={() => pick(o.id)} title={o.label}\n        after={value === o.id ? <Check size={18} className=\"text-primary\" /> : undefined} />\n    ))}\n  </List>\n</Sheet>"
+ },
+ {
+  "id": "sheet-push",
+  "title": "Шторка с Push",
+  "group": "Окна",
+  "code": "<Sheet open={open} onClose={() => setOpen(false)}\n  title=\"Быстрое действие\" className=\"!h-[42dvh]\">\n  <Block strong inset>Шторка приподнимает основной экран.</Block>\n</Sheet>"
+ },
+ {
+  "id": "sheet-swipe-close",
+  "title": "Шторка со свайпом",
+  "group": "Окна",
+  "code": "<Sheet open={open} onClose={() => setOpen(false)}\n  title=\"Параметры\" className=\"!h-[52dvh]\">\n  <SwipeHandle onSwipeDown={() => setOpen(false)} />\n  <Block strong inset>Потяните вниз, чтобы закрыть.</Block>\n</Sheet>"
+ },
+ {
+  "id": "sheet-swipe-step",
+  "title": "Шторка: половина → весь экран",
+  "group": "Окна",
+  "code": "<Sheet open={open} onClose={() => setOpen(false)} title=\"Детали\"\n  className={expanded ? '!h-[92dvh]' : '!h-[46dvh]'}>\n  <SwipeHandle onSwipeUp={() => setExpanded(true)}\n    onSwipeDown={() => expanded ? setExpanded(false) : setOpen(false)} />\n  <Block strong inset>Потяните вверх, чтобы развернуть.</Block>\n</Sheet>"
+ },
+ {
+  "id": "sheet-breakpoints",
+  "title": "Шторка с тремя высотами",
+  "group": "Окна",
+  "code": "const heights = ['!h-[33dvh]', '!h-[66dvh]', '!h-[92dvh]']\n\n<Sheet open={open} onClose={() => setOpen(false)} title=\"Маршрут\"\n  className={`${heights[step]} transition-[height]`}>\n  <SwipeHandle onSwipeUp={() => setStep(Math.min(2, step + 1))}\n    onSwipeDown={() => step ? setStep(step - 1) : setOpen(false)} />\n  <Block strong inset>Высоты: 1/3, 2/3 и весь экран.</Block>\n</Sheet>"
  },
  {
   "id": "actions",
