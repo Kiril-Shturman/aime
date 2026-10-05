@@ -78,6 +78,7 @@ import Sheet from '../components/Sheet'
 import Pill from '../components/Pill'
 import { haptic } from '../lib/telegram'
 import '../f7-timeline.css'
+import { EXTENDED_DEMOS } from './design-demos-extended'
 
 // Живые примеры блоков. Рядом с каждым в каталоге лежит его код —
 // агент копирует кусок и собирает из таких кирпичей экран.
@@ -106,6 +107,7 @@ function Okno({
 }
 
 export const DEMOS: Record<string, () => React.ReactNode> = {
+  ...EXTENDED_DEMOS,
   list: () => (
     <List strong inset>
       <ListItem title="Первый пункт" />

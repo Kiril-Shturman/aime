@@ -400,5 +400,275 @@
   "title": "Статус-бар",
   "group": "Навигация",
   "code": "// подложка под системную строку: цвет и высота берутся из safe-area\n<div className=\"h-[env(safe-area-inset-top)] bg-ios-light-surface dark:bg-ios-dark-surface\" />\n<Navbar title=\"Экран\" />"
+ },
+ {
+  "id": "app",
+  "title": "Корень приложения",
+  "group": "Каркас приложения",
+  "code": "<App theme=\"ios\" dark>\n  <BrowserRouter>\n    <AppStoreProvider><Routes /></AppStoreProvider>\n  </BrowserRouter>\n</App>"
+ },
+ {
+  "id": "page",
+  "title": "Страница",
+  "group": "Каркас приложения",
+  "code": "<Page>\n  <Navbar title=\"Страница\" />\n  <Block>Содержимое маршрута</Block>\n</Page>"
+ },
+ {
+  "id": "view",
+  "title": "Стек экранов",
+  "group": "Каркас приложения",
+  "code": "<Routes>\n  <Route path=\"/\" element={<HomePage />} />\n  <Route path=\"/settings\" element={<SettingsPage />} />\n</Routes>"
+ },
+ {
+  "id": "form",
+  "title": "Форма с проверкой",
+  "group": "Формы",
+  "code": "<form onSubmit={save}>\n  <List strong inset>\n    <ListInput required label=\"Название\" value={title} onChange={changeTitle} />\n  </List>\n  <Button type=\"submit\" disabled={!title.trim()}>Сохранить</Button>\n</form>"
+ },
+ {
+  "id": "form-storage",
+  "title": "Автосохранение формы",
+  "group": "Формы",
+  "code": "const [draft, setDraft] = useState(() => localStorage.getItem('draft') ?? '')\nuseEffect(() => localStorage.setItem('draft', draft), [draft])\n\n<ListInput value={draft} onChange={(e) => setDraft(e.target.value)} />"
+ },
+ {
+  "id": "modal",
+  "title": "Модальный контейнер",
+  "group": "Окна",
+  "code": "// Общий паттерн для Popup, Sheet, Dialog и Actions\n<Modal opened={open} onBackdropClick={() => setOpen(false)}>\n  {children}\n</Modal>"
+ },
+ {
+  "id": "touch-highlight",
+  "title": "Подсветка нажатия",
+  "group": "Управление",
+  "code": "<button className=\"transition active:bg-black/10 active:opacity-70\">\n  Нажми меня\n</button>"
+ },
+ {
+  "id": "touch-ripple",
+  "title": "Волна нажатия",
+  "group": "Управление",
+  "code": "<button className=\"relative overflow-hidden\" onPointerDown={startRipple}>\n  Действие\n  {ripples.map((r) => <span key={r.id} className=\"touch-ripple\" style={r.style} />)}\n</button>"
+ },
+ {
+  "id": "typography",
+  "title": "Типографика",
+  "group": "Показ данных",
+  "code": "<h1 className=\"text-[28px] font-bold\">Большой заголовок</h1>\n<h2 className=\"text-[20px] font-semibold\">Заголовок секции</h2>\n<p className=\"text-[15px] leading-relaxed\">Основной текст</p>\n<small className=\"opacity-50\">Подпись</small>"
+ },
+ {
+  "id": "calendar-page",
+  "title": "Календарь на весь экран",
+  "group": "Формы",
+  "code": "<Page>\n  <Navbar title={monthTitle} />\n  <Calendar value={selectedDate} onChange={setSelectedDate} />\n</Page>"
+ },
+ {
+  "id": "cards-expandable",
+  "title": "Раскрывающаяся карточка",
+  "group": "Показ данных",
+  "code": "<Card onClick={() => setExpanded(!expanded)} className={expanded ? 'min-h-screen' : ''}>\n  <CardHeader>Проект</CardHeader>\n  {expanded && <ProjectDetails />}\n</Card>"
+ },
+ {
+  "id": "fab-morph",
+  "title": "Раскрывающаяся FAB",
+  "group": "Управление",
+  "code": "<div className={open ? 'fab-morph is-open' : 'fab-morph'}>\n  <Fab icon={<Plus />} onClick={() => setOpen(true)} />\n  {open && <NewTaskForm onClose={() => setOpen(false)} />}\n</div>"
+ },
+ {
+  "id": "login-screen-page",
+  "title": "Страница входа",
+  "group": "Окна",
+  "code": "<Page>\n  <Navbar title=\"Вход\" />\n  <LoginForm />\n</Page>"
+ },
+ {
+  "id": "navbar-hide-scroll",
+  "title": "Скрываемая шапка",
+  "group": "Навигация",
+  "code": "<Navbar className={scrollingDown ? '-translate-y-full' : 'translate-y-0'}\n  title=\"Лента\" />"
+ },
+ {
+  "id": "searchbar-expandable",
+  "title": "Поиск из шапки",
+  "group": "Навигация",
+  "code": "<Navbar title=\"Проекты\" right={<Link onClick={() => setSearchOpen(true)}><Search /></Link>} />\n{searchOpen && <Searchbar value={q} onInput={changeQuery} />}"
+ },
+ {
+  "id": "subnavbar-title",
+  "title": "Подшапка с заголовком",
+  "group": "Навигация",
+  "code": "<Navbar title=\"Проект\" subnavbar={<Toolbar top><b>Задачи · 12</b></Toolbar>} />"
+ },
+ {
+  "id": "tabs-static",
+  "title": "Статические вкладки",
+  "group": "Навигация",
+  "code": "<Segmented strong>\n  {tabs.map((tab) => <SegmentedButton active={active === tab.id} onClick={() => setActive(tab.id)}>{tab.title}</SegmentedButton>)}\n</Segmented>\n<div>{panels[active]}</div>"
+ },
+ {
+  "id": "tabs-animated",
+  "title": "Анимированные вкладки",
+  "group": "Навигация",
+  "code": "<div className=\"overflow-hidden\">\n  <div className=\"flex transition-transform\" style={{ transform: `translateX(-${active * 100}%)` }}>\n    {panels.map((panel) => <div className=\"w-full shrink-0\">{panel}</div>)}\n  </div>\n</div>"
+ },
+ {
+  "id": "tabs-swipeable",
+  "title": "Вкладки со свайпом",
+  "group": "Навигация",
+  "code": "<div className=\"flex snap-x snap-mandatory overflow-x-auto\">\n  {panels.map((panel) => <section className=\"w-full shrink-0 snap-center\">{panel}</section>)}\n</div>"
+ },
+ {
+  "id": "tabs-routable",
+  "title": "Вкладки-маршруты",
+  "group": "Навигация",
+  "code": "<Routes>\n  <Route path=\"tasks\" element={<TasksTab />} />\n  <Route path=\"files\" element={<FilesTab />} />\n  <Route path=\"people\" element={<PeopleTab />} />\n</Routes>"
+ },
+ {
+  "id": "tabbar-icons",
+  "title": "Таббар с иконками",
+  "group": "Навигация",
+  "code": "<Tabbar labels icons>\n  <TabbarLink active label=\"Главная\" icon={<Home />} />\n  <TabbarLink label=\"Профиль\" icon={<User />} />\n</Tabbar>"
+ },
+ {
+  "id": "tabbar-scrollable",
+  "title": "Прокручиваемый таббар",
+  "group": "Навигация",
+  "code": "<div className=\"flex gap-2 overflow-x-auto\">\n  {tabs.map((tab) => <Chip className=\"shrink-0\">{tab}</Chip>)}\n</div>"
+ },
+ {
+  "id": "toolbar-hide-scroll",
+  "title": "Скрываемая нижняя панель",
+  "group": "Навигация",
+  "code": "<Toolbar className={scrollingDown ? 'translate-y-full' : 'translate-y-0'}>\n  <ToolbarActions />\n</Toolbar>"
+ },
+ {
+  "id": "swiper-horizontal",
+  "title": "Горизонтальный слайдер",
+  "group": "Слайдеры",
+  "code": "<Swiper slidesPerView={1} pagination>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-vertical",
+  "title": "Вертикальный слайдер",
+  "group": "Слайдеры",
+  "code": "<Swiper direction=\"vertical\" pagination>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-space-between",
+  "title": "Слайды с промежутком",
+  "group": "Слайдеры",
+  "code": "<Swiper spaceBetween={16}>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-multiple",
+  "title": "Несколько слайдов",
+  "group": "Слайдеры",
+  "code": "<Swiper slidesPerView={2.2} spaceBetween={12}>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-nested",
+  "title": "Вложенный слайдер",
+  "group": "Слайдеры",
+  "code": "<Swiper>\n  <SwiperSlide><Swiper direction=\"vertical\">{nestedSlides}</Swiper></SwiperSlide>\n</Swiper>"
+ },
+ {
+  "id": "swiper-loop",
+  "title": "Зацикленный слайдер",
+  "group": "Слайдеры",
+  "code": "<Swiper loop>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-3d-cube",
+  "title": "Слайдер 3D Cube",
+  "group": "Слайдеры",
+  "code": "<Swiper effect=\"cube\" cubeEffect={{ shadow: true }}>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-3d-coverflow",
+  "title": "Слайдер 3D Coverflow",
+  "group": "Слайдеры",
+  "code": "<Swiper effect=\"coverflow\" centeredSlides slidesPerView=\"auto\">{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-3d-flip",
+  "title": "Слайдер 3D Flip",
+  "group": "Слайдеры",
+  "code": "<Swiper effect=\"flip\">{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-fade",
+  "title": "Слайдер Fade",
+  "group": "Слайдеры",
+  "code": "<Swiper effect=\"fade\" fadeEffect={{ crossFade: true }}>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-scrollbar",
+  "title": "Слайдер с полосой",
+  "group": "Слайдеры",
+  "code": "<Swiper scrollbar={{ draggable: true }}>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-gallery",
+  "title": "Галерея с миниатюрами",
+  "group": "Слайдеры",
+  "code": "<Swiper thumbs={{ swiper: thumbsSwiper }}>{slides.map(renderSlide)}</Swiper>\n<Swiper onSwiper={setThumbsSwiper} slidesPerView={4}>{thumbs}</Swiper>"
+ },
+ {
+  "id": "swiper-parallax",
+  "title": "Слайдер с параллаксом",
+  "group": "Слайдеры",
+  "code": "<Swiper parallax>\n  <div data-swiper-parallax=\"-30%\">Фоновый слой</div>\n  {slides.map(renderSlide)}\n</Swiper>"
+ },
+ {
+  "id": "swiper-lazy",
+  "title": "Ленивая загрузка слайдов",
+  "group": "Слайдеры",
+  "code": "<Swiper lazyPreloadPrevNext={1}>\n  {images.map((src) => <SwiperSlide><img loading=\"lazy\" src={src} /></SwiperSlide>)}\n</Swiper>"
+ },
+ {
+  "id": "swiper-pagination-progress",
+  "title": "Слайдер с прогрессом",
+  "group": "Слайдеры",
+  "code": "<Swiper pagination={{ type: 'progressbar' }}>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-pagination-fraction",
+  "title": "Слайдер со счётчиком",
+  "group": "Слайдеры",
+  "code": "<Swiper pagination={{ type: 'fraction' }}>{slides.map(renderSlide)}</Swiper>"
+ },
+ {
+  "id": "swiper-zoom",
+  "title": "Слайдер с увеличением",
+  "group": "Слайдеры",
+  "code": "<Swiper zoom>\n  <SwiperSlide><div className=\"swiper-zoom-container\"><img src={photo} /></div></SwiperSlide>\n</Swiper>"
+ },
+ {
+  "id": "color-themes",
+  "title": "Цветовые темы",
+  "group": "Каркас приложения",
+  "code": "const themes = ['blue', 'green', 'orange', 'purple', 'red']\n{themes.map((theme) => <button onClick={() => setTheme(theme)} className={`color-${theme}`} />)}"
+ },
+ {
+  "id": "page-transitions",
+  "title": "Переходы между страницами",
+  "group": "Каркас приложения",
+  "code": "<Route path=\"/details\" element={<DetailsPage />} />\n// CSS: slide, fade, cover, circle и custom transition"
+ },
+ {
+  "id": "routable-modals",
+  "title": "Модальные маршруты",
+  "group": "Каркас приложения",
+  "code": "<Route path=\"/compose\" element={<ComposePopup />} />\n// history.back() закрывает окно так же, как обычный экран"
+ },
+ {
+  "id": "master-detail",
+  "title": "Master–Detail",
+  "group": "Каркас приложения",
+  "code": "<div className=\"grid md:grid-cols-[320px_1fr]\">\n  <MasterList />\n  <Routes><Route path=\":id\" element={<Detail />} /></Routes>\n</div>"
+ },
+ {
+  "id": "store",
+  "title": "Общее состояние приложения",
+  "group": "Каркас приложения",
+  "code": "const AppContext = createContext(null)\nexport function AppStoreProvider({ children }) {\n  const [state, dispatch] = useReducer(reducer, initialState)\n  return <AppContext.Provider value={{ state, dispatch }}>{children}</AppContext.Provider>\n}"
  }
 ]
