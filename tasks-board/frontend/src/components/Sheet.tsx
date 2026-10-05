@@ -9,6 +9,7 @@ interface Props {
   children: ReactNode
   headerRight?: ReactNode
   headerLeft?: ReactNode
+  className?: string
 }
 
 // Маленькое окно снизу — ровно как sheet-modal у konsta: тулбар сверху,
@@ -21,6 +22,7 @@ export default function Sheet({
   children,
   headerRight,
   headerLeft,
+  className = '',
 }: Props) {
   useEffect(() => {
     if (open) haptic('light')
@@ -30,7 +32,7 @@ export default function Sheet({
     <KSheet
       opened={open}
       onBackdropClick={onClose}
-      className="pb-safe w-full max-h-[92dvh] overflow-y-auto"
+      className={`pb-safe w-full max-h-[92dvh] overflow-y-auto ${className}`}
     >
       {(title || headerRight || headerLeft) && (
         <Toolbar top innerClassName="w-full">

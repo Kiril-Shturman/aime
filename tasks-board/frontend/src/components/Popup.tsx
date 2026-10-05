@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode, type TouchEvent } from 'react'
 import { X, Check } from 'lucide-react'
 import { Popup as KPopup, Navbar, Page, Link as KLink } from 'konsta/react'
 import { haptic } from '../lib/telegram'
@@ -16,6 +16,11 @@ interface Props {
   side?: 'center' | 'right'
   // что показать справа в шапке вместо галочки сохранения
   headerRight?: ReactNode
+  // Варианты Framework7 Popup: закрытие свайпом по всему окну или
+  // только по выделенной ручке, плюс push-представление.
+  swipeToClose?: boolean | 'to-top' | 'to-bottom'
+  swipeHandler?: string
+  push?: boolean
   children: ReactNode
 }
 
@@ -28,8 +33,13 @@ export default function Popup({
   canSave,
   side = 'center',
   headerRight,
+  swipeToClose = false,
+  swipeHandler,
+  push = false,
   children,
 }: Props) {
+  const swipeStartY = useRef<number | null>(null)
+
   useEffect(() => {
     if (open) haptic('light')
   }, [open])
@@ -55,13 +65,35 @@ export default function Popup({
       ].join(' ')
     : 'md:!w-[880px] md:!h-[90vh] md:!max-h-[900px]'
 
+  const pushCls = push
+    ? `!top-[calc(env(safe-area-inset-top)+10px)] !h-[calc(100dvh-env(safe-area-inset-top)-10px)] !rounded-t-2xl ${open ? '!translate-y-0' : '!translate-y-full'}`
+    : ''
+
+  const startSwipe = (event: TouchEvent<HTMLElement>) => {
+    if (!swipeToClose) return
+    if (swipeHandler && !(event.target as HTMLElement).closest(swipeHandler)) return
+    swipeStartY.current = event.touches[0]?.clientY ?? null
+  }
+
+  const endSwipe = (event: TouchEvent<HTMLElement>) => {
+    if (swipeStartY.current === null) return
+    const endY = event.changedTouches[0]?.clientY ?? swipeStartY.current
+    const delta = endY - swipeStartY.current
+    swipeStartY.current = null
+    const closesUp = swipeToClose === true || swipeToClose === 'to-top'
+    const closesDown = swipeToClose === true || swipeToClose === 'to-bottom'
+    if ((closesUp && delta < -72) || (closesDown && delta > 72)) onClose()
+  }
+
   return (
     <KPopup
       opened={open}
       onBackdropClick={onClose}
       // Фон белый по дефолту, при overscroll сверху видно белую полоску
       // над серой Page — прибиваем к тому же серому (ios-light-surface).
-      className={`${drawerCls} !bg-ios-light-surface dark:!bg-ios-dark-surface`}
+      className={`${drawerCls} ${pushCls} !bg-ios-light-surface dark:!bg-ios-dark-surface`}
+      onTouchStart={startSwipe}
+      onTouchEnd={endSwipe}
     >
       <Page className={pageClassName}>
         <Navbar

@@ -107,6 +107,113 @@ function Okno({
   )
 }
 
+function PopupVariantDemo({ variant }: { variant: 'swipe' | 'handler' | 'push' }) {
+  const [open, setOpen] = useState(false)
+  const close = () => setOpen(false)
+  const handler = variant === 'handler'
+  return (
+    <Block className="!my-0">
+      <Button rounded onClick={() => setOpen(true)}>
+        {variant === 'push' ? 'Открыть push-popup' : 'Открыть и свайпнуть'}
+      </Button>
+      <Vrstva>
+        <Popup
+          open={open}
+          onClose={close}
+          title={variant === 'push' ? 'Popup Push' : 'Popup со свайпом'}
+          push={variant === 'push'}
+          swipeToClose={variant === 'handler' ? 'to-bottom' : variant === 'swipe'}
+          swipeHandler={handler ? '.popup-swipe-handle' : undefined}
+        >
+          {handler && (
+            <div className="popup-swipe-handle flex justify-center py-3 touch-none">
+              <span className="h-1.5 w-12 rounded-full bg-black/20 dark:bg-white/25" />
+            </div>
+          )}
+          <Block strong inset>
+            {variant === 'push'
+              ? 'Окно приподнимает и визуально отодвигает основной экран.'
+              : handler
+                ? 'Потяните за ручку вниз, чтобы закрыть.'
+                : 'Проведите вверх или вниз по содержимому, чтобы закрыть.'}
+          </Block>
+        </Popup>
+      </Vrstva>
+    </Block>
+  )
+}
+
+type SheetVariant = 'push' | 'swipe-close' | 'swipe-step' | 'breakpoints'
+
+function SheetVariantDemo({ variant }: { variant: SheetVariant }) {
+  const [open, setOpen] = useState(false)
+  const [level, setLevel] = useState(0)
+  const startY = useRef<number | null>(null)
+  const close = () => setOpen(false)
+  const maxLevel = variant === 'breakpoints' ? 2 : variant === 'swipe-step' ? 1 : 0
+  const heightClass =
+    variant === 'breakpoints'
+      ? ['!h-[33dvh]', '!h-[66dvh]', '!h-[92dvh]'][level]
+      : variant === 'swipe-step'
+        ? ['!h-[46dvh]', '!h-[92dvh]'][level]
+        : variant === 'push'
+          ? '!h-[42dvh]'
+          : '!h-[52dvh]'
+
+  const finishSwipe = (event: React.TouchEvent<HTMLDivElement>) => {
+    if (startY.current === null) return
+    const delta = (event.changedTouches[0]?.clientY ?? startY.current) - startY.current
+    startY.current = null
+    if (delta > 70) {
+      if (level > 0) setLevel((value) => value - 1)
+      else close()
+    } else if (delta < -70 && level < maxLevel) {
+      setLevel((value) => value + 1)
+    }
+  }
+
+  const openSheet = () => {
+    setLevel(0)
+    setOpen(true)
+  }
+
+  const title = {
+    push: 'Sheet Push',
+    'swipe-close': 'Свайп для закрытия',
+    'swipe-step': 'Шторка на полэкрана',
+    breakpoints: 'Несколько высот',
+  }[variant]
+
+  return (
+    <Block className="!my-0">
+      <Button rounded onClick={openSheet}>Открыть шторку</Button>
+      <Vrstva>
+        <Sheet open={open} onClose={close} title={title} className={`${heightClass} transition-[height] duration-300`}>
+          <div
+            className="flex touch-none justify-center py-3"
+            onTouchStart={(event) => { startY.current = event.touches[0]?.clientY ?? null }}
+            onTouchEnd={finishSwipe}
+          >
+            <span className="h-1.5 w-12 rounded-full bg-black/20 dark:bg-white/25" />
+          </div>
+          <Block strong inset>
+            {variant === 'push' && 'Шторка открывается поверх экрана с push-эффектом.'}
+            {variant === 'swipe-close' && 'Потяните ручку вниз, чтобы закрыть шторку.'}
+            {variant === 'swipe-step' && 'Потяните вверх: половина экрана раскроется на весь экран.'}
+            {variant === 'breakpoints' && `Текущая высота: ${['1/3', '2/3', 'весь экран'][level]}.`}
+          </Block>
+          {maxLevel > 0 && (
+            <Block className="grid grid-cols-2 gap-2">
+              <Button disabled={level === 0} rounded onClick={() => setLevel((value) => Math.max(0, value - 1))}>Ниже</Button>
+              <Button disabled={level === maxLevel} rounded onClick={() => setLevel((value) => Math.min(maxLevel, value + 1))}>Выше</Button>
+            </Block>
+          )}
+        </Sheet>
+      </Vrstva>
+    </Block>
+  )
+}
+
 export const DEMOS: Record<string, () => React.ReactNode> = {
   ...EXTENDED_DEMOS,
   list: () => (
@@ -630,6 +737,9 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </Okno>
     </Block>
   ),
+  'popup-swipe': () => <PopupVariantDemo variant="swipe" />,
+  'popup-swipe-handler': () => <PopupVariantDemo variant="handler" />,
+  'popup-push': () => <PopupVariantDemo variant="push" />,
   'sheet-modal': () => (
     <Block className="!my-0">
       <Okno label="Открыть шторку">
@@ -651,6 +761,10 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
       </Okno>
     </Block>
   ),
+  'sheet-push': () => <SheetVariantDemo variant="push" />,
+  'sheet-swipe-close': () => <SheetVariantDemo variant="swipe-close" />,
+  'sheet-swipe-step': () => <SheetVariantDemo variant="swipe-step" />,
+  'sheet-breakpoints': () => <SheetVariantDemo variant="breakpoints" />,
   actions: () => (
     <Block className="!my-0">
       <Okno label="Открыть действия">
