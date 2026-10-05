@@ -5,6 +5,7 @@ import {
   ActionsButton,
   ActionsGroup,
   ActionsLabel,
+  App as KonstaApp,
   Badge,
   Block,
   BlockFooter,
@@ -1989,6 +1990,64 @@ export const DEMOS: Record<string, () => React.ReactNode> = {
         <Button rounded small onClick={() => setSvetla((s) => !s)}>
           {svetla ? 'Тёмный статус-бар' : 'Светлый статус-бар'}
         </Button>
+      </Block>
+    )
+  },
+  app: function AppDemo() {
+    const [theme, setTheme] = useState<'ios' | 'material'>('ios')
+    const [dark, setDark] = useState(false)
+    const [accent, setAccent] = useState<'#007aff' | '#30d158'>('#007aff')
+    const appColors = {
+      '--k-color-primary': accent,
+      '--k-color-ios-primary': accent,
+      '--k-color-md-light-primary': accent,
+      '--k-color-md-dark-primary': accent,
+    } as React.CSSProperties
+
+    return (
+      <Block className="!my-0 grid gap-3">
+        <Segmented strong rounded>
+          <SegmentedButton active={theme === 'ios'} onClick={() => setTheme('ios')}>
+            iOS
+          </SegmentedButton>
+          <SegmentedButton active={theme === 'material'} onClick={() => setTheme('material')}>
+            Material
+          </SegmentedButton>
+        </Segmented>
+        <KonstaApp
+          theme={theme}
+          dark={dark}
+          safeAreas
+          data-theme={theme}
+          data-dark={dark}
+          style={appColors}
+          className="!h-64 !min-h-0 overflow-hidden rounded-3xl border border-black/10 dark:border-white/10"
+        >
+          <Page className="!relative !h-64">
+            <Navbar
+              title="aiMe"
+              subtitle={`${theme === 'ios' ? 'iOS' : 'Material'} · ${dark ? 'тёмная' : 'светлая'}`}
+            />
+            <Block className="!my-3 grid gap-3">
+              <span className="flex flex-wrap gap-1.5">
+                <Chip>theme: {theme}</Chip>
+                <Chip>primary: {accent}</Chip>
+                <Chip>darkMode: {String(dark)}</Chip>
+              </span>
+              <Button rounded onClick={() => setDark((current) => !current)}>
+                {dark ? 'Включить светлый режим' : 'Включить тёмный режим'}
+              </Button>
+            </Block>
+          </Page>
+        </KonstaApp>
+        <Segmented strong rounded>
+          <SegmentedButton active={accent === '#007aff'} onClick={() => setAccent('#007aff')}>
+            Синий акцент
+          </SegmentedButton>
+          <SegmentedButton active={accent === '#30d158'} onClick={() => setAccent('#30d158')}>
+            Зелёный акцент
+          </SegmentedButton>
+        </Segmented>
       </Block>
     )
   },
