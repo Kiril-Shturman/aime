@@ -50,7 +50,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, [])
 
   useEffect(() => {
-    refresh()
+    // Отдельная витрина кошелька не использует API закрытой доски.
+    if (!window.location.hostname.startsWith('wallet.')) refresh()
   }, [refresh])
 
   const value = useMemo(
