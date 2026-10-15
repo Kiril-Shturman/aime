@@ -65,8 +65,25 @@ export function initTelegram() {
 // Вызываем каждый раз, когда пользователь переключает светлую/тёмную.
 export function applyTgTheme(theme: 'dark' | 'light') {
   const t = tg()
+  // В светлой теме экран кошелька использует системный iOS grouped background.
+  // Тем же цветом красим нативную шапку Telegram, чтобы над WebView не было
+  // отдельной белой полосы.
+  const bg = theme === 'dark' ? '#000000' : '#efeff4'
+
+  // Держим цвет самого WebView и системной шапки Telegram одинаковым.
+  // meta theme-color нужен как запасной вариант для клиентов, которые
+  // применяют цвет WebView раньше, чем становится доступен WebApp API.
+  document.documentElement.style.backgroundColor = bg
+  document.body.style.backgroundColor = bg
+  let themeMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+  if (!themeMeta) {
+    themeMeta = document.createElement('meta')
+    themeMeta.name = 'theme-color'
+    document.head.appendChild(themeMeta)
+  }
+  themeMeta.content = bg
+
   if (!t) return
-  const bg = theme === 'dark' ? '#000000' : '#ffffff'
   try {
     t.setHeaderColor?.(bg)
     t.setBackgroundColor?.(bg)
