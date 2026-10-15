@@ -32,6 +32,7 @@ import AgentChatPage from './pages/AgentChatPage'
 import GmailConnectPage from './pages/GmailConnectPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import WalletPage from './pages/WalletPage'
 import TabPill from './components/TabPill'
 import DesktopSidebar from './components/DesktopSidebar'
 import CopyToast from './components/CopyToast'
@@ -76,6 +77,9 @@ function Themed() {
 
 function AppRoutes() {
   const { pathname } = useLocation()
+  if (isWalletHost()) {
+    return <WalletPage />
+  }
   const hasTabPill =
     pathname === '/' ||
     pathname === '/generate' ||
@@ -114,6 +118,7 @@ function AppRoutes() {
           <Route path="/connect/gmail" element={<GmailConnectPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/wallet" element={<WalletPage />} />
         </Routes>
         {hasTabPill && <TabPill className="md:hidden" />}
       </div>
@@ -122,14 +127,14 @@ function AppRoutes() {
 }
 
 // Публичные страницы: авторизация и правовые — их гейт не закрывает.
-const PUBLIC_PATHS = ['/login', '/register', '/terms', '/privacy', '/agent']
+const PUBLIC_PATHS = ['/login', '/register', '/terms', '/privacy', '/agent', '/wallet']
 
 // Доска закрыта ключом. Из Телеграма подпись приходит сама, в браузере
 // ключ передаётся один раз: адрес?key=…
 function Gate({ children }: { children: React.ReactNode }) {
   const { denied } = useApp()
   const { pathname } = useLocation()
-  const isPublic = PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+  const isPublic = isWalletHost() || PUBLIC_PATHS.some((p) => pathname.startsWith(p))
   if (!denied || isPublic) return <>{children}</>
   return (
     <div className="h-full flex items-center justify-center px-8 text-center">
@@ -142,4 +147,8 @@ function Gate({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   )
+}
+
+function isWalletHost() {
+  return window.location.hostname.startsWith('wallet.')
 }
