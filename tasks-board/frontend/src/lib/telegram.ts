@@ -14,6 +14,10 @@ interface TG {
   setHeaderColor?: (c: string) => void
   setBackgroundColor?: (c: string) => void
   setBottomBarColor?: (c: string) => void
+  openTelegramLink?: (url: string) => void
+  openLink?: (url: string) => void
+  showScanQrPopup?: (params: { text?: string }, callback?: (data: string) => boolean | void) => void
+  closeScanQrPopup?: () => void
   disableVerticalSwipes?: () => void
   initData?: string
   initDataUnsafe?: { user?: TgUser }

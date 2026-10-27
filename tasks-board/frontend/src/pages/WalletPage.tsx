@@ -11,7 +11,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import QRCode from 'react-qr-code'
-import { Button, Card, Link as KLink, List, ListItem, Navbar, Page, Popover, Preloader, Searchbar, Segmented, SegmentedButton, Tabbar, TabbarLink, ToolbarPane } from 'konsta/react'
+import { Button, Card, Link as KLink, List, ListItem, Navbar, Page, Popover, Preloader, Searchbar, Segmented, SegmentedButton } from 'konsta/react'
 import {
   SiBitcoin,
   SiBnbchain,
@@ -43,12 +43,13 @@ import MoonStars from 'framework7-icons/react/esm/MoonStars.js'
 import PaperplaneFill from 'framework7-icons/react/esm/PaperplaneFill.js'
 import PersonCropCircleFill from 'framework7-icons/react/esm/PersonCropCircleFill.js'
 import PlusCircleFill from 'framework7-icons/react/esm/PlusCircleFill.js'
+import Qrcode from 'framework7-icons/react/esm/Qrcode.js'
 import QuestionCircleFill from 'framework7-icons/react/esm/QuestionCircleFill.js'
 import SliderHorizontal3 from 'framework7-icons/react/esm/SliderHorizontal3.js'
 import Snow from 'framework7-icons/react/esm/Snow.js'
 import SunMax from 'framework7-icons/react/esm/SunMax.js'
 import WalletFill from 'framework7-icons/react/esm/WalletFill.js'
-import { getUser, haptic } from '../lib/telegram'
+import { getUser, haptic, tg } from '../lib/telegram'
 import { useTheme } from '../store/ThemeStore'
 
 type Action = {
@@ -321,6 +322,48 @@ export default function WalletPage() {
     pageRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  function scanPaymentQr() {
+    const telegram = tg()
+    if (!telegram?.showScanQrPopup) {
+      haptic('error')
+      showNotice('QR-сканер доступен внутри Telegram')
+      return
+    }
+    haptic('light')
+    telegram.showScanQrPopup(
+      { text: 'Наведите камеру на платёжный QR GoSwap' },
+      (value) => {
+        const scanned = value.trim()
+        let valid = false
+        try {
+          const url = new URL(scanned)
+          const telegramHost = ['t.me', 'telegram.me', 'telegram.dog'].includes(url.hostname.toLowerCase())
+          valid = (telegramHost && url.pathname.toLowerCase().startsWith('/goswap')) ||
+            url.hostname.toLowerCase() === 'goswap.site' ||
+            (url.protocol === 'tg:' && url.searchParams.get('domain')?.toLowerCase() === 'goswap')
+        } catch {
+          valid = false
+        }
+        if (!valid) {
+          haptic('error')
+          showNotice('Это не платёжный QR GoSwap')
+          return false
+        }
+        haptic('success')
+        window.setTimeout(() => {
+          if (scanned.startsWith('https://t.me/') && telegram.openTelegramLink) {
+            telegram.openTelegramLink(scanned)
+          } else if (scanned.startsWith('https://') && telegram.openLink) {
+            telegram.openLink(scanned)
+          } else {
+            window.location.href = scanned
+          }
+        }, 100)
+        return true
+      },
+    )
+  }
+
   const pull = usePullToRefresh(pageRef, {
     delay: 900,
     onRefreshStart: () => setLoading(true),
@@ -506,38 +549,34 @@ export default function WalletPage() {
         showNotice={showNotice}
       />
 
-      <Tabbar
-        labels
-        icons
-        className="!fixed !bottom-0 !left-0 !right-0 !z-30 !w-full !pb-[calc(env(safe-area-inset-bottom)+12px)]"
-      >
-        <ToolbarPane>
-          <TabbarLink
-            active={activeTab === 'wallet'}
-            label="Кошелёк"
-            icon={<WalletFill className="h-6 w-6" />}
-            onClick={() => selectTab('wallet')}
-          />
-          <TabbarLink
-            active={activeTab === 'history'}
-            label="История"
-            icon={<ClockFill className="h-6 w-6" />}
-            onClick={() => selectTab('history')}
-          />
-          <TabbarLink
-            active={activeTab === 'cards'}
-            label="Карты"
-            icon={<CreditcardFill className="h-6 w-6" />}
-            onClick={() => selectTab('cards')}
-          />
-          <TabbarLink
-            active={activeTab === 'profile'}
-            label="Профиль"
-            icon={<PersonCropCircleFill className="h-6 w-6" />}
-            onClick={() => selectTab('profile')}
-          />
-        </ToolbarPane>
-      </Tabbar>
+      <div className="fixed inset-x-0 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-30 mx-auto flex w-full max-w-[620px] items-center gap-3 px-4">
+        <nav className="flex h-16 min-w-0 flex-1 items-center rounded-full border border-black/[.07] bg-white/90 p-1.5 shadow-[0_10px_36px_rgba(0,0,0,.16)] backdrop-blur-xl dark:border-white/[.10] dark:bg-[#1c1c1e]/90">
+          {([
+            { id: 'wallet' as const, label: 'Кошелёк', icon: WalletFill },
+            { id: 'cards' as const, label: 'Карты', icon: CreditcardFill },
+            { id: 'history' as const, label: 'История', icon: ClockFill },
+            { id: 'profile' as const, label: 'Профиль', icon: PersonCropCircleFill },
+          ]).map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => selectTab(id)}
+              className={`flex h-full min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full transition active:scale-95 ${activeTab === id ? 'bg-primary/12 text-primary' : 'text-black/45 dark:text-white/45'}`}
+            >
+              <Icon className="h-[21px] w-[21px]" />
+              <span className="w-full truncate px-0.5 text-[9px] font-medium leading-none">{label}</span>
+            </button>
+          ))}
+        </nav>
+        <button
+          type="button"
+          aria-label="Сканировать QR для оплаты"
+          onClick={scanPaymentQr}
+          className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-primary text-white shadow-[0_10px_32px_rgba(10,132,255,.42)] transition active:scale-95"
+        >
+          <Qrcode className="h-8 w-8" />
+        </button>
+      </div>
 
       <div
         role="status"
