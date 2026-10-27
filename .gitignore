@@ -1,0 +1,43 @@
+# Runtime data and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*secret*
+*token*
+owner.key
+bots.json
+bots.json.tmp
+userbot.env
+userbot.pending
+userbot.session
+userbot.session-journal
+
+# Local application state
+data.json
+data.json.tmp
+avatars/
+shots/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+static/
+
+# Editor and system files
+.idea/
+.vscode/
+.DS_Store
+*.log
+*.tmp
+
+# Source files with "token" in their normal filename are safe to track
+!frontend/src/**
