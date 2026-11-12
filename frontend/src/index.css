@@ -164,3 +164,43 @@ input:-webkit-autofill:active {
   caret-color: currentColor;
   transition: background-color 100000s ease-in-out 0s;
 }
+
+/* Telegram supplies both the device inset and the space occupied by its
+   fullscreen controls. Apply at each navbar, including body-mounted portals,
+   so Konsta uses the same inset for its controls and background. Browser and
+   Telegram device insets overlap: take their maximum rather than adding them. */
+.wpay-viewport {
+  --wpay-top-inset: calc(max(16px, calc(max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px))) + 8px);
+  --wpay-bottom-inset: max(env(safe-area-inset-bottom, 0px), calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px)));
+}
+.wpay-viewport .k-navbar { --k-safe-area-top: var(--wpay-top-inset); }
+.wpay-asset-scroll {
+  --wpay-top-surface: #ffffff;
+  --wpay-lower-surface: #efeff4;
+  background-color: var(--wpay-lower-surface);
+  background-image: linear-gradient(to bottom, var(--wpay-top-surface) 0px, var(--wpay-top-surface) calc(var(--wpay-top-inset) + 60px + var(--wpay-pull-distance, 0px)), var(--wpay-lower-surface) calc(var(--wpay-top-inset) + 60px + var(--wpay-pull-distance, 0px)));
+  background-attachment: local;
+}
+.dark .wpay-asset-scroll {
+  --wpay-top-surface: #1c1c1e;
+  --wpay-lower-surface: #000000;
+}
+.wpay-bottom-menu { padding-bottom: calc(var(--wpay-bottom-inset) + 12px) !important; }
+/* A 48px action button and the 64px main menu share the same center line. */
+.wpay-asset-actions { padding-bottom: calc(var(--wpay-bottom-inset) + 20px); }
+@keyframes wpay-icon-in {
+  0% { opacity: 0; transform: scale(.06); }
+  65% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.wpay-currency-icon {
+  transform-origin: center;
+  animation: wpay-icon-in 460ms cubic-bezier(.2,.8,.2,1) both;
+}
+.wpay-viewport[aria-hidden="true"] .wpay-currency-icon { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .wpay-currency-icon { animation: none !important; }
+}
+/* Konsta's toolbar dispatches taps on the link itself. Keep the native touch
+   target there too so Framework7 does not reject a retargeted synthetic click. */
+.wpay-bottom-menu .k-link > * { pointer-events: none; }

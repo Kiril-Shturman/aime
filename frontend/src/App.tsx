@@ -58,7 +58,14 @@ function Themed() {
 
   // Перекрашиваем шапку/фон ТГ-мини-аппы под нашу тему.
   useEffect(() => {
-    applyTgTheme(theme)
+    const sync = () => { initTelegram(); applyTgTheme(theme) }
+    sync()
+    window.addEventListener('telegram-ready', sync)
+    window.addEventListener('load', sync)
+    return () => {
+      window.removeEventListener('telegram-ready', sync)
+      window.removeEventListener('load', sync)
+    }
   }, [theme])
 
   return (

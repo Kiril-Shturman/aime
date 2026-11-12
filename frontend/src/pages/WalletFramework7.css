@@ -1,0 +1,2268 @@
+/* Framework7 9.1.3 core styles (MIT), scoped to the wallet host. Popup animation is imported unchanged from the package. */
+/**
+ * Framework7 9.1.3
+ * Full featured mobile HTML framework for building iOS & Android apps
+ * https://framework7.io/
+ *
+ * Copyright 2014-2026 Vladimir Kharlampidi
+ *
+ * Released under the MIT License
+ *
+ * Released on: August 25, 2026
+ */
+
+/*====================
+  Core
+  ==================== */
+.wpay-f7-root {
+  --f7-safe-area-left: 0px;
+  --f7-safe-area-right: 0px;
+  --f7-safe-area-top: 0px;
+  --f7-safe-area-bottom: 0px;
+  --f7-safe-area-outer-left: 0px;
+  --f7-safe-area-outer-right: 0px;
+  --f7-device-pixel-ratio: 1;
+}
+@supports (left: env(safe-area-inset-left)) {
+  .wpay-f7-root {
+    --f7-safe-area-top: env(safe-area-inset-top);
+    --f7-safe-area-bottom: env(safe-area-inset-bottom);
+  }
+}
+@media (min-resolution: 2dppx) {
+  .wpay-f7-root {
+    --f7-device-pixel-ratio: 2;
+  }
+}
+@media (min-resolution: 3dppx) {
+  .wpay-f7-root {
+    --f7-device-pixel-ratio: 3;
+  }
+}
+/*====================
+  Fonts & Bars
+  ==================== */
+.wpay-f7-root {
+  --f7-font-size: 14px;
+  --f7-bars-translucent-opacity: 0.8;
+  --f7-bars-translucent-blur: 20px;
+}
+.wpay-f7-root.ios {
+  --f7-font-family: -apple-system, SF Pro Text, SF UI Text, system-ui, Helvetica Neue, Helvetica, Arial, sans-serif;
+  --f7-line-height: 1.4;
+  --f7-bars-border-color: transparent;
+  /*
+  --f7-bars-link-color: var(--f7-theme-color);
+  */
+  --f7-glass-bg-color: rgba(255, 255, 255, 0.75);
+  --f7-glass-shadow: inset -1px -1px 0px -0.5px #ffffff, inset 1px 1px 0px -0.5px #ffffff, inset 3px 3px 10px -3px #ddd, inset -3px -3px 10px -3px #ddd, inset 0 0 5px 1px #fff, inset 0 0 0 0.5px rgba(0, 0, 0, 0.25), inset 0 0 24px 0 rgba(0, 0, 0, 0.1), 0 0 25px 0 rgba(0, 0, 0, 0.2);
+  --f7-glass-shadow-thumb: inset -3px -3px 0px -3.5px #ffffff, inset 3px 3px 0px -3.5px #ffffff, inset 0px 0px 0px 0.5px rgba(255, 255, 255, 0.5), inset 3px 3px 10px -2px #eee, inset -3px -3px 10px -2px #eee, inset 0 0 5px 1px #fff;
+  --f7-bars-text-color: #000;
+  --f7-text-color: #000;
+  --f7-bars-bg-color: #efeff4;
+}
+/*====================
+  Color Themes
+  ==================== */
+@font-face {
+  font-family: 'framework7-core-icons';
+  src: url('data:application/font-woff;charset=utf-8;base64, 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') format('woff');
+  font-weight: 400;
+  font-style: normal;
+}
+.wpay-f7-root .framework7-root {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+}
+.dark .wpay-f7-root {
+  color: var(--f7-text-color);
+}
+.wpay-f7-root .framework7-root {
+  overflow: hidden;
+  box-sizing: border-box;
+}
+@media (width: 1024px) and (height: 691px) and (orientation: landscape) {
+  .wpay-f7-root .framework7-root {
+    height: 671px;
+  }
+}
+@media (width: 1024px) and (height: 692px) and (orientation: landscape) {
+  .wpay-f7-root .framework7-root {
+    height: 672px;
+  }
+}
+.wpay-f7-root .link {
+  cursor: pointer;
+}
+@media (width: 1024px) and (height: 691px) and (orientation: landscape) {
+  .wpay-f7-root.ios,
+  .wpay-f7-root.ios .framework7-root {
+    height: 671px;
+  }
+}
+@media (width: 1024px) and (height: 692px) and (orientation: landscape) {
+  .wpay-f7-root.ios,
+  .wpay-f7-root.ios .framework7-root {
+    height: 672px;
+  }
+}
+/* === Statusbar === */
+/* === Views === */
+.wpay-f7-root .views,
+.wpay-f7-root .view {
+  position: relative;
+  height: 100%;
+  z-index: 5000;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.wpay-f7-root .framework7-root > .view,
+.wpay-f7-root .framework7-root > .views {
+  height: 100%;
+}
+.wpay-f7-root .view-resize-handler {
+  width: 6px;
+  height: 100%;
+  position: absolute;
+  left: var(--f7-page-master-width);
+  margin-left: -3px;
+  top: 0;
+  cursor: col-resize;
+  z-index: 1000;
+  display: none;
+}
+.wpay-f7-root .view-master-detail .view-resize-handler {
+  display: block;
+}
+/* === Pages === */
+.wpay-f7-root {
+  --f7-page-master-width: 320px;
+  --f7-page-master-border-color: rgba(0, 0, 0, 0.1);
+  --f7-page-master-border-width: 1px;
+  --f7-page-swipeback-transition-duration: 300ms;
+  --f7-page-parallax-transition-duration: 500ms;
+  --f7-page-cover-transition-duration: 450ms;
+  --f7-page-dive-transition-duration: 500ms;
+  --f7-page-fade-transition-duration: 500ms;
+  --f7-page-flip-transition-duration: 700ms;
+  --f7-page-push-transition-duration: 500ms;
+  /*
+  --f7-page-content-extra-padding-top: 0px;
+  --f7-page-content-extra-padding-bottom: 0px;
+  */
+  --f7-page-title-line-height: 1.2;
+  --f7-page-title-text-color: inherit;
+  --f7-page-title-padding-left: 16px;
+  --f7-page-title-padding-right: 16px;
+}
+.wpay-f7-root.ios {
+  --f7-page-transition-duration: 400ms;
+  --f7-page-title-font-size: 34px;
+  --f7-page-title-font-weight: 700;
+  --f7-page-title-letter-spacing: -0.03em;
+  --f7-page-title-padding-vertical: 6px;
+  --f7-page-bg-color: #efeff4;
+}
+.dark .wpay-f7-root {
+  --f7-page-master-border-color: rgba(255, 255, 255, 0.2);
+}
+.wpay-f7-root .pages {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+.wpay-f7-root .page {
+  box-sizing: border-box;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  background-color: var(--f7-page-bg-color);
+  z-index: 1;
+}
+.wpay-f7-root .page-transparent {
+  background-color: transparent;
+}
+.wpay-f7-root .page-with-navbar-large-collapsed {
+  --f7-navbar-large-collapse-progress: 1;
+}
+.wpay-f7-root .page-previous {
+  pointer-events: none;
+}
+.wpay-f7-root .page-content {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+  height: 100%;
+  position: relative;
+  z-index: 1;
+  padding-top: calc(var(--f7-page-navbar-offset, 0px) + var(--f7-page-toolbar-top-offset, 0px) + var(--f7-page-subnavbar-offset, 0px) + var(--f7-page-searchbar-offset, 0px) + var(--f7-page-content-extra-padding-top, 0px));
+  padding-bottom: calc(var(--f7-page-toolbar-bottom-offset, 0px) + var(--f7-safe-area-bottom) + var(--f7-page-content-extra-padding-bottom, 0px));
+}
+.wpay-f7-root .page-previous .page-opacity-effect {
+  opacity: 1;
+}
+.wpay-f7-root .page-previous:after {
+  opacity: 1;
+}
+.wpay-f7-root .page-transitioning,
+.wpay-f7-root .page-transitioning .page-shadow-effect,
+.wpay-f7-root .page-transitioning .page-opacity-effect {
+  transition-duration: var(--f7-page-transition-duration);
+}
+.wpay-f7-root .page-transitioning-swipeback,
+.wpay-f7-root .page-transitioning-swipeback .page-shadow-effect,
+.wpay-f7-root .page-transitioning-swipeback .page-opacity-effect {
+  transition-duration: var(--f7-page-swipeback-transition-duration);
+}
+.wpay-f7-root .router-transition-forward .page-next,
+.wpay-f7-root .router-transition-backward .page-next,
+.wpay-f7-root .router-transition-forward .page-current,
+.wpay-f7-root .router-transition-backward .page-current {
+  pointer-events: none;
+}
+.wpay-f7-root .page-shadow-effect {
+  position: absolute;
+  top: 0;
+  width: 16px;
+  bottom: 0;
+  z-index: -1;
+  content: '';
+  opacity: 0;
+  right: 100%;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 10%, rgba(0, 0, 0, 0.01) 50%, rgba(0, 0, 0, 0.2) 100%);
+}
+.wpay-f7-root .page-opacity-effect {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: rgba(0, 0, 0, 0.1);
+  width: 100%;
+  bottom: 0;
+  content: '';
+  opacity: 0;
+  z-index: 10000;
+}
+.wpay-f7-root.ios .page-previous {
+  transform: translate3d(-20%, 0, 0);
+}
+.wpay-f7-root.ios .page-next {
+  transform: translate3d(100%, 0, 0);
+}
+.wpay-f7-root.ios .page-current .page-shadow-effect {
+  opacity: 1;
+}
+.wpay-f7-root.ios .router-transition-forward .page-next {
+  animation: ios-page-next-to-current var(--f7-page-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-forward .page-next:before {
+  position: absolute;
+  top: 0;
+  width: 16px;
+  bottom: 0;
+  z-index: -1;
+  content: '';
+  opacity: 0;
+  right: 100%;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 10%, rgba(0, 0, 0, 0.01) 50%, rgba(0, 0, 0, 0.2) 100%);
+  animation: ios-page-element-fade-in var(--f7-page-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-forward .page-current {
+  animation: ios-page-current-to-previous var(--f7-page-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-forward .page-current:after {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: rgba(0, 0, 0, 0.1);
+  width: 100%;
+  bottom: 0;
+  content: '';
+  opacity: 0;
+  z-index: 10000;
+  animation: ios-page-element-fade-in var(--f7-page-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-backward .page-previous {
+  animation: ios-page-previous-to-current var(--f7-page-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-backward .page-previous:after {
+  position: absolute;
+  left: 0;
+  top: 0;
+  background: rgba(0, 0, 0, 0.1);
+  width: 100%;
+  bottom: 0;
+  content: '';
+  opacity: 0;
+  z-index: 10000;
+  animation: ios-page-element-fade-out var(--f7-page-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-backward .page-current {
+  animation: ios-page-current-to-next var(--f7-page-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-backward .page-current:before {
+  position: absolute;
+  top: 0;
+  width: 16px;
+  bottom: 0;
+  z-index: -1;
+  content: '';
+  opacity: 0;
+  right: 100%;
+  background: linear-gradient(to right, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0) 10%, rgba(0, 0, 0, 0.01) 50%, rgba(0, 0, 0, 0.2) 100%);
+  animation: ios-page-element-fade-out var(--f7-page-transition-duration) forwards;
+}
+@keyframes ios-page-next-to-current {
+  from {
+    transform: translate3d(100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0%, 0, 0);
+  }
+}
+@keyframes ios-page-previous-to-current {
+  from {
+    transform: translate3d(-20%, 0, 0);
+  }
+  to {
+    transform: translate3d(0%, 0, 0);
+  }
+}
+@keyframes ios-page-current-to-previous {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-20%, 0, 0);
+  }
+}
+@keyframes ios-page-current-to-next {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+@keyframes ios-page-element-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ios-page-element-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.wpay-f7-root .md .page-previous {
+  transform: translate3d(-24px, 0px, 0);
+}
+.wpay-f7-root .md .page-next {
+  pointer-events: none;
+  transform: translate3d(128px, 0px, 0);
+  opacity: 0;
+}
+.wpay-f7-root .md .page-next.page-next-on-right {
+  transform: translate3d(100%, 0, 0);
+  opacity: 1;
+}
+.wpay-f7-root .md .router-transition-forward .page-next {
+  opacity: 1;
+  animation: md-page-next-to-current var(--f7-page-transition-duration) forwards cubic-bezier(0, 0.8, 0.3, 1);
+}
+.wpay-f7-root .md .router-transition-forward .page-current {
+  animation: md-page-current-to-previous var(--f7-page-transition-duration) forwards cubic-bezier(0, 0.8, 0.3, 1);
+}
+.wpay-f7-root .md .router-transition-backward .page-current {
+  animation: md-page-current-to-next calc(var(--f7-page-transition-duration) / 2) forwards cubic-bezier(0, 1, 0.8, 1), md-page-current-to-next-opacity calc(var(--f7-page-transition-duration) / 2) forwards;
+}
+.wpay-f7-root .md .router-transition-backward .page-previous {
+  animation: md-page-previous-to-current calc(var(--f7-page-transition-duration) / 2) forwards cubic-bezier(0, 1, 0.8, 1);
+}
+@keyframes md-page-next-to-current {
+  from {
+    transform: translate3d(128px, 0px, 0);
+  }
+  to {
+    transform: translate3d(0px, 0px, 0);
+  }
+}
+@keyframes md-page-current-to-next {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(128px, 0px, 0);
+  }
+}
+@keyframes md-page-current-to-next-opacity {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+@keyframes md-page-current-to-previous {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-24px, 0px, 0);
+  }
+}
+@keyframes md-page-previous-to-current {
+  from {
+    transform: translate3d(-24px, 0px, 0);
+  }
+  to {
+    transform: translate3d(0, 0px, 0);
+  }
+}
+.wpay-f7-root .view:not(.view-master-detail) .page-master-stacked {
+  display: none;
+}
+.wpay-f7-root .view-master-detail .page-master {
+  width: var(--f7-page-master-width);
+  --f7-safe-area-right: 0px;
+  --f7-safe-area-outer-right: 0px;
+  border-right: var(--f7-page-master-border-width) solid var(--f7-page-master-border-color);
+}
+.wpay-f7-root .view-master-detail .page-master-detail {
+  width: calc(100% - var(--f7-page-master-width));
+  --f7-safe-area-left: 0px;
+  --f7-safe-area-outer-left: 0px;
+  left: var(--f7-page-master-width);
+}
+.wpay-f7-root .view-master-detail .page-master {
+  z-index: 2;
+  transform: none;
+  pointer-events: auto;
+}
+.wpay-f7-root .view-master-detail .page-master:before,
+.wpay-f7-root .view-master-detail .page-master:after {
+  display: none;
+}
+.wpay-f7-root .view-master-detail.router-transition .page-master {
+  animation: none;
+}
+.wpay-f7-root .md .router-transition-custom .page-previous,
+.wpay-f7-root.ios .router-transition-custom .page-previous,
+.wpay-f7-root .md .router-transition-custom .page-next,
+.wpay-f7-root.ios .router-transition-custom .page-next {
+  opacity: 1;
+  transform: none;
+}
+.wpay-f7-root .md .router-transition-custom.view-master-detail .page-master,
+.wpay-f7-root.ios .router-transition-custom.view-master-detail .page-master {
+  animation: none;
+}
+.wpay-f7-root .page-title {
+  position: relative;
+  z-index: 10;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--f7-page-title-text-color);
+  letter-spacing: var(--f7-page-title-letter-spacing);
+  font-size: var(--f7-page-title-font-size);
+  font-weight: var(--f7-page-title-font-weight);
+  line-height: var(--f7-page-title-line-height);
+  padding-left: calc(var(--f7-page-title-padding-left) + var(--f7-safe-area-left));
+  padding-right: calc(var(--f7-page-title-padding-right) + var(--f7-safe-area-right));
+  padding-top: var(--f7-page-title-padding-vertical);
+  padding-bottom: var(--f7-page-title-padding-vertical);
+  box-sizing: border-box;
+  overflow: hidden;
+  width: 100%;
+}
+.wpay-f7-root .router-transition-f7-circle-forward .page,
+.wpay-f7-root .router-transition-f7-circle-backward .page {
+  pointer-events: none;
+}
+.wpay-f7-root.ios .router-transition-f7-circle-forward .page-next,
+.wpay-f7-root .md .router-transition-f7-circle-forward .page-next {
+  opacity: 0;
+  transform: scale(0.9);
+  animation: f7-circle-next-to-current 300ms forwards;
+  animation-delay: 300ms;
+  z-index: 150;
+}
+.wpay-f7-root.ios .router-transition-f7-circle-backward .page-current,
+.wpay-f7-root .md .router-transition-f7-circle-backward .page-current {
+  animation: f7-circle-current-to-next 700ms forwards;
+  z-index: 150;
+}
+@keyframes f7-circle-circle-in {
+  from {
+    transform: scale(0);
+    border-radius: 50%;
+  }
+  50% {
+    border-radius: 50%;
+  }
+  to {
+    transform: scale(1);
+    border-radius: 0%;
+  }
+}
+@keyframes f7-circle-circle-out {
+  from {
+    transform: scale(1);
+    border-radius: 0%;
+  }
+  50% {
+    border-radius: 50%;
+  }
+  to {
+    transform: scale(0);
+    border-radius: 50%;
+  }
+}
+@keyframes f7-circle-next-to-current {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  40% {
+    transform: scale(1.035);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@keyframes f7-circle-current-to-next {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  34% {
+    transform: scale(1.035);
+    opacity: 1;
+  }
+  57% {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+  to {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+.wpay-f7-root .router-transition-f7-cover-v-forward .page,
+.wpay-f7-root .router-transition-f7-cover-v-backward .page {
+  pointer-events: none;
+}
+.wpay-f7-root .router-transition-f7-cover-v-forward .page-next {
+  animation: f7-cover-v-next-to-current var(--f7-page-cover-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-cover-v-forward .page-current {
+  animation: f7-cover-v-current-to-prev var(--f7-page-cover-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-cover-v-backward .page-current {
+  animation: f7-cover-v-current-to-next var(--f7-page-cover-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-cover-v-backward .page-previous {
+  animation: f7-cover-v-prev-to-current var(--f7-page-cover-transition-duration) forwards;
+}
+@keyframes f7-cover-v-next-to-current {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0%);
+  }
+}
+@keyframes f7-cover-v-current-to-next {
+  from {
+    transform: translateY(0%);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes f7-cover-v-current-to-prev {
+  from {
+    transform: translateZ(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateZ(-300px);
+    opacity: 0.5;
+  }
+}
+@keyframes f7-cover-v-prev-to-current {
+  from {
+    transform: translateZ(-300px);
+    opacity: 0.5;
+  }
+  to {
+    transform: translateZ(0);
+    opacity: 1;
+  }
+}
+.wpay-f7-root .router-transition-f7-cover-forward .page,
+.wpay-f7-root .router-transition-f7-cover-backward .page {
+  pointer-events: none;
+}
+.wpay-f7-root .router-transition-f7-cover-forward .page-next {
+  animation: f7-cover-next-to-current var(--f7-page-cover-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-cover-forward .page-current {
+  animation: f7-cover-current-to-prev var(--f7-page-cover-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-cover-backward .page-current {
+  animation: f7-cover-current-to-next var(--f7-page-cover-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-cover-backward .page-previous {
+  animation: f7-cover-prev-to-current var(--f7-page-cover-transition-duration) forwards;
+}
+@keyframes f7-cover-next-to-current {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0%);
+  }
+}
+@keyframes f7-cover-current-to-next {
+  from {
+    transform: translateX(0%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes f7-cover-current-to-prev {
+  from {
+    transform: translateZ(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateZ(-300px);
+    opacity: 0.5;
+  }
+}
+@keyframes f7-cover-prev-to-current {
+  from {
+    transform: translateZ(-300px);
+    opacity: 0.5;
+  }
+  to {
+    transform: translateZ(0);
+    opacity: 1;
+  }
+}
+.wpay-f7-root .router-transition-f7-dive-forward .page,
+.wpay-f7-root .router-transition-f7-dive-backward .page {
+  pointer-events: none;
+}
+.wpay-f7-root .router-transition-f7-dive-forward .page-next {
+  animation: f7-dive-next-to-current var(--f7-page-dive-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-dive-forward .page-current {
+  animation: f7-dive-current-to-prev var(--f7-page-dive-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-dive-backward .page-current {
+  animation: f7-dive-current-to-next var(--f7-page-dive-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-dive-backward .page-previous {
+  animation: f7-dive-prev-to-current var(--f7-page-dive-transition-duration) forwards;
+}
+@keyframes f7-dive-next-to-current {
+  from {
+    opacity: 0;
+    transform: translateZ(-150px);
+  }
+  50% {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0px);
+  }
+}
+@keyframes f7-dive-current-to-next {
+  from {
+    opacity: 1;
+    transform: translateZ(0px);
+  }
+  50% {
+    opacity: 0;
+  }
+  to {
+    opacity: 0;
+    transform: translateZ(-150px);
+  }
+}
+@keyframes f7-dive-current-to-prev {
+  from {
+    transform: translateZ(0px);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+  to {
+    opacity: 0;
+    transform: translateZ(150px);
+  }
+}
+@keyframes f7-dive-prev-to-current {
+  from {
+    opacity: 0;
+    transform: translateZ(150px);
+  }
+  50% {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+    transform: translateZ(0px);
+  }
+}
+.wpay-f7-root .router-transition-f7-fade-forward .page,
+.wpay-f7-root .router-transition-f7-fade-backward .page {
+  pointer-events: none;
+}
+.wpay-f7-root.ios .router-transition-f7-fade-forward .page-next,
+.wpay-f7-root .md .router-transition-f7-fade-forward .page-next {
+  opacity: 0;
+  animation: f7-fade-in var(--f7-page-fade-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-f7-fade-forward .page-current,
+.wpay-f7-root .md .router-transition-f7-fade-forward .page-current {
+  animation: f7-fade-out var(--f7-page-fade-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-f7-fade-backward .page-current,
+.wpay-f7-root .md .router-transition-f7-fade-backward .page-current {
+  animation: f7-fade-out var(--f7-page-fade-transition-duration) forwards;
+}
+.wpay-f7-root.ios .router-transition-f7-fade-backward .page-previous,
+.wpay-f7-root .md .router-transition-f7-fade-backward .page-previous {
+  animation: f7-fade-in var(--f7-page-fade-transition-duration) forwards;
+}
+@keyframes f7-fade-in {
+  from {
+    opacity: 0;
+  }
+  50% {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes f7-fade-out {
+  from {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+  to {
+    opacity: 0;
+  }
+}
+.wpay-f7-root .router-transition-f7-flip-forward .page,
+.wpay-f7-root .router-transition-f7-flip-backward .page {
+  backface-visibility: hidden;
+  overflow: hidden;
+  pointer-events: none;
+}
+.wpay-f7-root .router-transition-f7-flip-forward .page-next {
+  transform-style: preserve-3d;
+  animation: f7-flip-next-to-current var(--f7-page-flip-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-flip-forward .page-current {
+  transform-style: preserve-3d;
+  animation: f7-flip-current-to-prev var(--f7-page-flip-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-flip-backward .page-current {
+  transform-style: preserve-3d;
+  animation: f7-flip-current-to-next var(--f7-page-flip-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-flip-backward .page-previous {
+  transform-style: preserve-3d;
+  animation: f7-flip-prev-to-current var(--f7-page-flip-transition-duration) forwards;
+}
+@keyframes f7-flip-next-to-current {
+  from {
+    border-radius: 32px;
+    transform: translateZ(-100vmax) rotateY(180deg);
+  }
+  to {
+    border-radius: 0;
+    transform: translateZ(0px) rotateY(0deg);
+  }
+}
+@keyframes f7-flip-current-to-next {
+  from {
+    border-radius: 0px;
+    transform: translateZ(0px) rotateY(0deg);
+  }
+  to {
+    border-radius: 32px;
+    transform: translateZ(-100vmax) rotateY(180deg);
+  }
+}
+@keyframes f7-flip-current-to-prev {
+  from {
+    border-radius: 0px;
+    transform: translateZ(0px) rotateY(0deg);
+  }
+  to {
+    border-radius: 32px;
+    transform: translateZ(-100vmax) rotateY(-180deg);
+  }
+}
+@keyframes f7-flip-prev-to-current {
+  from {
+    border-radius: 32px;
+    transform: translateZ(-100vmax) rotateY(-180deg);
+  }
+  to {
+    border-radius: 0px;
+    transform: translateZ(0px) rotateY(0deg);
+  }
+}
+.wpay-f7-root .router-transition-f7-parallax-forward .page {
+  pointer-events: none;
+}
+.wpay-f7-root .router-transition-f7-parallax-forward .page-next {
+  animation: f7-parallax-next-to-current var(--f7-page-parallax-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-parallax-forward .page-current {
+  animation: f7-parallax-current-to-prev var(--f7-page-parallax-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-parallax-backward .page {
+  pointer-events: none;
+}
+.wpay-f7-root .router-transition-f7-parallax-backward .page-current {
+  animation: f7-parallax-current-to-next var(--f7-page-parallax-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-parallax-backward .page-previous {
+  animation: f7-parallax-prev-to-current var(--f7-page-parallax-transition-duration) forwards;
+}
+@keyframes f7-parallax-next-to-current {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0%);
+  }
+}
+@keyframes f7-parallax-current-to-next {
+  from {
+    transform: translateX(0%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes f7-parallax-current-to-prev {
+  from {
+    transform: translateX(0%);
+  }
+  to {
+    transform: translateX(-20%);
+  }
+}
+@keyframes f7-parallax-prev-to-current {
+  from {
+    transform: translateX(-20%);
+  }
+  to {
+    transform: translateX(0%);
+  }
+}
+.wpay-f7-root .router-transition-f7-push-forward .page {
+  pointer-events: none;
+}
+.wpay-f7-root .router-transition-f7-push-forward .page-next {
+  animation: f7-push-next-to-current var(--f7-page-push-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-push-forward .page-current {
+  animation: f7-push-current-to-prev var(--f7-page-push-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-push-backward .page {
+  pointer-events: none;
+}
+.wpay-f7-root .router-transition-f7-push-backward .page-current {
+  animation: f7-push-current-to-next var(--f7-page-push-transition-duration) forwards;
+}
+.wpay-f7-root .router-transition-f7-push-backward .page-previous {
+  animation: f7-push-prev-to-current var(--f7-page-push-transition-duration) forwards;
+}
+@keyframes f7-push-next-to-current {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0%);
+  }
+}
+@keyframes f7-push-current-to-next {
+  from {
+    transform: translateX(0%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes f7-push-current-to-prev {
+  from {
+    transform: translateX(0%);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+@keyframes f7-push-prev-to-current {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0%);
+  }
+}
+/* === Link === */
+.wpay-f7-root {
+  --f7-link-highlight-black: rgba(0, 0, 0, 0.1);
+  --f7-link-highlight-white: rgba(255, 255, 255, 0.15);
+  --f7-link-highlight-color: rgba(var(--f7-theme-color-rgb), 0.15);
+}
+.wpay-f7-root.ios {
+  --f7-link-pressed-opacity: 0.3;
+}
+.wpay-f7-root .link {
+  display: inline-flex;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  position: relative;
+  box-sizing: border-box;
+  z-index: 1;
+  --f7-touch-ripple-color: var(--f7-link-touch-ripple-color, rgba(var(--f7-theme-color-rgb), 0.25));
+}
+.wpay-f7-root .link i + span,
+.wpay-f7-root .link i + i,
+.wpay-f7-root .link span + i,
+.wpay-f7-root .link span + span {
+  margin-left: 4px;
+}
+.wpay-f7-root .link[class*='color-'] {
+  color: var(--f7-theme-color);
+}
+.wpay-f7-root.ios .link {
+  transition: opacity 300ms;
+}
+.wpay-f7-root.ios .link.active-state {
+  opacity: var(--f7-link-pressed-opacity);
+  transition-duration: 0ms;
+}
+/* === Navbar === */
+.wpay-f7-root {
+  /*
+  --f7-navbar-bg-color: var(--f7-bars-bg-color);
+  --f7-navbar-bg-color-rgb: var(--f7-bars-bg-color-rgb);
+  --f7-navbar-border-color: var(--f7-bars-border-color);
+  */
+  --f7-navbar-hide-show-transition-duration: 400ms;
+  --f7-navbar-title-line-height: 1.2;
+  --f7-navbar-subtitle-text-align: inherit;
+  --f7-navbar-large-title-line-height: 1.2;
+  --f7-navbar-large-title-text-color: inherit;
+  --f7-navbar-large-title-padding-left: 16px;
+  --f7-navbar-large-title-padding-right: 16px;
+}
+.wpay-f7-root.ios {
+  /*
+  --f7-navbar-link-color: var(--f7-bars-link-color);
+  --f7-navbar-text-color: var(--f7-bars-text-color);
+  */
+  --f7-navbar-link-color: var(--f7-bars-text-color);
+  --f7-navbar-height: 76px;
+  --f7-navbar-font-size: 17px;
+  --f7-navbar-title-font-size: inherit;
+  --f7-navbar-inner-padding-left: 16px;
+  --f7-navbar-inner-padding-right: 16px;
+  --f7-navbar-title-font-weight: 600;
+  --f7-navbar-title-margin-left: 0;
+  --f7-navbar-title-margin-right: 0;
+  --f7-navbar-title-text-align: center;
+  --f7-navbar-subtitle-font-size: 10px;
+  --f7-navbar-subtitle-line-height: 1;
+  --f7-navbar-large-title-height: 52px;
+  --f7-navbar-large-title-font-size: 34px;
+  --f7-navbar-large-title-font-weight: 700;
+  --f7-navbar-large-title-letter-spacing: -0.03em;
+  --f7-navbar-large-title-padding-vertical: 6px;
+  /*
+  --f7-navbar-link-height: var(--f7-navbar-height);
+  --f7-navbar-link-line-height: var(--f7-navbar-height);
+  */
+  --f7-navbar-subtitle-text-color: rgba(0, 0, 0, 0.55);
+}
+.wpay-f7-root .navbars,
+.wpay-f7-root .navbar {
+  z-index: 500;
+  left: 0;
+  top: 0;
+  width: 100%;
+}
+.wpay-f7-root .navbars {
+  position: absolute;
+}
+.wpay-f7-root .navbars .navbar {
+  z-index: auto;
+}
+.wpay-f7-root .navbars .navbar-transitioning {
+  z-index: 500;
+}
+.wpay-f7-root .navbar {
+  --f7-navbar-large-collapse-progress: 0;
+  position: relative;
+  backface-visibility: hidden;
+  box-sizing: border-box;
+  margin: 0;
+  height: calc(var(--f7-navbar-height) + var(--f7-safe-area-top));
+  color: var(--f7-navbar-text-color, var(--f7-bars-text-color));
+  font-size: var(--f7-navbar-font-size);
+}
+.wpay-f7-root .navbar b {
+  font-weight: 500;
+}
+.wpay-f7-root .navbar a {
+  color: var(--f7-navbar-link-color, var(--f7-bars-link-color, var(--f7-theme-color)));
+}
+.wpay-f7-root .navbar a.link {
+  display: flex;
+  justify-content: flex-start;
+}
+.wpay-f7-root .navbar .title,
+.wpay-f7-root .navbar .left,
+.wpay-f7-root .navbar .right {
+  position: relative;
+  z-index: 10;
+}
+.wpay-f7-root .navbar .title {
+  position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 10;
+  font-weight: var(--f7-navbar-title-font-weight);
+  display: inline-block;
+  line-height: var(--f7-navbar-title-line-height);
+  text-align: var(--f7-navbar-title-text-align);
+  font-size: var(--f7-navbar-title-font-size);
+  margin-left: var(--f7-navbar-title-margin-left);
+  margin-right: var(--f7-navbar-title-margin-left);
+}
+.wpay-f7-root .navbar .subtitle {
+  display: block;
+  color: var(--f7-navbar-subtitle-text-color);
+  font-weight: normal;
+  font-size: var(--f7-navbar-subtitle-font-size);
+  line-height: var(--f7-navbar-subtitle-line-height);
+  text-align: var(--f7-navbar-subtitle-text-align);
+}
+.wpay-f7-root .navbar .left,
+.wpay-f7-root .navbar .right {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.wpay-f7-root .navbar .right:first-child {
+  position: absolute;
+  height: 100%;
+}
+.wpay-f7-root .navbar.no-outline .navbar-bg:after,
+.wpay-f7-root .navbar .no-outline .navbar-bg:after {
+  display: none !important;
+}
+.wpay-f7-root .navbar.no-outline .title-large:after,
+.wpay-f7-root .navbar .no-outline .title-large:after {
+  display: none !important;
+}
+.wpay-f7-root .navbar.navbar-hidden .navbar-bg:before,
+.wpay-f7-root .navbar-hidden .navbar .navbar-bg:before {
+  opacity: 0 !important;
+}
+.wpay-f7-root .navbar-bg {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+  transition-property: transform;
+}
+.wpay-f7-root .navbar-transitioning,
+.wpay-f7-root .navbar-transitioning .left,
+.wpay-f7-root .navbar-transitioning .title,
+.wpay-f7-root .navbar-transitioning .right,
+.wpay-f7-root .navbar-transitioning .title-large-text,
+.wpay-f7-root .navbar-transitioning .navbar-bg,
+.wpay-f7-root .navbar-transitioning .subnavbar,
+.wpay-f7-root .navbar-transitioning .navbar-bg:before {
+  transition-duration: var(--f7-navbar-hide-show-transition-duration);
+}
+.wpay-f7-root .navbar-hidden {
+  transform: translate3d(0, calc(-1 * var(--f7-navbar-height)), 0);
+}
+.wpay-f7-root .navbar-hidden .navbar-inner {
+  pointer-events: none;
+}
+.wpay-f7-root .navbar-hidden .navbar-inner > .left,
+.wpay-f7-root .navbar-hidden .navbar-inner > .title,
+.wpay-f7-root .navbar-hidden .navbar-inner > .right {
+  opacity: 0 !important;
+}
+.wpay-f7-root .navbar-hidden .subnavbar {
+  pointer-events: auto;
+}
+.wpay-f7-root .navbar-hidden-statusbar {
+  transform: translate3d(0, calc(-1 * var(--f7-navbar-height) - var(--f7-safe-area-top)), 0);
+}
+.wpay-f7-root .navbar-large-hidden .navbar-large {
+  --f7-navbar-large-collapse-progress: 1;
+}
+.wpay-f7-root .navbar-inner {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  padding: var(--f7-safe-area-top) calc(var(--f7-navbar-inner-padding-right) + var(--f7-safe-area-right)) 0 calc(var(--f7-navbar-inner-padding-left) + var(--f7-safe-area-left));
+  transform: translate3d(0, 0, 0);
+  z-index: 10;
+}
+.wpay-f7-root .views > .navbar,
+.wpay-f7-root .view > .navbar,
+.wpay-f7-root .page > .navbar {
+  position: absolute;
+}
+.wpay-f7-root.ios .navbar:not(.navbar-large) .navbar-bg {
+  --f7-navbar-large-collapse-progress: 1;
+}
+.wpay-f7-root .navbar-large .title {
+  opacity: var(--f7-navbar-large-collapse-progress);
+}
+.wpay-f7-root .navbar-large-collapsed {
+  --f7-navbar-large-collapse-progress: 1;
+}
+.wpay-f7-root .navbar-large-collapsed .title-large {
+  pointer-events: none;
+}
+.wpay-f7-root .navbar-large-collapsed .title-large-text {
+  opacity: 0;
+}
+.wpay-f7-root .navbar .title-large {
+  box-sizing: border-box;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  display: flex;
+  white-space: nowrap;
+  height: var(--f7-navbar-large-title-height);
+  z-index: 5;
+}
+.wpay-f7-root .navbar .title-large-text {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--f7-navbar-large-title-text-color);
+  letter-spacing: var(--f7-navbar-large-title-letter-spacing);
+  font-size: var(--f7-navbar-large-title-font-size);
+  font-weight: var(--f7-navbar-large-title-font-weight);
+  line-height: var(--f7-navbar-large-title-line-height);
+  padding-left: calc(var(--f7-navbar-large-title-padding-left) + var(--f7-safe-area-left));
+  padding-right: calc(var(--f7-navbar-large-title-padding-right) + var(--f7-safe-area-right));
+  padding-top: var(--f7-navbar-large-title-padding-vertical);
+  padding-bottom: var(--f7-navbar-large-title-padding-vertical);
+  box-sizing: border-box;
+  overflow: hidden;
+  width: 100%;
+  transform: translate3d(0px, calc(-1 * var(--f7-navbar-large-collapse-progress) * var(--f7-navbar-large-title-height)), 0);
+  transform-origin: calc(var(--f7-navbar-large-title-padding-left) + var(--f7-safe-area-left)) center;
+}
+.wpay-f7-root .navbar-no-title-large-transition .title-large-text {
+  transition-duration: 0ms;
+}
+.wpay-f7-root .navbar ~ * {
+  --f7-page-navbar-offset: calc(var(--f7-navbar-height) + var(--f7-safe-area-top));
+}
+.wpay-f7-root .navbar ~ * .page-with-navbar-large,
+.wpay-f7-root .navbar ~ .page-with-navbar-large,
+.wpay-f7-root .page-with-navbar-large .navbar ~ * {
+  --f7-page-navbar-offset: calc(var(--f7-navbar-height) + var(--f7-navbar-large-title-height) + var(--f7-safe-area-top));
+}
+.wpay-f7-root .page.no-navbar,
+.wpay-f7-root .page.no-navbar .navbar ~ * {
+  --f7-page-navbar-offset: var(--f7-safe-area-top);
+}
+.wpay-f7-root.ios {
+  --f7-navbarLeftTextOffset: calc(4px + 12px + var(--f7-navbar-inner-padding-left));
+  --f7-navbarTitleLargeOffset: var(--f7-navbar-large-title-padding-left);
+}
+.wpay-f7-root.ios .navbar .title-large {
+  align-items: flex-end;
+}
+.wpay-f7-root.ios .navbar a.link {
+  height: 100%;
+  padding: 0 12px;
+}
+.wpay-f7-root.ios .navbar a:is(.icon-only, :has(i:only-child), :has(svg:only-child)) {
+  width: 44px;
+  margin: 0;
+  justify-content: center;
+}
+.wpay-f7-root.ios .navbar .left a + a,
+.wpay-f7-root.ios .navbar .right a + a {
+  margin-left: 16px;
+}
+.wpay-f7-root.ios .navbar b {
+  font-weight: 600;
+}
+.wpay-f7-root.ios .navbar .left {
+  margin-right: 10px;
+}
+.wpay-f7-root.ios .navbar .right {
+  margin-left: 10px;
+}
+.wpay-f7-root.ios .navbar .right:first-child {
+  right: calc(8px + var(--f7-safe-area-right));
+}
+.wpay-f7-root.ios .navbar-bg {
+  height: 100%;
+}
+.wpay-f7-root.ios .navbar-bg::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  backdrop-filter: blur(2px);
+  mask-image: linear-gradient(to bottom, black calc(50% + var(--f7-safe-area-top, 0px)), transparent 100%);
+}
+.wpay-f7-root.ios .navbar-bg::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(to bottom, var(--f7-navbar-bg-color, var(--f7-bars-bg-color)) var(--f7-safe-area-top, 0px), transparent 100%);
+}
+.wpay-f7-root.ios .navbar-inner {
+  justify-content: space-between;
+  padding-top: calc(16px + var(--f7-safe-area-top));
+  padding-bottom: 16px;
+}
+.wpay-f7-root.ios .navbar .left,
+.wpay-f7-root.ios .navbar .right,
+.wpay-f7-root.ios .navbar .navbar-pane {
+  height: 100%;
+  backdrop-filter: saturate(180%) blur(16px);
+  box-shadow: var(--f7-glass-shadow);
+  background-color: var(--f7-glass-bg-color);
+  border-radius: 64px;
+  min-width: 44px;
+}
+.wpay-f7-root.ios .navbar-pane {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wpay-f7-root.ios .navbar-inner-left-title {
+  justify-content: flex-start;
+}
+.wpay-f7-root.ios .navbar-inner-left-title .right {
+  margin-left: auto;
+}
+.wpay-f7-root.ios .navbar-inner-left-title .title {
+  text-align: left;
+  margin-right: 10px;
+}
+.wpay-f7-root.ios .navbar-transparent:not(.navbar-large):not(.navbar-transparent-visible):not(
+      .with-searchbar-expandable-enabled
+    ) .title {
+  opacity: 0;
+}
+.wpay-f7-root .view-master-detail .page-master {
+  z-index: 525;
+}
+.wpay-f7-root .md .navbar .title-large {
+  align-items: center;
+  overflow: hidden;
+}
+.wpay-f7-root .md .navbar .left {
+  margin-left: 4px;
+  margin-right: 4px;
+}
+.wpay-f7-root .md .navbar a.link {
+  padding: 0 12px;
+  min-width: 48px;
+  height: var(--f7-navbar-link-height, var(--f7-navbar-height));
+}
+.wpay-f7-root .md .navbar a:is(.icon-only, :has(i:only-child), :has(svg:only-child)) {
+  min-width: 0;
+  flex-shrink: 0;
+  width: 48px;
+}
+.wpay-f7-root .md .navbar .right {
+  margin-left: auto;
+  margin-right: 4px;
+}
+.wpay-f7-root .md .navbar .right:first-child {
+  right: var(--f7-safe-area-right);
+}
+.wpay-f7-root .md .navbar-pane {
+  display: contents;
+}
+.wpay-f7-root .md .navbar-bg {
+  background: var(--f7-navbar-bg-color);
+  background-color: var(--f7-navbar-bg-color, var(--f7-bars-bg-color));
+}
+.wpay-f7-root .md .navbar-bg:after,
+.wpay-f7-root .md .navbar-bg:before {
+  backface-visibility: hidden;
+}
+.wpay-f7-root .md .navbar-bg:after {
+  content: '';
+  position: absolute;
+  background-color: var(--f7-navbar-border-color, var(--f7-bars-border-color));
+  display: block;
+  z-index: 15;
+  top: auto;
+  right: auto;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  width: 100%;
+  transform-origin: 50% 100%;
+  transform: scaleY(calc(1 / var(--f7-device-pixel-ratio)));
+}
+.wpay-f7-root .md .navbar-bg:after {
+  z-index: 1;
+}
+.wpay-f7-root .md .navbar-inner {
+  justify-content: flex-start;
+  overflow: hidden;
+}
+.wpay-f7-root .md .navbar-large:not(.navbar-large-collapsed) .navbar-inner {
+  overflow: visible;
+}
+.wpay-f7-root .md .page.page-with-subnavbar .navbar-inner {
+  overflow: visible;
+}
+.wpay-f7-root .md .navbar-inner:not(.navbar-inner-centered-title) .title:first-child {
+  margin-left: 16px;
+}
+.wpay-f7-root .md .navbar-inner-centered-title {
+  justify-content: space-between;
+}
+.wpay-f7-root .md .navbar-inner-centered-title .right {
+  margin-left: 0;
+}
+.wpay-f7-root .md .navbar-inner-centered-title .title {
+  text-align: center;
+}
+.wpay-f7-root .md .navbar-transparent:not(.navbar-large):not(.navbar-transparent-visible):not(
+      .with-searchbar-expandable-enabled
+    ) .navbar-bg,
+.wpay-f7-root .md .navbar-transparent:not(.navbar-large):not(.navbar-transparent-visible):not(
+      .with-searchbar-expandable-enabled
+    ) .title {
+  opacity: 0;
+}
+.wpay-f7-root .md .navbar-large .navbar-bg {
+  height: calc(100% + var(--f7-navbar-large-title-height));
+  transform: translate3d(0px, calc(-1 * var(--f7-navbar-large-collapse-progress) * var(--f7-navbar-large-title-height)), 0);
+}
+.wpay-f7-root .md .navbar-large-transparent .navbar-bg,
+.wpay-f7-root .md .navbar-large.navbar-transparent .navbar-bg {
+  opacity: var(--f7-navbar-large-collapse-progress);
+}
+/* === Toolbar === */
+.wpay-f7-root {
+  /*
+  --f7-toolbar-bg-color: var(--f7-bars-bg-color);
+  --f7-toolbar-bg-color-rgb: var(--f7-bars-bg-color-rgb);
+  --f7-toolbar-border-color: var(--f7-bars-border-color);
+  --f7-toolbar-text-color: var(--f7-bars-text-color);
+  */
+  --f7-tabbar-link-active-bg-color: transparent;
+  --f7-tabbar-label-text-transform: none;
+  --f7-toolbar-hide-show-transition-duration: 400ms;
+}
+.wpay-f7-root.ios {
+  --f7-toolbar-height: 64px;
+  --f7-toolbar-font-size: 17px;
+  --f7-toolbar-inner-padding-left: 16px;
+  --f7-toolbar-inner-padding-right: 16px;
+  --f7-toolbar-link-font-weight: 400;
+  --f7-toolbar-link-color: var(--f7-bars-text-color);
+  --f7-tabbar-link-inactive-color: var(--f7-bars-text-color);
+  /*
+  --f7-toolbar-link-height: var(--f7-toolbar-height);
+  --f7-toolbar-link-line-height: var(--f7-toolbar-height);
+  --f7-tabbar-link-active-color: var(--f7-theme-color);
+  */
+  --f7-tabbar-icons-height: 80px;
+  --f7-tabbar-icons-tablet-height: 80px;
+  --f7-tabbar-icon-size: 28px;
+  --f7-tabbar-link-text-transform: none;
+  --f7-tabbar-link-font-weight: 400;
+  --f7-tabbar-link-letter-spacing: 0;
+  --f7-tabbar-label-font-size: 12px;
+  --f7-tabbar-label-tablet-font-size: 14px;
+  --f7-tabbar-label-font-weight: 500;
+  --f7-tabbar-label-letter-spacing: 0.01;
+  --f7-tabbar-link-highlight-bg-color: rgba(0, 0, 0, 0.1);
+  --f7-tabbar-link-highlight-active-bg-color: rgba(0, 0, 0, 0.05);
+}
+.wpay-f7-root .toolbar .link {
+  display: flex;
+  font-weight: var(--f7-toolbar-link-font-weight);
+}
+.wpay-f7-root .toolbar i.icon {
+  display: block;
+}
+.wpay-f7-root .views > .toolbar,
+.wpay-f7-root .view > .toolbar,
+.wpay-f7-root .page > .toolbar {
+  position: absolute;
+}
+.wpay-f7-root .views > .tabbar,
+.wpay-f7-root .views > .tabbar-icons {
+  z-index: 5001;
+}
+.wpay-f7-root .tabbar .link,
+.wpay-f7-root .tabbar-icons .link {
+  line-height: 1.4;
+}
+.wpay-f7-root .tabbar .link,
+.wpay-f7-root .tabbar-icons .link {
+  height: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  text-transform: var(--f7-tabbar-link-text-transform);
+  font-weight: var(--f7-tabbar-link-font-weight);
+  letter-spacing: var(--f7-tabbar-link-letter-spacing);
+  overflow: hidden;
+}
+.wpay-f7-root .tabbar i.icon,
+.wpay-f7-root .tabbar-icons i.icon {
+  font-size: var(--f7-tabbar-icon-size);
+  height: var(--f7-tabbar-icon-size);
+  line-height: var(--f7-tabbar-icon-size);
+}
+.wpay-f7-root .tabbar-icons .link {
+  height: 100%;
+  justify-content: center;
+  align-items: center;
+}
+@media (min-width: 768px) and (min-height: 600px) {
+  .wpay-f7-root {
+    --f7-tabbar-icons-height: var(--f7-tabbar-icons-tablet-height);
+    --f7-tabbar-label-font-size: var(--f7-tabbar-label-tablet-font-size);
+  }
+}
+.wpay-f7-root .tabbar-scrollable .link {
+  width: auto;
+  flex-shrink: 0;
+}
+.wpay-f7-root .navbar-transitioning + .toolbar,
+.wpay-f7-root .navbar-transitioning ~ * .toolbar {
+  transition-duration: var(--f7-toolbar-hide-show-transition-duration);
+}
+.wpay-f7-root .navbar ~ .toolbar-top,
+.wpay-f7-root .navbars ~ .toolbar-top,
+.wpay-f7-root.ios .navbar ~ .toolbar-top-ios,
+.wpay-f7-root.ios .navbars ~ .toolbar-top-ios,
+.wpay-f7-root .md .navbar ~ .toolbar-top-md,
+.wpay-f7-root .navbar ~ * .toolbar-top,
+.wpay-f7-root .navbars ~ * .toolbar-top,
+.wpay-f7-root.ios .navbar ~ * .toolbar-top-ios,
+.wpay-f7-root.ios .navbars ~ * .toolbar-top-ios,
+.wpay-f7-root .md .navbar ~ * .toolbar-top-md,
+.wpay-f7-root .navbar ~ .page:not(.no-navbar) .toolbar-top,
+.wpay-f7-root .navbars ~ .page:not(.no-navbar) .toolbar-top,
+.wpay-f7-root.ios .navbar ~ .page:not(.no-navbar) .toolbar-top-ios,
+.wpay-f7-root.ios .navbars ~ .page:not(.no-navbar) .toolbar-top-ios,
+.wpay-f7-root .md .navbar ~ .page:not(.no-navbar) .toolbar-top-md {
+  top: calc(var(--f7-navbar-height) + var(--f7-safe-area-top));
+}
+.wpay-f7-root .navbar ~ .toolbar-top.toolbar-hidden,
+.wpay-f7-root .navbars ~ .toolbar-top.toolbar-hidden,
+.wpay-f7-root.ios .navbar ~ .toolbar-top-ios.toolbar-hidden,
+.wpay-f7-root.ios .navbars ~ .toolbar-top-ios.toolbar-hidden,
+.wpay-f7-root .md .navbar ~ .toolbar-top-md.toolbar-hidden,
+.wpay-f7-root .navbar ~ * .toolbar-top.toolbar-hidden,
+.wpay-f7-root .navbars ~ * .toolbar-top.toolbar-hidden,
+.wpay-f7-root.ios .navbar ~ * .toolbar-top-ios.toolbar-hidden,
+.wpay-f7-root.ios .navbars ~ * .toolbar-top-ios.toolbar-hidden,
+.wpay-f7-root .md .navbar ~ * .toolbar-top-md.toolbar-hidden,
+.wpay-f7-root .navbar ~ .page:not(.no-navbar) .toolbar-top.toolbar-hidden,
+.wpay-f7-root .navbars ~ .page:not(.no-navbar) .toolbar-top.toolbar-hidden,
+.wpay-f7-root.ios .navbar ~ .page:not(.no-navbar) .toolbar-top-ios.toolbar-hidden,
+.wpay-f7-root.ios .navbars ~ .page:not(.no-navbar) .toolbar-top-ios.toolbar-hidden,
+.wpay-f7-root .md .navbar ~ .page:not(.no-navbar) .toolbar-top-md.toolbar-hidden {
+  transform: translate3d(0, calc(-1 * (var(--f7-navbar-height) + var(--f7-toolbar-height) + var(--f7-safe-area-top))), 0);
+}
+.wpay-f7-root .navbar ~ .toolbar-top.toolbar-hidden.tabbar-icons,
+.wpay-f7-root .navbars ~ .toolbar-top.toolbar-hidden.tabbar-icons,
+.wpay-f7-root.ios .navbar ~ .toolbar-top-ios.toolbar-hidden.tabbar-icons,
+.wpay-f7-root.ios .navbars ~ .toolbar-top-ios.toolbar-hidden.tabbar-icons,
+.wpay-f7-root .md .navbar ~ .toolbar-top-md.toolbar-hidden.tabbar-icons,
+.wpay-f7-root .navbar ~ * .toolbar-top.toolbar-hidden.tabbar-icons,
+.wpay-f7-root .navbars ~ * .toolbar-top.toolbar-hidden.tabbar-icons,
+.wpay-f7-root.ios .navbar ~ * .toolbar-top-ios.toolbar-hidden.tabbar-icons,
+.wpay-f7-root.ios .navbars ~ * .toolbar-top-ios.toolbar-hidden.tabbar-icons,
+.wpay-f7-root .md .navbar ~ * .toolbar-top-md.toolbar-hidden.tabbar-icons,
+.wpay-f7-root .navbar ~ .page:not(.no-navbar) .toolbar-top.toolbar-hidden.tabbar-icons,
+.wpay-f7-root .navbars ~ .page:not(.no-navbar) .toolbar-top.toolbar-hidden.tabbar-icons,
+.wpay-f7-root.ios .navbar ~ .page:not(.no-navbar) .toolbar-top-ios.toolbar-hidden.tabbar-icons,
+.wpay-f7-root.ios .navbars ~ .page:not(.no-navbar) .toolbar-top-ios.toolbar-hidden.tabbar-icons,
+.wpay-f7-root .md .navbar ~ .page:not(.no-navbar) .toolbar-top-md.toolbar-hidden.tabbar-icons {
+  transform: translate3d(0, calc(-1 * (var(--f7-navbar-height) + var(--f7-tabbar-icons-height) + var(--f7-safe-area-top))), 0);
+}
+.wpay-f7-root .navbar-hidden + .toolbar-top:not(.toolbar-hidden),
+.wpay-f7-root.ios .navbar-hidden + .toolbar-top-ios:not(.toolbar-hidden),
+.wpay-f7-root .md .navbar-hidden + .toolbar-top-md:not(.toolbar-hidden),
+.wpay-f7-root .navbar-hidden ~ * .toolbar-top:not(.toolbar-hidden),
+.wpay-f7-root.ios .navbar-hidden ~ * .toolbar-top-ios:not(.toolbar-hidden),
+.wpay-f7-root .md .navbar-hidden ~ * .toolbar-top-md:not(.toolbar-hidden) {
+  transform: translate3d(0, calc(0px - var(--f7-navbar-height)), 0);
+}
+.wpay-f7-root .navbar-large-hidden + .toolbar-top:not(.toolbar-hidden),
+.wpay-f7-root.ios .navbar-large-hidden + .toolbar-top-ios:not(.toolbar-hidden),
+.wpay-f7-root .md .navbar-large-hidden + .toolbar-top-md:not(.toolbar-hidden),
+.wpay-f7-root .navbar-large-hidden ~ * .toolbar-top:not(.toolbar-hidden),
+.wpay-f7-root.ios .navbar-large-hidden ~ * .toolbar-top-ios:not(.toolbar-hidden),
+.wpay-f7-root .md .navbar-large-hidden ~ * .toolbar-top-md:not(.toolbar-hidden) {
+  transform: translate3d(0, calc(0px - var(--f7-navbar-height) - var(--f7-navbar-large-title-height)), 0);
+}
+.wpay-f7-root.ios .toolbar a:is(.icon-only, :has(i:only-child), :has(svg:only-child)) {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+}
+.wpay-f7-root.ios .toolbar .link {
+  padding: 0 12px;
+  height: 100%;
+}
+.wpay-f7-root.ios .navbar ~ .toolbar-top::before,
+.wpay-f7-root.ios .navbar ~ .toolbar-top::after {
+  display: none;
+}
+.wpay-f7-root.ios .tabbar-icons .link {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+.wpay-f7-root.ios .tabbar-icons .link i + span {
+  margin: 0;
+  margin-top: 4px;
+}
+@media (max-width: 767px) {
+}
+@media (min-width: 768px) {
+}
+.wpay-f7-root.ios .tabbar-scrollable .link {
+  padding: 0 8px;
+}
+.wpay-f7-root .md .toolbar .link {
+  justify-content: center;
+  padding: 0 12px;
+  min-width: 48px;
+  min-height: 48px;
+  line-height: var(--f7-toolbar-link-line-height, var(--f7-toolbar-height));
+  height: var(--f7-toolbar-link-height, var(--f7-toolbar-height));
+}
+.wpay-f7-root .md .toolbar a:is(.icon-only, :has(i:only-child), :has(svg:only-child)) {
+  min-width: 48px;
+  flex-shrink: 0;
+  padding: 0;
+}
+.wpay-f7-root .md .tabbar .link,
+.wpay-f7-root .md .tabbar-icons .link {
+  padding-left: 0;
+  padding-right: 0;
+}
+.wpay-f7-root .md .tabbar a:is(.icon-only, :has(i:only-child), :has(svg:only-child)), .wpay-f7-root .md .tabbar-icons a:is(.icon-only, :has(i:only-child), :has(svg:only-child)) {
+  flex-shrink: initial;
+}
+.wpay-f7-root .md .tabbar i.icon,
+.wpay-f7-root .md .tabbar-icons i.icon {
+  position: relative;
+}
+.wpay-f7-root .md .tabbar i.icon::before,
+.wpay-f7-root .md .tabbar-icons i.icon::before {
+  content: '';
+  width: 64px;
+  height: 32px;
+  border-radius: 32px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translateX(-50%) translateY(-50%) scaleX(0.5);
+  background: var(--f7-tabbar-link-active-icon-bg-color);
+  opacity: 0;
+  transition-duration: 200ms;
+  z-index: -1;
+}
+.wpay-f7-root .md .tabbar i.icon + .tabbar-label,
+.wpay-f7-root .md .tabbar-icons i.icon + .tabbar-label {
+  margin-top: 8px;
+}
+.wpay-f7-root .md .tabbar .tab-link-active i.icon::before,
+.wpay-f7-root .md .tabbar-icons .tab-link-active i.icon::before {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-50%) scaleX(1);
+}
+.wpay-f7-root .md .tabbar-icons .link {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.wpay-f7-root .md .tabbar-scrollable .link {
+  padding: 0 12px;
+}
+/* === Subnavbar === */
+.wpay-f7-root {
+  /*
+
+  --f7-subnavbar-bg-color-rgb: var(--f7-bars-bg-color-rgb);
+  --f7-subnavbar-border-color: var(--f7-bars-border-color);
+  --f7-subnavbar-link-color: var(--f7-bars-link-color);
+  --f7-subnavbar-text-color: var(--f7-bars-text-color);
+  */
+  --f7-subnavbar-title-line-height: 1.2;
+}
+.wpay-f7-root.ios {
+  --f7-subnavbar-height: 44px;
+  --f7-subnavbar-offset-left: calc(16px + var(--f7-safe-area-left));
+  --f7-subnavbar-offset-right: calc(16px + var(--f7-safe-area-right));
+  --f7-subnavbar-inner-padding-left: 5px;
+  --f7-subnavbar-inner-padding-right: 5px;
+  --f7-subnavbar-title-font-size: 24px;
+  --f7-subnavbar-title-font-weight: 700;
+  --f7-subnavbar-title-letter-spacing: -0.03em;
+  --f7-subnavbar-title-margin-left: 8px;
+  --f7-subnavbar-bg-color: var(--f7-glass-bg-color);
+  /*
+  --f7-subnavbar-link-height: var(--f7-subnavbar-height);
+  --f7-subnavbar-link-line-height: var(--f7-subnavbar-height);
+  */
+}
+.wpay-f7-root .subnavbar a.link {
+  line-height: var(--f7-subnavbar-link-line-height, var(--f7-subnavbar-height));
+  height: var(--f7-subnavbar-link-height, var(--f7-subnavbar-height));
+}
+.wpay-f7-root .subnavbar a:is(.icon-only, :has(i:only-child), :has(svg:only-child)) {
+  min-width: var(--f7-subnavbar-height);
+}
+.wpay-f7-root .subnavbar.navbar-hidden:before {
+  display: none !important;
+}
+.wpay-f7-root .navbar .subnavbar {
+  top: 100%;
+}
+.wpay-f7-root .views > .subnavbar,
+.wpay-f7-root .view > .subnavbar,
+.wpay-f7-root .page > .subnavbar {
+  position: absolute;
+}
+.wpay-f7-root .navbar ~ * .subnavbar,
+.wpay-f7-root .navbars ~ * .subnavbar,
+.wpay-f7-root .page-with-subnavbar .navbar ~ .subnavbar,
+.wpay-f7-root .page-with-subnavbar .navbar ~ * .subnavbar,
+.wpay-f7-root .navbar ~ .page-with-subnavbar:not(.no-navbar) .subnavbar,
+.wpay-f7-root .navbar ~ .subnavbar,
+.wpay-f7-root .navbars ~ .page-with-subnavbar:not(.no-navbar) .subnavbar,
+.wpay-f7-root .navbars ~ .subnavbar {
+  top: calc(var(--f7-navbar-height) + var(--f7-safe-area-top));
+}
+.wpay-f7-root .navbar ~ .page-with-navbar-large:not(.no-navbar) .subnavbar,
+.wpay-f7-root .navbars ~ .page-with-navbar-large:not(.no-navbar) .subnavbar,
+.wpay-f7-root .page-with-subnavbar.page-with-navbar-large .navbar ~ .subnavbar,
+.wpay-f7-root .page-with-subnavbar.page-with-navbar-large .navbar ~ * .subnavbar,
+.wpay-f7-root .navbar .title-large ~ .subnavbar {
+  top: calc(var(--f7-navbar-height) + var(--f7-navbar-large-title-height) + var(--f7-safe-area-top));
+  transform: translate3d(0, calc(-1 * var(--f7-navbar-large-collapse-progress) * var(--f7-navbar-large-title-height)), 0);
+}
+.wpay-f7-root .page-with-subnavbar {
+  --f7-page-subnavbar-offset: var(--f7-subnavbar-height);
+}
+.wpay-f7-root.ios .subnavbar a.link {
+  justify-content: flex-start;
+}
+.wpay-f7-root.ios .subnavbar a:is(.icon-only, :has(i:only-child), :has(svg:only-child)) {
+  justify-content: center;
+  margin: 0;
+}
+.wpay-f7-root .md .subnavbar a.link {
+  justify-content: center;
+  padding: 0 12px;
+}
+.wpay-f7-root .md .subnavbar a:is(.icon-only, :has(i:only-child), :has(svg:only-child)) {
+  flex-shrink: 0;
+  padding: 0 12px;
+}
+.wpay-f7-root .md .subnavbar-inner > a.link:first-child {
+  margin-left: calc(-1 * var(--f7-subnavbar-inner-padding-left));
+}
+.wpay-f7-root .md .subnavbar-inner > a.link:last-child {
+  margin-right: calc(-1 * var(--f7-subnavbar-inner-padding-right));
+}
+/* === Content Block === */
+.wpay-f7-root {
+  --f7-block-padding-horizontal: 16px;
+  --f7-block-padding-vertical: 16px;
+  --f7-block-font-size: inherit;
+  --f7-block-header-margin: 10px;
+  --f7-block-footer-margin: 10px;
+  --f7-block-header-font-size: 14px;
+  --f7-block-footer-font-size: 14px;
+  --f7-block-title-text-transform: none;
+  --f7-block-title-white-space: nowrap;
+  --f7-block-title-medium-text-transform: none;
+  --f7-block-title-large-text-transform: none;
+  --f7-block-inset-side-margin: 16px;
+}
+.wpay-f7-root.ios {
+  --f7-block-text-color: inherit;
+  --f7-block-margin-vertical: 35px;
+  --f7-block-outline-border-color: rgba(0, 0, 0, 0.22);
+  --f7-block-title-font-size: 17px;
+  --f7-block-title-font-weight: 600;
+  --f7-block-title-line-height: 20px;
+  --f7-block-title-margin-bottom: 10px;
+  --f7-block-title-medium-font-size: 20px;
+  --f7-block-title-medium-font-weight: bold;
+  --f7-block-title-medium-line-height: 1.4;
+  --f7-block-title-large-font-size: 22px;
+  --f7-block-title-large-font-weight: bold;
+  --f7-block-title-large-line-height: 1.3;
+  --f7-block-inset-border-radius: 24px;
+  --f7-block-title-text-color: rgba(0, 0, 0, 0.6);
+  --f7-block-strong-text-color: #000;
+  --f7-block-header-text-color: rgba(0, 0, 0, 0.45);
+  --f7-block-footer-text-color: rgba(0, 0, 0, 0.45);
+  --f7-block-strong-bg-color: #fff;
+  --f7-block-title-medium-text-color: #000;
+  --f7-block-title-large-text-color: #000;
+}
+@media (min-width: 480px) {
+}
+@media (min-width: 568px) {
+}
+@media (min-width: 768px) {
+}
+@media (min-width: 1024px) {
+}
+@media (min-width: 1200px) {
+}
+/* === List View === */
+.wpay-f7-root {
+  --f7-list-inset-side-margin: 16px;
+  --f7-list-item-padding-horizontal: 16px;
+  --f7-list-media-item-padding-horizontal: 16px;
+  --f7-list-item-text-max-lines: 2;
+  --f7-list-chevron-icon-font-size: 20px;
+  --f7-list-item-media-margin: 16px;
+  --f7-list-item-title-font-size: inherit;
+  --f7-list-item-title-font-weight: 400;
+  --f7-list-item-title-line-height: inherit;
+  --f7-list-item-title-white-space: nowrap;
+  --f7-list-item-subtitle-font-weight: 400;
+  --f7-list-item-subtitle-line-height: inherit;
+  --f7-list-item-text-font-weight: 400;
+  --f7-list-item-after-font-weight: 400;
+  --f7-list-item-after-line-height: inherit;
+  --f7-list-item-header-font-size: 12px;
+  --f7-list-item-header-font-weight: 400;
+  --f7-list-item-header-line-height: 1.2;
+  --f7-list-item-footer-font-size: 12px;
+  --f7-list-item-footer-font-weight: 400;
+  --f7-list-item-footer-line-height: 1.2;
+  /*
+  --f7-list-button-text-color: var(--f7-theme-color);
+  */
+  --f7-list-button-font-size: inherit;
+  --f7-list-button-font-weight: 400;
+  --f7-list-button-text-align: center;
+  --f7-list-group-title-line-height: inherit;
+  --f7-menu-list-font-size: 14px;
+  --f7-menu-list-item-title-font-size: 14px;
+  --f7-menu-list-item-title-font-weight: 500;
+  --f7-menu-list-item-subtitle-font-size: 14px;
+  --f7-menu-list-item-text-font-size: 14px;
+  --f7-menu-list-item-after-font-size: 14px;
+  --f7-list-outline-border-color: rgba(0, 0, 0, 0.22);
+  --f7-list-chevron-icon-color: rgba(0, 0, 0, 0.2);
+}
+.wpay-f7-root.ios {
+  --f7-list-item-padding-vertical: 12px;
+  --f7-list-in-list-padding-left: 30px;
+  --f7-list-inset-border-radius: 24px;
+  --f7-list-margin-vertical: 35px;
+  --f7-list-font-size: 17px;
+  --f7-list-chevron-icon-area: 20px;
+  --f7-list-item-title-text-color: inherit;
+  --f7-list-item-subtitle-text-color: inherit;
+  --f7-list-link-pressed-bg-color: rgba(0, 0, 0, 0.15);
+  --f7-list-item-subtitle-font-size: 15px;
+  --f7-list-item-text-font-size: 15px;
+  --f7-list-item-text-line-height: 21px;
+  --f7-list-item-after-font-size: inherit;
+  --f7-list-item-after-padding: 5px;
+  --f7-list-item-min-height: 52px;
+  --f7-list-item-media-icons-margin: 5px;
+  --f7-list-media-item-padding-vertical: 10px;
+  --f7-list-media-item-title-font-weight: 600;
+  --f7-list-button-border-color: rgba(0, 0, 0, 0.22);
+  /*
+  --f7-list-button-pressed-bg-color: rgba(var(--f7-theme-color-rgb), .15);
+  */
+  --f7-list-group-title-border-color: rgba(0, 0, 0, 0.22);
+  --f7-list-group-title-height: 31px;
+  --f7-list-group-title-font-size: inherit;
+  --f7-list-group-title-font-weight: 400;
+  --f7-menu-list-offset: 8px;
+  --f7-menu-list-border-radius: 16px;
+  --f7-menu-list-item-bg-color: transparent;
+  --f7-menu-list-item-text-color: inherit;
+  --f7-menu-list-item-min-height: 44px;
+  --f7-list-item-border-color: rgba(0, 0, 0, 0.22);
+  --f7-list-outline-inset-border-color: rgba(0, 0, 0, 0.22);
+  --f7-list-strong-bg-color: #fff;
+  --f7-list-item-after-text-color: rgba(0, 0, 0, 0.45);
+  --f7-list-item-header-text-color: inherit;
+  --f7-list-item-footer-text-color: rgba(0, 0, 0, 0.45);
+  --f7-list-item-text-text-color: rgba(0, 0, 0, 0.45);
+  --f7-list-group-title-text-color: rgba(0, 0, 0, 0.45);
+  --f7-list-group-title-bg-color: #f7f7f7;
+  --f7-menu-list-item-selected-text-color: var(--f7-theme-color);
+  --f7-menu-list-item-selected-bg-color: rgba(var(--f7-theme-color-rgb), 0.15);
+}
+.wpay-f7-root {
+  --f7-list-chevron-icon-left: 'chevron_left';
+  --f7-list-chevron-icon-right: 'chevron_right';
+}
+.wpay-f7-root .links-list li {
+  z-index: 1;
+}
+.wpay-f7-root .links-list a {
+  transition-duration: 300ms;
+  transition-property: background-color;
+  display: block;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  align-content: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  height: var(--f7-list-item-min-height);
+  color: inherit;
+}
+.wpay-f7-root .links-list a .ripple-wave {
+  z-index: 0;
+}
+.wpay-f7-root .links-list a:after {
+  width: auto;
+}
+.wpay-f7-root .links-list a.active-state {
+  background-color: var(--f7-list-link-pressed-bg-color);
+}
+.wpay-f7-root .links-list a {
+  padding-left: calc(var(--f7-list-item-padding-horizontal) + var(--f7-safe-area-left));
+  padding-right: calc(var(--f7-list-chevron-icon-area) + var(--f7-list-item-padding-horizontal) + var(--f7-safe-area-right));
+}
+.wpay-f7-root .links-list a:after {
+  left: calc(var(--f7-list-item-padding-horizontal) + var(--f7-safe-area-left));
+  right: 0;
+}
+.wpay-f7-root .links-list li:last-child a:after {
+  display: none !important;
+}
+.wpay-f7-root .list-dividers.links-list a:after,
+.wpay-f7-root.ios .list-dividers-ios.links-list a:after,
+.wpay-f7-root .md .list-dividers-md.links-list a:after {
+  content: '';
+  position: absolute;
+  background-color: var(--f7-list-item-border-color);
+  display: block;
+  z-index: 15;
+  top: auto;
+  right: auto;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  width: 100%;
+  transform-origin: 50% 100%;
+  transform: scaleY(calc(1 / var(--f7-device-pixel-ratio)));
+}
+.wpay-f7-root .links-list a:before {
+  font-family: 'framework7-core-icons';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'liga';
+  text-align: center;
+  display: block;
+  width: 100%;
+  height: 100%;
+  font-size: 20px;
+  position: absolute;
+  top: 50%;
+  width: 8px;
+  height: 14px;
+  margin-top: -7px;
+  font-size: var(--f7-list-chevron-icon-font-size);
+  line-height: 14px;
+  color: var(--f7-list-chevron-icon-color);
+  pointer-events: none;
+  right: calc(var(--f7-list-item-padding-horizontal) + var(--f7-safe-area-right));
+  content: var(--f7-list-chevron-icon-right);
+}
+.wpay-f7-root .page-with-navbar-large .list-group > .list-group-title,
+.wpay-f7-root .page-with-navbar-large .list-group > ul > .list-group-title {
+  top: calc(-1 * var(--f7-navbar-large-title-height));
+}
+@media (min-width: 480px) {
+}
+@media (min-width: 568px) {
+}
+@media (min-width: 768px) {
+}
+@media (min-width: 1024px) {
+}
+@media (min-width: 1200px) {
+}
+.wpay-f7-root.ios .links-list a.active-state:after {
+  background-color: transparent;
+}
+.wpay-f7-root.ios .links-list a.active-state {
+  transition-duration: 0ms;
+}
+/* === Badge === */
+.wpay-f7-root {
+  --f7-badge-text-color: #fff;
+  --f7-badge-bg-color: #8e8e93;
+  --f7-badge-in-icon-size: 16px;
+  --f7-badge-in-icon-font-size: 10px;
+  --f7-badge-font-weight: normal;
+  --f7-badge-font-size: 12px;
+}
+.wpay-f7-root.ios {
+  --f7-badge-padding: 0 4px;
+  --f7-badge-size: 20px;
+  --f7-badge-font-weight: 600;
+}
+.wpay-f7-root .icon .badge {
+  position: absolute;
+  left: 100%;
+  margin-left: -10px;
+  top: -2px;
+  font-family: var(--f7-font-family);
+  --f7-badge-font-size: var(--f7-badge-in-icon-font-size);
+  --f7-badge-size: var(--f7-badge-in-icon-size);
+  --f7-badge-padding: 0px 2px;
+}
+.wpay-f7-root {
+  --f7-button-min-width: 32px;
+  --f7-button-bg-color: transparent;
+  --f7-button-border-width: 0px;
+  /*
+  --f7-button-text-color: var(--f7-theme-color);
+  --f7-button-pressed-text-color: var(--f7-button-text-color, var(--f7-theme-color));
+  --f7-button-border-color: var(--f7-theme-color);
+  --f7-button-fill-bg-color: var(--f7-theme-color);
+  --f7-button-padding-vertical: 0px;
+  */
+  --f7-button-raised-box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
+  --f7-button-raised-pressed-box-shadow: 0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23);
+  --f7-segmented-raised-divider-color: rgba(0, 0, 0, 0.1);
+  --f7-segmented-strong-padding: 2px;
+  --f7-segmented-strong-between-buttons: 4px;
+  --f7-segmented-strong-button-font-weight: 500;
+  --f7-segmented-strong-button-active-box-shadow: 0px 2px 2px rgba(0, 0, 0, 0.25);
+  --f7-segmented-strong-button-text-color: #000;
+  --f7-segmented-strong-button-hover-bg-color: rgba(0, 0, 0, 0.04);
+  --f7-segmented-strong-button-active-text-color: #000;
+  --f7-segmented-strong-button-active-bg-color: #fff;
+}
+.wpay-f7-root.ios {
+  --f7-button-font-size: 15px;
+  --f7-button-fill-text-color: #fff;
+  --f7-button-text-transform: none;
+  --f7-button-height: 34px;
+  --f7-button-padding-horizontal: 10px;
+  --f7-button-border-radius: 4px;
+  --f7-button-font-weight: 500;
+  --f7-button-letter-spacing: 0;
+  /*
+  --f7-button-outline-border-color: var(--f7-theme-color);
+  */
+  --f7-button-outline-border-width: 2px;
+  /*
+  --f7-button-pressed-bg-color: rgba(var(--f7-theme-color-rgb), .15);
+  --f7-button-fill-pressed-bg-color: var(--f7-theme-color-tint);
+  */
+  --f7-button-large-text-transform: none;
+  --f7-button-large-height: 48px;
+  --f7-button-large-font-size: 17px;
+  --f7-button-large-font-weight: 500;
+  --f7-button-small-outline-border-width: 2px;
+  --f7-button-small-text-transform: none;
+  --f7-button-small-height: 28px;
+  --f7-button-small-font-size: 14px;
+  --f7-button-small-font-weight: 500;
+  --f7-segmented-strong-button-text-transform: none;
+  --f7-segmented-strong-button-active-font-weight: 600;
+  --f7-segmented-strong-bg-color: rgba(0, 0, 0, 0.07);
+  --f7-segmented-strong-button-pressed-bg-color: rgba(0, 0, 0, 0.07);
+}
+.wpay-f7-root.ios {
+  --f7-button-tonal-bg-color: rgba(var(--f7-theme-color-rgb), 0.15);
+  --f7-button-tonal-pressed-bg-color: rgba(var(--f7-theme-color-rgb), 0.25);
+  --f7-button-tonal-text-color: var(--f7-theme-color);
+}
+.wpay-f7-root .navbar .button {
+  color: var(--f7-button-text-color, var(--f7-theme-color));
+}
+/* === Touch Ripple === */
+.wpay-f7-root {
+  --f7-touch-ripple-black: rgba(0, 0, 0, 0.1);
+  --f7-touch-ripple-white: rgba(255, 255, 255, 0.15);
+  --f7-touch-ripple-color: var(--f7-touch-ripple-black);
+}
+.dark .wpay-f7-root {
+  --f7-touch-ripple-color: var(--f7-touch-ripple-white);
+}
+.wpay-f7-root .link {
+  -webkit-user-select: none;
+  user-select: none;
+}
+.wpay-f7-root .links-list a .ripple-wave,
+.wpay-f7-root .photo-browser .toolbar .link .ripple-wave {
+  animation: touch-ripple-in-blurred 250ms forwards;
+  background-image: radial-gradient(closest-side circle at 50% 50%, var(--f7-touch-ripple-color) 50%, rgba(255, 255, 255, 0));
+  background-color: transparent;
+}
+@keyframes touch-ripple-in-blurred {
+  from {
+    transform: translate3d(0px, 0px, 0) scale(0.5);
+  }
+  to {
+    transform: var(--f7-ripple-transform);
+  }
+}
+@keyframes touch-ripple-in {
+  from {
+    transform: translate3d(0px, 0px, 0) scale(0);
+  }
+  to {
+    transform: var(--f7-ripple-transform);
+  }
+}
+@keyframes touch-ripple-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+/* === Touch Highlight === */
+.wpay-f7-root.ios {
+  --f7-touch-highlight-bg-color: rgba(255, 255, 255, 0.5);
+}
+.wpay-f7-root.ios .navbar .left,
+.wpay-f7-root.ios .navbar .right {
+  touch-action: none;
+}
+/* === Icon === */
+.wpay-f7-root i.icon {
+  display: inline-block;
+  vertical-align: middle;
+  background-size: 100% auto;
+  background-position: center;
+  background-repeat: no-repeat;
+  font-style: normal;
+  position: relative;
+}
+.wpay-f7-root .icon-back:after,
+.wpay-f7-root .icon-prev:after,
+.wpay-f7-root .icon-forward:after,
+.wpay-f7-root .icon-next:after,
+.wpay-f7-root .icon-close:after {
+  font-family: 'framework7-core-icons';
+  font-weight: normal;
+  font-style: normal;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'liga';
+  text-align: center;
+  display: block;
+  width: 100%;
+  height: 100%;
+  font-size: 20px;
+}
+.wpay-f7-root .icon[class*='color-'] {
+  color: var(--f7-theme-color);
+}
+.wpay-f7-root.ios .icon-back,
+.wpay-f7-root.ios .icon-prev,
+.wpay-f7-root.ios .icon-forward,
+.wpay-f7-root.ios .icon-next {
+  width: 12px;
+  height: 20px;
+  line-height: 20px;
+}
+.wpay-f7-root.ios .icon-back:after,
+.wpay-f7-root.ios .icon-prev:after,
+.wpay-f7-root.ios .icon-forward:after,
+.wpay-f7-root.ios .icon-next:after {
+  line-height: inherit;
+}
+.wpay-f7-root.ios .icon-prev:after,
+.wpay-f7-root.ios .icon-next:after {
+  font-size: 16px;
+}
+.wpay-f7-root.ios .icon-close {
+  width: 20px;
+  height: 20px;
+  line-height: 20px;
+  font-size: 20px;
+}
+.wpay-f7-root.ios .icon-close:after {
+  content: 'close_ios';
+}
+.wpay-f7-root.ios .icon-back:after,
+.wpay-f7-root.ios .icon-prev:after {
+  content: 'chevron_left_ios';
+}
+.wpay-f7-root.ios .icon-forward:after,
+.wpay-f7-root.ios .icon-next:after {
+  content: 'chevron_right_ios';
+}
+.wpay-f7-root .md .icon-back,
+.wpay-f7-root .md .icon-forward,
+.wpay-f7-root .md .icon-next,
+.wpay-f7-root .md .icon-prev {
+  width: 24px;
+  height: 24px;
+}
+.wpay-f7-root .md .icon-back:after,
+.wpay-f7-root .md .icon-forward:after,
+.wpay-f7-root .md .icon-next:after,
+.wpay-f7-root .md .icon-prev:after {
+  line-height: 1.2;
+}
+.wpay-f7-root .md .icon-close {
+  width: 24px;
+  height: 24px;
+  line-height: 24px;
+  font-size: 24px;
+}
+.wpay-f7-root .md .icon-close:after {
+  content: 'close_md';
+}
+.wpay-f7-root .md .icon-back:after {
+  content: 'arrow_left_md';
+}
+.wpay-f7-root .md .icon-forward:after {
+  content: 'arrow_right_md';
+}
+.wpay-f7-root .md .icon-next:after {
+  content: 'chevron_right_md';
+}
+.wpay-f7-root .md .icon-prev:after {
+  content: 'chevron_left_md';
+}
+.wpay-f7-root .custom-modal-backdrop {
+  z-index: 10500;
+}
+.wpay-f7-root .custom-modal-backdrop,
+.wpay-f7-root .actions-backdrop,
+.wpay-f7-root .dialog-backdrop,
+.wpay-f7-root .popover-backdrop,
+.wpay-f7-root .popup-backdrop,
+.wpay-f7-root .preloader-backdrop,
+.wpay-f7-root .sheet-backdrop,
+.wpay-f7-root .fab-backdrop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 13000;
+  visibility: hidden;
+  opacity: 0;
+  transition-duration: 400ms;
+}
+.wpay-f7-root .custom-modal-backdrop.not-animated,
+.wpay-f7-root .actions-backdrop.not-animated,
+.wpay-f7-root .dialog-backdrop.not-animated,
+.wpay-f7-root .popover-backdrop.not-animated,
+.wpay-f7-root .popup-backdrop.not-animated,
+.wpay-f7-root .preloader-backdrop.not-animated,
+.wpay-f7-root .sheet-backdrop.not-animated,
+.wpay-f7-root .fab-backdrop.not-animated {
+  transition-duration: 0ms;
+}
+.wpay-f7-root .custom-modal-backdrop.backdrop-in,
+.wpay-f7-root .actions-backdrop.backdrop-in,
+.wpay-f7-root .dialog-backdrop.backdrop-in,
+.wpay-f7-root .popover-backdrop.backdrop-in,
+.wpay-f7-root .popup-backdrop.backdrop-in,
+.wpay-f7-root .preloader-backdrop.backdrop-in,
+.wpay-f7-root .sheet-backdrop.backdrop-in,
+.wpay-f7-root .fab-backdrop.backdrop-in {
+  visibility: visible;
+  opacity: 1;
+}

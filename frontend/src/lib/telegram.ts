@@ -9,6 +9,7 @@ export interface TgUser {
 }
 
 interface TG {
+  isVersionAtLeast?: (version: string) => boolean
   ready?: () => void
   expand?: () => void
   setHeaderColor?: (c: string) => void
@@ -72,7 +73,11 @@ export function applyTgTheme(theme: 'dark' | 'light') {
   // В светлой теме экран кошелька использует системный iOS grouped background.
   // Тем же цветом красим нативную шапку Telegram, чтобы над WebView не было
   // отдельной белой полосы.
-  const bg = theme === 'dark' ? '#000000' : '#efeff4'
+  const views = document.querySelectorAll<HTMLElement>('[data-wallet-surface][aria-hidden="false"]')
+  const assetSurface = views[views.length - 1]?.dataset.walletSurface === 'asset'
+  const bg = assetSurface
+    ? (theme === 'dark' ? '#1c1c1e' : '#ffffff')
+    : (theme === 'dark' ? '#000000' : '#efeff4')
 
   // Держим цвет самого WebView и системной шапки Telegram одинаковым.
   // meta theme-color нужен как запасной вариант для клиентов, которые
@@ -88,12 +93,10 @@ export function applyTgTheme(theme: 'dark' | 'light') {
   themeMeta.content = bg
 
   if (!t) return
-  try {
-    t.setHeaderColor?.(bg)
-    t.setBackgroundColor?.(bg)
-    t.setBottomBarColor?.(bg)
-  } catch {
-    /* старая версия клиента */
+  // Older Telegram clients may support only some of these methods.
+  const bottom = theme === 'dark' ? '#000000' : '#efeff4'
+  for (const [update, color] of [[t.setHeaderColor, bg], [t.setBackgroundColor, bg], [t.setBottomBarColor, bottom]] as const) {
+    try { update?.call(t, color) } catch { /* unsupported client method */ }
   }
 }
 

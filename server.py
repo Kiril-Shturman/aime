@@ -78,6 +78,7 @@ from datetime import date
 
 from aiohttp import web
 from task_cycle import apply_review, return_for_retry, submit_candidate
+from wallet_backend import install_wallet
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, "data.json")
@@ -1745,6 +1746,8 @@ OPEN_PATHS = ("/api/whoami",)
 @web.middleware
 async def guard(request, handler):
     """К данным пускаем только своих — и на чтение, и на запись."""
+    if request.path.startswith("/api/wallet/"):
+        return await handler(request)
     who = whoami(request)
     if not who and os.environ.get("DEV_OPEN"):
         who = {"kind": "owner", "id": "owner", "name": "владелец"}
@@ -2241,7 +2244,8 @@ async def spa(request):
 
 def make_app():
     owner_key()   # чтобы ключ владельца существовал с первого запуска
-    app = web.Application(middlewares=[guard])
+    app = web.Application(middlewares=[guard], client_max_size=1024 * 1024)
+    install_wallet(app, ROOT, lambda key: hmac.compare_digest(key, owner_key()))
     app.router.add_get("/api/state", get_state)
     app.router.add_get("/api/design/blocks", get_blocks)
     app.router.add_get("/api/whoami", get_whoami)

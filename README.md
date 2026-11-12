@@ -1,3 +1,9 @@
+# WPay · React Mini App
+
+Полная текущая версия кошелька. Запуск, состав проекта и ограничения API: [WPAY.md](WPAY.md).
+
+Ниже сохранена документация исходной доски задач и общего сервера.
+
 # Доска задач
 
 Мини-аппа Телеграма в духе «Напоминаний» Apple: тёмный экран, плитки-сводки,
@@ -201,3 +207,35 @@ python3 worker.py --project aiMe --member NightWorkrr --limit 3
 На сервере `board-worker.service` запускается сразу при появлении человеческой
 задачи, а `board-worker.timer` страхует цикл раз в шесть часов. Файловая
 блокировка не даёт двум проходам работать одновременно.
+
+
+## WPay /wallet — GoSwap backend
+
+The React wallet now uses `/api/wallet/*` on this server. Configure
+`GOSWAP_API_TOKEN` and `WPAY_BOT_TOKEN` in the service environment or a private
+`.env.wallet` file (see `.env.wallet.example`), then restart the server.
+`BOARD_BOT_TOKEN` is accepted as a fallback for Telegram identity. Browser
+access uses the existing owner key; public board access never grants wallet
+access. No tokens belong in frontend variables.
+
+Enable B2B access at GoSwap and configure the webhook as
+`https://<wallet-host>/api/wallet/webhook`. Raw-body HMAC is verified before JSON
+parsing. Duplicate deposits are ignored by deposit_id; QR status events are
+idempotent. Each verified user has a server-owned client_ref and a separate
+SQLite balance. The organization's getBalance is available only through the
+owner-only `/api/wallet/provider` diagnostic route and is never shown as a
+customer balance. Back up `wpay.sqlite3` with its WAL files or SQLite backup API.
+
+Implemented: balance, valid reference rates, customer deposit windows, exact
+USDT/TRON deposits, deposit reconciliation, own transaction history, QR quotes,
+explicit payment confirmation, reserves, status polling and refund webhooks.
+An uncertain payment keeps its reserve and retries use the same spend_id.
+Do not delete reservations manually after a network error.
+
+External withdrawals, executable exchange, ruble deposits and card issuance
+remain unavailable: corresponding provider APIs are not documented. The card
+screens are still concepts. Missing provider credentials are displayed honestly;
+no generated/demo receiving addresses are shown.
+
+Tests: `python3 -m unittest discover -s tests -p test_wallet_backend.py -v`.
+They use an in-memory fake provider and never execute real GoSwap payments.

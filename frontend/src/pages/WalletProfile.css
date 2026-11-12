@@ -1,0 +1,87 @@
+/* Framework7 React list styles scoped to the account, alongside the Konsta wallet. */
+.wpay-f7-profile { --f7-list-bg-color: #fff; --f7-list-item-title-text-color: #000; --f7-list-item-after-text-color: #8e8e93; --f7-list-item-border-color: rgba(60,60,67,.14); }
+.dark .wpay-f7-profile { --f7-list-bg-color: #1c1c1e; --f7-list-item-title-text-color: #fff; --f7-list-item-after-text-color: #98989f; --f7-list-item-border-color: rgba(235,235,245,.14); }
+.wpay-f7-profile .list { margin: 0 16px 24px; border-radius: 28px; background: var(--f7-list-bg-color); overflow: hidden; color: var(--f7-list-item-title-text-color); }
+.wpay-f7-profile .list ul { list-style: none; margin: 0; padding: 0; }
+.wpay-f7-profile .item-content { min-height: 58px; display: flex; align-items: center; padding-left: 18px; box-sizing: border-box; }
+.wpay-f7-profile .item-media { display: flex; flex-shrink: 0; align-items: center; padding: 8px 0; }
+.wpay-f7-profile .item-inner { position: relative; min-width: 0; min-height: 58px; width: 100%; margin-left: 14px; padding: 8px 18px 8px 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; box-sizing: border-box; }
+.wpay-f7-profile .item-inner::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: .5px; background: var(--f7-list-item-border-color); }
+.wpay-f7-profile li:last-child .item-inner::after { display: none; }
+.wpay-f7-profile .item-link { display: block; color: inherit; text-decoration: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.wpay-f7-profile .item-link:active { background: rgba(128,128,128,.12); }
+.wpay-f7-profile .item-link:focus-visible { outline: 2px solid #007aff; outline-offset: -2px; }
+.wpay-f7-profile .item-link .item-inner { padding-right: 34px; }
+.wpay-f7-profile .item-link .item-inner::before { content: ''; position: absolute; right: 17px; top: 50%; width: 10px; height: 10px; border-top: 2px solid var(--f7-list-item-after-text-color); border-right: 2px solid var(--f7-list-item-after-text-color); transform: translateY(-50%) rotate(45deg); opacity: .65; }
+.wpay-f7-profile .item-title { min-width: 0; font-size: 17px; line-height: 22px; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.wpay-f7-profile .item-title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+.wpay-f7-profile .item-subtitle { margin-top: 2px; font-size: 13px; line-height: 18px; color: var(--f7-list-item-after-text-color); }
+.wpay-f7-profile .media-item .item-inner { display: block; }
+.wpay-f7-profile .item-after { flex-shrink: 0; max-width: 48%; font-size: 15px; line-height: 20px; color: var(--f7-list-item-after-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+
+.wpay-support-chat .messages { display: flex; flex-direction: column; gap: 16px; padding: 22px 0 24px; }
+.wpay-support-chat .messages-title { text-align: center; margin-bottom: 4px; font-size: 11px; color: #8e8e93; }
+.wpay-support-chat .messages-title span { padding: 5px 12px; border-radius: 20px; background: rgba(120,120,128,.08); }
+.wpay-support-chat .message { max-width: 85%; align-self: flex-end; min-width: 0; }
+.wpay-support-chat .message-content { display: flex; flex-direction: column; align-items: flex-end; }
+.wpay-support-chat .message-bubble { max-width: 100%; width: fit-content; padding: 11px 16px; border-radius: 22px 22px 7px 22px; background: linear-gradient(150deg,#1688ff,#007aff); color: #fff; box-shadow: 0 2px 4px rgb(0 122 255 / .08); }
+.wpay-support-chat .message-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 17px; line-height: 23px; }
+.wpay-support-chat .message-footer { margin-top: 6px; text-align: right; font-size: 11px; line-height: 16px; color: #8e8e93; }
+.wpay-support-chat .support-compose { padding-bottom: calc(var(--wpay-bottom-inset) + 16px); background: rgba(239,239,244,.94); border-top: .5px solid rgba(60,60,67,.08); backdrop-filter: blur(20px); }
+.dark .wpay-support-chat .support-compose { background: rgba(0,0,0,.94); border-top-color: rgba(235,235,245,.1); }
+.dark .wpay-support-chat .message-bubble { background: linear-gradient(150deg,#2595ff,#0a84ff); }
+.dark .wpay-support-chat .message-footer, .dark .wpay-support-chat .messages-title { color: #98989f; }
+.wpay-support-chat .toolbar-inner { display: flex; align-items: flex-end; gap: 10px; }
+.wpay-support-chat .messagebar-area { min-width: 0; flex: 1; }
+.wpay-support-chat textarea { box-sizing: border-box; display: block; resize: none; width: 100%; height: 46px; min-height: 46px; max-height: 120px; border-radius: 23px; padding: 10px 16px; font-size: 17px; line-height: 24px; background: #fff; color: #000; border: 1px solid rgba(60,60,67,.1); outline: none; }
+.wpay-support-chat textarea:focus { border-color: rgba(0,122,255,.5); }
+.dark .wpay-support-chat textarea { background: #1c1c1e; color: #fff; border-color: rgba(235,235,245,.15); }
+.dark .wpay-support-chat textarea:focus { border-color: #0a84ff; }
+.wpay-support-chat .support-send { transition: opacity .15s, transform .15s; }
+.wpay-support-chat .support-send:active { transform: scale(.92); }
+@media (prefers-reduced-motion: reduce) { .wpay-support-chat .support-send { transition: none; } }
+
+.wpay-f7-profile .profile-legal-list .item-inner { margin-left: 14px; }
+.wpay-f7-profile .profile-legal-list .item-title { color: #007aff; font-size: 16px; font-weight: 600; white-space: normal; }
+.dark .wpay-f7-profile .profile-legal-list .item-title { color: #0a84ff; }
+.wpay-f7-profile .profile-legal-list .item-link .item-inner::before { display: none; }
+.wpay-f7-profile .profile-legal-list .item-link .item-inner { padding-right: 18px; }
+
+.wpay-f7-profile .profile-input-list .item-inner { display: block; margin-left: 0; padding: 12px 18px 12px 0; }
+.wpay-f7-profile .profile-input-list .item-label { display: block; margin-bottom: 5px; font-size: 13px; line-height: 18px; font-weight: 500; color: #8e8e93; }
+.wpay-f7-profile .profile-input-list .item-input-wrap { width: 100%; }
+.wpay-f7-profile .profile-input-list input { display: block; width: 100%; min-width: 0; height: 26px; padding: 0; border: 0; outline: none; background: transparent; font-size: 17px; line-height: 26px; color: #000; }
+.wpay-f7-profile .profile-input-list input::placeholder { color: #8e8e93; }
+.dark .wpay-f7-profile .profile-input-list input { color: #fff; }
+.dark .wpay-f7-profile .profile-input-list .item-label, .dark .wpay-f7-profile .profile-input-list input::placeholder { color: #98989f; }
+
+.wpay-f7-profile .profile-notifications .item-after { max-width: none; overflow: visible; }
+.wpay-f7-profile .toggle { position: relative; display: inline-flex; width: 58px; height: 31px; vertical-align: middle; cursor: pointer; }
+.wpay-f7-profile .toggle input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 1; margin: 0; }
+.wpay-f7-profile .toggle-icon { width: 58px; height: 31px; border-radius: 18px; background: #e9e9eb; transition: background .2s; }
+.wpay-f7-profile .toggle-icon::after { content: ''; position: absolute; left: 2px; top: 2px; width: 27px; height: 27px; border-radius: 50%; background: #fff; box-shadow: 0 2px 4px rgb(0 0 0 / .18); transition: transform .2s; }
+.wpay-f7-profile .toggle input:checked + .toggle-icon { background: #34c759; }
+.wpay-f7-profile .toggle input:checked + .toggle-icon::after { transform: translateX(27px); }
+.wpay-f7-profile .toggle input:focus-visible + .toggle-icon { outline: 2px solid #007aff; outline-offset: 3px; }
+.dark .wpay-f7-profile .toggle-icon { background: #39393d; }
+.dark .wpay-f7-profile .toggle input:checked + .toggle-icon { background: #30d158; }
+.dark .wpay-f7-profile .toggle input:focus-visible + .toggle-icon { outline-color: #0a84ff; }
+@media(prefers-reduced-motion:reduce) { .wpay-f7-profile .toggle-icon, .wpay-f7-profile .toggle-icon::after { transition: none; } }
+
+.wpay-f7-profile .profile-notifications .item-inner { margin-left: 0; }
+
+.wpay-f7-root { --f7-theme-color: #007aff; --f7-page-bg-color: #efeff4; --f7-navbar-height: 56px; --f7-navbar-large-title-font-size: 32px; --f7-navbar-large-title-height: 52px; --f7-navbar-large-title-padding-left: 20px; }
+.dark .wpay-f7-root { --f7-theme-color: #0a84ff; --f7-page-bg-color: #000; }
+.wpay-main-view { height: 100%; transform-origin: center top; }
+.wpay-profile-popup .page-content { background: #efeff4; padding-bottom: max(20px, var(--tg-safe-area-inset-bottom, 0px)); }
+.dark .wpay-profile-popup .page-content { background: #000; }
+.wpay-profile-popup .wpay-f7-profile { padding-top: 20px; }
+.wpay-f7-root .popup-backdrop { position: absolute; inset: 0; }
+/* Preserve the package's popup layer order after scoping core styles. */
+.wpay-f7-root .popup-backdrop { z-index: 10500; }
+/* Keep existing wallet push panels above the main view; F7 popups keep their native modal layer. */
+.wpay-f7-root > .wpay-main-view { z-index: 0; }
+
+.wpay-f7-profile .profile-notifications li:not(:last-child) .item-inner { border-bottom: 1px solid var(--f7-list-item-border-color); }
+.wpay-f7-profile .profile-notifications .item-inner::after { display: none; }

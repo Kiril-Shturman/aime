@@ -41,3 +41,15 @@ static/
 
 # Source files with "token" in their normal filename are safe to track
 !frontend/src/**
+
+# Wallet ledger and local secrets
+wpay.sqlite3*
+.env
+.env.local
+
+.env.wallet
+
+# Safe configuration templates and reproducible source checkout
+!.env.wallet.example
+node_modules/
+dist/
