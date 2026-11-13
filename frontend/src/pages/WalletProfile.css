@@ -85,3 +85,7 @@
 
 .wpay-f7-profile .profile-notifications li:not(:last-child) .item-inner { border-bottom: 1px solid var(--f7-list-item-border-color); }
 .wpay-f7-profile .profile-notifications .item-inner::after { display: none; }
+
+/* A titleless card navbar must not stretch its glass close button. */
+.wpay-f7-root .wpay-card-popup .navbar .right { height: 44px; min-height: 0; align-self: center; display: flex; align-items: center; }
+.wpay-f7-root .wpay-card-popup .navbar .right .link.popup-close { width: 44px; height: 44px; min-width: 44px; min-height: 44px; padding: 0; border-radius: 50%; align-self: center; flex: 0 0 44px; justify-content: center; }

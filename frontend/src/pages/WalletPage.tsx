@@ -5,8 +5,10 @@ import Framework7React, { List as F7List, ListItem as F7ListItem, Messages, Mess
 import './WalletFramework7.css'
 import 'framework7/components/popup/css'
 import './WalletProfile.css'
+import './WalletCard.css'
 import {
   useCallback,
+  useId,
   useEffect,
   useMemo,
   useRef,
@@ -143,13 +145,16 @@ function usePullToRefresh<T extends HTMLElement>(
     onRefreshStart,
     onRefreshed,
     delay = 800,
+    softPull = false,
   }: {
     onRefreshStart?: () => void
     onRefreshed: () => void
     delay?: number
+    softPull?: boolean
   },
 ) {
   const startY = useRef<number | null>(null)
+  const startX = useRef(0)
   const distanceRef = useRef(0)
   const refreshingRef = useRef(false)
   const timerRef = useRef<number | null>(null)
@@ -162,7 +167,8 @@ function usePullToRefresh<T extends HTMLElement>(
 
   const updateDistance = useCallback((clientY: number) => {
     if (startY.current === null || refreshingRef.current || (scrollRef.current?.scrollTop ?? 0) > 0) return false
-    const delta = clientY - startY.current
+    const rawDelta = clientY - startY.current
+    const delta = softPull ? Math.max(0,rawDelta-10)*0.85 : rawDelta
     if (delta <= 0) {
       distanceRef.current = 0
       setDistance(0)
@@ -176,7 +182,7 @@ function usePullToRefresh<T extends HTMLElement>(
     distanceRef.current = nextDistance
     setDistance(nextDistance)
     return true
-  }, [scrollRef])
+  }, [scrollRef,softPull])
 
   const finish = useCallback(() => {
     startY.current = null
@@ -209,11 +215,17 @@ function usePullToRefresh<T extends HTMLElement>(
 
     const handleTouchStart = (event: TouchEvent) => {
       if (event.touches.length !== 1 || refreshingRef.current || node.scrollTop > 0) return
+      startX.current = event.touches[0].clientX
       startY.current = event.touches[0].clientY
       setDragging(true)
     }
     const handleTouchMove = (event: TouchEvent) => {
       if (event.touches.length !== 1) return
+      if(softPull && startY.current!==null){
+        const dx=Math.abs(event.touches[0].clientX-startX.current)
+        const dy=Math.abs(event.touches[0].clientY-startY.current)
+        if(dx>10 && dx>dy){startY.current=null;return}
+      }
       if (updateDistance(event.touches[0].clientY)) event.preventDefault()
     }
     const handleTouchEnd = () => finish()
@@ -228,7 +240,7 @@ function usePullToRefresh<T extends HTMLElement>(
       node.removeEventListener('touchend', handleTouchEnd)
       node.removeEventListener('touchcancel', handleTouchEnd)
     }
-  }, [finish, scrollRef, updateDistance])
+  }, [finish, scrollRef, updateDistance,softPull])
 
   useEffect(() => () => {
     if (timerRef.current !== null) window.clearTimeout(timerRef.current)
@@ -381,6 +393,7 @@ function WalletScreen() {
   }
 
   const pull = usePullToRefresh(pageRef, {
+    softPull: activeTab==='cards',
     delay: 900,
     onRefreshStart: () => setLoading(true),
     onRefreshed: () => {
@@ -550,7 +563,7 @@ function WalletScreen() {
 
       <div
         role="status"
-        className={`pointer-events-none fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-50 -translate-x-1/2 whitespace-nowrap rounded-full bg-black px-4 py-2.5 text-[13px] font-medium text-white shadow-xl transition-all dark:bg-white dark:text-black ${notice ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
+        className={`pointer-events-none fixed bottom-[calc(88px+env(safe-area-inset-bottom))] left-1/2 z-[13000] -translate-x-1/2 whitespace-nowrap rounded-full bg-black px-4 py-2.5 text-[13px] font-medium text-white shadow-xl transition-all dark:bg-white dark:text-black ${notice ? 'translate-y-0 opacity-100' : 'translate-y-3 opacity-0'}`}
       >
         {notice}
       </div>
@@ -695,14 +708,14 @@ function PushViewShell({
 }
 
 function NotificationSheet({open,title,onClose,children}: ComponentProps<typeof PushViewShell>) {
-  const Icon=title==='Безопасность'?LockShieldFill:title==='Основная валюта'?Globe:title==='Поддержка'?QuestionCircleFill:BellFill
-  const color=title==='Безопасность'?'#30c759':title==='Основная валюта'?'#8e8e93':title==='Поддержка'?'#ff9500':'#ff3b30'
-  return <F7Popup push opened={open} className="wpay-profile-popup" closeByBackdropClick closeOnEscape swipeToClose="to-bottom" swipeHandler=".wpay-profile-popup .navbar" onPopupClosed={onClose}>
+  const Icon=(title==='Карта'||title==='Новая карта')?CreditcardFill:title==='Безопасность'?LockShieldFill:title==='Основная валюта'?Globe:title==='Поддержка'?QuestionCircleFill:BellFill
+  const color=(title==='Карта'||title==='Новая карта')?'#007aff':title==='Безопасность'?'#30c759':title==='Основная валюта'?'#8e8e93':title==='Поддержка'?'#ff9500':'#ff3b30'
+  return <F7Popup push opened={open} className={`wpay-profile-popup ${title==='Карта'?'wpay-card-popup':''}`} closeByBackdropClick closeOnEscape swipeToClose="to-bottom" swipeHandler=".wpay-profile-popup .navbar" onPopupClosed={onClose}>
     <div className="view">
       <F7Page>
-        <F7Navbar large transparent>
-          <span slot="title" className="inline-flex items-center gap-2"><Icon className="text-[20px]" style={{color}}/>{title}</span>
-          <span slot="title-large" className="inline-flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] text-white" style={{background:`linear-gradient(to bottom,color-mix(in srgb, ${color} 75%, white),${color})`}}><Icon className="text-[27px]"/></span>{title}</span>
+        <F7Navbar large={title!=='Карта'} transparent>
+          {title!=='Карта' && <span slot="title" className="inline-flex items-center gap-2"><Icon className="text-[20px]" style={{color}}/>{title}</span>}
+          {title!=='Карта' && <span slot="title-large" className="inline-flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[13px] text-white" style={{background:`linear-gradient(to bottom,color-mix(in srgb, ${color} 75%, white),${color})`}}><Icon className="text-[27px]"/></span>{title}</span>}
           <NavRight><F7Link popupClose aria-label={`Закрыть ${title.toLowerCase()}`}><i className="icon icon-close"/></F7Link></NavRight>
         </F7Navbar>
         {children}
@@ -885,11 +898,13 @@ function WithdrawalMethodsView({open,onClose}:{open:boolean;onClose:()=>void}) {
 }
 
 const bankCards = [
-  { id: 'rub', name: 'Основная карта', currency: '₽', balance: '0,00 ₽', last4: '0000', gradient: 'from-[#1d4ed8] via-[#2563eb] to-[#60a5fa]' },
-  { id: 'usd', name: 'Долларовая карта', currency: '$', balance: '$0.00', last4: '0001', gradient: 'from-[#312e81] via-[#5b21b6] to-[#a855f7]' },
+  { id: 'rub', name: 'Основная карта', currency: '₽', balance: '0,00 ₽', last4: '0000', network: 'Visa', gradient: 'from-[#1d4ed8] via-[#2563eb] to-[#60a5fa]' },
+  { id: 'usd', name: 'Долларовая карта', currency: '$', balance: '$0.00', last4: '0001', network: 'Visa', gradient: 'from-[#312e81] via-[#5b21b6] to-[#a855f7]' },
+  { id: 'amex', name: 'Green', currency: '$', balance: '$0.00', last4: '1002', network: 'American Express', gradient: 'from-[#f1f3f6] via-[#cdd3dc] to-[#e6ebf0]' },
 ]
 
 const cardPayments = {
+  amex: [],
   rub: [
     { id: 1, title: 'Кофейня', subtitle: 'Сегодня, 10:15', amount: '−620 ₽', icon: CreditcardFill },
     { id: 2, title: 'Пополнение', subtitle: 'Сегодня, 09:40', amount: '+10 000 ₽', icon: ArrowDownCircleFill, income: true },
@@ -903,11 +918,23 @@ const cardPayments = {
 
 type BankCard = (typeof bankCards)[number]
 const roundedWalletList = '!mt-0 overflow-hidden !rounded-[32px] [&>ul]:!rounded-[32px]'
+function BankCardArtwork({card}: {card:BankCard}) {
+  const chipId=useId()
+  if(card.id==='amex')return <span role="img" aria-label={`${card.name}, ${card.network}, демо, ${card.balance}, номер заканчивается на ${card.last4}`} className="wpay-classic-card"><img src="/cards/amex-green-classic.png" width="315" height="199" alt="" draggable={false} className="wpay-classic-card-image"/><span className="wpay-classic-card-status">{card.balance}<span>·</span>Демо</span></span>
+  return <span role="img" aria-label={`${card.name}, ${card.network}, демо, ${card.balance}, номер заканчивается на ${card.last4}`} className={`wpay-bank-card wpay-bank-card--${card.id}`}>
+    <span className="wpay-bank-card-orbit" aria-hidden="true"/>
+    <span className="wpay-bank-card-head"><span className="wpay-bank-card-brand">WPay<span className="wpay-bank-card-brand-dot"/></span><span className="wpay-bank-card-tag">{card.currency==='₽'?'RUB':'USD'}<span>·</span>Демо</span></span>
+    <span className="wpay-bank-card-middle"><span><span className="wpay-bank-card-name">{card.name}</span><span className="wpay-bank-card-balance">{card.balance}</span></span><span className="wpay-bank-card-chip-group" aria-hidden="true"><svg width="36" height="28" viewBox="0 0 36 28" fill="none"><rect x=".5" y=".5" width="35" height="27" rx="7" fill={`url(#${chipId})`} stroke="#fff" strokeOpacity=".4"/><path d="M12 0v8L8 11H0m36 0h-8l-4-3V0M0 17h8l4 3v8m12 0v-8l4-3h8M12 8h12v12H12z" stroke="#836b40" strokeOpacity=".55" strokeWidth=".75"/><defs><linearGradient id={chipId} x1="0" y1="0" x2="36" y2="28" gradientUnits="userSpaceOnUse"><stop stopColor="#f4e8c7"/><stop offset=".5" stopColor="#c9ad71"/><stop offset="1" stopColor="#efddaf"/></linearGradient></defs></svg><svg width="17" height="24" viewBox="0 0 17 24" fill="none"><path d="M3 8a7 7 0 0 1 0 8m4-11a12 12 0 0 1 0 14m4-17a17 17 0 0 1 0 20" stroke="currentColor" strokeOpacity=".75" strokeWidth="1.6" strokeLinecap="round"/></svg></span></span>
+    <span className="wpay-bank-card-bottom"><span><span className="wpay-bank-card-number">••••<span>{card.last4}</span></span><span className="wpay-bank-card-kind">VIRTUAL DEBIT</span></span><span className="wpay-bank-card-visa">VISA</span></span>
+  </span>
+}
+
 function CardAvatar({card}: {card:BankCard}) {
-  return <span className="wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={assetIconStyle({color:card.id==='rub'?'#3275e9':'#7c3aed',iconColor:'#fff'})}><CreditcardFill className="text-[23px]"/></span>
+  return <span className="wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={assetIconStyle({color:card.id==='rub'?'#3275e9':card.id==='amex'?'#42765b':'#7c3aed',iconColor:'#fff'})}><CreditcardFill className="text-[23px]"/></span>
 }
 function CardsPaymentsList({card,showNotice}: {card:BankCard;showNotice:NoticeHandler}) {
   const payments=cardPayments[card.id as keyof typeof cardPayments]
+  if(!payments.length)return <p className="mx-4 rounded-[28px] bg-white px-5 py-6 text-center text-[14px] text-black/40 dark:bg-[#1c1c1e] dark:text-white/40">По этой карте пока нет операций</p>
   return <List strong inset dividers className={roundedWalletList}>
     {payments.map(payment=>{const Icon=payment.icon;return <ListItem key={`${card.id}-${payment.id}`} link chevron={false} onClick={()=>showNotice(`${payment.title} · пример операции`)} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${payment.income?'bg-gradient-to-b from-green-300 to-green-500 text-white dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 text-white dark:from-blue-400 dark:to-blue-600'}`}><Icon className="text-[22px]"/></span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{payment.title}</span><span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">{payment.subtitle}</span></span><span className={`shrink-0 text-right text-[16px] font-medium tabular-nums ${payment.income?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{payment.amount}</span></span>}/>})}
   </List>
@@ -917,29 +944,89 @@ function CardWalletOptions({showNotice}: {showNotice:NoticeHandler}) {
     {[{title:'Apple Wallet',subtitle:'Добавить карту',Icon:LogoApple,color:'bg-black text-white dark:bg-white dark:text-black'},{title:'Google Wallet',subtitle:'Добавить карту',Icon:LogoGoogle,color:'bg-gradient-to-b from-blue-300 to-blue-500 text-white dark:from-blue-400 dark:to-blue-600'}].map(({title,subtitle,Icon,color})=><ListItem key={title} link title={title} subtitle={subtitle} contentClassName="!h-16" innerClassName="!h-16 !py-2 after:!opacity-30" titleWrapClassName="pr-6" chevronIcon={<ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-[19px] text-black/25 dark:text-white/30"/>} onClick={()=>showNotice(`${title}: подключение появится после выпуска карты`)} media={<span className={`wpay-currency-icon flex h-11 w-11 items-center justify-center rounded-full ${color}`}><Icon className="text-[24px]"/></span>}/>)}
   </List>
 }
+const cardOffers=[
+  {id:'virtual',name:'Виртуальная USD',caption:'Для ваших онлайн-покупок',network:'Visa',premium:false},
+  {id:'premium',name:'Premium USD',caption:'Ещё одна карта для ваших планов',network:'Mastercard',premium:true},
+]
+type CardOffer=(typeof cardOffers)[number]
+function CardOfferArtwork({offer}:{offer:CardOffer}) {
+  return <span className={`wpay-bank-card wpay-card-offer ${offer.premium?'wpay-card-offer-premium':''}`}>
+    <span className="wpay-bank-card-orbit" aria-hidden="true"/>
+    <span className="wpay-bank-card-head"><span className="wpay-bank-card-brand">WPay<span className="wpay-bank-card-brand-dot"/></span><span className="wpay-bank-card-tag">USD · Новая</span></span>
+    <span className="wpay-card-offer-plus" aria-hidden="true">+</span>
+    <span className="wpay-bank-card-bottom"><span><span className="wpay-card-offer-title">{offer.name}</span><span className="wpay-bank-card-kind">ДОБАВИТЬ КАРТУ</span></span><span className={offer.premium?'text-[12px] font-semibold':'wpay-bank-card-visa'}>{offer.network}</span></span>
+  </span>
+}
+function CardOfferDetails({offer,onOrder,checkout=false}:{offer:CardOffer;onOrder?:()=>void;checkout?:boolean}) {
+  return <div className="px-4 pb-7 pt-6"><h2 className="text-[27px] font-semibold tracking-tight text-black dark:text-white">{offer.name}</h2><p className="mt-2 text-[16px] leading-6 text-black/45 dark:text-white/45">{offer.caption}. Отдельная карта в долларах поможет разделить расходы и подписки.</p>
+    <List strong dividers className="!mx-0 !mb-5 !mt-5 overflow-hidden !rounded-[28px] [&>ul]:!rounded-[28px]">{['Выпуск карты','Обслуживание','Пополнение'].map(title=><ListItem key={title} title={title} after="Уточняется" contentClassName="!h-14" innerClassName="!h-14 after:!opacity-30"/>)}</List>
+    <Button rounded large disabled={checkout} className="!m-0 !w-full !rounded-[22px]" onClick={onOrder}>{checkout?'Выпуск пока недоступен':'Заказать карту'}</Button>
+    <p className="mt-3 px-2 text-center text-[13px] leading-5 text-black/40 dark:text-white/40">{checkout?'Провайдер выпуска ещё не подключён. Цена, комиссии и доступные способы оплаты появятся до подтверждения заказа. Средства не списываются.':'Предварительный каталог. Условия и стоимость выпуска пока не опубликованы.'}</p>
+  </div>
+}
+function CardPurchaseView({offer,onSelect,onClose}:{offer:CardOffer|null;onSelect:(offer:CardOffer)=>void;onClose:()=>void}) {
+  const [displayOffer,setDisplayOffer]=useState(cardOffers[0])
+  useEffect(()=>{if(offer)setDisplayOffer(offer)},[offer])
+  return <NotificationSheet open={offer!==null} title="Новая карта" onClose={onClose}><main className="mx-auto w-full max-w-[560px] pb-6"><div className="flex gap-2 px-4 pb-4 pt-3">{cardOffers.map(item=><button key={item.id} type="button" aria-pressed={displayOffer.id===item.id} onClick={()=>onSelect(item)} className={`min-h-10 flex-1 rounded-full px-3 text-[14px] font-medium ${displayOffer.id===item.id?'bg-primary text-white dark:bg-primary':'bg-black/5 text-black/50 dark:bg-white/10 dark:text-white/50'}`}>{item.name}</button>)}</div><div className="px-4"><CardOfferArtwork offer={displayOffer}/></div><CardOfferDetails offer={displayOffer} checkout/></main></NotificationSheet>
+}
+
 function CardsSection({showNotice}: {showNotice:NoticeHandler}) {
   const [activeCardIndex,setActiveCardIndex]=useState(0)
+  const cardDrag=useRef({active:false,startX:0,scrollLeft:0,moved:false})
+  const suppressCardClick=useRef(false)
+  const [draggingCard,setDraggingCard]=useState(false)
+  const finishCardDrag=(event:ReactPointerEvent<HTMLDivElement>)=>{
+    const drag=cardDrag.current
+    if(!drag.active)return
+    drag.active=false
+    if(!drag.moved)return
+    event.stopPropagation()
+    setDraggingCard(false)
+    const container=event.currentTarget
+    const card=container.firstElementChild as HTMLElement|null
+    const step=(card?.offsetWidth??container.clientWidth)+12
+    const target=Math.round(container.scrollLeft/step)*step
+    container.style.scrollSnapType=''
+    container.scrollTo({left:target,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'})
+    if(container.hasPointerCapture(event.pointerId))container.releasePointerCapture(event.pointerId)
+    window.setTimeout(()=>{suppressCardClick.current=false},0)
+  }
+  const [purchaseOffer,setPurchaseOffer]=useState<CardOffer|null>(null)
+  const activeOffer=cardOffers[activeCardIndex-bankCards.length]
+  const carouselCount=bankCards.length+cardOffers.length
   const [settingsCardId,setSettingsCardId]=useState<string|null>(null)
   const activeCard=bankCards[activeCardIndex]??bankCards[0]
   const selectedCard=bankCards.find(card=>card.id===settingsCardId)??activeCard
   return <>
-    <main className={`mx-auto w-full max-w-[560px] pb-6 transition-[transform,opacity] duration-300 ease-out ${settingsCardId?'-translate-x-[22%] opacity-60':'translate-x-0 opacity-100'}`}>
+    <main className="mx-auto w-full max-w-[560px] pb-6">
       <section aria-label="Ваши карты" className="pt-5">
-        <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" onScroll={event=>{
+        <div className={`flex snap-x snap-mandatory gap-3 overflow-x-auto select-none px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${draggingCard?'cursor-grabbing':'cursor-grab'}`} onDragStart={event=>event.preventDefault()} onPointerDown={event=>{
+          if(event.pointerType!=='mouse'||event.button!==0)return
+          event.stopPropagation()
+          cardDrag.current={active:true,startX:event.clientX,scrollLeft:event.currentTarget.scrollLeft,moved:false}
+        }} onPointerMove={event=>{
+          const drag=cardDrag.current
+          if(event.pointerType!=='mouse'||!drag.active)return
+          const delta=event.clientX-drag.startX
+          if(!drag.moved&&Math.abs(delta)<6)return
+          if(!drag.moved){drag.moved=true;suppressCardClick.current=true;setDraggingCard(true);event.currentTarget.style.scrollSnapType='none';event.currentTarget.setPointerCapture(event.pointerId)}
+          event.preventDefault();event.stopPropagation()
+          event.currentTarget.scrollLeft=drag.scrollLeft-delta
+        }} onPointerUp={finishCardDrag} onPointerCancel={finishCardDrag} onLostPointerCapture={finishCardDrag} onPointerLeave={()=>{if(!cardDrag.current.moved)cardDrag.current.active=false}} onClickCapture={event=>{
+          if(suppressCardClick.current){event.preventDefault();event.stopPropagation();suppressCardClick.current=false}
+        }} onScroll={event=>{
           const container=event.currentTarget
           const card=container.firstElementChild as HTMLElement|null
-          if(card)setActiveCardIndex(Math.max(0,Math.min(bankCards.length-1,Math.round(container.scrollLeft/(card.offsetWidth+12)))))
+          if(card)setActiveCardIndex(Math.max(0,Math.min(carouselCount-1,Math.round(container.scrollLeft/(card.offsetWidth+12)))))
         }}>
-          {bankCards.map(card=><button key={card.id} type="button" aria-label={`Открыть ${card.name}`} onClick={()=>setSettingsCardId(card.id)} className={`relative min-w-0 shrink-0 basis-full snap-center overflow-hidden rounded-[32px] bg-gradient-to-br ${card.gradient} p-6 text-left text-white shadow-sm`}>
-            <span className="flex items-start justify-between gap-3"><span><span className="block text-[13px] text-white/65">Виртуальная карта · Демо</span><span className="mt-1 block text-[18px] font-semibold">{card.name}</span></span><span className="text-[23px] font-black italic tracking-[-0.08em]">VISA</span></span>
-            <span className="mt-9 block text-[32px] font-semibold tabular-nums">{card.balance}</span>
-            <span className="mt-7 flex justify-between text-[14px] text-white/80"><span className="font-mono tracking-wider">•••• {card.last4}</span><span>{card.currency==='₽'?'RUB':'USD'}</span></span>
-          </button>)}
+          {bankCards.map(card=><button key={card.id} type="button" aria-label={`Открыть ${card.name}`} onClick={()=>setSettingsCardId(card.id)} className="min-w-0 shrink-0 basis-full snap-center rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><BankCardArtwork card={card}/></button>)}
+          {cardOffers.map(offer=><button key={offer.id} type="button" aria-label={`Заказать ${offer.name}`} onClick={()=>setPurchaseOffer(offer)} className="min-w-0 shrink-0 basis-full snap-center rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><CardOfferArtwork offer={offer}/></button>)}
         </div>
-        <div className="mt-2 flex justify-center gap-1.5" aria-label={`Карта ${activeCardIndex+1} из ${bankCards.length}`}>
-          {bankCards.map((card,index)=><span key={card.id} className={`h-1.5 w-1.5 rounded-full ${index===activeCardIndex?'bg-black/60 dark:bg-white/70':'bg-black/15 dark:bg-white/20'}`}/>)}
+        <div className="mt-2 flex justify-center gap-1.5" aria-label={`Карта ${activeCardIndex+1} из ${carouselCount}`}>
+          {[...bankCards,...cardOffers].map((card,index)=><span key={card.id} className={`h-1.5 w-1.5 rounded-full ${index===activeCardIndex?'bg-black/60 dark:bg-white/70':'bg-black/15 dark:bg-white/20'}`}/>)}
         </div>
       </section>
+      {activeOffer?<CardOfferDetails offer={activeOffer} onOrder={()=>setPurchaseOffer(activeOffer)}/>:<>
       <div className="h-5" />
       <WalletActionGrid label="Действия с картами" items={[
         {label:'Пополнить',icon:PlusCircleFill,onClick:()=>showNotice('Пополнение карты появится после подключения провайдера')},
@@ -949,25 +1036,24 @@ function CardsSection({showNotice}: {showNotice:NoticeHandler}) {
       ]}/>
       <div className="mb-2 mt-8 flex items-end justify-between px-safe-4"><h2 className="text-[21px] font-semibold tracking-tight text-black dark:text-white">Мои карты</h2><span className="text-[13px] text-black/40 dark:text-white/40">{bankCards.length} карты</span></div>
       <List strong inset dividers className={roundedWalletList}>
-        {bankCards.map((card,index)=><ListItem key={card.id} link chevron={false} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" onClick={()=>{haptic('light');setActiveCardIndex(index);setSettingsCardId(card.id)}} media={<CardAvatar card={card}/>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{card.name}</span><span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">Visa · •••• {card.last4}</span></span><span className="shrink-0 text-right"><span className="block text-[16px] font-medium leading-6 tabular-nums text-black dark:text-white">{card.balance}</span><span className="block text-[12px] leading-5 text-black/40 dark:text-white/40">{card.currency==='₽'?'RUB':'USD'} · Демо</span></span></span>}/>)}
-        <ListItem link title="Выпустить карту" subtitle="Новая виртуальная карта" contentClassName="!h-16" innerClassName="!h-16 !py-2 after:!opacity-30" titleWrapClassName="pr-6" chevronIcon={<ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-[19px] text-black/25 dark:text-white/30"/>} media={<span className="wpay-currency-icon flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary dark:bg-primary/20"><PlusCircleFill className="text-[25px]"/></span>} onClick={()=>showNotice('Выпуск карт пока не подключён')}/>
+        {bankCards.map((card,index)=><ListItem key={card.id} link chevron={false} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" onClick={()=>{haptic('light');setActiveCardIndex(index);setSettingsCardId(card.id)}} media={<CardAvatar card={card}/>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{card.name}</span><span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">{card.network} · •••• {card.last4}</span></span><span className="shrink-0 text-right"><span className="block text-[16px] font-medium leading-6 tabular-nums text-black dark:text-white">{card.balance}</span><span className="block text-[12px] leading-5 text-black/40 dark:text-white/40">{card.currency==='₽'?'RUB':'USD'} · Демо</span></span></span>}/>)}
+        <ListItem link title="Выпустить карту" subtitle="Новая виртуальная карта" contentClassName="!h-16" innerClassName="!h-16 !py-2 after:!opacity-30" titleWrapClassName="pr-6" chevronIcon={<ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-[19px] text-black/25 dark:text-white/30"/>} media={<span className="wpay-currency-icon flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary dark:bg-primary/20"><PlusCircleFill className="text-[25px]"/></span>} onClick={()=>setPurchaseOffer(cardOffers[0])}/>
       </List>
       <h2 className="mb-2 mt-7 px-safe-4 text-[21px] font-semibold tracking-tight text-black dark:text-white">Оплата телефоном</h2>
       <CardWalletOptions showNotice={showNotice}/>
       <div className="mb-2 mt-7 flex items-end justify-between px-safe-4"><h2 className="text-[21px] font-semibold tracking-tight text-black dark:text-white">Платежи по карте</h2><span className="text-[13px] text-black/40 dark:text-white/40">Демо</span></div>
       <CardsPaymentsList card={activeCard} showNotice={showNotice}/>
       <p className="mx-auto mt-5 max-w-[360px] px-5 text-center text-[12px] leading-relaxed text-black/35 dark:text-white/35">Демонстрационные карты и операции. Выпуск и платежи появятся после подключения банковского провайдера.</p>
+      </>}
     </main>
+    <CardPurchaseView offer={purchaseOffer} onSelect={setPurchaseOffer} onClose={()=>setPurchaseOffer(null)}/>
     <CardPushView card={selectedCard} open={settingsCardId!==null} onClose={()=>setSettingsCardId(null)} showNotice={showNotice}/>
   </>
 }
 function CardPushView({card,open,onClose,showNotice}: {card:BankCard;open:boolean;onClose:()=>void;showNotice:NoticeHandler}) {
-  return <PushViewShell open={open} title="Карта" subtitle={`Visa · •••• ${card.last4}`} onClose={onClose} onRefreshed={()=>showNotice('Демо-карта: провайдер пока не подключён')}>
+  return <NotificationSheet open={open} title="Карта" onClose={onClose}>
     <main className="mx-auto w-full max-w-[560px] pb-6">
-      <div className="px-safe-4 pb-6 pt-5"><Card raised className={`!m-0 overflow-hidden !rounded-[32px] !bg-gradient-to-br ${card.gradient} !text-white`} contentWrapPadding="p-6">
-        <div className="flex items-start justify-between gap-3"><span><span className="block text-[13px] text-white/65">Виртуальная карта · Демо</span><span className="mt-1 block text-[18px] font-semibold">{card.name}</span></span><span className="text-[23px] font-black italic tracking-[-0.08em]">VISA</span></div>
-        <p className="mt-9 text-[32px] font-semibold tabular-nums">{card.balance}</p><div className="mt-7 flex justify-between text-[14px] text-white/80"><span className="font-mono tracking-wider">•••• {card.last4}</span><span>{card.currency==='₽'?'RUB':'USD'}</span></div>
-      </Card></div>
+      <div className="px-safe-4 pb-7 pt-3"><BankCardArtwork card={card}/></div>
       <WalletActionGrid label="Действия с картой" items={[
         {label:'Пополнить',icon:PlusCircleFill,onClick:()=>showNotice('Пополнение карты пока не подключено')},
         {label:'Реквизиты',icon:DocOnDoc,onClick:()=>showNotice('Реквизиты появятся после выпуска карты')},
@@ -981,7 +1067,7 @@ function CardPushView({card,open,onClose,showNotice}: {card:BankCard;open:boolea
       <h2 className="mb-2 mt-7 px-safe-4 text-[21px] font-semibold tracking-tight text-black dark:text-white">Оплата телефоном</h2><CardWalletOptions showNotice={showNotice}/>
       <div className="mb-2 mt-7 flex items-end justify-between px-safe-4"><h2 className="text-[21px] font-semibold tracking-tight text-black dark:text-white">История карты</h2><span className="text-[13px] text-black/40 dark:text-white/40">Демо</span></div><CardsPaymentsList card={card} showNotice={showNotice}/>
     </main>
-  </PushViewShell>
+  </NotificationSheet>
 }
 
 function ProfileListItem(props: ComponentProps<typeof F7ListItem>) {
