@@ -19,6 +19,8 @@ from urllib.parse import parse_qsl
 
 from aiohttp import ClientSession, ClientTimeout, web
 
+from wallet_operations import prepare_operations, operations_route, save_address
+
 BASE_URL = 'https://goswap.site/api/'
 NETWORKS = {'BSC', 'ETH', 'TON', 'SOL', 'TRON'}
 DEPOSIT_NETWORKS = {'USDT': NETWORKS, 'ETH': {'ETH'}, 'BNB': {'BSC'}, 'TON': {'TON'}, 'SOL': {'SOL'}}
@@ -234,6 +236,7 @@ def install_wallet(app, root, owner_check):
     token = os.environ.get('GOSWAP_API_TOKEN', '')
     bot_token = os.environ.get('WPAY_BOT_TOKEN') or os.environ.get('BOARD_BOT_TOKEN', '')
     ledger = Ledger(os.environ.get('WPAY_DB_PATH', os.path.join(root, 'wpay.sqlite3')))
+    prepare_operations(ledger)
     provider = GoSwap(token)
     app['wpay_provider'] = provider
     app['wpay_ledger'] = ledger
@@ -278,8 +281,13 @@ def install_wallet(app, root, owner_check):
                 return web.json_response({'ok': True})
             uid = identity(request)
             client_ref = ledger.account(uid)
+            if action == 'access' and request.method == 'GET':
+                return web.json_response({'owner': uid == 'owner'})
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
+            operations = await operations_route(request, action, uid, client_ref, ledger, provider, ApiError)
+            if operations is not None:
+                return operations
             if action == 'overview' and request.method == 'GET':
                 await sync_payments(uid)
                 rates = await provider.call('getExchangeRates')
@@ -291,7 +299,7 @@ def install_wallet(app, root, owner_check):
             if action == 'provider' and request.method == 'GET':
                 if uid != 'owner':
                     raise ApiError('FORBIDDEN', 'Только владелец', 403)
-                return web.json_response({'app': await provider.call('getMe'), 'organization_balance': await provider.call('getBalance')})
+                return web.json_response({'app': await provider.call('getMe'), 'organization_balance': await provider.call('getBalance'), 'currencies': await provider.call('getCurrencies')})
             if action == 'currencies' and request.method == 'GET':
                 return web.json_response(await provider.call('getCurrencies'))
             if action == 'deposit' and request.method == 'POST':
@@ -310,6 +318,7 @@ def install_wallet(app, root, owner_check):
                     result = await provider.call('createExactDeposit', {'client_ref': client_ref, 'amount': str(money(body.get('amount'))), 'network': 'TRON', 'asset': 'USDT'}, post=True)
                 else:
                     result = await provider.call('createDeposit', {'client_ref': client_ref, 'network': network, 'asset': asset}, post=True)
+                save_address(ledger, uid, result)
                 return web.json_response(result)
             if action == 'sync' and request.method == 'POST':
                 # Fetch all pages; bound the work and allow the next sync to continue.

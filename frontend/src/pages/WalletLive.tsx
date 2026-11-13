@@ -1,3 +1,5 @@
+import WalletOperations from './WalletOperations'
+import { TransactionDetails, TransactionExamples, transactionFromApi, type TransactionView } from './WalletTransaction'
 import ArrowDownCircleFill from 'framework7-icons/react/esm/ArrowDownCircleFill.js'
 import Qrcode from 'framework7-icons/react/esm/Qrcode.js'
 import Clock from 'framework7-icons/react/esm/Clock.js'
@@ -116,14 +118,18 @@ export function LiveDepositPanel({ defaultAsset = 'USDT' }: { defaultAsset?: str
 
 export function LiveHistory() {
   const wallet = useLiveWallet(), [filter, setFilter] = useState('all'), [query, setQuery] = useState('')
+  const [selectedTransaction,setSelectedTransaction]=useState<TransactionView|null>(null)
+  const [operationsOpen,setOperationsOpen]=useState(false)
   const items = wallet.data.transactions.filter(x => (filter === 'all' || (filter === 'income' ? Number(x.amount) > 0 : x.type.startsWith('qr_'))) && `${x.asset} ${x.type} ${x.detail.merchant_name ?? ''}`.toLowerCase().includes(query.toLowerCase()))
   const groups = new Map<string, typeof items>()
   for (const item of [...items].sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at))) {
     const date = new Date(item.created_at).toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'})
     groups.set(date,[...(groups.get(date) ?? []),item])
   }
+  if(operationsOpen)return <><div className="mx-auto max-w-[560px] px-4 pt-3"><button type="button" onClick={()=>setOperationsOpen(false)} className="min-h-11 text-[17px] text-blue-600 dark:text-blue-400">‹ История</button></div><WalletOperations/></>
   return <main className="mx-auto w-full max-w-[560px] pb-6 pt-5">
     <div className="px-4">
+      <button type="button" onClick={()=>setOperationsOpen(true)} className="mb-5 flex min-h-16 w-full items-center justify-between rounded-[28px] bg-white px-4 text-left dark:bg-[#1c1c1e]"><span><span className="block text-[17px] font-semibold text-black dark:text-white">Операции</span><span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">Счета, переводы, выводы и пополнения</span></span><span className="text-[25px] text-black/25 dark:text-white/25">›</span></button>
       <input aria-label="Поиск операций" placeholder="Поиск операций" value={query} onChange={e=>setQuery(e.target.value)} className="h-12 w-full rounded-[22px] bg-black/5 px-4 text-[17px] text-black outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-white/10 dark:text-white"/>
       <div className="mt-4 flex gap-1 rounded-[22px] bg-black/5 p-1 dark:bg-white/10" aria-label="Фильтр операций">
         {[['all','Все'],['income','Пополнения'],['expense','Платежи']].map(([id,label])=><button key={id} type="button" aria-pressed={filter===id} onClick={()=>setFilter(id)} className={`min-h-11 min-w-0 flex-1 rounded-[18px] px-2 text-[15px] font-medium transition-colors ${filter===id?'bg-white text-black shadow-sm dark:bg-[#2c2c2e] dark:text-white':'text-black/50 dark:text-white/50'}`}>{label}</button>)}
@@ -137,11 +143,13 @@ export function LiveHistory() {
           const failed=item.type==='qr_failed'
           const Icon=income?ArrowDownCircleFill:Qrcode
           const title=item.type==='deposit'?'Пополнение':item.type==='qr_refunded'?'Возврат QR':failed?'Платёж не прошёл':String(item.detail.merchant_name||'Оплата QR')
-          return <ListItem key={item.event_id} chevron={false} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${failed?'bg-gradient-to-b from-orange-300 to-orange-500 dark:from-orange-400 dark:to-orange-600':income?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon className="text-[23px]"/></span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{title}</span><span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">{new Date(item.created_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})} · {item.asset}</span></span><span className="shrink-0 text-right"><span className={`block text-[16px] font-medium leading-6 tabular-nums ${income?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{income?'+':''}{cryptoAmount(item.amount)}</span><span className="block text-[12px] leading-5 text-black/40 dark:text-white/40">{item.asset}</span></span></span>}/>
+          return <ListItem key={item.event_id} link onClick={()=>setSelectedTransaction(transactionFromApi(item))} chevron={false} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${failed?'bg-gradient-to-b from-orange-300 to-orange-500 dark:from-orange-400 dark:to-orange-600':income?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon className="text-[23px]"/></span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{title}</span><span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">{new Date(item.created_at).toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})} · {item.asset}</span></span><span className="shrink-0 text-right"><span className={`block text-[16px] font-medium leading-6 tabular-nums ${income?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{income?'+':''}{cryptoAmount(item.amount)}</span><span className="block text-[12px] leading-5 text-black/40 dark:text-white/40">{item.asset}</span></span></span>}/>
         })}
       </List>
     </section>)}
     {!items.length && <div className="mx-4 mt-7 rounded-[32px] bg-white px-6 py-10 text-center dark:bg-[#1c1c1e]" role="status"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-b from-blue-300 to-blue-500 text-white dark:from-blue-400 dark:to-blue-600"><Clock className="text-[28px]"/></span><h2 className="mt-4 text-[21px] font-semibold text-black dark:text-white">{query||filter!=='all'?'Ничего не найдено':'Операций пока нет'}</h2><p className="mt-2 text-[15px] leading-relaxed text-black/45 dark:text-white/45">{query||filter!=='all'?'Попробуйте изменить поиск или фильтр.':wallet.ready?'Здесь появятся ваши пополнения и платежи.':wallet.loading?'Загружаем историю…':wallet.error}</p></div>}
+    <TransactionExamples onSelect={setSelectedTransaction}/>
+    <TransactionDetails item={selectedTransaction} onClose={()=>setSelectedTransaction(null)}/>
     <div className="mt-5 px-4"><Button rounded tonal disabled={wallet.loading} className="!m-0 !h-12 !w-full !rounded-[22px]" onClick={()=>void wallet.refresh(true)}>{wallet.loading?'Обновляем…':'Обновить историю'}</Button></div>
   </main>
 }

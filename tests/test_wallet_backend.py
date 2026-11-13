@@ -33,9 +33,27 @@ class FakeProvider:
         self.calls = []
         self.payments = []
         self.timeout_once = False
+        self.transfer_status = 'pending'
 
     async def call(self, method, data=None, post=False):
         self.calls.append((method, data, post))
+        if method == 'getMe':
+            return {'name': 'Test', 'can_transfer': True, 'can_withdraw': False}
+        if method == 'getBalance':
+            return [{'currency_code': 'USDT', 'available': '10'}]
+        if method == 'getInvoices':
+            return {'items': [{'invoice_id': '101', 'status': 'active'}, {'invoice_id': '999', 'status': 'paid'}]}
+        if method == 'getTransfers':
+            return {'items': [{'spend_id': 'owner-payout', 'status': self.transfer_status, 'amount': '10', 'asset': 'USDT'}]}
+        if method == 'revokeTransfer':
+            self.transfer_status = 'reverted'
+            return {'spend_id': data['spend_id'], 'status': 'reverted'}
+        if method == 'getWithdrawals':
+            return {'items': []}
+        if method == 'getTransactions':
+            return {'items': [{'id': 1, 'asset': 'USDT', 'net': '10'}], 'has_more': False, 'cursor': 1}
+        if method == 'getClientAddress':
+            return {'address': 'test-address', 'network': data['network'], 'client_ref': data['client_ref'], 'min_deposit': '1'}
         if method == 'getExchangeRates':
             return []
         if method == 'getCurrencies':
@@ -163,6 +181,97 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call[1]['client_ref'], self.ledger.account('owner'))
         response = await self.client.post('/api/wallet/deposit', json={'asset': 'BTC', 'network': 'BSC'}, headers=OWNER)
         self.assertEqual(response.status, 400)
+
+
+class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
+    asyncSetUp = WalletRoutesTests.asyncSetUp
+    asyncTearDown = WalletRoutesTests.asyncTearDown
+    async def test_organization_history_requires_owner(self):
+        user = {'X-Telegram-Init-Data': init_data(123)}
+        for action in ['operations-invoices', 'operations-transfers', 'operations-withdrawals']:
+            response = await self.client.get('/api/wallet/' + action, headers=user)
+            self.assertEqual(response.status, 200)
+            self.assertEqual((await response.json())['items'], [])
+        self.assertEqual(self.provider.calls, [])
+        for action in ['provider', 'operations-reconciliation']:
+            self.assertEqual((await self.client.get('/api/wallet/' + action, headers=user)).status, 403)
+        self.assertEqual((await self.client.get('/api/wallet/operations-invoices', headers=OWNER)).status, 200)
+        self.assertEqual((await self.client.get('/api/wallet/access', headers=user)).status, 200)
+        self.assertFalse((await (await self.client.get('/api/wallet/access', headers=user)).json())['owner'])
+
+    async def test_invoice_ownership_filters_provider_response(self):
+        self.ledger.db.execute('INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)', ('invoice-test', 'tg:123', 'USDT', '0', 'invoice', '2026-11-13', json.dumps({'operation_kind': 'invoices', 'invoice_id': '101'})))
+        response = await self.client.get('/api/wallet/operations-invoices?invoice_ids=999', headers={'X-Telegram-Init-Data': init_data(123)})
+        self.assertEqual([row['invoice_id'] for row in (await response.json())['items']], ['101'])
+        self.assertEqual(self.provider.calls[-1][1]['invoice_ids'], '101')
+
+    async def test_owner_revoke_rechecks_status_and_is_not_client_refund(self):
+        response = await self.client.post('/api/wallet/revoke-transfer', json={'spend_id': 'owner-payout'}, headers={'X-Telegram-Init-Data': init_data(123)})
+        self.assertEqual(response.status, 403)
+        self.assertEqual(self.provider.calls, [])
+        self.provider.transfer_status = 'completed'
+        self.assertEqual((await self.client.post('/api/wallet/revoke-transfer', json={'spend_id': 'owner-payout'}, headers=OWNER)).status, 409)
+        self.provider.transfer_status = 'pending'
+        response = await self.client.post('/api/wallet/revoke-transfer', json={'spend_id': 'owner-payout'}, headers=OWNER)
+        self.assertEqual((await response.json())['status'], 'reverted')
+        self.assertEqual(str(self.ledger.balance('owner', 'USDT')[0]), '0')
+
+    async def test_pagination_and_reconciliation_cursor(self):
+        self.assertEqual((await self.client.get('/api/wallet/operations-invoices?offset=-1', headers=OWNER)).status, 400)
+        response = await self.client.get('/api/wallet/operations-reconciliation?before=55&count=9999', headers=OWNER)
+        self.assertEqual(response.status, 200)
+        self.assertEqual(self.provider.calls[-1], ('getTransactions', {'count': 100, 'before': 55}, False))
+
+    async def test_saved_addresses_are_isolated_and_server_scoped(self):
+        user = {'X-Telegram-Init-Data': init_data(123)}
+        response = await self.client.post('/api/wallet/address', json={'network': 'BSC', 'client_ref': 'foreign'}, headers=user)
+        self.assertEqual(response.status, 200)
+        self.assertNotEqual(self.provider.calls[-1][1]['client_ref'], 'foreign')
+        rows = await (await self.client.get('/api/wallet/addresses', headers=user)).json()
+        self.assertEqual(len(rows['items']), 1)
+        foreign = await (await self.client.get('/api/wallet/addresses', headers={'X-Telegram-Init-Data': init_data(999)})).json()
+        self.assertEqual(foreign['items'], [])
+        self.assertEqual((await self.client.post('/api/wallet/address', json={'network': 'TRON'}, headers=user)).status, 400)
+
+    async def test_full_audit_is_owner_only_and_compares_exact_net(self):
+        self.assertEqual((await self.client.get('/api/wallet/provider-audit', headers={'X-Telegram-Init-Data': init_data(123)})).status, 403)
+        response = await self.client.get('/api/wallet/provider-audit', headers=OWNER)
+        result = await response.json()
+        self.assertTrue(result['complete'])
+        self.assertTrue(result['stable'])
+        self.assertEqual(result['items'][0]['difference'], '0')
+
+    async def test_audit_pagination_deduplication_and_changing_balance(self):
+        original = self.provider.call
+        balance_calls = 0
+        async def scripted(method, data=None, post=False):
+            nonlocal balance_calls
+            if method == 'getBalance':
+                balance_calls += 1
+                return [{'currency_code': 'USDT', 'available': '30' if balance_calls == 1 else '31'}]
+            if method == 'getTransactions':
+                if not data.get('before'):
+                    return {'items': [{'id': 2, 'asset': 'USDT', 'net': '20'}], 'has_more': True, 'cursor': 2}
+                self.assertEqual(data['before'], 2)
+                return {'items': [{'id': 2, 'asset': 'USDT', 'net': '20'}, {'id': 1, 'asset': 'USDT', 'net': '10'}], 'has_more': False}
+            return await original(method, data, post)
+        self.provider.call = scripted
+        result = await (await self.client.get('/api/wallet/provider-audit', headers=OWNER)).json()
+        self.assertEqual(result['entries'], 2)
+        self.assertEqual(result['items'][0]['net'], '30')
+        self.assertIsNone(result['items'][0]['difference'])
+        self.assertFalse(result['stable'])
+
+    async def test_deposit_history_cannot_select_another_client(self):
+        original = self.provider.call
+        async def scripted(method, data=None, post=False):
+            if method == 'getDeposits':
+                self.assertEqual(data['client_ref'], self.ledger.account('tg:123'))
+                return {'items': [{'deposit_id': 'mine', 'client_ref': data['client_ref']}, {'deposit_id': 'foreign', 'client_ref': 'other'}]}
+            return await original(method, data, post)
+        self.provider.call = scripted
+        response = await self.client.get('/api/wallet/operations-deposits?client_ref=other', headers={'X-Telegram-Init-Data': init_data(123)})
+        self.assertEqual([row['deposit_id'] for row in (await response.json())['items']], ['mine'])
 
 
 if __name__ == '__main__':
