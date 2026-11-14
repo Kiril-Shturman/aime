@@ -1763,6 +1763,8 @@ async def wpay_telegram_webhook(request):
     sender_id = (message.get("from") or {}).get("id")
     if not chat_id:
         return web.json_response({"ok": True})
+    if isinstance(sender_id, int) and sender_id > 0:
+        request.app["wpay_ledger"].account(f"tg:{sender_id}", message.get("from") or {}, bot_started=True)
     admin_ids = {value.strip() for value in os.environ.get("WPAY_ADMIN_IDS", "").split(",") if value.strip().isdigit()}
     app_url = os.environ.get("WPAY_APP_URL", "https://wallet.178-236-255-214.nip.io/wallet")
     if command == "/admin":

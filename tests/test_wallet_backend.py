@@ -191,10 +191,14 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get('/api/wallet/admin-overview', headers={'X-Telegram-Init-Data': init_data(321)})
         self.assertEqual(response.status, 200)
         result = await response.json()
-        self.assertEqual(result['users'], 1)
+        self.assertEqual(result['users'], 2)
         self.assertEqual(result['liabilities'][0]['total'], '1.200000000000000001')
         self.assertEqual(result['provider']['balance'][0]['available'], '10')
         self.assertTrue((await (await self.client.get('/api/wallet/access', headers={'X-Telegram-Init-Data': init_data(321)})).json())['owner'])
+        admin_headers = {'X-Telegram-Init-Data': init_data(321)}
+        for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts']:
+            self.assertEqual((await self.client.get('/api/wallet/' + action, headers=admin_headers)).status, 200)
+            self.assertEqual((await self.client.get('/api/wallet/' + action, headers={'X-Telegram-Init-Data': init_data(999)})).status, 403)
 
 
 class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):

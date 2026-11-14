@@ -15,7 +15,7 @@ import time
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, localcontext
-from urllib.parse import parse_qsl
+from urllib.parse import parse_qsl, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, web
 
@@ -48,7 +48,7 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def telegram_user(raw, token):
+def telegram_profile(raw, token):
     if not raw or not token:
         return None
     try:
@@ -66,9 +66,14 @@ def telegram_user(raw, token):
             return None
         user = json.loads(data['user'])
         uid = user.get('id')
-        return f'tg:{uid}' if isinstance(uid, int) and not isinstance(uid, bool) and uid > 0 else None
+        return user if isinstance(uid, int) and not isinstance(uid, bool) and uid > 0 else None
     except (ValueError, KeyError, TypeError):
         return None
+
+
+def telegram_user(raw, token):
+    user = telegram_profile(raw, token)
+    return f"tg:{user['id']}" if user else None
 
 
 class ApiError(Exception):
@@ -121,10 +126,36 @@ class Ledger:
           CREATE TABLE IF NOT EXISTS wallet_events (event_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, asset TEXT NOT NULL, amount TEXT NOT NULL, type TEXT NOT NULL, created_at TEXT NOT NULL, detail TEXT NOT NULL);
           CREATE INDEX IF NOT EXISTS wallet_events_user ON wallet_events(user_id,created_at);
           CREATE TABLE IF NOT EXISTS wallet_quotes (quote_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, spend_id TEXT UNIQUE NOT NULL, body TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'quoted', payment_id TEXT);
+          CREATE TABLE IF NOT EXISTS admin_broadcasts (broadcast_id TEXT PRIMARY KEY, admin_id TEXT NOT NULL, target TEXT NOT NULL, text TEXT NOT NULL, button_text TEXT, button_url TEXT, status TEXT NOT NULL, total INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, started_at TEXT, finished_at TEXT);
+          CREATE TABLE IF NOT EXISTS admin_broadcast_deliveries (broadcast_id TEXT NOT NULL, user_id TEXT NOT NULL, status TEXT NOT NULL, error TEXT, updated_at TEXT NOT NULL, PRIMARY KEY(broadcast_id,user_id));
         ''')
 
-    def account(self, uid):
-        self.db.execute('INSERT OR IGNORE INTO wallet_accounts VALUES (?,?)', (uid, 'wpay-' + uuid.uuid4().hex))
+        columns = {row[1] for row in self.db.execute('PRAGMA table_info(wallet_accounts)')}
+        for name, definition in {
+            'telegram_username': 'TEXT', 'first_name': 'TEXT', 'last_name': 'TEXT',
+            'created_at': 'TEXT', 'last_seen': 'TEXT', 'bot_started_at': 'TEXT',
+            'status': "TEXT NOT NULL DEFAULT 'active'",
+        }.items():
+            if name not in columns:
+                self.db.execute(f'ALTER TABLE wallet_accounts ADD COLUMN {name} {definition}')
+
+    def account(self, uid, profile=None, bot_started=False):
+        stamp = now()
+        self.db.execute(
+            'INSERT OR IGNORE INTO wallet_accounts(user_id,client_ref,created_at,last_seen) VALUES (?,?,?,?)',
+            (uid, 'wpay-' + uuid.uuid4().hex, stamp, stamp),
+        )
+        if uid.startswith('tg:'):
+            values = [stamp]
+            updates = ['last_seen=?']
+            if profile:
+                updates.extend(['telegram_username=?', 'first_name=?', 'last_name=?'])
+                values.extend([str(profile.get('username') or '')[:64], str(profile.get('first_name') or '')[:128], str(profile.get('last_name') or '')[:128]])
+            if bot_started:
+                updates.append('bot_started_at=COALESCE(bot_started_at,?)')
+                values.append(stamp)
+            values.append(uid)
+            self.db.execute(f"UPDATE wallet_accounts SET {','.join(updates)} WHERE user_id=?", values)
         return self.db.execute('SELECT client_ref FROM wallet_accounts WHERE user_id=?', (uid,)).fetchone()[0]
 
     def balance(self, uid, asset):
@@ -241,11 +272,13 @@ def install_wallet(app, root, owner_check):
     provider = GoSwap(token)
     app['wpay_provider'] = provider
     app['wpay_ledger'] = ledger
+    app['wpay_broadcast_tasks'] = set()
 
     def identity(request):
-        uid = telegram_user(request.headers.get('X-Telegram-Init-Data', ''), bot_token)
-        if uid:
-            return uid
+        profile = telegram_profile(request.headers.get('X-Telegram-Init-Data', ''), bot_token)
+        if profile:
+            request['wpay_profile'] = profile
+            return f"tg:{profile['id']}"
         key = request.headers.get('X-Board-Key', '')
         if key and owner_check(key):
             return 'owner'
@@ -292,6 +325,136 @@ def install_wallet(app, root, owner_check):
             'provider': {'app': app_info, 'balance': organization_balance, 'currencies': currencies},
         }
 
+    def tables():
+        return {row[0] for row in ledger.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+
+    def decoded_rows(sql, params=()):
+        rows = [dict(row) for row in ledger.db.execute(sql, params)]
+        for row in rows:
+            for key in ('body', 'detail'):
+                if key in row and isinstance(row[key], str):
+                    try:
+                        row[key] = json.loads(row[key])
+                    except (ValueError, TypeError):
+                        pass
+        return rows
+
+    def admin_users():
+        rows = decoded_rows('''
+          SELECT a.*,
+                 COALESCE((SELECT COUNT(*) FROM wallet_events e WHERE e.user_id=a.user_id),0) event_count,
+                 COALESCE((SELECT COUNT(*) FROM wallet_addresses d WHERE d.user_id=a.user_id),0) address_count
+          FROM wallet_accounts a ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
+        ''') if 'wallet_addresses' in tables() else decoded_rows('''
+          SELECT a.*, COALESCE((SELECT COUNT(*) FROM wallet_events e WHERE e.user_id=a.user_id),0) event_count, 0 address_count
+          FROM wallet_accounts a ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
+        ''')
+        balances = decoded_rows('SELECT user_id,asset,available,reserved FROM wallet_balances ORDER BY user_id,asset')
+        by_user = {}
+        for balance in balances:
+            by_user.setdefault(balance['user_id'], []).append(balance)
+        for row in rows:
+            row['balances'] = by_user.get(row['user_id'], [])
+        return {'items': rows, 'total': ledger.db.execute('SELECT COUNT(*) FROM wallet_accounts').fetchone()[0]}
+
+    def admin_database(request):
+        allowed = sorted(name for name in tables() if name.startswith(('wallet_', 'admin_')))
+        selected = request.query.get('table') or (allowed[0] if allowed else '')
+        if selected not in allowed:
+            raise ApiError('INVALID_TABLE', 'Неизвестная таблица', 400)
+        count = min(max(int(request.query.get('count', '50')), 1), 200)
+        offset = max(int(request.query.get('offset', '0')), 0)
+        columns = [row[1] for row in ledger.db.execute(f'PRAGMA table_info("{selected}")')]
+        query, params = f'SELECT rowid,* FROM "{selected}"', []
+        search = request.query.get('q', '').strip()[:200]
+        if search and columns:
+            query += ' WHERE ' + ' OR '.join(f'CAST("{column}" AS TEXT) LIKE ?' for column in columns)
+            params.extend([f'%{search}%'] * len(columns))
+        query += ' ORDER BY rowid DESC LIMIT ? OFFSET ?'
+        params.extend([count, offset])
+        totals = {name: ledger.db.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0] for name in allowed}
+        return {'tables': totals, 'table': selected, 'columns': ['rowid', *columns], 'items': decoded_rows(query, params), 'offset': offset, 'count': count}
+
+    def admin_payments():
+        result = {'events': decoded_rows('SELECT rowid,* FROM wallet_events ORDER BY rowid DESC LIMIT 500')}
+        for table, key in [('wallet_quotes', 'quotes'), ('wallet_invoices', 'invoices'), ('wallet_transfers', 'transfers'), ('wallet_withdrawals', 'withdrawals')]:
+            result[key] = decoded_rows(f'SELECT rowid,* FROM {table} ORDER BY rowid DESC LIMIT 500') if table in tables() else []
+        return result
+
+    def admin_crypto():
+        addresses = decoded_rows('SELECT rowid,* FROM wallet_addresses ORDER BY rowid DESC LIMIT 1000') if 'wallet_addresses' in tables() else []
+        deposits = decoded_rows("SELECT rowid,* FROM wallet_events WHERE type='deposit' ORDER BY rowid DESC LIMIT 500")
+        balances = decoded_rows('SELECT user_id,asset,available,reserved FROM wallet_balances ORDER BY user_id,asset')
+        return {'addresses': addresses, 'deposits': deposits, 'balances': balances}
+
+    async def safe_provider(method, data=None):
+        try:
+            return {'ok': True, 'result': await provider.call(method, data or {})}
+        except ApiError as error:
+            return {'ok': False, 'error': error.name, 'detail': error.detail}
+
+    async def admin_goswap():
+        methods = {
+            'account': ('getMe', {}), 'balance': ('getBalance', {}), 'currencies': ('getCurrencies', {}),
+            'transactions': ('getTransactions', {'count': 100}), 'invoices': ('getInvoices', {'count': 100}),
+            'transfers': ('getTransfers', {'count': 100}), 'withdrawals': ('getWithdrawals', {'count': 100}),
+            'deposits': ('getDeposits', {'count': 100}),
+        }
+        values = await asyncio.gather(*(safe_provider(method, params) for method, params in methods.values()))
+        return dict(zip(methods, values))
+
+    async def run_broadcast(broadcast_id, targets, text, button_text, button_url):
+        ledger.db.execute("UPDATE admin_broadcasts SET status='sending',started_at=? WHERE broadcast_id=?", (now(), broadcast_id))
+        sent = failed = 0
+        async with ClientSession(timeout=ClientTimeout(total=15)) as session:
+            for uid in targets:
+                payload = {'chat_id': int(uid.removeprefix('tg:')), 'text': text}
+                if button_text and button_url:
+                    payload['reply_markup'] = {'inline_keyboard': [[{'text': button_text, 'url': button_url}]]}
+                error = None
+                try:
+                    async with session.post(f'https://api.telegram.org/bot{bot_token}/sendMessage', json=payload) as response:
+                        body = await response.json(content_type=None)
+                        if response.status >= 400 or not body.get('ok'):
+                            error = str(body.get('description') or 'Telegram error')[:300]
+                except (asyncio.TimeoutError, OSError, ValueError) as reason:
+                    error = str(reason)[:300]
+                status = 'failed' if error else 'sent'
+                failed += bool(error)
+                sent += not bool(error)
+                ledger.db.execute('INSERT OR REPLACE INTO admin_broadcast_deliveries VALUES (?,?,?,?,?)', (broadcast_id, uid, status, error, now()))
+                ledger.db.execute('UPDATE admin_broadcasts SET sent=?,failed=? WHERE broadcast_id=?', (sent, failed, broadcast_id))
+                await asyncio.sleep(0.04)
+        ledger.db.execute("UPDATE admin_broadcasts SET status='completed',finished_at=?,sent=?,failed=? WHERE broadcast_id=?", (now(), sent, failed, broadcast_id))
+
+    async def admin_broadcasts(request, uid):
+        if request.method == 'GET':
+            items = decoded_rows('SELECT * FROM admin_broadcasts ORDER BY rowid DESC LIMIT 100')
+            return {'items': items}
+        body = await request.json()
+        text = str(body.get('text') or '').strip()
+        if not 1 <= len(text) <= 4096:
+            raise ValueError('Текст рассылки должен быть от 1 до 4096 символов')
+        target = str(body.get('target') or 'self')
+        if target not in {'self', 'all'}:
+            raise ValueError('Некорректная аудитория')
+        if uid == 'owner':
+            raise ApiError('TELEGRAM_REQUIRED', 'Откройте админку через Telegram', 400)
+        button_text = str(body.get('button_text') or '').strip()[:64]
+        button_url = str(body.get('button_url') or '').strip()[:2048]
+        if bool(button_text) != bool(button_url) or (button_url and urlsplit(button_url).scheme not in {'http', 'https'}):
+            raise ValueError('Укажите корректную кнопку и ссылку')
+        if target == 'self':
+            targets = [uid]
+        else:
+            targets = [row[0] for row in ledger.db.execute("SELECT user_id FROM wallet_accounts WHERE user_id LIKE 'tg:%' AND status='active' AND bot_started_at IS NOT NULL")]
+        broadcast_id = 'broadcast-' + uuid.uuid4().hex
+        ledger.db.execute('INSERT INTO admin_broadcasts(broadcast_id,admin_id,target,text,button_text,button_url,status,total,created_at) VALUES (?,?,?,?,?,?,?,?,?)', (broadcast_id, uid, target, text, button_text or None, button_url or None, 'queued', len(targets), now()))
+        task = asyncio.create_task(run_broadcast(broadcast_id, targets, text, button_text, button_url))
+        app['wpay_broadcast_tasks'].add(task)
+        task.add_done_callback(app['wpay_broadcast_tasks'].discard)
+        return {'broadcast_id': broadcast_id, 'status': 'queued', 'total': len(targets)}
+
     async def sync_payments(uid):
         rows = ledger.db.execute("SELECT spend_id FROM wallet_quotes WHERE user_id=? AND state IN ('reserved','processing') LIMIT 100", (uid,)).fetchall()
         if rows:
@@ -323,15 +486,29 @@ def install_wallet(app, root, owner_check):
                 return web.json_response({'ok': True})
             uid = identity(request)
             admin = is_admin(uid)
+            client_ref = ledger.account(uid, request.get('wpay_profile'))
             if action == 'access' and request.method == 'GET':
                 return web.json_response({'owner': admin})
+            if action.startswith('admin-') and not admin:
+                raise ApiError('FORBIDDEN', 'Админка доступна только администраторам WPay', 403)
             if action == 'admin-overview' and request.method == 'GET':
-                if not admin:
-                    raise ApiError('FORBIDDEN', 'Админка доступна только администраторам WPay', 403)
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
                 return web.json_response(await admin_overview())
-            client_ref = ledger.account(uid)
+            if action == 'admin-users' and request.method == 'GET':
+                return web.json_response(admin_users())
+            if action == 'admin-database' and request.method == 'GET':
+                return web.json_response(admin_database(request))
+            if action == 'admin-payments' and request.method == 'GET':
+                return web.json_response(admin_payments())
+            if action == 'admin-crypto' and request.method == 'GET':
+                return web.json_response(admin_crypto())
+            if action == 'admin-goswap' and request.method == 'GET':
+                if not token:
+                    raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
+                return web.json_response(await admin_goswap())
+            if action == 'admin-broadcasts' and request.method in {'GET', 'POST'}:
+                return web.json_response(await admin_broadcasts(request, uid))
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
             operations = await operations_route(request, action, uid, client_ref, ledger, provider, ApiError)
@@ -419,6 +596,10 @@ def install_wallet(app, root, owner_check):
             return web.json_response({'ok': False, 'error': {'name': 'INVALID_REQUEST'}, 'detail': 'Некорректные данные запроса или ответа провайдера'}, status=400)
 
     async def cleanup(_):
+        for task in app['wpay_broadcast_tasks']:
+            task.cancel()
+        if app['wpay_broadcast_tasks']:
+            await asyncio.gather(*app['wpay_broadcast_tasks'], return_exceptions=True)
         await provider.close()
         ledger.db.close()
     app.router.add_route('*', '/api/wallet/{action}', route)
