@@ -5,6 +5,7 @@ import os
 import tempfile
 import time
 import unittest
+from decimal import Decimal
 from urllib.parse import urlencode
 from unittest.mock import patch
 
@@ -99,7 +100,7 @@ class AuthenticationTests(unittest.TestCase):
 class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {'GOSWAP_API_TOKEN': TOKEN, 'WPAY_BOT_TOKEN': BOT, 'WPAY_DB_PATH': self.tmp.name + '/db'})
+        self.env = patch.dict(os.environ, {'GOSWAP_API_TOKEN': TOKEN, 'WPAY_BOT_TOKEN': BOT, 'WPAY_DB_PATH': self.tmp.name + '/db', 'WPAY_ADMIN_IDS': '321'})
         self.env.start()
         self.fake = patch('wallet_backend.GoSwap', FakeProvider)
         self.fake.start()
@@ -181,6 +182,19 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(call[1]['client_ref'], self.ledger.account('owner'))
         response = await self.client.post('/api/wallet/deposit', json={'asset': 'BTC', 'network': 'BSC'}, headers=OWNER)
         self.assertEqual(response.status, 400)
+
+    async def test_admin_overview_is_allowlisted_and_exact(self):
+        self.ledger.account('tg:321')
+        self.ledger.put_balance('tg:321', 'USDT', Decimal('1.000000000000000001'), Decimal('0.2'))
+        denied = await self.client.get('/api/wallet/admin-overview', headers={'X-Telegram-Init-Data': init_data(999)})
+        self.assertEqual(denied.status, 403)
+        response = await self.client.get('/api/wallet/admin-overview', headers={'X-Telegram-Init-Data': init_data(321)})
+        self.assertEqual(response.status, 200)
+        result = await response.json()
+        self.assertEqual(result['users'], 1)
+        self.assertEqual(result['liabilities'][0]['total'], '1.200000000000000001')
+        self.assertEqual(result['provider']['balance'][0]['available'], '10')
+        self.assertTrue((await (await self.client.get('/api/wallet/access', headers={'X-Telegram-Init-Data': init_data(321)})).json())['owner'])
 
 
 class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):

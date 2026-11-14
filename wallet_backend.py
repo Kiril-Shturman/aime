@@ -231,10 +231,11 @@ def install_wallet(app, root, owner_check):
         with open(secrets_file, encoding='utf-8') as config:
             for line in config:
                 key, sep, value = line.strip().partition('=')
-                if sep and key in {'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH'}:
+                if sep and key in {'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS'}:
                     os.environ.setdefault(key, value.strip().strip('\"\''))
     token = os.environ.get('GOSWAP_API_TOKEN', '')
     bot_token = os.environ.get('WPAY_BOT_TOKEN') or os.environ.get('BOARD_BOT_TOKEN', '')
+    admin_ids = {value.strip() for value in os.environ.get('WPAY_ADMIN_IDS', '').split(',') if value.strip().isdigit()}
     ledger = Ledger(os.environ.get('WPAY_DB_PATH', os.path.join(root, 'wpay.sqlite3')))
     prepare_operations(ledger)
     provider = GoSwap(token)
@@ -249,6 +250,47 @@ def install_wallet(app, root, owner_check):
         if key and owner_check(key):
             return 'owner'
         raise ApiError('AUTH_REQUIRED', 'Откройте кошелёк из Telegram или войдите как владелец', 401)
+
+    def is_admin(uid):
+        return uid == 'owner' or (uid.startswith('tg:') and uid[3:] in admin_ids)
+
+    async def admin_overview():
+        liabilities = {}
+        for row in ledger.db.execute('SELECT asset,available,reserved FROM wallet_balances'):
+            item = liabilities.setdefault(row['asset'], [Decimal(0), Decimal(0)])
+            item[0] = add(item[0], Decimal(row['available']))
+            item[1] = add(item[1], Decimal(row['reserved']))
+        tables = {row[0] for row in ledger.db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        def grouped_counts(table, column):
+            if table not in tables:
+                return {}
+            return {str(row[0]): int(row[1]) for row in ledger.db.execute(f'SELECT {column},COUNT(*) FROM {table} GROUP BY {column}')}
+        recent = [dict(row) for row in ledger.db.execute(
+            'SELECT event_id,user_id,asset,amount,type,created_at,detail FROM wallet_events ORDER BY rowid DESC LIMIT 100'
+        )]
+        for item in recent:
+            try:
+                item['detail'] = json.loads(item['detail'])
+            except (ValueError, TypeError):
+                item['detail'] = {}
+        app_info, organization_balance, currencies = await asyncio.gather(
+            provider.call('getMe'), provider.call('getBalance'), provider.call('getCurrencies')
+        )
+        return {
+            'users': ledger.db.execute('SELECT COUNT(*) FROM wallet_accounts').fetchone()[0],
+            'events': ledger.db.execute('SELECT COUNT(*) FROM wallet_events').fetchone()[0],
+            'liabilities': [
+                {'asset': asset, 'available': str(values[0]), 'reserved': str(values[1]), 'total': str(add(values[0], values[1]))}
+                for asset, values in sorted(liabilities.items())
+            ],
+            'states': {
+                'quotes': grouped_counts('wallet_quotes', 'state'),
+                'transfers': grouped_counts('wallet_transfers', 'status'),
+                'withdrawals': grouped_counts('wallet_withdrawals', 'status'),
+            },
+            'recent': recent,
+            'provider': {'app': app_info, 'balance': organization_balance, 'currencies': currencies},
+        }
 
     async def sync_payments(uid):
         rows = ledger.db.execute("SELECT spend_id FROM wallet_quotes WHERE user_id=? AND state IN ('reserved','processing') LIMIT 100", (uid,)).fetchall()
@@ -280,9 +322,16 @@ def install_wallet(app, root, owner_check):
                     ledger.payment(payload)
                 return web.json_response({'ok': True})
             uid = identity(request)
-            client_ref = ledger.account(uid)
+            admin = is_admin(uid)
             if action == 'access' and request.method == 'GET':
-                return web.json_response({'owner': uid == 'owner'})
+                return web.json_response({'owner': admin})
+            if action == 'admin-overview' and request.method == 'GET':
+                if not admin:
+                    raise ApiError('FORBIDDEN', 'Админка доступна только администраторам WPay', 403)
+                if not token:
+                    raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
+                return web.json_response(await admin_overview())
+            client_ref = ledger.account(uid)
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
             operations = await operations_route(request, action, uid, client_ref, ledger, provider, ApiError)
@@ -297,7 +346,7 @@ def install_wallet(app, root, owner_check):
                     item['detail'] = json.loads(item['detail'])
                 return web.json_response({'balances': balances, 'rates': rates, 'transactions': items})
             if action == 'provider' and request.method == 'GET':
-                if uid != 'owner':
+                if not admin:
                     raise ApiError('FORBIDDEN', 'Только владелец', 403)
                 return web.json_response({'app': await provider.call('getMe'), 'organization_balance': await provider.call('getBalance'), 'currencies': await provider.call('getCurrencies')})
             if action == 'currencies' and request.method == 'GET':

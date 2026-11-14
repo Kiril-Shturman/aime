@@ -1743,10 +1743,67 @@ def whoami(request):
 OPEN_PATHS = ("/api/whoami",)
 
 
+async def wpay_telegram_webhook(request):
+    """Open the wallet or the protected admin mini-app from the WPay bot."""
+    token = os.environ.get("WPAY_BOT_TOKEN", "")
+    secret = os.environ.get("WPAY_TELEGRAM_WEBHOOK_SECRET", "")
+    supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
+    if not token or not secret or not hmac.compare_digest(secret, supplied):
+        return web.json_response({"ok": False}, status=401)
+    try:
+        update = await request.json()
+    except (ValueError, TypeError):
+        return web.json_response({"ok": False}, status=400)
+    message = update.get("message") or {}
+    text = message.get("text") or ""
+    command = text.split(maxsplit=1)[0].split("@", 1)[0] if text else ""
+    if command not in {"/start", "/admin"}:
+        return web.json_response({"ok": True})
+    chat_id = (message.get("chat") or {}).get("id")
+    sender_id = (message.get("from") or {}).get("id")
+    if not chat_id:
+        return web.json_response({"ok": True})
+    admin_ids = {value.strip() for value in os.environ.get("WPAY_ADMIN_IDS", "").split(",") if value.strip().isdigit()}
+    app_url = os.environ.get("WPAY_APP_URL", "https://wallet.178-236-255-214.nip.io/wallet")
+    if command == "/admin":
+        if str(sender_id) not in admin_ids:
+            payload = {"chat_id": chat_id, "text": "Нет доступа к админке WPay."}
+        else:
+            parsed = urllib.parse.urlsplit(app_url)
+            admin_url = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "/admin", "", ""))
+            payload = {
+                "chat_id": chat_id,
+                "text": "Админка WPay",
+                "reply_markup": {"inline_keyboard": [[{"text": "Открыть админку", "web_app": {"url": admin_url}}]]},
+            }
+    else:
+        payload = {
+            "chat_id": chat_id,
+            "text": "Добро пожаловать в WPay. Откройте мини-приложение кнопкой ниже.",
+            "reply_markup": {"inline_keyboard": [[{"text": "Открыть WPay", "web_app": {"url": app_url}}]]},
+        }
+
+    def send_message():
+        telegram_request = urllib.request.Request(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        with urllib.request.urlopen(telegram_request, timeout=12) as response:
+            if not json.loads(response.read()).get("ok"):
+                raise ValueError("Telegram sendMessage failed")
+
+    try:
+        await asyncio.to_thread(send_message)
+    except Exception:
+        return web.json_response({"ok": False}, status=502)
+    return web.json_response({"ok": True})
+
+
 @web.middleware
 async def guard(request, handler):
     """К данным пускаем только своих — и на чтение, и на запись."""
-    if request.path.startswith("/api/wallet/"):
+    if request.path.startswith("/api/wallet/") or request.path == "/api/telegram/webhook":
         return await handler(request)
     who = whoami(request)
     if not who and os.environ.get("DEV_OPEN"):
@@ -2249,6 +2306,7 @@ def make_app():
     app.router.add_get("/api/state", get_state)
     app.router.add_get("/api/design/blocks", get_blocks)
     app.router.add_get("/api/whoami", get_whoami)
+    app.router.add_post("/api/telegram/webhook", wpay_telegram_webhook)
     app.router.add_get("/api/access", get_access)
     app.router.add_patch("/api/access", patch_access)
     app.router.add_get("/api/assistant", get_assistant)
