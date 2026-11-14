@@ -31,6 +31,7 @@ const tabs:{id:Tab;label:string;icon:typeof Database}[] = [
 export default function WalletAdminPage() {
   const [tab,setTab]=useState<Tab>('overview')
   const [payload,setPayload]=useState<unknown>(null)
+  const [payloadTab,setPayloadTab]=useState<Tab|null>(null)
   const [loading,setLoading]=useState(false)
   const [error,setError]=useState('')
   const [table,setTable]=useState('')
@@ -39,36 +40,41 @@ export default function WalletAdminPage() {
   const load=useCallback(async()=>{
     setLoading(true);setError('')
     try {
-      if(tab==='overview') setPayload(await walletRequest<AdminOverview>('admin-overview'))
+      if(tab==='overview') { setPayload(await walletRequest<AdminOverview>('admin-overview'));setPayloadTab(tab) }
       if(tab==='data') {
         const suffix=`?${new URLSearchParams({... (table?{table}:{}),... (query?{q:query}:{})})}`
         const [users,database]=await Promise.all([walletRequest<UsersData>('admin-users'),walletRequest<DatabaseData>(`admin-database${suffix}`)])
-        setTable(database.table);setPayload({users,database})
+        setTable(database.table);setPayload({users,database});setPayloadTab(tab)
       }
-      if(tab==='payments') setPayload(await walletRequest<PaymentsData>('admin-payments'))
-      if(tab==='crypto') setPayload(await walletRequest<CryptoData>('admin-crypto'))
-      if(tab==='goswap') setPayload(await walletRequest<GoSwapData>('admin-goswap'))
-      if(tab==='broadcasts') setPayload(await walletRequest<BroadcastData>('admin-broadcasts'))
+      if(tab==='payments') { setPayload(await walletRequest<PaymentsData>('admin-payments'));setPayloadTab(tab) }
+      if(tab==='crypto') { setPayload(await walletRequest<CryptoData>('admin-crypto'));setPayloadTab(tab) }
+      if(tab==='goswap') { setPayload(await walletRequest<GoSwapData>('admin-goswap'));setPayloadTab(tab) }
+      if(tab==='broadcasts') { setPayload(await walletRequest<BroadcastData>('admin-broadcasts'));setPayloadTab(tab) }
     } catch(reason) { setError(reason instanceof Error?reason.message:'Не удалось загрузить данные') }
     finally { setLoading(false) }
   },[tab,table,query])
 
-  useEffect(()=>{setPayload(null);void load()},[tab]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(()=>{if(tab==='data'&&payload)void load()},[table,query]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{void load()},[tab]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(()=>{if(tab==='data'&&payloadTab==='data')void load()},[table,query]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <main className="min-h-full bg-[#f2f2f7] px-4 pb-28 pt-[max(16px,env(safe-area-inset-top))] text-[#111] dark:bg-[#08090b] dark:text-white">
-    <div className="mx-auto max-w-5xl">
-      <header className="mb-5 flex items-center gap-3">
-        <button onClick={()=>{window.location.href='/wallet'}} className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm dark:bg-white/10"><ArrowLeft size={21}/></button>
-        <div className="min-w-0 flex-1"><div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[.14em] text-emerald-600"><ShieldCheck size={14}/> WPay</div><h1 className="truncate text-[24px] font-bold">{tabs.find(item=>item.id===tab)?.label}</h1></div>
-        <button onClick={()=>void load()} disabled={loading} className="flex h-11 w-11 items-center justify-center rounded-full bg-white shadow-sm disabled:opacity-50 dark:bg-white/10"><RefreshCw size={20} className={loading?'animate-spin':''}/></button>
-      </header>
-      {error&&<div className={`${card} mb-4 border-red-500/20 bg-red-50 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300`}>{error}</div>}
-      {loading&&!payload?<div className="py-24 text-center text-sm opacity-45">Загружаю…</div>:<TabContent tab={tab} payload={payload} table={table} query={query} setTable={setTable} setQuery={setQuery} reload={load}/>}
+  const ready=payloadTab===tab
+  return <main className="min-h-full bg-[radial-gradient(circle_at_85%_0%,rgba(0,122,255,.10),transparent_34%),#f2f2f7] text-[#111] dark:bg-[radial-gradient(circle_at_85%_0%,rgba(10,132,255,.16),transparent_32%),#08090b] dark:text-white">
+    <aside className="fixed inset-y-0 left-0 z-50 flex w-[78px] flex-col border-r border-black/[.06] bg-white/85 px-2 pb-[max(12px,env(safe-area-inset-bottom))] pt-[max(14px,env(safe-area-inset-top))] shadow-[8px_0_30px_rgba(0,0,0,.04)] backdrop-blur-2xl sm:w-[220px] sm:px-3 dark:border-white/[.08] dark:bg-[#111216]/88">
+      <button onClick={()=>{window.location.href='/wallet'}} className="mb-5 flex h-12 items-center justify-center gap-3 rounded-2xl bg-black/[.045] sm:justify-start sm:px-3 dark:bg-white/[.07]"><ArrowLeft size={20}/><span className="hidden text-sm font-semibold sm:block">В кошелёк</span></button>
+      <div className="mb-5 hidden px-3 sm:block"><div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.15em] text-emerald-600"><ShieldCheck size={15}/> WPay</div><div className="mt-1 text-xl font-bold">Управление</div></div>
+      <nav className="space-y-1.5">{tabs.map(item=><button key={item.id} onClick={()=>setTab(item.id)} className={`flex h-12 w-full items-center justify-center gap-3 rounded-2xl text-sm font-semibold transition sm:justify-start sm:px-3 ${tab===item.id?'bg-blue-500 text-white shadow-lg shadow-blue-500/20':'text-black/50 hover:bg-black/[.04] dark:text-white/55 dark:hover:bg-white/[.06]'}`}><item.icon size={20}/><span className="hidden sm:block">{item.label}</span></button>)}</nav>
+      <div className="mt-auto hidden rounded-2xl bg-emerald-500/10 p-3 text-xs leading-relaxed text-emerald-700 sm:block dark:text-emerald-300"><b>Защищённый доступ</b><br/>Только Telegram-администраторы</div>
+    </aside>
+    <div className="min-h-full pl-[78px] sm:pl-[220px]">
+      <div className="mx-auto max-w-6xl px-3 pb-12 pt-[max(16px,env(safe-area-inset-top))] sm:px-6">
+        <header className="sticky top-0 z-30 mb-5 flex items-center gap-3 rounded-[24px] border border-white/50 bg-white/75 p-3 shadow-sm backdrop-blur-xl dark:border-white/[.07] dark:bg-[#15161a]/75">
+          <div className="min-w-0 flex-1"><div className="text-[10px] font-bold uppercase tracking-[.14em] text-blue-500">WPay Admin</div><h1 className="truncate text-[22px] font-bold">{tabs.find(item=>item.id===tab)?.label}</h1></div>
+          <button onClick={()=>void load()} disabled={loading} className="flex h-11 w-11 items-center justify-center rounded-full bg-black/[.045] disabled:opacity-50 dark:bg-white/[.08]"><RefreshCw size={19} className={loading?'animate-spin':''}/></button>
+        </header>
+        {error&&<div className={`${card} mb-4 border-red-500/20 bg-red-50 text-sm text-red-700 dark:bg-red-500/10 dark:text-red-300`}>{error}</div>}
+        {!ready?<div className="py-24 text-center text-sm opacity-45">Загружаю…</div>:<TabContent tab={tab} payload={payload} table={table} query={query} setTable={setTable} setQuery={setQuery} reload={load}/>}
+      </div>
     </div>
-    <nav className="fixed inset-x-2 bottom-[max(8px,env(safe-area-inset-bottom))] z-50 mx-auto grid max-w-xl grid-cols-6 rounded-[24px] border border-black/5 bg-white/95 p-1.5 shadow-xl backdrop-blur-xl dark:border-white/10 dark:bg-[#18191d]/95">
-      {tabs.map(item=><button key={item.id} onClick={()=>setTab(item.id)} className={`flex min-w-0 flex-col items-center gap-1 rounded-[18px] py-2 text-[9px] font-medium ${tab===item.id?'bg-blue-500 text-white':'text-black/50 dark:text-white/50'}`}><item.icon size={18}/><span className="truncate">{item.label}</span></button>)}
-    </nav>
   </main>
 }
 
