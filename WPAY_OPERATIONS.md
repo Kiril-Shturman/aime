@@ -1,7 +1,8 @@
 # WPay: operations and organization controls
 
-UI: History → Operations. Invoices, Telegram-ID transfers, network withdrawals,
-deposits and saved addresses. Owner sees GoSwap → reconciliation/account.
+UI: History contains direct filters for invoices, Telegram-ID transfers, network
+withdrawals and deposits. There is no nested Operations screen. Saved addresses
+are under Deposit → My details. Owner sees GoSwap → reconciliation/account.
 Provider reference: https://goswap.site/docs (checked 2026-11-13).
 
 Backend requires the existing GoSwap token and wallet identity. No provider key

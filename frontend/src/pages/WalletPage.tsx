@@ -1,9 +1,15 @@
+import { DesktopSidebar, DesktopOverview } from './WalletDesktop'
+import './WalletDesktop.css'
+import WalletOperations from './WalletOperations'
 import { ReferralProgram, WithdrawalMethods, WithdrawalForm, withdrawalTitles, type WithdrawalMethod } from './WalletPrograms'
 import DocTextFill from 'framework7-icons/react/esm/DocTextFill.js'
 import Framework7 from 'framework7/lite-bundle'
-import Framework7React, { List as F7List, ListItem as F7ListItem, Messages, Message, Messagebar, ListInput as F7ListInput, Toggle as F7Toggle, App as F7App, Popup as F7Popup, Navbar as F7Navbar, NavRight, Link as F7Link, Page as F7Page } from 'framework7-react'
+import Framework7React, { List as F7List, ListItem as F7ListItem, Messages, Message, Messagebar, ListInput as F7ListInput, Toggle as F7Toggle, App as F7App, Sheet as F7Sheet, Popup as F7Popup, Navbar as F7Navbar, NavRight, Link as F7Link, Page as F7Page } from 'framework7-react'
 import './WalletFramework7.css'
 import 'framework7/components/popup/css'
+import 'framework7/components/sheet/css'
+import './WalletExchange.css'
+import { Search, Check, X, Delete } from 'lucide-react'
 import './WalletProfile.css'
 import './WalletCard.css'
 import {
@@ -331,25 +337,21 @@ function WalletScreen() {
     () => [
       {
         title: theme === 'dark' ? 'Светлая тема' : 'Тёмная тема',
-        subtitle: 'Сменить оформление',
         icon: theme === 'dark' ? <SunMax /> : <MoonStars />,
         action: () => toggleTheme(),
       },
       {
         title: balanceHidden ? 'Показать баланс' : 'Скрыть баланс',
-        subtitle: 'На этом устройстве',
         icon: balanceHidden ? <Eye /> : <EyeSlash />,
         action: () => setBalanceHidden((value) => !value),
       },
       {
         title: 'История операций',
-        subtitle: 'Переводы и обмены',
         icon: <Clock />,
         action: () => selectTab('history'),
       },
       {
         title: 'Настройки кошелька',
-        subtitle: 'Валюта и безопасность',
         icon: <GearAlt />,
         action: () => selectTab('profile'),
       },
@@ -416,9 +418,11 @@ function WalletScreen() {
             key={item.title}
             link
             onClick={() => runMenuAction(item.action)}
-            media={<span className="text-[21px] text-primary">{item.icon}</span>}
-            title={item.title}
-            subtitle={item.subtitle}
+            chevron={false}
+            contentClassName="!h-13"
+            innerClassName="!min-w-0 !h-13 !py-0 after:!opacity-30"
+            media={<span className="flex h-6 w-6 items-center justify-center text-[21px] text-primary">{item.icon}</span>}
+            innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="truncate text-[16px] font-medium text-black dark:text-white">{item.title}</span><ChevronRight aria-hidden="true" className="shrink-0 text-[18px] text-black/30 dark:text-white/30"/></span>}
           />
         ))}
       </List>
@@ -429,12 +433,13 @@ function WalletScreen() {
   return (
     <Page
       ref={pageRef}
-      className="wpay-viewport overscroll-y-none pb-[calc(96px+env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="wpay-desktop-page wpay-viewport overscroll-y-none pb-[calc(96px+env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       onPointerDown={pull.pointerDown}
       onPointerMove={pull.pointerMove}
       onPointerUp={pull.finish}
       onPointerCancel={pull.finish}
     >
+      <DesktopSidebar tab={activeTab} onSelect={selectTab} dark={theme==='dark'} onTheme={toggleTheme} name={user?.first_name||'Ваш аккаунт'}/>
       <WalletNavbar
         title={tabMeta[activeTab].title}
         subtitle={tabMeta[activeTab].subtitle}
@@ -472,7 +477,9 @@ function WalletScreen() {
 
       <PullRefreshIndicator distance={pull.distance} refreshing={pull.refreshing} dragging={pull.dragging} />
 
-      {activeTab === 'wallet' && <main className={`mx-auto w-full max-w-[560px] transition-[transform,opacity] duration-300 ease-out ${selectedAssetCode ? '-translate-x-[22%] opacity-60' : 'translate-x-0 opacity-100'}`}>
+      <div className="wpay-desktop-body" data-tab={activeTab}>
+      {activeTab === 'wallet' && <main className={`wpay-wallet-home mx-auto w-full max-w-[560px] transition-[transform,opacity] duration-300 ease-out ${selectedAssetCode ? '-translate-x-[22%] opacity-60' : 'translate-x-0 opacity-100'}`}>
+        <div className="wpay-desktop-balance-card">
         <section className="px-safe-4 pb-7 pt-9 text-center" aria-label="Общий баланс">
           <div className="text-[15px] font-medium text-black/50 dark:text-white/50">Общий баланс</div>
           {loading ? (
@@ -496,6 +503,7 @@ function WalletScreen() {
           else if(action.label==='Обменять')setCryptoFlow({kind:'exchange'})
         }}))}/>
 
+        </div>
         <List strong inset className="!mb-0 !mt-6 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
           {loading ? <CurrencySkeletonRow rubles/> : <CurrencyRow asset={rubleAsset} balanceHidden={balanceHidden}/>}
         </List>
@@ -516,11 +524,14 @@ function WalletScreen() {
         <WalletConnectionNote/>
       </main>}
 
+      {activeTab === 'wallet'&&<DesktopOverview onHistory={()=>selectTab('history')} onDeposit={()=>setCryptoFlow({kind:'deposit'})} onExchange={()=>setCryptoFlow({kind:'exchange'})}/>}
       {activeTab === 'history' && <LiveHistory/>}
       {activeTab === 'cards' && <CardsSection showNotice={showNotice} />}
       {activeTab === 'profile' && (
         <ProfileSection user={user} initials={initials} showNotice={showNotice} />
       )}
+
+      </div>
 
       <AssetPushView
         asset={assets.find((item) => item.code === selectedAssetCode) ?? null}
@@ -728,9 +739,10 @@ function DepositMethodsView({ flow, onClose, showNotice }: { flow: CryptoFlow | 
   const [selected, setSelected] = useState<string | null>(null)
   useEffect(() => { if (flow) setSelected(null) }, [flow])
   const depositAssets = assets
-  return <PushViewShell open={flow !== null} title={selected ? `Пополнить ${selected}` : 'Пополнить'} onClose={() => selected ? setSelected(null) : onClose()}>
-    {selected ? <LiveDepositPanel defaultAsset={selected}/> : <main className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
+  return <PushViewShell open={flow !== null} title={selected==='addresses'?'Мои реквизиты':selected ? `Пополнить ${selected}` : 'Пополнить'} onClose={() => selected ? setSelected(null) : onClose()}>
+    {selected==='addresses'?<WalletOperations mode="addresses"/>:selected ? <LiveDepositPanel defaultAsset={selected}/> : <main className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
       <p className="mb-4 mt-1 text-center text-[14px] text-black/45 dark:text-white/45">Выберите способ пополнения</p>
+      <List strong inset className="!mx-0 !mb-4 !mt-0 overflow-hidden !rounded-[30px]"><ListItem link title="Мои реквизиты" subtitle="Сохранённые адреса по сетям" onClick={()=>setSelected('addresses')} media={<span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-b from-blue-300 to-blue-500 text-white dark:from-blue-400 dark:to-blue-600"><DocOnDoc className="text-[22px]"/></span>}/></List>
       <List strong inset className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
         <CurrencyRow asset={rubleAsset} deposit onClick={() => showNotice('Пополнение рублями через СБП пока не подключено')}/>
       </List>
@@ -760,11 +772,14 @@ function CryptoFlowPushView({
   const [toCode, setToCode] = useState('GRAM')
   const [amount, setAmount] = useState('')
   const [assetPicker, setAssetPicker] = useState<'from' | 'to' | null>(null)
+  const [pickerQuery,setPickerQuery]=useState('')
 
   useEffect(() => {
     if (!flow) return
     setDisplayFlow(flow)
-    if (flow.assetCode) setFromCode(flow.assetCode)
+    setAssetPicker(null)
+    setPickerQuery('')
+    if (flow.assetCode) {setFromCode(flow.assetCode);setToCode(previous=>previous===flow.assetCode?(flow.assetCode==='USDT'?'GRAM':'USDT'):previous)}
   }, [flow])
 
   const activeFlow = flow ?? displayFlow
@@ -781,8 +796,9 @@ function CryptoFlowPushView({
     value.toLocaleString('ru-RU', { maximumFractionDigits })
 
   const selectExchangeAsset = (code: string) => {
-    if (assetPicker === 'from') setFromCode(code)
-    if (assetPicker === 'to') setToCode(code)
+    if (assetPicker === 'from') {setFromCode(code);if(code===toCode)setToCode(fromCode)}
+    if (assetPicker === 'to') {setToCode(code);if(code===fromCode)setFromCode(toCode)}
+    haptic('light')
     setAssetPicker(null)
   }
 
@@ -798,90 +814,49 @@ function CryptoFlowPushView({
   }
 
   if (!isWithdraw) {
-    const pickerAssets = assets.filter((item) => item.code !== (assetPicker === 'from' ? toCode : fromCode))
+    const pickerAssets = assets.filter(item=>`${item.name} ${item.code}`.toLowerCase().includes(pickerQuery.trim().toLowerCase()))
 
-    const pairs = [['USDT','GRAM'], ['USDT','BNB'], ['USDT','SOL'], ['USDT','BTC'], ['ETH','BTC'], ['GRAM','USDT']]
-    const hasRate = live.rate(fromAsset.code) !== null && live.rate(toAsset.code) !== null
+    const balancePercent = balances[fromCode]>0?Math.min(100,Math.max(0,parsedAmount/balances[fromCode]*100)):0
+    const enterKey=(key:string)=>{haptic('light');setAmount(previous=>{
+      if(key==='delete')return previous.slice(0,-1)
+      const digit=key==='.'?',':key
+      if(digit===',')return /[.,]/.test(previous)?previous:(previous||'0')+','
+      if(previous.length>=18)return previous
+      const fraction=previous.split(/[.,]/)[1]
+      if(fraction!==undefined&&fraction.length>=8)return previous
+      return previous==='0'?digit:previous+digit
+    })}
+    const hasRate = (live.rate(fromAsset.code)??0)>0 && (live.rate(toAsset.code)??0)>0
     return (
       <PushViewShell open={flow !== null} title="Обмен" onClose={onClose} onRefreshed={() => void live.refresh()}>
-        <main className="relative mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
-          <div className="relative">
-            <Card className="!m-0 !rounded-[24px]" contentWrapPadding="p-4">
-              <div className="flex items-center justify-between gap-2 text-[14px] text-black/45 dark:text-white/45">
-                <span>Вы меняете</span>
-                <div className="flex items-center gap-2"><WalletFill className="text-[13px]"/><span className="tabular-nums">{live.ready ? formatCrypto(balances[fromAsset.code] ?? 0) : '—'}</span><Button clear inline onClick={() => setAmount(String(balances[fromAsset.code] ?? 0))} className="rounded-md bg-[#3275e9]/[.06] px-2 py-0.5 text-[12px] font-bold tracking-wide text-[#3275e9] dark:bg-blue-400/10 dark:text-blue-400">МАКС</Button></div>
+        <main className="wpay-exchange-desktop relative mx-auto w-full max-w-[560px] px-4 pb-6 pt-3">
+          <div className="relative space-y-1">
+            {(['from','to'] as const).map(side=>{const giving=side==='from',asset=giving?fromAsset:toAsset;return <section key={side} className={`bg-white px-5 py-4 dark:bg-[#1c1c1e] ${giving?'rounded-t-[32px] rounded-b-lg':'rounded-t-lg rounded-b-[32px]'}`}>
+              <div className="flex items-center justify-between text-[15px] text-black/45 dark:text-white/45"><span>{giving?'Отдаёте':'Получаете'}</span><span className="flex items-center gap-1.5 text-[13px]"><WalletFill className="text-[15px]"/><span className="tabular-nums">{live.ready?formatCrypto(balances[asset.code]??0):'—'}</span></span></div>
+              <div className="mt-4 flex h-12 items-center gap-3">
+                {giving?<input aria-label={`Сумма в ${asset.code}`} inputMode="none" readOnly value={amount} placeholder="0" onKeyDown={e=>{if(/^[0-9.,]$/.test(e.key)){e.preventDefault();enterKey(e.key)}else if(e.key==='Backspace'){e.preventDefault();enterKey('delete')}}} className="min-w-0 flex-1 bg-transparent p-0 text-left text-[44px] font-medium leading-none tracking-tight text-black outline-none placeholder:text-black/30 dark:text-white dark:placeholder:text-white/30"/>:<output aria-label="Сумма получения" className={`min-w-0 flex-1 truncate text-[44px] font-medium leading-none tracking-tight ${receiveAmount>0&&hasRate?'text-black dark:text-white':'text-black/30 dark:text-white/30'}`}>{hasRate&&receiveAmount>0?formatCrypto(receiveAmount,8):'0,00'}</output>}
+                <button type="button" aria-label={giving?'Валюта списания':'Валюта получения'} onClick={()=>{setPickerQuery('');setAssetPicker(side)}} className="flex min-h-12 shrink-0 items-center gap-2 py-1 pl-2 text-black dark:text-white"><span className="flex h-8 w-8 items-center justify-center rounded-full [&>svg]:!h-[21px] [&>svg]:!w-[21px]" style={assetIconStyle(asset)}>{asset.icon}</span><span className="text-[18px] font-semibold">{asset.code}</span><ChevronRight className="rotate-90 text-[16px] text-black/35 dark:text-white/35"/></button>
               </div>
-              <div className="mt-3 flex h-11 items-center gap-3">
-                <Button tonal rounded inline aria-label="Валюта списания" onClick={() => setAssetPicker('from')} className="!w-auto !h-auto !shrink-0 !normal-case flex items-center gap-2 rounded-full bg-black/[.035] py-1 pl-1 pr-3 dark:bg-white/[.06]">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full [&>svg]:!h-[22px] [&>svg]:!w-[22px]" style={assetIconStyle(fromAsset)}>{fromAsset.icon}</span><span className="text-[17px] font-semibold text-black dark:text-white">{fromAsset.code}</span><ChevronRight className="text-[14px] text-black/40 dark:text-white/40"/>
-                </Button>
-                <input aria-label={`Сумма в ${fromAsset.code}`} inputMode="decimal" autoComplete="off" value={amount} onChange={e=>setAmount(e.target.value.replace(/[^0-9.,]/g,''))} placeholder="0" className="min-w-0 flex-1 border-0 bg-transparent p-0 text-right text-[32px] font-medium leading-none text-black outline-none placeholder:text-black/25 dark:text-white dark:placeholder:text-white/30"/>
-              </div>
-            </Card>
-            <div className="relative z-10 flex h-6 items-center">
-              <div aria-hidden="true" className="absolute inset-x-5 top-1/2 h-px bg-black/15 dark:bg-white/20"/>
-              <Button tonal rounded inline aria-label="Поменять валюты местами" onClick={swapExchangeAssets} className="absolute left-1/2 top-1/2 z-10 !mt-0 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[5px] border-[#efeff4] bg-white text-[#3275e9] shadow-[0_0_0_1px_rgba(0,0,0,.02)] active:scale-95 dark:border-black dark:bg-[#252528] dark:text-blue-400"><ArrowRightArrowLeft className="rotate-90 text-[21px]"/></Button>
-            </div>
-            <Card className="!m-0 !rounded-[24px]" contentWrapPadding="p-4">
-              <p className="text-[14px] text-black/45 dark:text-white/45">Вы получаете</p>
-              <div className="mt-3 flex h-11 items-center gap-3">
-                <Button tonal rounded inline aria-label="Валюта получения" onClick={()=>setAssetPicker('to')} className="!w-auto !h-auto !shrink-0 !normal-case flex items-center gap-2 rounded-full bg-black/[.035] py-1 pl-1 pr-3 dark:bg-white/[.06]">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full [&>svg]:!h-[22px] [&>svg]:!w-[22px]" style={assetIconStyle(toAsset)}>{toAsset.icon}</span><span className="text-[17px] font-semibold text-black dark:text-white">{toAsset.code}</span><ChevronRight className="text-[14px] text-black/40 dark:text-white/40"/>
-                </Button>
-                <output aria-label="Сумма получения" className="min-w-0 flex-1 truncate text-right text-[32px] font-medium leading-none text-black/25 dark:text-white/30">{hasRate && receiveAmount > 0 ? formatCrypto(receiveAmount) : '0'}</output>
-              </div>
-            </Card>
+            </section>})}
+            <button type="button" aria-label="Поменять валюты местами" onClick={swapExchangeAssets} className="absolute left-1/2 top-1/2 z-10 !mt-0 flex h-11 w-11 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[5px] border-[#efeff4] bg-blue-50 text-primary active:scale-95 dark:border-black dark:bg-[#13233c]"><ArrowRightArrowLeft className="rotate-90 text-[22px]"/></button>
           </div>
-          <p role="status" className="my-4 text-center text-[13px] text-black/40 dark:text-white/40">{hasRate ? `Справочно: 1 ${fromAsset.code} ≈ ${formatCrypto(exchangeRate)} ${toAsset.code}` : 'Курс пока недоступен'}</p>
-          <Button large rounded onClick={()=>showNotice('Обмен будет доступен после подключения провайдера')} className="flex h-12 w-full items-center justify-center rounded-[16px] bg-[#3275e9] text-[17px] font-semibold text-white transition-colors active:bg-[#2464d1] dark:bg-[#3275e9] dark:text-white">Продолжить</Button>
-          <div className="-mx-4 mt-3 overflow-x-auto px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <div className="grid w-max grid-flow-col grid-rows-2 gap-2">
-              {pairs.map(([from,to],i)=>{ const first=assets.find(x=>x.code===from)!,second=assets.find(x=>x.code===to)!;return <Button tonal rounded inline key={i} aria-label={`Обмен ${from} на ${to}`} onClick={()=>{setFromCode(from);setToCode(to);setAmount('');haptic('light')}} className="flex h-[52px] min-w-[145px] items-center justify-center gap-2 rounded-[20px] bg-white px-3 text-black active:bg-black/5 dark:bg-[#1c1c1e] dark:text-white dark:active:bg-white/10"><span className="flex -space-x-2">{[first,second].map(item=><span key={item.code} className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white dark:border-[#1c1c1e] [&>svg]:!h-[17px] [&>svg]:!w-[17px]" style={assetIconStyle(item)}>{item.icon}</span>)}</span><span className="whitespace-nowrap text-[14px] font-medium">{from} / {to}</span></Button>})}
-            </div>
-          </div>
-          <p className="mt-3 text-center text-[12px] leading-4 text-black/35 dark:text-white/35">Обмен пока не подключён. Средства не списываются.</p>
-
-          {assetPicker && (
-            <div className="absolute inset-0 z-20 flex items-end bg-black/25 px-3 pb-3 backdrop-blur-[2px]" onClick={() => setAssetPicker(null)}>
-              <section
-                role="dialog"
-                aria-label="Выбор валюты"
-                className="w-full rounded-[26px] bg-white p-3 shadow-2xl dark:bg-[#1c1c1e]"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div className="px-2 pb-2 pt-1 text-center text-[15px] font-semibold text-black/55 dark:text-white/55">
-                  {assetPicker === 'from' ? 'Вы меняете' : 'Вы получаете'}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {pickerAssets.map((item) => (
-                    <Button
-                      key={item.code}
-                      onClick={() => selectExchangeAsset(item.code)}
-                      className="flex items-center gap-3 rounded-2xl border-0 bg-black/[.035] px-3 py-3 text-left dark:bg-white/[.07]"
-                    >
-                      <span
-                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full"
-                        style={assetIconStyle(item)}
-                      >
-                        {item.icon}
-                      </span>
-                      <span>
-                        <span className="block text-[16px] font-semibold text-black dark:text-white">{item.code}</span>
-                        <span className="block text-[11px] text-black/40 dark:text-white/40">{item.name}</span>
-                      </span>
-                    </Button>
-                  ))}
-                </div>
-                <Button
-                  onClick={() => setAssetPicker(null)}
-                  className="mt-2 w-full rounded-2xl border-0 bg-black/[.045] py-3 text-[16px] font-semibold text-primary dark:bg-white/[.08]"
-                >
-                  Отмена
-                </Button>
-              </section>
-            </div>
-          )}
+          <p role="status" className="my-4 text-center text-[13px] text-black/45 dark:text-white/45">{hasRate?`1 ${fromAsset.code} ≈ ${formatCrypto(exchangeRate,8)} ${toAsset.code}`:'Курс пока недоступен'}</p>
+          <div className="flex h-11 items-center gap-4 px-2"><button type="button" onClick={()=>setAmount('')} className="min-h-11 text-[14px] font-medium text-primary">Мин</button><input aria-label="Доля доступного баланса" type="range" min="0" max="100" step="1" value={balancePercent} disabled={!live.ready||!(balances[fromCode]>0)} onChange={e=>setAmount(String(Number(((balances[fromCode]??0)*Number(e.target.value)/100).toFixed(8))))} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-[#3275e9] disabled:opacity-35"/><button type="button" disabled={!live.ready} onClick={()=>setAmount(String(balances[fromCode]??0))} className="min-h-11 text-[14px] font-medium text-primary disabled:opacity-40">Макс</button></div>
+          <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1" aria-label="Цифровая клавиатура">{['1','2','3','4','5','6','7','8','9',',','0','delete'].map(key=><button key={key} type="button" aria-label={key==='delete'?'Удалить цифру':key===','?'Десятичный разделитель':key} onClick={()=>enterKey(key)} className="flex h-[clamp(44px,7dvh,64px)] items-center justify-center rounded-2xl text-[31px] font-medium text-black transition-colors active:bg-black/5 dark:text-white dark:active:bg-white/10">{key==='delete'?<Delete size={25} strokeWidth={1.8}/>:key}</button>)}</div>
+          <Button large rounded disabled={!(parsedAmount>0)||!hasRate||!live.ready||parsedAmount>(balances[fromCode]??0)} onClick={()=>showNotice('Обмен пока недоступен. Средства не списываются.')} className="!mt-5 !h-14 !w-full !rounded-[22px] !text-[17px] !font-semibold">Продолжить</Button>
+          <p className="mt-3 text-center text-[12px] text-black/35 dark:text-white/35">Расчёт справочный. Обмен пока недоступен.</p>
         </main>
+        {createPortal(<F7Sheet opened={assetPicker!==null&&flow!==null} backdrop closeByBackdropClick closeOnEscape swipeToClose swipeHandler=".wpay-exchange-picker-header" className="wpay-exchange-sheet" onSheetClosed={()=>{setAssetPicker(null);setPickerQuery('')}}>
+          <header className="wpay-exchange-picker-header shrink-0 px-5 pb-4 pt-3">
+            <div aria-hidden="true" className="mx-auto mb-4 h-1 w-9 rounded-full bg-black/[.08] dark:bg-white/10"/>
+            <div className="flex items-center justify-between gap-3"><div><h2 className="text-[23px] font-semibold tracking-tight text-black dark:text-white">Выберите валюту</h2><p className="mt-1 text-[14px] text-black/45 dark:text-white/45">{assetPicker==='from'?'С какого счёта списать':'На какой счёт получить'}</p></div><button type="button" aria-label="Закрыть выбор валюты" onClick={()=>setAssetPicker(null)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/5 text-black/50 dark:bg-white/10 dark:text-white/60"><X size={19}/></button></div>
+            <label className="mt-5 flex h-12 items-center gap-2.5 rounded-[20px] bg-black/5 px-3.5 dark:bg-white/10"><Search size={19} aria-hidden="true" className="shrink-0 text-black/40 dark:text-white/40"/><input aria-label="Найти валюту" placeholder="Название или тикер" value={pickerQuery} onChange={e=>setPickerQuery(e.target.value)} className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"/></label>
+          </header>
+          <section aria-label="Валюты для обмена" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-[max(20px,env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            <List strong inset dividers className="!mx-0 !my-0 !bg-transparent">{pickerAssets.map(item=>{const selected=item.code===(assetPicker==='from'?fromCode:toCode);return <ListItem key={item.code} link chevron={false} onClick={()=>selectExchangeAsset(item.code)} contentClassName="!h-[72px]" innerClassName="!h-[72px] !min-w-0 !py-2 after:!opacity-30" media={<span className="wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full [&>svg]:!h-6 [&>svg]:!w-6" style={assetIconStyle(item)}>{item.icon}</span>} innerChildren={<span className="flex min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold text-black dark:text-white">{item.name}</span><span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">{item.code}</span></span><span className="ml-auto text-right"><span className="block text-[16px] font-medium tabular-nums text-black dark:text-white">{live.ready?formatCrypto(balances[item.code]??0):'—'}</span><span className="mt-0.5 block text-[12px] text-black/40 dark:text-white/40">{live.ready&&live.rate(item.code)!==null?usd((balances[item.code]??0)*(live.rate(item.code)??0)):'Нет данных'}</span></span><span className="flex w-5 shrink-0 items-center justify-center text-primary">{selected&&<Check size={20} strokeWidth={2.5}/>}</span></span>}/>})}</List>
+            {!pickerAssets.length&&<p role="status" className="px-5 py-10 text-center text-[15px] text-black/45 dark:text-white/45">Валюта не найдена</p>}
+          </section>
+        </F7Sheet>,document.querySelector('.wpay-f7-root')??document.body)}
       </PushViewShell>
     )
   }

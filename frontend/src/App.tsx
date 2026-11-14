@@ -158,4 +158,6 @@ function Gate({ children }: { children: React.ReactNode }) {
 
 function isWalletHost() {
   return window.location.hostname.startsWith('wallet.')
+    || window.location.hostname === 'wpay-react-wallet.gildedmandrill1.chatgpt.site'
+    || import.meta.env.VITE_APP_MODE === 'wallet'
 }

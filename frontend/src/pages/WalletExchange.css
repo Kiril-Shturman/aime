@@ -1,0 +1,12 @@
+.wpay-exchange-sheet.sheet-modal {
+  position: fixed;
+  height: min(680px, 84dvh);
+  border-radius: 32px 32px 0 0;
+  background: #fff;
+  backdrop-filter: none;
+}
+.dark .wpay-exchange-sheet.sheet-modal,
+.wpay-exchange-sheet.sheet-modal.dark { background: #1c1c1e; }
+.wpay-exchange-sheet .sheet-modal-inner { display: flex; flex-direction: column; }
+.wpay-exchange-sheet .wpay-exchange-picker-header { touch-action: pan-x; }
+.wpay-f7-root .wpay-exchange-sheet.sheet-modal { z-index: 13500; }

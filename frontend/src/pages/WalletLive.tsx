@@ -1,3 +1,4 @@
+import { Search } from 'lucide-react'
 import WalletOperations from './WalletOperations'
 import { TransactionDetails, TransactionExamples, transactionFromApi, type TransactionView } from './WalletTransaction'
 import ArrowDownCircleFill from 'framework7-icons/react/esm/ArrowDownCircleFill.js'
@@ -119,22 +120,22 @@ export function LiveDepositPanel({ defaultAsset = 'USDT' }: { defaultAsset?: str
 export function LiveHistory() {
   const wallet = useLiveWallet(), [filter, setFilter] = useState('all'), [query, setQuery] = useState('')
   const [selectedTransaction,setSelectedTransaction]=useState<TransactionView|null>(null)
-  const [operationsOpen,setOperationsOpen]=useState(false)
   const items = wallet.data.transactions.filter(x => (filter === 'all' || (filter === 'income' ? Number(x.amount) > 0 : x.type.startsWith('qr_'))) && `${x.asset} ${x.type} ${x.detail.merchant_name ?? ''}`.toLowerCase().includes(query.toLowerCase()))
   const groups = new Map<string, typeof items>()
   for (const item of [...items].sort((a,b)=>Date.parse(b.created_at)-Date.parse(a.created_at))) {
     const date = new Date(item.created_at).toLocaleDateString('ru-RU', {day:'numeric',month:'long',year:'numeric'})
     groups.set(date,[...(groups.get(date) ?? []),item])
   }
-  if(operationsOpen)return <><div className="mx-auto max-w-[560px] px-4 pt-3"><button type="button" onClick={()=>setOperationsOpen(false)} className="min-h-11 text-[17px] text-blue-600 dark:text-blue-400">‹ История</button></div><WalletOperations/></>
+
   return <main className="mx-auto w-full max-w-[560px] pb-6 pt-5">
     <div className="px-4">
-      <button type="button" onClick={()=>setOperationsOpen(true)} className="mb-5 flex min-h-16 w-full items-center justify-between rounded-[28px] bg-white px-4 text-left dark:bg-[#1c1c1e]"><span><span className="block text-[17px] font-semibold text-black dark:text-white">Операции</span><span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">Счета, переводы, выводы и пополнения</span></span><span className="text-[25px] text-black/25 dark:text-white/25">›</span></button>
-      <input aria-label="Поиск операций" placeholder="Поиск операций" value={query} onChange={e=>setQuery(e.target.value)} className="h-12 w-full rounded-[22px] bg-black/5 px-4 text-[17px] text-black outline-none focus-visible:ring-2 focus-visible:ring-primary dark:bg-white/10 dark:text-white"/>
-      <div className="mt-4 flex gap-1 rounded-[22px] bg-black/5 p-1 dark:bg-white/10" aria-label="Фильтр операций">
-        {[['all','Все'],['income','Пополнения'],['expense','Платежи']].map(([id,label])=><button key={id} type="button" aria-pressed={filter===id} onClick={()=>setFilter(id)} className={`min-h-11 min-w-0 flex-1 rounded-[18px] px-2 text-[15px] font-medium transition-colors ${filter===id?'bg-white text-black shadow-sm dark:bg-[#2c2c2e] dark:text-white':'text-black/50 dark:text-white/50'}`}>{label}</button>)}
+
+      {(filter==='all'||filter==='expense')&&<label className="flex h-12 w-full items-center gap-2.5 rounded-[22px] bg-black/5 px-4 focus-within:ring-2 focus-within:ring-primary dark:bg-white/10"><Search size={20} strokeWidth={2} aria-hidden="true" className="shrink-0 text-black/40 dark:text-white/40"/><input aria-label="Поиск операций" placeholder="Поиск операций" value={query} onChange={e=>setQuery(e.target.value)} className="h-full min-w-0 flex-1 bg-transparent text-[17px] text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"/></label>}
+      <div className="mt-4 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-[22px] bg-black/5 p-1 dark:bg-white/10" aria-label="Фильтр операций">
+        {[['all','Все'],['expense','Платежи'],['invoices','Счета'],['transfers','Переводы'],['withdrawals','Выводы'],['deposits','Пополнения']].map(([id,label])=><button key={id} type="button" aria-pressed={filter===id} onClick={()=>setFilter(id)} className={`min-h-11 shrink-0 rounded-[18px] px-4 text-[15px] font-medium transition-colors ${filter===id?'bg-white text-black shadow-sm dark:bg-[#2c2c2e] dark:text-white':'text-black/50 dark:text-white/50'}`}>{label}</button>)}
       </div>
     </div>
+    {['invoices','transfers','withdrawals','deposits'].includes(filter)?<WalletOperations key={filter} initialTab={filter as 'invoices'|'transfers'|'withdrawals'|'deposits'}/>:<>
     {[...groups].map(([date,transactions])=><section key={date} aria-label={date}>
       <h2 className="mb-2 mt-7 px-4 text-[21px] font-semibold tracking-tight text-black dark:text-white">{date}</h2>
       <List strong inset dividers className="!mt-0 overflow-hidden !rounded-[32px] [&>ul]:!rounded-[32px]">
@@ -147,10 +148,11 @@ export function LiveHistory() {
         })}
       </List>
     </section>)}
-    {!items.length && <div className="mx-4 mt-7 rounded-[32px] bg-white px-6 py-10 text-center dark:bg-[#1c1c1e]" role="status"><span className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-b from-blue-300 to-blue-500 text-white dark:from-blue-400 dark:to-blue-600"><Clock className="text-[28px]"/></span><h2 className="mt-4 text-[21px] font-semibold text-black dark:text-white">{query||filter!=='all'?'Ничего не найдено':'Операций пока нет'}</h2><p className="mt-2 text-[15px] leading-relaxed text-black/45 dark:text-white/45">{query||filter!=='all'?'Попробуйте изменить поиск или фильтр.':wallet.ready?'Здесь появятся ваши пополнения и платежи.':wallet.loading?'Загружаем историю…':wallet.error}</p></div>}
+    {!items.length && <div className="mx-4 mt-7 px-6 py-10 text-center" role="status"><Clock aria-hidden="true" className="mx-auto text-[36px] text-black/30 dark:text-white/30"/><h2 className="mt-4 text-[21px] font-semibold text-black dark:text-white">{query||filter!=='all'?'Ничего не найдено':'Операций пока нет'}</h2><p className="mt-2 text-[15px] leading-relaxed text-black/45 dark:text-white/45">{query||filter!=='all'?'Попробуйте изменить поиск или фильтр.':wallet.ready?'Здесь появятся ваши пополнения и платежи.':wallet.loading?'Загружаем историю…':'Здесь появятся ваши пополнения и платежи.'}</p></div>}
     <TransactionExamples onSelect={setSelectedTransaction}/>
     <TransactionDetails item={selectedTransaction} onClose={()=>setSelectedTransaction(null)}/>
     <div className="mt-5 px-4"><Button rounded tonal disabled={wallet.loading} className="!m-0 !h-12 !w-full !rounded-[22px]" onClick={()=>void wallet.refresh(true)}>{wallet.loading?'Обновляем…':'Обновить историю'}</Button></div>
+    </>}
   </main>
 }
 
