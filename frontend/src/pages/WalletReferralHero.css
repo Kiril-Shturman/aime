@@ -1,0 +1,19 @@
+.wpay-referral-hero{position:relative;height:340px;overflow:hidden;border-radius:30px;background:radial-gradient(ellipse at 50% 38%,#e4ebff70,transparent 64%)}
+.dark .wpay-referral-hero{background:radial-gradient(ellipse at 50% 38%,#3275e918,transparent 64%)}
+.wpay-referral-orbits{position:absolute;inset:0 0 55px;overflow:hidden;pointer-events:none;mask-image:radial-gradient(ellipse at center,#000 30%,#0009 65%,transparent 92%)}
+.wpay-referral-circles{position:absolute;left:50%;top:50%;width:736px;height:736px;transform:translate(-50%,-50%) scale(.57);transform-origin:center}
+.wpay-referral-center{position:absolute;left:50%;top:142px;transform:translate(-50%,-50%);display:flex;width:72px;height:72px;align-items:center;justify-content:center;border-radius:50%;padding:5px;background:#fff;box-shadow:0 0 0 8px #ffffff50,0 12px 40px #3275e91a}
+.dark .wpay-referral-center{background:#1c1c1e;box-shadow:0 0 0 8px #ffffff08,0 12px 40px #0006}
+.wpay-referral-center img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.wpay-referral-center>span{display:flex;width:100%;height:100%;align-items:center;justify-content:center;border-radius:50%;background:linear-gradient(145deg,#70caff,#3275e9);color:white;font-size:26px;font-weight:600}
+.wpay-referral-caption{position:absolute;bottom:10px;left:12px;right:12px;text-align:center;color:#16181d}
+.dark .wpay-referral-caption{color:#fff}
+.wpay-referral-caption h2{font-size:21px;font-weight:600;letter-spacing:-.5px}
+.wpay-referral-caption p{margin-top:7px;font-size:13px;color:#8a8c96}
+.dark .wpay-referral-caption p{color:#92939e}
+@media(prefers-reduced-motion:reduce){.wpay-referral-circles *{animation:none!important}.wpay-referral-circles li>div{transform:rotate(calc(-1 * var(--item-angle)))}}
+
+.wpay-referral-circles circle{stroke:#b3bdcf}
+.dark .wpay-referral-circles circle{stroke:#505c73}
+.wpay-referral-earning{position:absolute;left:calc(100% - 3px);top:50%;transform:translateY(-50%);white-space:nowrap;padding:6px 10px;border-radius:16px;background:#e4f8ec;color:#14934d;font-size:18px;font-weight:600;line-height:1.2;box-shadow:0 2px 8px #00000006}
+.dark .wpay-referral-earning{background:#133123;color:#6cda98;box-shadow:none}

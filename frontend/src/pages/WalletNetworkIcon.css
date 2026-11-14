@@ -1,0 +1,11 @@
+.wpay-network-icon{display:flex;width:44px;height:44px;align-items:center;justify-content:center;border-radius:14px;flex-shrink:0}
+.wpay-network-icon--bsc{background:#f6c44318;color:#c99812}
+.wpay-network-icon--eth{background:#727ce914;color:#6876d8}
+.wpay-network-icon--ton{background:#0098ea12;color:#0098dc}
+.wpay-network-icon--sol{background:#9469db12;color:#8860cf}
+.wpay-network-icon--tron{background:#ef315414;color:#e73454}
+.dark .wpay-network-icon--bsc{background:#f6c44318;color:#f3c54e}
+.dark .wpay-network-icon--eth{background:#939cf318;color:#a2aafa}
+.dark .wpay-network-icon--ton{background:#38b1f51a;color:#55bfff}
+.dark .wpay-network-icon--sol{background:#ad84ef18;color:#b993f5}
+.dark .wpay-network-icon--tron{background:#f2506b1a;color:#ff758b}

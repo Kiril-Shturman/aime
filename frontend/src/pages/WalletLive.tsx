@@ -6,13 +6,10 @@ import Qrcode from 'framework7-icons/react/esm/Qrcode.js'
 import Clock from 'framework7-icons/react/esm/Clock.js'
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
-import QRCode from 'react-qr-code'
 import { Button, Card, Navbar, Link as KLink, Preloader, List, ListItem } from 'konsta/react'
 import { getMarketUsdRates } from '../lib/market-data'
-import { tg } from '../lib/telegram'
-import { walletRequest, WalletApiError, type Deposit, type QrQuote, type WalletOverview } from '../lib/wallet-api'
+import { walletRequest, WalletApiError, type QrQuote, type WalletOverview } from '../lib/wallet-api'
 
-const supportedDepositNetworks: Record<string,string[]> = {USDT:['BSC','ETH','TON','SOL','TRON'],ETH:['ETH'],BNB:['BSC'],TON:['TON'],SOL:['SOL']}
 const empty: WalletOverview = { balances: [], rates: [], transactions: [] }
 const usd = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
 export const usdPrice = (n: number) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: n < 1 ? 6 : n < 10 ? 4 : 2 })
@@ -64,58 +61,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
 }
 export function WalletConnectionNote() { const wallet = useLiveWallet(); return <p role="status" className="mx-auto my-5 max-w-[420px] px-5 text-center text-[13px] leading-relaxed text-black/45 dark:text-white/45">{wallet.error || 'Баланс и операции обновляются через GoSwap.'}</p> }
 
-export function LiveDepositPanel({ defaultAsset = 'USDT' }: { defaultAsset?: string }) {
-  const wallet = useLiveWallet()
-  const [asset, setAsset] = useState(supportedDepositNetworks[defaultAsset] ? defaultAsset : 'USDT'), [network, setNetwork] = useState('BSC'), [amount, setAmount] = useState(''), [deposit, setDeposit] = useState<Deposit | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState('')
-  const [currencies, setCurrencies] = useState<string[]>(['USDT'])
-  useEffect(() => { if (wallet.configured) walletRequest<{ code: string }[]>('currencies').then(rows => setCurrencies(rows.map(x => x.code).filter(code => supportedDepositNetworks[code]))).catch(() => {}) }, [wallet.configured])
-  useEffect(() => { setDeposit(null); setError('') }, [asset, network, amount])
-  useEffect(() => { setAsset(supportedDepositNetworks[defaultAsset] ? defaultAsset : 'USDT') }, [defaultAsset])
-  useEffect(() => { if (!supportedDepositNetworks[asset]?.includes(network)) setNetwork(supportedDepositNetworks[asset]?.[0] ?? 'BSC') }, [asset, network])
-  async function createDeposit() {
-    setBusy(true); setError('')
-    try { setDeposit(await walletRequest<Deposit>('deposit', { asset, network, ...(network === 'TRON' ? { amount: amount.replace(',', '.') } : {}) })) }
-    catch (e) { setError(e instanceof Error ? e.message : 'Не удалось получить реквизиты') }
-    finally { setBusy(false) }
-  }
-  function openProvider() {
-    const raw = deposit?.mini_app_url || deposit?.url
-    if (!raw) return
-    try {
-      const url = new URL(raw)
-      if (url.protocol !== 'https:' || !['t.me', 'goswap.site'].includes(url.hostname)) throw Error()
-      if (url.hostname === 't.me' && tg()?.openTelegramLink) tg()?.openTelegramLink?.(raw)
-      else if (tg()?.openLink) tg()?.openLink?.(raw)
-      else window.open(raw, '_blank', 'noopener,noreferrer')
-    } catch { setError('Не удалось открыть платёжное окно') }
-  }
-  return <main className="mx-auto w-full max-w-[560px] space-y-4 px-4 py-5">
-    <Card className="!m-0 !rounded-[30px]" contentWrapPadding="p-4">
-      <label className="block text-[14px] text-black/60 dark:text-white/60">Валюта
-        <select aria-label="Валюта пополнения" value={asset} onChange={e => setAsset(e.target.value)} className="mt-2 block w-full rounded-[18px] bg-black/5 p-3 text-[17px] text-black dark:bg-white/10 dark:text-white">
-          {[...new Set([asset, ...currencies])].map(code => <option key={code}>{code}</option>)}
-        </select>
-      </label>
-      <label className="mt-4 block text-[14px] text-black/60 dark:text-white/60">Сеть
-        <select aria-label="Сеть пополнения" value={network} onChange={e => setNetwork(e.target.value)} className="mt-2 block w-full rounded-[18px] bg-black/5 p-3 text-[17px] text-black dark:bg-white/10 dark:text-white">
-          {(supportedDepositNetworks[asset] ?? []).map(code => <option key={code}>{code}</option>)}
-        </select>
-      </label>
-      {network === 'TRON' && <label className="mt-4 block text-[14px] text-black/60 dark:text-white/60">Сумма USDT<input aria-label="Сумма пополнения USDT" inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Например, 100" className="mt-2 block w-full rounded-[18px] bg-black/5 p-3 text-[20px] text-black dark:bg-white/10 dark:text-white"/></label>}
-    </Card>
-    <p className="text-[13px] leading-relaxed text-black/50 dark:text-white/50">{network === 'TRON' ? 'Для TRON нужна заявка с точной суммой. Отправьте именно сумму из ответа до окончания срока.' : 'GoSwap откроет окно с адресом, QR-кодом и условиями выбранной сети. Отправляйте только указанную валюту в выбранной сети.'}</p>
-    <Button rounded large disabled={!wallet.configured || busy || (network === 'TRON' && !amount)} onClick={() => void createDeposit()} className="!m-0 !w-full">{busy ? 'Получаем реквизиты…' : 'Получить реквизиты'}</Button>
-    {(error || (!wallet.configured && wallet.error)) && <p role="alert" className="text-[14px] leading-relaxed text-red-500">{error || wallet.error}</p>}
-    {deposit && <Card className="!m-0 !rounded-[30px]" contentWrapPadding="p-4">
-      {deposit.address && <><div className="mx-auto w-fit rounded-2xl bg-white p-3"><QRCode value={deposit.address} size={168}/></div><p className="mt-4 break-all font-mono text-[13px] text-black dark:text-white">{deposit.address}</p><Button rounded tonal onClick={() => void navigator.clipboard.writeText(deposit.address!)}>Скопировать адрес</Button></>}
-      {deposit.amount && <p className="mt-4 text-[22px] font-semibold text-black dark:text-white">Точно {deposit.amount} USDT</p>}
-      {deposit.expires_at && <p className="text-[13px] text-black/50 dark:text-white/50">Отправить до {new Date(deposit.expires_at).toLocaleTimeString('ru-RU')}</p>}
-      {(deposit.url || deposit.mini_app_url) && <Button rounded large onClick={openProvider} className="!mt-4 !w-full">Открыть окно GoSwap</Button>}
-      <Button rounded tonal onClick={() => void wallet.refresh(true)} className="!mt-3 !w-full">Проверить зачисление</Button>
-    </Card>}
-    <p className="text-center text-[12px] text-black/40 dark:text-white/40">Ввод рублей пока не подключён: для него нет опубликованного метода API.</p>
-  </main>
-}
+export { default as LiveDepositPanel } from './WalletDeposit'
 
 export function LiveHistory() {
   const wallet = useLiveWallet(), [filter, setFilter] = useState('all'), [query, setQuery] = useState('')

@@ -1,0 +1,2 @@
+.wpay-deposit-picker-header{touch-action:pan-x}
+@media(min-width:1100px){.wpay-viewport[data-wallet-surface] main.wpay-deposit-page{max-width:600px;padding-top:36px}}

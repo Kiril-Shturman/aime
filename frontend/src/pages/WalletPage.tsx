@@ -1,6 +1,7 @@
+import './WalletInputTheme.css'
+import WalletSheetClose from './WalletSheetClose'
 import { DesktopSidebar, DesktopOverview } from './WalletDesktop'
 import './WalletDesktop.css'
-import WalletOperations from './WalletOperations'
 import { ReferralProgram, WithdrawalMethods, WithdrawalForm, withdrawalTitles, type WithdrawalMethod } from './WalletPrograms'
 import DocTextFill from 'framework7-icons/react/esm/DocTextFill.js'
 import Framework7 from 'framework7/lite-bundle'
@@ -9,7 +10,7 @@ import './WalletFramework7.css'
 import 'framework7/components/popup/css'
 import 'framework7/components/sheet/css'
 import './WalletExchange.css'
-import { Search, Check, X, Delete } from 'lucide-react'
+import { Search, Check, Delete } from 'lucide-react'
 import './WalletProfile.css'
 import './WalletCard.css'
 import {
@@ -110,6 +111,7 @@ function WalletActionGrid({items, label = 'Действия с кошелько�
 }
 
 const rubleAsset: Asset = { code: 'RUB', name: 'Рубли', rate: '', color: '#F5A623', iconColor: '#fff', icon: <span className="text-[27px] font-medium">₽</span> }
+const sbpDepositAsset: Asset = {...rubleAsset,color:'#ffffff',icon:<img src="/brands/sbp-symbol.svg" alt="СБП" width="28" height="32"/>}
 const assets: Asset[] = [
   { code: 'USDT', name: 'Tether', rate: '', color: '#26A17B', iconColor: '#fff', icon: <SiTether size={25}/> },
   { code: 'TRX', name: 'TRON', rate: '', color: '#ef0027', iconColor: '#fff', icon: <svg viewBox="0 0 32 32" width="25" height="25" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"><path d="M4 4 28 9 14 29 4 4Z M4 4 17 12 28 9 M17 12 14 29 M17 12 23 8"/></svg> },
@@ -735,21 +737,19 @@ function NotificationSheet({open,title,onClose,children}: ComponentProps<typeof 
   </F7Popup>
 }
 
-function DepositMethodsView({ flow, onClose, showNotice }: { flow: CryptoFlow | null; onClose: () => void; showNotice: NoticeHandler }) {
+function DepositMethodsView({ flow, onClose }: { flow: CryptoFlow | null; onClose: () => void; showNotice: NoticeHandler }) {
   const [selected, setSelected] = useState<string | null>(null)
-  useEffect(() => { if (flow) setSelected(null) }, [flow])
+  useEffect(() => { if (flow) setSelected(flow.assetCode??null) }, [flow])
   const depositAssets = assets
-  return <PushViewShell open={flow !== null} title={selected==='addresses'?'Мои реквизиты':selected ? `Пополнить ${selected}` : 'Пополнить'} onClose={() => selected ? setSelected(null) : onClose()}>
-    {selected==='addresses'?<WalletOperations mode="addresses"/>:selected ? <LiveDepositPanel defaultAsset={selected}/> : <main className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
+  return <PushViewShell open={flow !== null} title={selected ? `Пополнить ${selected}` : 'Пополнить'} onClose={() => selected ? setSelected(null) : onClose()}>
+    {selected ? <LiveDepositPanel defaultAsset={selected} onAssetChange={setSelected} options={[sbpDepositAsset,...assets].map(item=>({code:item.code,name:item.name,icon:item.icon,style:assetIconStyle(item)}))}/> : <main className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
       <p className="mb-4 mt-1 text-center text-[14px] text-black/45 dark:text-white/45">Выберите способ пополнения</p>
-      <List strong inset className="!mx-0 !mb-4 !mt-0 overflow-hidden !rounded-[30px]"><ListItem link title="Мои реквизиты" subtitle="Сохранённые адреса по сетям" onClick={()=>setSelected('addresses')} media={<span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-b from-blue-300 to-blue-500 text-white dark:from-blue-400 dark:to-blue-600"><DocOnDoc className="text-[22px]"/></span>}/></List>
       <List strong inset className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
-        <CurrencyRow asset={rubleAsset} deposit onClick={() => showNotice('Пополнение рублями через СБП пока не подключено')}/>
+        <CurrencyRow asset={sbpDepositAsset} deposit onClick={() => setSelected('RUB')}/>
       </List>
       <h2 className="mb-2 mt-6 px-1 text-[17px] font-semibold text-black/50 dark:text-white/50">Криптовалютой</h2>
       <List strong inset dividers className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
         {depositAssets.map(item => <CurrencyRow key={item.code} asset={item} deposit onClick={() => {
-          if (!['USDT','BNB','ETH','TON','SOL'].includes(item.code)) {showNotice(`Пополнение ${item.code} пока не подключено у провайдера`);return}
           setSelected(item.code);haptic('light')
         }}/>) }
       </List>
@@ -849,7 +849,7 @@ function CryptoFlowPushView({
         {createPortal(<F7Sheet opened={assetPicker!==null&&flow!==null} backdrop closeByBackdropClick closeOnEscape swipeToClose swipeHandler=".wpay-exchange-picker-header" className="wpay-exchange-sheet" onSheetClosed={()=>{setAssetPicker(null);setPickerQuery('')}}>
           <header className="wpay-exchange-picker-header shrink-0 px-5 pb-4 pt-3">
             <div aria-hidden="true" className="mx-auto mb-4 h-1 w-9 rounded-full bg-black/[.08] dark:bg-white/10"/>
-            <div className="flex items-center justify-between gap-3"><div><h2 className="text-[23px] font-semibold tracking-tight text-black dark:text-white">Выберите валюту</h2><p className="mt-1 text-[14px] text-black/45 dark:text-white/45">{assetPicker==='from'?'С какого счёта списать':'На какой счёт получить'}</p></div><button type="button" aria-label="Закрыть выбор валюты" onClick={()=>setAssetPicker(null)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-black/5 text-black/50 dark:bg-white/10 dark:text-white/60"><X size={19}/></button></div>
+            <div className="flex items-center justify-between gap-3"><div><h2 className="text-[23px] font-semibold tracking-tight text-black dark:text-white">Выберите валюту</h2><p className="mt-1 text-[14px] text-black/45 dark:text-white/45">{assetPicker==='from'?'С какого счёта списать':'На какой счёт получить'}</p></div><WalletSheetClose label="Закрыть выбор валюты" onClick={()=>setAssetPicker(null)}/></div>
             <label className="mt-5 flex h-12 items-center gap-2.5 rounded-[20px] bg-black/5 px-3.5 dark:bg-white/10"><Search size={19} aria-hidden="true" className="shrink-0 text-black/40 dark:text-white/40"/><input aria-label="Найти валюту" placeholder="Название или тикер" value={pickerQuery} onChange={e=>setPickerQuery(e.target.value)} className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"/></label>
           </header>
           <section aria-label="Валюты для обмена" className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-[max(20px,env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">

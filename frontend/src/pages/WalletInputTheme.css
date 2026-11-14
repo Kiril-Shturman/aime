@@ -1,0 +1,5 @@
+/* Keep WebKit's editing caret in sync with the selected wallet theme. */
+.wpay-f7-root,.wpay-viewport{color-scheme:light}
+.wpay-f7-root input,.wpay-f7-root textarea,.wpay-viewport input,.wpay-viewport textarea{caret-color:#1c1c1e!important}
+.dark .wpay-f7-root,.wpay-f7-root.dark,.dark .wpay-viewport{color-scheme:dark}
+.dark .wpay-f7-root input,.dark .wpay-f7-root textarea,.wpay-f7-root.dark input,.wpay-f7-root.dark textarea,.dark .wpay-viewport input,.dark .wpay-viewport textarea{caret-color:#fff!important}
