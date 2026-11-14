@@ -447,7 +447,7 @@ def install_wallet(app, root, owner_check):
         if target == 'self':
             targets = [uid]
         else:
-            targets = [row[0] for row in ledger.db.execute("SELECT user_id FROM wallet_accounts WHERE user_id LIKE 'tg:%' AND status='active' AND bot_started_at IS NOT NULL")]
+            targets = [row[0] for row in ledger.db.execute("SELECT user_id FROM wallet_accounts WHERE user_id LIKE 'tg:%' AND status='active'")]
         broadcast_id = 'broadcast-' + uuid.uuid4().hex
         ledger.db.execute('INSERT INTO admin_broadcasts(broadcast_id,admin_id,target,text,button_text,button_url,status,total,created_at) VALUES (?,?,?,?,?,?,?,?,?)', (broadcast_id, uid, target, text, button_text or None, button_url or None, 'queued', len(targets), now()))
         task = asyncio.create_task(run_broadcast(broadcast_id, targets, text, button_text, button_url))
