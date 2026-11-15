@@ -32,63 +32,84 @@ export default function WalletVerification({
   if (contacts)
     return (
       <section
-        className="wpay-verification"
+        className="wpay-verification wpay-verification-contacts"
         aria-label="Контакты для верификации"
       >
         <form
+          className="wpay-verification-contact-form"
           onSubmit={async (event) => {
             event.preventDefault();
             if (await aura.save()) await aura.start();
           }}
         >
-          <div className="wpay-verification-copy !text-left !px-6 !pt-8">
-            <h2>Ваши контакты</h2>
-            <p>Укажите телефон и почту, чтобы продолжить проверку личности.</p>
-          </div>
-          <List strong inset dividers className="profile-input-list">
-            <ListInput
-              label="Номер телефона"
-              inputId="verification-phone"
-              type="tel"
-              name="tel"
-              autocomplete="tel"
-              placeholder="+7 999 123-45-67"
-              value={aura.phone}
-              maxlength={32}
-              disabled={aura.busy}
-              onInput={(event) => aura.setPhone(event.target.value)}
-            />
-            <ListInput
-              label="Электронная почта"
-              inputId="verification-email"
-              type="email"
-              name="email"
-              autocomplete="email"
-              placeholder="name@example.com"
-              value={aura.email}
-              maxlength={254}
-              disabled={aura.busy}
-              onInput={(event) => aura.setEmail(event.target.value)}
-            />
-          </List>
-          {aura.error && (
-            <p
-              role="alert"
-              className="px-6 text-sm text-red-600 dark:text-red-400"
+          <div className="wpay-verification-contact-body">
+            <div
+              className="wpay-verification-steps"
+              aria-label="Шаг 1 из 2: контакты"
             >
-              {aura.error}
+              <span className="is-current">01 · Контакты</span>
+              <span>02 · Документы</span>
+            </div>
+            <div className="wpay-verification-contact-copy">
+              <h2>Ваши контакты</h2>
+              <p>
+                Добавьте номер телефона и электронную почту. Затем перейдём к
+                проверке документов.
+              </p>
+            </div>
+            <List
+              strong
+              inset
+              dividers
+              className="profile-input-list wpay-verification-contact-inputs"
+            >
+              <ListInput
+                label="Номер телефона"
+                inputId="verification-phone"
+                type="tel"
+                name="tel"
+                autocomplete="tel"
+                placeholder="+7 999 123-45-67"
+                value={aura.phone}
+                maxlength={32}
+                disabled={aura.busy}
+                onInput={(event) => aura.setPhone(event.target.value)}
+              />
+              <ListInput
+                label="Электронная почта"
+                inputId="verification-email"
+                type="email"
+                name="email"
+                autocomplete="email"
+                placeholder="name@example.com"
+                value={aura.email}
+                maxlength={254}
+                disabled={aura.busy}
+                onInput={(event) => aura.setEmail(event.target.value)}
+              />
+            </List>
+            <p className="wpay-verification-contact-note">
+              <LockKeyhole size={16} /> Контакты сохранятся в вашем профиле.
             </p>
-          )}
-          {aura.sessionUrl && (
-            <a
-              className="wpay-verification-text-action mx-6"
-              href={aura.sessionUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Продолжить проверку <ArrowUpRight size={16} />
-            </a>
-          )}
+            {aura.error && (
+              <p
+                role="alert"
+                className="px-6 text-sm text-red-600 dark:text-red-400"
+              >
+                {aura.error}
+              </p>
+            )}
+            {aura.sessionUrl && (
+              <a
+                className="wpay-verification-text-action mx-6"
+                href={aura.sessionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Продолжить проверку <ArrowUpRight size={16} />
+              </a>
+            )}
+          </div>
           <div className="wpay-verification-footer">
             <Button
               type="submit"
