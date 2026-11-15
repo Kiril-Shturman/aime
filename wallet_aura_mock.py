@@ -9,7 +9,7 @@ import hashlib
 import json
 import time
 import uuid
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 
 from aiohttp import web
 
@@ -250,16 +250,31 @@ def make_app():
         requested = Decimal(str(body.get("amount", body.get("amount_spend"))))
         if requested <= 0:
             return envelope("amount_out_of_range", "amount is invalid", 400)
+        if "amount" in body and requested < Decimal("10"):
+            return envelope("amount_out_of_range", "amount is below minimum", 400)
+        if "amount_spend" in body and requested / Decimal("1.02") < Decimal("10"):
+            return envelope("amount_out_of_range", "amount_spend is below minimum", 400)
 
         def create():
+            if "amount" in body:
+                recharge_amount = requested
+                fee = (recharge_amount * Decimal("0.02") + Decimal("0.000004")).quantize(
+                    Decimal("0.000001")
+                )
+                charged_amount = recharge_amount + fee
+            else:
+                charged_amount = requested
+                recharge_amount = (charged_amount / Decimal("1.02")).quantize(
+                    Decimal("0.000001"), rounding=ROUND_DOWN
+                )
+                fee = charged_amount - recharge_amount
             result = {
-                "id": "recharge_" + uuid.uuid4().hex,
-                "card_id": card_id, "status": "completed", "currency": "USDT",
-                "charged_amount": str(requested), "recharge_amount": str(requested),
-                "fee": "0", "failure_reason": None,
-                "updated_at": "2026-01-01T00:05:00Z",
+                "operation_id": str(uuid.uuid4()), "status": "completed",
+                "currency": "USDT", "charged_amount": str(charged_amount),
+                "recharge_amount": str(recharge_amount), "fee": str(fee),
+                "failure_reason": None,
             }
-            state.balance -= requested
+            state.balance -= charged_amount
             return result
 
         return idempotent(request, body, create)

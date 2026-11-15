@@ -252,6 +252,50 @@ def _card_request_body(owner_id, kind, shipping_address=None):
     return body
 
 
+def _card_recharge_body(amount=None, amount_spend=None):
+    if (amount is None) == (amount_spend is None):
+        raise ValueError("Provide exactly one of amount or amount_spend")
+    key, value = ("amount", amount) if amount is not None else ("amount_spend", amount_spend)
+    return {key: str(_decimal(value))}
+
+
+def _card_recharge_result(payload, request_body):
+    required = {
+        "charged_amount", "currency", "failure_reason", "fee",
+        "operation_id", "recharge_amount", "status",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura card recharge response")
+    if payload.get("currency") != "USDT":
+        raise ValueError("Invalid Aura card recharge currency")
+    status = str(payload.get("status") or "")
+    if status not in {"requested", "sent", "completed", "failed"}:
+        raise ValueError("Invalid Aura card recharge status")
+    charged = _decimal(payload.get("charged_amount"), allow_zero=status == "failed")
+    recharge = _decimal(payload.get("recharge_amount"), allow_zero=status == "failed")
+    fee = _decimal(payload.get("fee"), allow_zero=True)
+    if charged != recharge + fee:
+        raise ValueError("Invalid Aura card recharge amounts")
+    if (status != "failed" and "amount" in request_body
+            and recharge != _decimal(request_body["amount"])):
+        raise ValueError("Aura card recharge amount changed")
+    if (status != "failed" and "amount_spend" in request_body
+            and charged != _decimal(request_body["amount_spend"])):
+        raise ValueError("Aura card recharge spend changed")
+    failure_reason = payload.get("failure_reason")
+    if status == "failed":
+        if failure_reason not in {"provider_rejected", "provider_unavailable"}:
+            failure_reason = "provider_rejected"
+    elif failure_reason is not None:
+        raise ValueError("Unexpected Aura card recharge failure reason")
+    return {
+        "charged_amount": str(charged), "currency": "USDT",
+        "failure_reason": failure_reason, "fee": str(fee),
+        "operation_id": _safe_identifier(payload.get("operation_id"), "operation id"),
+        "recharge_amount": str(recharge), "status": status,
+    }
+
+
 def _retry_policy(code, status):
     if code in FINAL_ERROR_CODES:
         return "no"
@@ -424,10 +468,7 @@ class AuraClient:
     async def recharge_card(self, card_id, *, idempotency_key, amount=None,
                             amount_spend=None):
         card_id = quote(_safe_identifier(card_id, "card id"), safe="")
-        if (amount is None) == (amount_spend is None):
-            raise ValueError("Provide exactly one of amount or amount_spend")
-        key, value = ("amount", amount) if amount is not None else ("amount_spend", amount_spend)
-        body = {key: str(_decimal(value))}
+        body = _card_recharge_body(amount, amount_spend)
         return await self.request(
             "POST", "/cards/" + card_id + "/recharge",
             body=body, idempotency_key=idempotency_key,
@@ -722,6 +763,175 @@ class AuraService:
             raise
         return {"card_id": card_id, "status": "processing"}
 
+    async def recharge_card_request(self, uid, card_id, *, idempotency_key,
+                                    amount=None, amount_spend=None):
+        card_id = _safe_identifier(card_id, "card id")
+        idempotency_key = str(idempotency_key)
+        request_fields = _card_recharge_body(amount, amount_spend)
+        card = self.ledger.db.execute(
+            "SELECT kind FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?",
+            (card_id, uid, self.environment),
+        ).fetchone()
+        if not card:
+            raise self.client.error_cls("card_not_found", "Card not found", 404)
+        existing = self.ledger.db.execute(
+            "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+            "AND entity_type='card_recharge' AND local_id=?",
+            (self.environment, idempotency_key),
+        ).fetchone()
+        if existing:
+            stored = json.loads(existing["request_body"])
+            if stored.get("request") != request_fields or stored.get("card_id") != card_id:
+                raise ValueError("Aura idempotency key reused with another card recharge")
+            if stored.get("result"):
+                result = dict(stored["result"])
+                if existing["status"] in {"completed", "failed"}:
+                    result["status"] = existing["status"]
+                return result
+            if existing["status"] == "rejected":
+                raise self.client.error_cls(
+                    "card_recharge_rejected",
+                    "The original Aura recharge was rejected; use a new idempotency key",
+                    409,
+                )
+            reserve_amount = _decimal(stored["reserve_amount"])
+        else:
+            if "amount_spend" in request_fields:
+                reserve_amount = _decimal(request_fields["amount_spend"])
+            else:
+                fees = await self.client.get_card_fees()
+                if not isinstance(fees, dict) or fees.get("currency") != "USDT":
+                    raise ValueError("Invalid Aura card fees")
+                recharge_amount = _decimal(request_fields["amount"])
+                minimum = _decimal(fees.get("minimum_recharge_amount"))
+                if recharge_amount < minimum:
+                    raise self.client.error_cls(
+                        "amount_out_of_range", "Recharge amount is below Aura minimum", 400
+                    )
+                pct_field = "physical_recharge_fee_pct" if card["kind"] == "physical" else "recharge_fee_pct"
+                if fees.get(pct_field) in {None, ""}:
+                    raise self.client.error_cls(
+                        "card_kind_unavailable", "Aura card kind is unavailable", 412
+                    )
+                fee_pct = _decimal(fees[pct_field], allow_zero=True)
+                with localcontext() as ctx:
+                    ctx.prec = 80
+                    reserve_amount = recharge_amount + recharge_amount * fee_pct / Decimal(100)
+                    # Aura says the percentage is an estimate. Keep a small six-decimal
+                    # settlement cushion and release it as soon as the exact response arrives.
+                    reserve_amount += Decimal("0.01")
+            available, reserved = self.ledger.balance(uid, "USDT")
+            self.ledger.begin("aura_card_recharge_reserve", uid, idempotency_key)
+            try:
+                self.ledger.put_balance(
+                    uid, "USDT", available - reserve_amount, reserved + reserve_amount
+                )
+                _position_adjust(
+                    self.ledger, self.environment, uid, "USDT", -reserve_amount, reserve_amount
+                )
+                stamp = time.time()
+                stored = {
+                    "card_id": card_id, "request": request_fields,
+                    "reserve_amount": str(reserve_amount),
+                }
+                self.ledger.db.execute(
+                    "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    ("aura", self.environment, "card_recharge", idempotency_key, None,
+                     uid, "reserved", idempotency_key,
+                     json.dumps(stored, sort_keys=True, separators=(",", ":")),
+                     None, stamp, stamp),
+                )
+                self.ledger.commit()
+            except Exception:
+                self.ledger.rollback()
+                raise
+        try:
+            raw_result = await self.client.recharge_card(
+                card_id, idempotency_key=idempotency_key,
+                amount=request_fields.get("amount"),
+                amount_spend=request_fields.get("amount_spend"),
+            )
+        except Exception as error:
+            if getattr(error, "retry_policy", None) in {"no", "after_fix"}:
+                self.ledger.begin("aura_card_recharge_release", uid, idempotency_key)
+                try:
+                    available, reserved = self.ledger.balance(uid, "USDT")
+                    self.ledger.put_balance(
+                        uid, "USDT", available + reserve_amount, reserved - reserve_amount
+                    )
+                    _position_adjust(
+                        self.ledger, self.environment, uid, "USDT", reserve_amount, -reserve_amount
+                    )
+                    self.ledger.db.execute(
+                        "UPDATE wallet_provider_entities SET status='rejected',updated_at=? "
+                        "WHERE provider='aura' AND environment=? AND entity_type='card_recharge' "
+                        "AND local_id=?",
+                        (time.time(), self.environment, idempotency_key),
+                    )
+                    self.ledger.commit()
+                except Exception:
+                    self.ledger.rollback()
+                    raise
+            raise
+        result = _card_recharge_result(raw_result, request_fields)
+        charged = _decimal(result["charged_amount"])
+        if charged > reserve_amount:
+            stored["result"] = result
+            self.ledger.db.execute(
+                "UPDATE wallet_provider_entities SET remote_id=?,status='needs_reconciliation',"
+                "request_body=?,updated_at=? WHERE provider='aura' AND environment=? "
+                "AND entity_type='card_recharge' AND local_id=?",
+                (result["operation_id"], json.dumps(stored, sort_keys=True, separators=(",", ":")),
+                 time.time(), self.environment, idempotency_key),
+            )
+            raise self.client.error_cls(
+                "recharge_settlement_exceeded_reserve",
+                "Aura charged more than the reserved recharge amount; reconciliation is required",
+                502,
+            )
+        self.ledger.begin("aura_card_recharge_settle", uid, idempotency_key)
+        try:
+            available, reserved = self.ledger.balance(uid, "USDT")
+            status = result["status"]
+            if status == "failed":
+                release = reserve_amount
+                held = Decimal(0)
+            else:
+                release = reserve_amount - charged
+                held = charged if status in {"requested", "sent"} else Decimal(0)
+            self.ledger.put_balance(
+                uid, "USDT", available + release, reserved - reserve_amount + held
+            )
+            _position_adjust(
+                self.ledger, self.environment, uid, "USDT", release,
+                -reserve_amount + held,
+            )
+            stored["result"] = result
+            stored["held_amount"] = str(held)
+            self.ledger.db.execute(
+                "UPDATE wallet_provider_entities SET remote_id=?,status=?,request_body=?,updated_at=? "
+                "WHERE provider='aura' AND environment=? AND entity_type='card_recharge' "
+                "AND local_id=?",
+                (result["operation_id"], status,
+                 json.dumps(stored, sort_keys=True, separators=(",", ":")),
+                 time.time(), self.environment, idempotency_key),
+            )
+            if status in {"requested", "sent"}:
+                already_delivered = self.ledger.db.execute(
+                    "SELECT status FROM aura_card_operations WHERE operation_id=? AND environment=?",
+                    (result["operation_id"], self.environment),
+                ).fetchone()
+                if already_delivered:
+                    _settle_card_recharge(
+                        self.ledger, self.environment, result["operation_id"],
+                        already_delivered["status"],
+                    )
+            self.ledger.commit()
+        except Exception:
+            self.ledger.rollback()
+            raise
+        return result
+
     async def get_or_create_deposit_address(self, uid, client_ref):
         customer_id = await self.ensure_customer(uid, client_ref)
         payload = await self.client.deposit_addresses(customer_id)
@@ -912,6 +1122,40 @@ def _settle_card_request(ledger, environment, card_id, status):
     )
 
 
+def _settle_card_recharge(ledger, environment, operation_id, status):
+    if status not in {"completed", "failed"}:
+        return
+    entity = ledger.db.execute(
+        "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+        "AND entity_type='card_recharge' AND remote_id=?",
+        (environment, operation_id),
+    ).fetchone()
+    if not entity or entity["status"] not in {"requested", "sent"}:
+        return
+    stored = json.loads(entity["request_body"])
+    held = _decimal(stored.get("held_amount"))
+    available, reserved = ledger.balance(entity["user_id"], "USDT")
+    release = held if status == "failed" else Decimal(0)
+    ledger.put_balance(
+        entity["user_id"], "USDT", available + release, reserved - held
+    )
+    _position_adjust(
+        ledger, environment, entity["user_id"], "USDT", release, -held
+    )
+    if isinstance(stored.get("result"), dict):
+        stored["result"]["status"] = status
+        if status == "failed" and stored["result"].get("failure_reason") is None:
+            stored["result"]["failure_reason"] = "provider_rejected"
+    stored["held_amount"] = "0"
+    ledger.db.execute(
+        "UPDATE wallet_provider_entities SET status=?,request_body=?,updated_at=? "
+        "WHERE provider='aura' AND environment=? AND entity_type='card_recharge' "
+        "AND local_id=?",
+        (status, json.dumps(stored, sort_keys=True, separators=(",", ":")),
+         time.time(), environment, entity["local_id"]),
+    )
+
+
 def _store_card_event(ledger, environment, kind, data, occurred_at=None):
     card_id = _safe_identifier(data.get("card_id") or data.get("id"), "card id")
     existing = ledger.db.execute(
@@ -1045,6 +1289,7 @@ def _store_card_operation(ledger, environment, data):
          json.dumps(_redact_card_data(data), separators=(",", ":"), ensure_ascii=False),
          stamp, stamp),
     )
+    _settle_card_recharge(ledger, environment, operation_id, status)
 
 
 def _store_sbp_order(ledger, environment, kind, data):

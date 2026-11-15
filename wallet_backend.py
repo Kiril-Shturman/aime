@@ -890,6 +890,24 @@ def install_wallet(app, root, owner_check):
                     raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
                 result = await aura_client.cancel_card(card_id)
                 return web.json_response({'card_id': card_id, 'status': result.get('status')})
+            if action == 'aura-card-recharge' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('cards'):
+                    raise ApiError('cards_not_enabled', 'Aura cards are not enabled', 403)
+                idempotency_key = request.headers.get('Idempotency-Key', '')
+                if not 1 <= len(idempotency_key) <= 200:
+                    raise ApiError('idempotency_key_required', 'Idempotency-Key is required', 400)
+                body = await request.json()
+                if not isinstance(body, dict) or 'card_id' not in body:
+                    raise ValueError('card_id is required')
+                allowed = {'card_id', 'amount', 'amount_spend'}
+                if set(body) - allowed or (('amount' in body) == ('amount_spend' in body)):
+                    raise ValueError('Provide exactly one of amount or amount_spend')
+                return web.json_response(await aura_service.recharge_card_request(
+                    uid, body['card_id'], idempotency_key=idempotency_key,
+                    amount=body.get('amount'), amount_spend=body.get('amount_spend'),
+                ))
             if action == 'aura-card-operations' and request.method == 'GET':
                 card_id = str(request.query.get('card_id') or '')
                 if not card_id:

@@ -6,7 +6,7 @@ import time
 import unittest
 import os
 from decimal import Decimal
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
@@ -462,9 +462,11 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         recharge_replay = await self.client.recharge_card(
             card["card_id"], amount="25", idempotency_key="recharge-one"
         )
-        self.assertEqual(recharge["id"], recharge_replay["id"])
-        self.assertEqual(recharge["charged_amount"], "25")
-        self.assertEqual(self.mock.app["state"].balance, Decimal("55"))
+        self.assertEqual(recharge["operation_id"], recharge_replay["operation_id"])
+        self.assertEqual(recharge["charged_amount"], "25.500004")
+        self.assertEqual(recharge["recharge_amount"], "25")
+        self.assertEqual(recharge["fee"], "0.500004")
+        self.assertEqual(self.mock.app["state"].balance, Decimal("54.499996"))
 
         with self.assertRaises(ApiError) as reused:
             await self.client.recharge_card(
@@ -475,10 +477,10 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         second = await self.client.create_card(
             customer_id, kind="virtual", idempotency_key="open-card-two"
         )
-        self.assertEqual(self.mock.app["state"].balance, Decimal("35"))
+        self.assertEqual(self.mock.app["state"].balance, Decimal("34.499996"))
         cancelled = await self.client.cancel_card(second["card_id"])
         self.assertEqual(cancelled["status"], "cancelled")
-        self.assertEqual(self.mock.app["state"].balance, Decimal("55"))
+        self.assertEqual(self.mock.app["state"].balance, Decimal("54.499996"))
         with self.assertRaises(ApiError) as not_cancelable:
             await self.client.cancel_card(second["card_id"])
         self.assertEqual(not_cancelable.exception.name, "card_request_not_cancelable")
@@ -533,6 +535,87 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(entity["status"], "refunded")
         self.assertEqual(process_inbox(self.ledger, "test"), 0)
         self.assertEqual(self.ledger.balance(uid, "USDT"), (Decimal("100"), Decimal("0")))
+
+    async def test_card_recharge_uses_exact_response_amounts_and_is_idempotent(self):
+        uid = "tg:card-recharge"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(uid, ref)
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id, "kind": "virtual"}
+        )
+        card_payload = await created.json()
+        raw, signature = signed(card_payload["webhook"])
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        card_id = card_payload["card"]["id"]
+        self.ledger.begin("test_funding", "test", uid)
+        self.ledger.put_balance(uid, "USDT", Decimal("100"), Decimal("0"))
+        self.ledger.db.execute(
+            "INSERT INTO wallet_provider_positions VALUES ('aura','test',?,'USDT','100','0',?)",
+            (uid, time.time()),
+        )
+        self.ledger.commit()
+        self.mock.app["state"].balance = Decimal("100")
+
+        result = await self.service.recharge_card_request(
+            uid, card_id, amount="25", idempotency_key="recharge-service-one"
+        )
+        self.assertEqual(result["charged_amount"], "25.500004")
+        self.assertEqual(result["recharge_amount"], "25")
+        self.assertEqual(result["fee"], "0.500004")
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(
+            self.ledger.balance(uid, "USDT"), (Decimal("74.499996"), Decimal("0"))
+        )
+        replay = await self.service.recharge_card_request(
+            uid, card_id, amount="25", idempotency_key="recharge-service-one"
+        )
+        self.assertEqual(replay, result)
+        self.assertEqual(self.mock.app["state"].balance, Decimal("74.499996"))
+
+        spend = await self.service.recharge_card_request(
+            uid, card_id, amount_spend="20.4", idempotency_key="recharge-service-two"
+        )
+        self.assertEqual(spend["charged_amount"], "20.4")
+        self.assertEqual(spend["recharge_amount"], "20.000000")
+        self.assertEqual(
+            self.ledger.balance(uid, "USDT"), (Decimal("54.099996"), Decimal("0"))
+        )
+
+        pending_result = {
+            "charged_amount": "10.2", "currency": "USDT",
+            "failure_reason": None, "fee": "0.2",
+            "operation_id": "3f2a1b0c-9d8e-4f7a-8b6c-5d4e3f2a1b0c",
+            "recharge_amount": "10", "status": "sent",
+        }
+        with patch.object(
+            self.client, "recharge_card", AsyncMock(return_value=pending_result)
+        ):
+            pending = await self.service.recharge_card_request(
+                uid, card_id, amount_spend="10.2",
+                idempotency_key="recharge-service-pending",
+            )
+        self.assertEqual(pending["status"], "sent")
+        self.assertEqual(
+            self.ledger.balance(uid, "USDT"), (Decimal("43.899996"), Decimal("10.2"))
+        )
+        failed_event = {
+            "api_version": "3.17.0", "event": "card.operation",
+            "event_id": "evt_recharge_failed", "occurred_at": "2026-01-01T00:30:00Z",
+            "partner_id": MOCK_PARTNER,
+            "data": {
+                "operation_id": pending_result["operation_id"], "card_id": card_id,
+                "type": "topup", "status": "failed", "currency": "USDT",
+                "amount": "10", "fee": "0.2", "updated_at": "2026-01-01T00:30:00Z",
+            },
+        }
+        raw, signature = signed(failed_event)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        self.assertEqual(
+            self.ledger.balance(uid, "USDT"), (Decimal("54.099996"), Decimal("0"))
+        )
+        self.assertEqual(process_inbox(self.ledger, "test"), 0)
 
     async def test_card_money_input_validation(self):
         with self.assertRaises(ValueError):
@@ -778,6 +861,54 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await processed.json())["processed"], 0)
         self.assertEqual(ledger.balance("owner", "USDT"), (Decimal("100"), Decimal("0")))
+
+    async def test_card_recharge_route_uses_provider_charged_amount(self):
+        ledger = self.app["wpay_ledger"]
+        ledger.begin("test_funding", "test", "owner")
+        ledger.put_balance("owner", "USDT", Decimal("100"), Decimal("0"))
+        ledger.db.execute(
+            "INSERT OR REPLACE INTO wallet_provider_positions "
+            "VALUES ('aura','test','owner','USDT','100','0',?)", (time.time(),)
+        )
+        ledger.commit()
+        self.mock.app["state"].balance = Decimal("100")
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner, json={}
+        )
+        customer_id = (await registered.json())["customer_id"]
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id, "kind": "virtual"}
+        )
+        card_payload = await created.json()
+        raw, signature = signed(card_payload["webhook"])
+        self.assertEqual((await self.wpay.post(
+            "/api/wallet/aura-webhook", data=raw,
+            headers={"X-Aura-Signature-V2": signature},
+        )).status, 200)
+        processed = await self.wpay.post(
+            "/api/wallet/admin-aura-process", headers=self.owner
+        )
+        self.assertEqual((await processed.json())["processed"], 1)
+        card_id = card_payload["card"]["id"]
+        response = await self.wpay.post(
+            "/api/wallet/aura-card-recharge",
+            headers={**self.owner, "Idempotency-Key": "route-recharge-one"},
+            json={"card_id": card_id, "amount": "25"},
+        )
+        self.assertEqual(response.status, 200, await response.text())
+        result = await response.json()
+        self.assertEqual(result["charged_amount"], "25.500004")
+        self.assertEqual(result["recharge_amount"], "25")
+        self.assertEqual(
+            ledger.balance("owner", "USDT"), (Decimal("74.499996"), Decimal("0"))
+        )
+        replay = await self.wpay.post(
+            "/api/wallet/aura-card-recharge",
+            headers={**self.owner, "Idempotency-Key": "route-recharge-one"},
+            json={"card_id": card_id, "amount": "25"},
+        )
+        self.assertEqual(await replay.json(), result)
+        self.assertEqual(self.mock.app["state"].balance, Decimal("74.499996"))
 
     async def test_sbp_terminal_webhook_feeds_owner_scoped_view(self):
         registered = await self.wpay.post(
