@@ -1,6 +1,12 @@
 import unittest
 
-from server import _wpay_amount, _wpay_bot_view
+from server import _wpay_amount, _wpay_audit_line, _wpay_bot_view
+
+
+class FakeRequest(dict):
+    path = "/api/wallet/aura-cards"
+    method = "POST"
+    headers = {"Authorization": "secret", "X-API-Key": "secret"}
 
 
 class WPayRichBotTests(unittest.TestCase):
@@ -41,6 +47,16 @@ class WPayRichBotTests(unittest.TestCase):
         self.assertEqual(_wpay_amount("20.000000"), "20")
         self.assertEqual(_wpay_amount("0.0012300"), "0.00123")
         self.assertEqual(_wpay_amount(None), "0")
+
+    def test_audit_line_contains_metadata_but_never_headers_or_body(self):
+        request = FakeRequest(
+            wpay_profile={"id": 123, "email": "private@example.com"},
+            wpay_audit_detail="card:create",
+        )
+        line = _wpay_audit_line(request, 201, 42)
+        self.assertIn("POST · aura-cards · 201 · tg:123 · 42ms · card:create", line)
+        self.assertNotIn("private@example.com", line)
+        self.assertNotIn("secret", line)
 
 
 if __name__ == "__main__":

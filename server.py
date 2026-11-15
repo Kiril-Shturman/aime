@@ -1934,6 +1934,76 @@ def _telegram_bot_api(token, method, payload):
     return body.get("result")
 
 
+def _wpay_audit_line(request, status, elapsed_ms):
+    """Build a secret-free audit line; never includes request bodies or headers."""
+    action = request.path
+    if action.startswith("/api/wallet/"):
+        action = action.removeprefix("/api/wallet/") or "wallet"
+    elif action == "/api/telegram/webhook":
+        action = "telegram"
+    actor = request.get("wpay_audit_actor")
+    profile = request.get("wpay_profile") or {}
+    if not actor and isinstance(profile.get("id"), int):
+        actor = f"tg:{profile['id']}"
+    if not actor and request.headers.get("X-Board-Key"):
+        actor = "owner"
+    actor = str(actor or "provider" if "webhook" in action else actor or "anonymous")[:80]
+    detail = str(request.get("wpay_audit_detail") or "")[:120]
+    request_id = ""
+    response = request.get("wpay_audit_response")
+    if response is not None:
+        candidate = response.headers.get("X-Request-ID") or response.headers.get("X-Request-Id") or ""
+        if re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", candidate):
+            request_id = candidate
+    marker = "✅" if status < 400 else "⚠️" if status < 500 else "🚨"
+    parts = [marker, request.method, action, str(status), actor, f"{elapsed_ms}ms"]
+    if detail:
+        parts.append(detail)
+    if request_id:
+        parts.append("rid=" + request_id)
+    return " · ".join(parts)
+
+
+async def _wpay_audit_worker(app):
+    token = os.environ.get("WPAY_BOT_TOKEN", "")
+    chat_id = os.environ.get("WPAY_LOG_CHAT_ID", "").strip()
+    if not token or not re.fullmatch(r"-?\d+", chat_id):
+        return
+    queue = app["wpay_audit_queue"]
+    while True:
+        first = await queue.get()
+        lines = [first]
+        size = len(first)
+        deadline = asyncio.get_running_loop().time() + 2
+        while len(lines) < 40 and size < 3500:
+            timeout = deadline - asyncio.get_running_loop().time()
+            if timeout <= 0:
+                break
+            try:
+                line = await asyncio.wait_for(queue.get(), timeout=timeout)
+            except asyncio.TimeoutError:
+                break
+            lines.append(line)
+            size += len(line) + 1
+        text = "WPay audit\n" + "\n".join(lines)
+        try:
+            await asyncio.to_thread(_telegram_bot_api, token, "sendMessage", {
+                "chat_id": int(chat_id),
+                "text": text[:4000],
+                "disable_notification": True,
+            })
+        except Exception as exc:
+            print(f"[wpay-audit] delivery failed: {exc}", flush=True)
+
+
+async def _start_wpay_audit(app):
+    app["wpay_audit_queue"] = asyncio.Queue(maxsize=1000)
+    app["wpay_audit_task"] = asyncio.create_task(_wpay_audit_worker(app))
+    chat_id = os.environ.get("WPAY_LOG_CHAT_ID", "").strip()
+    if re.fullmatch(r"-?\d+", chat_id):
+        app["wpay_audit_queue"].put_nowait("🚀 service · started")
+
+
 async def _configure_wpay_bot(app):
     """Keep the Telegram command menu and Mini App button in sync with WPay."""
     token = os.environ.get("WPAY_BOT_TOKEN", "")
@@ -2003,6 +2073,8 @@ async def wpay_telegram_webhook(request):
     command = text.split(maxsplit=1)[0].split("@", 1)[0] if text else ""
     sender_id = sender.get("id")
     if isinstance(sender_id, int) and sender_id > 0:
+        request["wpay_audit_actor"] = f"tg:{sender_id}"
+    if isinstance(sender_id, int) and sender_id > 0:
         start_param = text.split(maxsplit=1)[1].strip() if command == "/start" and len(text.split(maxsplit=1)) > 1 else None
         request.app["wpay_ledger"].account(
             f"tg:{sender_id}", sender, bot_started=True, source="bot",
@@ -2020,6 +2092,7 @@ async def wpay_telegram_webhook(request):
         "wpay:verify": "verify", "wpay:help": "help",
     }
     view = view_by_command.get(command) or view_by_callback.get(callback_data)
+    request["wpay_audit_detail"] = "bot:" + str(view or "ignored")
     if not view:
         return web.json_response({"ok": True})
     chat_id = (message.get("chat") or (callback.get("message") or {}).get("chat") or {}).get("id")
@@ -2062,6 +2135,31 @@ async def wpay_telegram_webhook(request):
     except Exception:
         return web.json_response({"ok": False}, status=502)
     return web.json_response({"ok": True})
+
+
+@web.middleware
+async def wpay_audit_middleware(request, handler):
+    watched = request.path.startswith("/api/wallet/") or request.path == "/api/telegram/webhook"
+    if not watched:
+        return await handler(request)
+    started = time.monotonic()
+    status = 500
+    try:
+        response = await handler(request)
+        status = response.status
+        request["wpay_audit_response"] = response
+        return response
+    except web.HTTPException as exc:
+        status = exc.status
+        raise
+    finally:
+        queue = request.app.get("wpay_audit_queue")
+        if queue is not None:
+            elapsed_ms = max(0, round((time.monotonic() - started) * 1000))
+            try:
+                queue.put_nowait(_wpay_audit_line(request, status, elapsed_ms))
+            except asyncio.QueueFull:
+                print("[wpay-audit] queue full; event dropped", flush=True)
 
 
 @web.middleware
@@ -2565,7 +2663,7 @@ async def spa(request):
 
 def make_app():
     owner_key()   # чтобы ключ владельца существовал с первого запуска
-    app = web.Application(middlewares=[guard], client_max_size=1024 * 1024)
+    app = web.Application(middlewares=[wpay_audit_middleware, guard], client_max_size=1024 * 1024)
     install_wallet(app, ROOT, lambda key: hmac.compare_digest(key, owner_key()))
     app.router.add_get("/api/state", get_state)
     app.router.add_get("/api/design/blocks", get_blocks)
@@ -2637,6 +2735,7 @@ def make_app():
     os.makedirs(os.path.join(ROOT, "shots"), exist_ok=True)
     app.router.add_static("/shots", os.path.join(ROOT, "shots"))
     app.router.add_get("/{tail:.*}", spa)
+    app.on_startup.append(_start_wpay_audit)
     app.on_startup.append(_start_wpay_bot_config)
     app.on_shutdown.append(rozpustit_spojeni)
     return app
@@ -2650,6 +2749,9 @@ async def rozpustit_spojeni(app):
     config_task = app.get("wpay_bot_config_task")
     if config_task and not config_task.done():
         config_task.cancel()
+    audit_task = app.get("wpay_audit_task")
+    if audit_task and not audit_task.done():
+        audit_task.cancel()
     for mid in list(_cekaji):
         probudit(mid)
     for sokety in list(_kanaly.values()):
