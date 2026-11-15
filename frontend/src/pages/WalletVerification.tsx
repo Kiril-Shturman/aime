@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { tg } from "../lib/telegram";
 import telephoneArtwork from "../assets/verification/telephone.webp";
 import mailboxArtwork from "../assets/verification/mailbox-envelope.webp";
 import passportArtwork from "../assets/verification/passport.webp";
@@ -34,6 +36,50 @@ type Props = {
   contacts: boolean;
   onContacts: () => void;
 };
+function EmbeddedVerification({
+  aura,
+}: {
+  aura: ReturnType<typeof useAuraProfile>;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <section
+      className="wpay-verification wpay-verification-embedded"
+      aria-label="Форма проверки личности"
+    >
+      <header className="wpay-verification-frame-header">
+        <span>
+          <LockKeyhole size={15} /> Проверка личности
+        </span>
+        <button
+          type="button"
+          onClick={() =>
+            tg()?.openLink
+              ? tg()?.openLink?.(aura.sessionUrl)
+              : window.open(aura.sessionUrl, "_blank", "noopener,noreferrer")
+          }
+        >
+          В браузере <ArrowUpRight size={14} />
+        </button>
+      </header>
+      <div className="wpay-verification-frame-body">
+        {!loaded && (
+          <p className="wpay-verification-frame-loading" role="status">
+            Загружаем защищённую форму…
+          </p>
+        )}
+        <iframe
+          title="Проверка личности Aura"
+          src={aura.sessionUrl}
+          allow="camera; microphone; fullscreen"
+          referrerPolicy="no-referrer"
+          onLoad={() => setLoaded(true)}
+        />
+      </div>
+    </section>
+  );
+}
+
 export default function WalletVerification({
   aura,
   onPersonal,
@@ -43,7 +89,9 @@ export default function WalletVerification({
   const verified = Boolean(aura.kyc?.verified);
   const pending = ["pending", "in_review"].includes(aura.kyc?.status || "");
   const rejected = aura.kyc?.status === "rejected";
-  if (contacts)
+  if (aura.sessionOpen && aura.sessionUrl)
+    return <EmbeddedVerification key={aura.sessionUrl} aura={aura} />;
+  if (contacts && !verified && !rejected)
     return (
       <section
         className="wpay-verification wpay-verification-contacts"
@@ -122,12 +170,9 @@ export default function WalletVerification({
                 name="tel"
                 autocomplete="tel"
                 placeholder="+7 999 123-45-67"
-                value={aura.phone}
+                value={aura.phone || "+7"}
                 maxlength={32}
                 disabled={aura.busy}
-                onFocus={() => {
-                  if (!aura.phone.trim()) aura.setPhone("+7");
-                }}
                 onInput={(event) => aura.setPhone(event.target.value)}
               />
               <ListInput
@@ -155,14 +200,13 @@ export default function WalletVerification({
               </p>
             )}
             {aura.sessionUrl && (
-              <a
+              <button
+                type="button"
                 className="wpay-verification-text-action mx-6"
-                href={aura.sessionUrl}
-                target="_blank"
-                rel="noopener noreferrer"
+                onClick={aura.resumeSession}
               >
                 Продолжить проверку <ArrowUpRight size={16} />
-              </a>
+              </button>
             )}
           </div>
           <div className="wpay-verification-footer">
@@ -254,14 +298,13 @@ export default function WalletVerification({
             </p>
           )}
           {aura.sessionUrl && (
-            <a
+            <button
+              type="button"
               className="wpay-verification-text-action"
-              href={aura.sessionUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              onClick={aura.resumeSession}
             >
               Продолжить проверку <ArrowUpRight size={16} />
-            </a>
+            </button>
           )}
           <div className="wpay-verification-links">
             {!verified && (

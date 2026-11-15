@@ -3096,7 +3096,9 @@ function ProfileSettingsPushView({
         hideNavbar={displayPage === "verification"}
         nativeBack={displayPage === "verification"}
         onClose={() => {
-          if (displayPage === "verification" && verificationContacts)
+          if (displayPage === "verification" && aura.sessionOpen)
+            aura.closeSession();
+          else if (displayPage === "verification" && verificationContacts)
             setVerificationContacts(false);
           else onClose();
         }}

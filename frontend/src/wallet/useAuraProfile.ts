@@ -31,6 +31,7 @@ export function useAuraProfile(page: string | null) {
   const [error, setError] = useState("");
   const [kyc, setKyc] = useState<KycState | null>(null);
   const [sessionUrl, setSessionUrl] = useState("");
+  const [sessionOpen, setSessionOpen] = useState(false);
   const working = useRef(false);
   const generation = useRef(0);
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -41,6 +42,7 @@ export function useAuraProfile(page: string | null) {
   useEffect(() => {
     if (page !== "personal" && page !== "verification") {
       setSessionUrl("");
+      setSessionOpen(false);
       return;
     }
     const controller = new AbortController();
@@ -48,6 +50,7 @@ export function useAuraProfile(page: string | null) {
     setLoading(true);
     setError("");
     setSessionUrl("");
+    setSessionOpen(false);
     void (async () => {
       try {
         const status = await walletRequest<{
@@ -109,6 +112,30 @@ export function useAuraProfile(page: string | null) {
       app?.offEvent?.("activated", update);
     };
   }, [page, available, refresh]);
+  useEffect(() => {
+    if (page !== "verification" || !sessionOpen || !available) return;
+    const controller = new AbortController();
+    let polling = false;
+    const timer = window.setInterval(async () => {
+      if (document.hidden || polling || working.current) return;
+      polling = true;
+      try {
+        const state = await refresh(controller.signal);
+        if (!controller.signal.aborted && (state.verified || state.terminal)) {
+          setSessionOpen(false);
+          setSessionUrl("");
+        }
+      } catch {
+        /* Keep the form open during a temporary status outage. */
+      } finally {
+        polling = false;
+      }
+    }, 8000);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [page, sessionOpen, available, refresh]);
   const save = async () => {
     if (working.current || !available) return false;
     const cleanEmail = email.trim();
@@ -173,7 +200,7 @@ export function useAuraProfile(page: string | null) {
       )
         throw Error("No session URL");
       setSessionUrl(result.session_url);
-      tg()?.openLink?.(result.session_url);
+      setSessionOpen(true);
     } catch (e) {
       setError(message(e));
     } finally {
@@ -192,6 +219,9 @@ export function useAuraProfile(page: string | null) {
     error,
     kyc,
     sessionUrl,
+    sessionOpen,
+    closeSession: () => setSessionOpen(false),
+    resumeSession: () => setSessionOpen(true),
     save,
     start,
     refresh: async () => {

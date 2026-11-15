@@ -14,6 +14,12 @@ async function setup(
     localStorage.setItem("ui-theme", theme);
     localStorage.setItem("wpay:intro:v1", "seen");
   }, theme);
+  await page.route("https://verify.example/**", (route) =>
+    route.fulfill({
+      contentType: "text/html; charset=utf-8",
+      body: '<!doctype html><title>Identity check</title><h1>Защищённая проверка</h1><input aria-label="Документ">',
+    }),
+  );
   await page.route("**/api/**", (route) => {
     const action = new URL(route.request().url()).pathname.split("/").pop()!;
     if (route.request().method() === "POST")
@@ -109,9 +115,10 @@ test("contacts persist through server, hosted KYC updates from pending to verifi
   await expect(page.locator(".wpay-contact-mailbox")).toBeVisible();
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
 
-  await expect(
-    page.getByRole("link", { name: "Продолжить проверку" }),
-  ).toHaveAttribute("href", "https://verify.example/session-private");
+  await expect(page.getByTitle("Проверка личности Aura")).toHaveAttribute(
+    "src",
+    "https://verify.example/session-private",
+  );
   expect(state.posts.at(-1)).toEqual({ action: "aura-kyc", body: {} });
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
     "session-private",
@@ -157,9 +164,10 @@ test("invalid contacts never post; viewing KYC never registers a customer", asyn
   expect(state.posts).toHaveLength(0);
   await page.locator("#verification-phone").fill("8 (999) 123-45-67");
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
-  await expect(
-    page.getByRole("link", { name: "Продолжить проверку" }),
-  ).toHaveAttribute("href", "https://verify.example/session-private");
+  await expect(page.getByTitle("Проверка личности Aura")).toHaveAttribute(
+    "src",
+    "https://verify.example/session-private",
+  );
   expect(state.posts).toEqual([
     {
       action: "aura-customer",
@@ -286,4 +294,55 @@ test("Telegram back from contacts returns to verification start before closing",
   await expect(
     page.getByRole("region", { name: "Проверка личности", exact: true }),
   ).toHaveCount(0);
+});
+
+test("embedded verification stays inside app, back resumes contacts, and polling detects completion", async ({
+  page,
+}) => {
+  const state = await setup(page, true, "light", true);
+  await page
+    .getByRole("link", { name: "Верификация Подтверждение личности" })
+    .click();
+  await page.getByRole("button", { name: "Начать", exact: true }).click();
+  await page.locator("#verification-phone").fill("+79991234567");
+  await page.locator("#verification-email").fill("hello@example.com");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  const frame = page.getByTitle("Проверка личности Aura");
+  await expect(frame).toBeVisible();
+
+  await expect(
+    page
+      .frameLocator('iframe[title="Проверка личности Aura"]')
+      .getByRole("heading", { name: "Защищённая проверка" }),
+  ).toBeVisible();
+  for (const size of [
+    { width: 375, height: 667 },
+    { width: 768, height: 1024 },
+  ]) {
+    await page.setViewportSize(size);
+    const rect = await frame.boundingBox();
+    expect(rect!.height).toBeGreaterThan(size.height - 160);
+    expect(rect!.y + rect!.height).toBeLessThanOrEqual(size.height);
+  }
+  const posts = state.posts.length;
+  await page.evaluate(() =>
+    (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {}),
+  );
+  await expect(frame).toHaveCount(0);
+  await expect(page.locator("#verification-email")).toHaveValue(
+    "hello@example.com",
+  );
+  await page
+    .getByRole("button", { name: "Продолжить проверку", exact: true })
+    .click();
+  await expect(frame).toBeVisible();
+  expect(state.posts.length).toBe(posts);
+  state.verified = true;
+  await expect(
+    page.getByRole("heading", { name: "Личность подтверждена" }),
+  ).toBeVisible({ timeout: 12000 });
+  await expect(frame).toHaveCount(0);
+  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
+    "session-private",
+  );
 });

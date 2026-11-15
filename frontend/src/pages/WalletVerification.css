@@ -704,3 +704,63 @@
   right: 14%;
   bottom: 16%;
 }
+
+.wpay-verification-frame-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px 16px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.wpay-verification-frame-header span,
+.wpay-verification-frame-header button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.wpay-verification-frame-header button {
+  color: #2878ff;
+  background: transparent;
+  border: 0;
+  padding: 8px 0;
+  cursor: pointer;
+}
+.dark .wpay-verification-frame-header button {
+  color: #85b4ff;
+}
+.wpay-verification-frame-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: #fff;
+}
+.dark .wpay-verification-frame-body {
+  background: #20242d;
+}
+.wpay-verification-frame-body iframe {
+  display: block;
+  border: 0;
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+  background: #fff;
+}
+.wpay-verification-frame-loading {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  margin: 0;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  color: var(--verify-muted);
+  background: #f4f6fa;
+  pointer-events: none;
+}
+.dark .wpay-verification-frame-loading {
+  background: #20242d;
+}
