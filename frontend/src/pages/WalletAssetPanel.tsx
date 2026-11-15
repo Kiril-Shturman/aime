@@ -91,9 +91,11 @@ export default function WalletAssetPanel({
   onWithdraw,
   onExchange,
   onOpenAddress,
+  hiddenAddresses = [],
   historyRequest = 0,
   active = true,
 }: {
+  hiddenAddresses?: string[];
   historyRequest?: number;
   code: string;
   name: string;
@@ -339,6 +341,11 @@ export default function WalletAssetPanel({
               const item = demoPortfolio
                 ? portfolioExamples[network]
                 : addresses.find((row) => row.network === network);
+              if (
+                item &&
+                hiddenAddresses.includes(`${code}:${network}:${item.address}`)
+              )
+                return null;
               return (
                 <button
                   key={network}

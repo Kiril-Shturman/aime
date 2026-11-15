@@ -13,6 +13,7 @@ export type WalletMenuItem = {
   title: string;
   icon: ReactNode;
   onClick: () => void;
+  destructive?: boolean;
 };
 
 export function WalletNavbar({
@@ -33,6 +34,7 @@ export function WalletNavbar({
   assetSurface?: boolean;
 }) {
   const [opened, setOpened] = useState(false);
+  const [menuTop, setMenuTop] = useState(0);
   const target = useRef<HTMLElement | null>(null);
   useEffect(() => {
     if (!active) setOpened(false);
@@ -63,7 +65,11 @@ export function WalletNavbar({
                 iconOnly
                 aria-label="Ещё"
                 aria-expanded={opened}
-                onClick={() => setOpened((value) => !value)}
+                onClick={() => {
+                  const rect = target.current?.getBoundingClientRect();
+                  if (rect) setMenuTop(Math.max(8, rect.bottom + 8));
+                  setOpened((value) => !value);
+                }}
                 className="!h-full !w-full !text-black dark:!text-white"
               >
                 <Ellipsis className="text-[25px]" />
@@ -78,7 +84,9 @@ export function WalletNavbar({
             opened={opened && active}
             target={target.current}
             onBackdropClick={() => setOpened(false)}
-            className="!z-[100] !mt-3 !w-72"
+            aria-label="Меню кошелька"
+            style={{ "--wpay-menu-top": `${menuTop}px` } as React.CSSProperties}
+            className="!fixed !z-[100] !left-auto !right-4 !top-[var(--wpay-menu-top)] !m-0 !w-[min(288px,calc(100vw-32px))] max-h-[calc(100dvh-var(--wpay-menu-top)-16px)] overflow-y-auto"
           >
             <List nested className="!my-0">
               {menuItems ? (
@@ -90,13 +98,17 @@ export function WalletNavbar({
                     contentClassName="!h-13"
                     innerClassName="!min-w-0 !h-13 !py-0 after:!opacity-30"
                     media={
-                      <span className="flex h-6 w-6 items-center justify-center text-[21px] text-primary">
+                      <span
+                        className={`flex h-6 w-6 items-center justify-center text-[21px] ${item.destructive ? "text-red-500" : "text-primary"}`}
+                      >
                         {item.icon}
                       </span>
                     }
                     innerChildren={
                       <span className="flex h-full min-w-0 items-center justify-between gap-3">
-                        <span className="truncate text-[16px] font-medium text-black dark:text-white">
+                        <span
+                          className={`truncate text-[16px] font-medium ${item.destructive ? "text-red-500" : "text-black dark:text-white"}`}
+                        >
                           {item.title}
                         </span>
                         <ChevronRight

@@ -40,6 +40,7 @@ import Framework7React, {
   Toggle as F7Toggle,
   App as F7App,
   Sheet as F7Sheet,
+  f7,
   Popup as F7Popup,
   Navbar as F7Navbar,
   NavRight,
@@ -50,7 +51,7 @@ import "./WalletFramework7.css";
 import "framework7/components/popup/css";
 import "framework7/components/sheet/css";
 import "./WalletExchange.css";
-import { Search, Check, Delete } from "lucide-react";
+import { Search, Check, Delete, Trash2 } from "lucide-react";
 import "./WalletProfile.css";
 import "./WalletCard.css";
 import {
@@ -765,6 +766,17 @@ function AssetPushView({
     depositAddress?: WalletAddressSelection,
   ) => void;
 }) {
+  const hiddenKey = `wpay:hidden-provider-addresses:v1:${getUser()?.id ?? "owner"}`;
+  const [hiddenAddresses, setHiddenAddresses] = useState<string[]>(() => {
+    try {
+      const rows = JSON.parse(localStorage.getItem(hiddenKey) ?? "[]");
+      return Array.isArray(rows)
+        ? rows.filter((row): row is string => typeof row === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  });
   const [historyRequest, setHistoryRequest] = useState(0);
   const [displayAsset, setDisplayAsset] = useState(asset ?? assets[0]);
   const [addressEntry, setAddressEntry] =
@@ -859,6 +871,7 @@ function AssetPushView({
         }}
       >
         <WalletAssetPanel
+          hiddenAddresses={hiddenAddresses}
           historyRequest={historyRequest}
           onOpenAddress={setAddressEntry}
           active={asset !== null}
@@ -889,6 +902,58 @@ function AssetPushView({
           addressEntry ? addressNetworkNames[addressEntry.network] : undefined
         }
         zClass="z-[80]"
+        menuItems={[
+          {
+            title: "Пополнить",
+            icon: <PlusCircleFill className="text-[22px]" />,
+            onClick: () => {
+              setAllDepositNetworks(false);
+              setDepositChoice(true);
+            },
+          },
+          {
+            title: "Вывести",
+            icon: <ArrowUpCircleFill className="text-[22px]" />,
+            onClick: () => {
+              setAddressEntry(null);
+              openFlow("withdraw", displayAsset.code);
+            },
+          },
+          {
+            title: "Обменять",
+            icon: <ArrowRightArrowLeft className="text-[22px]" />,
+            onClick: () => {
+              setAddressEntry(null);
+              openFlow("exchange", displayAsset.code);
+            },
+          },
+          {
+            title: "Удалить кошелёк",
+            icon: <Trash2 size={22} />,
+            destructive: true,
+            onClick: () => {
+              if (!addressEntry) return;
+              const entry = addressEntry;
+              f7.dialog.confirm(
+                "Адрес будет скрыт на этом устройстве. Адрес в сети и средства не удаляются.",
+                "Удалить кошелёк?",
+                () => {
+                  const key = `${displayAsset.code}:${entry.network}:${entry.address}`;
+                  const next = [...new Set([...hiddenAddresses, key])];
+                  try {
+                    localStorage.setItem(hiddenKey, JSON.stringify(next));
+                  } catch {
+                    showNotice("Не удалось сохранить изменения");
+                    return;
+                  }
+                  setHiddenAddresses(next);
+                  setAddressEntry(null);
+                  showNotice("Кошелёк скрыт на этом устройстве");
+                },
+              );
+            },
+          },
+        ]}
         onClose={() => setAddressEntry(null)}
       >
         {addressEntry && (

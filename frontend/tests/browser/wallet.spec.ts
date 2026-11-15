@@ -939,3 +939,142 @@ test("unconfigured custody disables generation", async ({ page }) => {
       }),
     ).toBeDisabled();
 });
+
+for (const theme of ["light", "dark"])
+  test(`${theme}: owned wallet menu is aligned and hides without destroying the address`, async ({
+    page,
+  }) => {
+    await setup(page, theme);
+    let hidden = false,
+      hides = 0;
+    await page.route("**/api/wallet/custody-status", (route) =>
+      route.fulfill({ json: { ...custodyStatus, chain_env: "mainnet" } }),
+    );
+    const row = { ...publicCustodyWallet("SOL"), chain_env: "mainnet" };
+    await page.route("**/api/wallet/custody-wallets", (route) =>
+      route.fulfill({ json: { items: hidden ? [] : [row] } }),
+    );
+    await page.route("**/api/wallet/custody-wallet-hide", (route) => {
+      expect(route.request().postDataJSON()).toEqual({ wallet_id: row.id });
+      hidden = true;
+      hides++;
+      return route.fulfill({ json: { id: row.id, hidden: true } });
+    });
+    await page.route("**/api/wallet/custody-wallet", (route) => {
+      hidden = false;
+      return route.fulfill({ json: row });
+    });
+    const panel = await openCustody(page);
+    await panel
+      .getByRole("button", { name: "Открыть кошелёк Solana", exact: true })
+      .click();
+    const details = page.getByRole("main", {
+      name: "Собственный кошелёк",
+      exact: true,
+    });
+    const surface = details.locator(
+      "xpath=ancestor::section[@data-wallet-surface][1]",
+    );
+    await expect(
+      details.getByText("Баланс сети ещё не подключён", { exact: true }),
+    ).toBeVisible();
+    await expect(details.getByText("425.5", { exact: true })).toHaveCount(0);
+    await details
+      .getByRole("button", { name: "Пополнить", exact: true })
+      .click();
+    await expect(
+      details.getByRole("region", { name: "QR-код собственного кошелька" }),
+    ).toBeVisible();
+    await details.getByRole("button", { name: "Вывести", exact: true }).click();
+    await expect(
+      page.getByText("Вывод для собственных кошельков ещё не подключён", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    const trigger = surface.getByLabel("Ещё", { exact: true });
+    await trigger.click();
+    const menu = page.locator('[aria-label="Меню кошелька"]:visible');
+    for (const title of ["Пополнить", "Вывести", "Обменять", "Удалить кошелёк"])
+      await expect(menu.getByText(title, { exact: true })).toBeVisible();
+    const triggerBox = (await trigger.boundingBox())!,
+      menuBox = (await menu.boundingBox())!;
+    expect(menuBox.y).toBeGreaterThanOrEqual(triggerBox.y + triggerBox.height);
+    expect(menuBox.x).toBeGreaterThanOrEqual(0);
+    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(390);
+    await trigger.click();
+    await expect(menu).toHaveCount(0);
+    await trigger.click();
+    await menu.getByText("Удалить кошелёк", { exact: true }).click();
+    await page
+      .locator(".dialog.modal-in .dialog-button")
+      .filter({ hasText: /^Отмена$/ })
+      .click();
+    expect(hides).toBe(0);
+    await trigger.click();
+    await menu.getByText("Удалить кошелёк", { exact: true }).click();
+    await page
+      .locator(".dialog.modal-in .dialog-button")
+      .filter({ hasText: /^Удалить$/ })
+      .click();
+    await expect(
+      panel.getByRole("button", {
+        name: "Создать кошелёк Solana",
+        exact: true,
+      }),
+    ).toBeVisible();
+    expect(hides).toBe(1);
+    await panel
+      .getByRole("button", { name: "Создать кошелёк Solana", exact: true })
+      .click();
+    await expect(panel.getByLabel("Адрес Solana", { exact: true })).toHaveText(
+      row.address,
+    );
+  });
+
+test("address details menu contains wallet actions and no illustrative balance", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  const address = "0x" + "b".repeat(40);
+  await page.route("**/api/wallet/addresses", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            asset: "USDT",
+            assets: ["USDT"],
+            network: "BSC",
+            address,
+            min_deposit: "1",
+          },
+        ],
+      },
+    }),
+  );
+  await page
+    .locator(".wpay-wallet-home span.font-semibold")
+    .filter({ hasText: /^Tether$/ })
+    .first()
+    .click();
+  await page
+    .getByRole("button", { name: "Открыть адрес BSC", exact: true })
+    .click();
+  const details = page
+    .locator('[data-wallet-surface="grouped"][aria-hidden="false"]')
+    .filter({
+      has: page.getByRole("region", {
+        name: "Реквизиты кошелька",
+        exact: true,
+      }),
+    });
+  await expect(
+    details.getByRole("region", { name: "Баланс адреса", exact: true }),
+  ).not.toContainText("425.5");
+  await details.getByLabel("Ещё", { exact: true }).click();
+  const menu = page.locator('[aria-label="Меню кошелька"]:visible');
+  for (const title of ["Пополнить", "Вывести", "Обменять", "Удалить кошелёк"])
+    await expect(menu.getByText(title, { exact: true })).toBeVisible();
+  await expect(menu.getByText("Тёмная тема", { exact: true })).toHaveCount(0);
+  await details.getByLabel("Назад", { exact: true }).click();
+  await expect(menu).toHaveCount(0);
+});

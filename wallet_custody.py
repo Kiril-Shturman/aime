@@ -136,6 +136,8 @@ def prepare(ledger):
         encrypted_secret BLOB NOT NULL,created_at REAL NOT NULL,
         UNIQUE(user_id,network,chain_env),UNIQUE(network,chain_env,address)
       );
+      CREATE TABLE IF NOT EXISTS custody_hidden (wallet_id TEXT PRIMARY KEY REFERENCES custody_wallets(id),user_id TEXT NOT NULL,hidden_at REAL NOT NULL);
+      CREATE TABLE IF NOT EXISTS custody_activity (id TEXT PRIMARY KEY,wallet_id TEXT NOT NULL REFERENCES custody_wallets(id),actor TEXT NOT NULL,action TEXT NOT NULL,created_at REAL NOT NULL);
       CREATE TABLE IF NOT EXISTS custody_events (wallet_id TEXT PRIMARY KEY REFERENCES custody_wallets(id),actor TEXT NOT NULL,action TEXT NOT NULL,created_at REAL NOT NULL);
       CREATE TRIGGER IF NOT EXISTS custody_wallets_immutable_update BEFORE UPDATE ON custody_wallets BEGIN SELECT RAISE(ABORT,'immutable custody wallet'); END;
       CREATE TRIGGER IF NOT EXISTS custody_wallets_immutable_delete BEFORE DELETE ON custody_wallets BEGIN SELECT RAISE(ABORT,'immutable custody wallet'); END;
@@ -148,6 +150,10 @@ def prepare(ledger):
         ledger.db.execute(
             "INSERT OR IGNORE INTO finance_migrations VALUES (?,?)",
             ("custody-addresses-v1", time.time()),
+        )
+        ledger.db.execute(
+            "INSERT OR IGNORE INTO finance_migrations VALUES (?,?)",
+            ("custody-visibility-v1", time.time()),
         )
         ledger.commit()
     except Exception:
@@ -246,6 +252,20 @@ class Custody:
                 (uid, network, self.chain_env),
             ).fetchone()
             if row:
+                if ledger.db.execute(
+                    "DELETE FROM custody_hidden WHERE wallet_id=? AND user_id=?",
+                    (row["id"], uid),
+                ).rowcount:
+                    ledger.db.execute(
+                        "INSERT INTO custody_activity VALUES (?,?,?,?,?)",
+                        (
+                            uuid.uuid4().hex,
+                            row["id"],
+                            uid,
+                            "wallet_restored",
+                            time.time(),
+                        ),
+                    )
                 ledger.commit()
                 return public_wallet(row)
             wallet_id, created_at = uuid.uuid4().hex, time.time()
@@ -307,18 +327,47 @@ class Custody:
             ledger.rollback()
             raise
 
+    def hide(self, uid, wallet_id):
+        ledger = self.ledger
+        ledger.begin("custody_hide", uid, "Hide wallet without removing recovery keys")
+        try:
+            row = ledger.db.execute(
+                "SELECT id FROM custody_wallets WHERE id=? AND user_id=?",
+                (wallet_id, uid),
+            ).fetchone()
+            if not row:
+                raise self.error("NOT_FOUND", "Кошелёк не найден", 404)
+            if ledger.db.execute(
+                "INSERT OR IGNORE INTO custody_hidden VALUES (?,?,?)",
+                (wallet_id, uid, time.time()),
+            ).rowcount:
+                ledger.db.execute(
+                    "INSERT INTO custody_activity VALUES (?,?,?,?,?)",
+                    (uuid.uuid4().hex, wallet_id, uid, "wallet_hidden", time.time()),
+                )
+            ledger.commit()
+            return {"hidden": True, "id": wallet_id}
+        except Exception:
+            ledger.rollback()
+            raise
+
     def wallets(self, uid):
         return [
             public_wallet(row)
             for row in self.ledger.db.execute(
-                "SELECT * FROM custody_wallets WHERE user_id=? ORDER BY created_at,id",
+                "SELECT w.* FROM custody_wallets w WHERE w.user_id=? AND NOT EXISTS (SELECT 1 FROM custody_hidden h WHERE h.wallet_id=w.id) ORDER BY w.created_at,w.id",
                 (uid,),
             )
         ]
 
 
 async def custody_route(request, action, uid, custody):
-    if action not in {"custody-status", "custody-wallets", "custody-wallet"}:
+    if action not in {
+        "custody-status",
+        "custody-wallets",
+        "custody-wallet",
+        "custody-wallet-hide",
+    }:
         return None
     if action == "custody-status" and request.method == "GET":
         return web.json_response(custody.capabilities())
@@ -326,6 +375,16 @@ async def custody_route(request, action, uid, custody):
         if request.query:
             raise ValueError("No browser ownership filters")
         return web.json_response({"items": custody.wallets(uid)})
+    if action == "custody-wallet-hide" and request.method == "POST":
+        body = await request.json()
+        if (
+            not isinstance(body, dict)
+            or set(body) != {"wallet_id"}
+            or not isinstance(body["wallet_id"], str)
+            or not 1 <= len(body["wallet_id"]) <= 64
+        ):
+            raise ValueError("Only wallet_id is accepted")
+        return web.json_response(custody.hide(uid, body["wallet_id"]))
     if action == "custody-wallet" and request.method == "POST":
         body = await request.json()
         if (

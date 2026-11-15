@@ -70,6 +70,38 @@ class CustodyTests(unittest.TestCase):
             0,
         )
 
+    def test_hide_preserves_keys_is_idempotent_and_create_restores_same_wallet(self):
+        wallet = self.custody.create("tg:123", "SOL")
+        ciphertext = bytes(self.row(wallet)["encrypted_secret"])
+        self.assertTrue(self.custody.hide("tg:123", wallet["id"])["hidden"])
+        self.custody.hide("tg:123", wallet["id"])
+        self.assertEqual(self.custody.wallets("tg:123"), [])
+        self.assertEqual(bytes(self.row(wallet)["encrypted_secret"]), ciphertext)
+        self.assertEqual(
+            verify_wallet(self.row(wallet), self.private)["address"], wallet["address"]
+        )
+        self.assertEqual(
+            self.ledger.db.execute("SELECT COUNT(*) FROM custody_activity").fetchone()[
+                0
+            ],
+            1,
+        )
+        self.assertEqual(self.custody.create("tg:123", "SOL"), wallet)
+        self.assertEqual(len(self.custody.wallets("tg:123")), 1)
+        self.assertEqual(
+            self.ledger.db.execute(
+                "SELECT COUNT(*) FROM finance_transactions"
+            ).fetchone()[0],
+            0,
+        )
+
+    def test_foreign_user_cannot_hide_wallet(self):
+        wallet = self.custody.create("tg:123", "BTC")
+        with self.assertRaises(ApiError) as raised:
+            self.custody.hide("tg:999", wallet["id"])
+        self.assertEqual(raised.exception.status, 404)
+        self.assertEqual(len(self.custody.wallets("tg:123")), 1)
+
     def test_repeat_and_restart_return_same_wallet_without_new_generation(self):
         first = self.custody.create("tg:123", "BTC")
         with patch(
@@ -419,6 +451,29 @@ class CustodyRouteTests(unittest.IsolatedAsyncioTestCase):
             .fetchone()[0],
             0,
         )
+
+    async def test_hide_route_checks_ownership_auth_and_payload(self):
+        wallet = await (await self.create({"network": "ETH"})).json()
+        url = "/api/wallet/custody-wallet-hide"
+        body = {"wallet_id": wallet["id"]}
+        response = await self.client.post(url, json=body)
+        self.assertEqual(response.status, 401)
+        response = await self.client.post(url, json=body, headers=self.foreign)
+        self.assertEqual(response.status, 404)
+        response = await self.client.post(
+            url, json={**body, "user_id": "tg:999"}, headers=self.user
+        )
+        self.assertEqual(response.status, 400)
+        for _ in range(2):
+            response = await self.client.post(url, json=body, headers=self.user)
+            self.assertEqual(response.status, 200)
+        response = await self.client.get(
+            "/api/wallet/custody-wallets", headers=self.user
+        )
+        self.assertEqual((await response.json())["items"], [])
+        restored = await (await self.create({"network": "ETH"})).json()
+        self.assertEqual(restored["address"], wallet["address"])
+        self.assertEqual(self.app["wpay_provider"].calls, [])
 
     async def test_parallel_retries_create_exactly_one_wallet_and_audit_event(self):
         responses = await asyncio.gather(

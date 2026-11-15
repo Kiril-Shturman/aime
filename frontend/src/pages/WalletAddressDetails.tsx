@@ -135,31 +135,18 @@ export default function WalletAddressDetails({
       item.source === "RUB" &&
       ["USD", "USDT"].includes(item.target),
   );
-  const rubRate = entry.demo
-    ? 92.5
-    : rubQuote
-      ? Number(rubQuote.rate)
-      : inverseRubQuote && Number(inverseRubQuote.rate) > 0
-        ? 1 / Number(inverseRubQuote.rate)
-        : null;
+  const rubRate = rubQuote
+    ? Number(rubQuote.rate)
+    : inverseRubQuote && Number(inverseRubQuote.rate) > 0
+      ? 1 / Number(inverseRubQuote.rate)
+      : null;
+  const amount = entry.demo ? null : entry.amount;
   const rubAmount =
-    entry.amount !== null && entry.rate !== null && rubRate !== null
-      ? entry.amount * entry.rate * rubRate
+    amount !== null && entry.rate !== null && rubRate !== null
+      ? amount * entry.rate * rubRate
       : null;
   const history: TransactionView[] = entry.demo
-    ? [0.6, -0.1, 0.5].map((part, index) => ({
-        id: `address-example-${entry.network}-${index}`,
-        kind: part > 0 ? "deposit" : "withdrawal",
-        status: "completed",
-        amount: String(Number(((entry.amount ?? 0) * part).toFixed(8))),
-        asset: code,
-        date: `2026-11-${String(15 - index).padStart(2, "0")}T09:30:00Z`,
-        rows: [
-          ["Сеть", name],
-          ["Адрес", entry.address],
-        ],
-        demo: true,
-      }))
+    ? []
     : deposits.map((row) => ({
         id: row.id,
         kind: "deposit",
@@ -200,15 +187,15 @@ export default function WalletAddressDetails({
           </span>
         </span>
         <p className="mt-6 text-[40px] font-semibold leading-tight tracking-tight tabular-nums">
-          {entry.amount !== null ? cryptoAmount(entry.amount) : "—"}{" "}
+          {amount !== null ? cryptoAmount(amount) : "—"}{" "}
           <span className="text-[30px] font-medium text-black/40 dark:text-white/40">
             {code}
           </span>
         </p>
         <div className="wpay-address-fiat mt-2 flex items-center justify-center gap-3 whitespace-nowrap text-black/45 dark:text-white/45">
           <span className="tabular-nums">
-            {entry.amount !== null && entry.rate !== null
-              ? usd(entry.amount * entry.rate)
+            {amount !== null && entry.rate !== null
+              ? usd(amount * entry.rate)
               : "—"}
           </span>
           <span aria-label="Баланс адреса в рублях" className="tabular-nums">

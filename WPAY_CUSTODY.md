@@ -137,8 +137,8 @@ excluded from the existing admin database browser. Routes work without GoSwap.
 
 ## Validation and remaining scope
 
-106 backend tests (previous 85 plus 21 custody cases), 3 frontend unit tests and
-26 Playwright tests pass. Production TypeScript/Vite build and frontend lint pass;
+109 backend tests (previous 85 plus 24 custody cases), 3 frontend unit tests and
+29 Playwright tests pass. Production TypeScript/Vite build and frontend lint pass;
 existing repository warnings remain. Tests cover recovery on all five networks,
 known vectors, encrypted-only storage, wrong keys, swapped/tampered envelopes,
 rotation, immutable rows, restart, two independent SQLite connections creating
@@ -158,3 +158,21 @@ References:
 - https://pynacl.readthedocs.io/en/latest/public/#nacl-public-sealedbox
 
 Solana seed vector checked with the official SDK: https://solana-foundation.github.io/solana-web3.js/classes/Keypair.html#fromSeed
+
+## Wallet actions and visibility
+
+The own-wallet detail menu anchors below the ellipsis and includes Deposit,
+Withdraw, Exchange and Delete. Deposit reveals the actual address/QR together
+with the not-yet-enabled crediting notice. Withdrawal/exchange remain explicitly
+unavailable until the signer/order state machines exist. Unknown chain balances
+are shown as an em dash, never example holdings or fabricated fiat values.
+Legacy address details no longer turn demo holdings into an address balance or
+fake transaction history; the demo amount is not evidence of funds on chain.
+
+`custody-visibility-v1` adds custody_hidden and custody_activity. POST
+`custody-wallet-hide` accepts only wallet_id, verifies server-derived ownership,
+and hides idempotently in one write transaction. Keys and immutable wallet rows
+are retained; POST custody-wallet restores the same wallet/address. Activity
+records distinguish hide and restore. Foreign/unknown IDs return the same 404.
+Provider addresses in the legacy view can only be hidden on the current device;
+they cannot be deleted from a blockchain or the upstream provider by this UI.
