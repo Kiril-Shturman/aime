@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import socket
 import tempfile
 import time
 import unittest
@@ -581,6 +582,10 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         after = tuple(self.ledger.db.execute("SELECT email_hash,phone_hash FROM aura_customers WHERE user_id=?", (uid,)).fetchone())
         self.assertEqual(before, after)
         self.assertTrue(all(before))
+
+    async def test_aura_transport_uses_allowlisted_ipv4(self):
+        await self.client.get_me()
+        self.assertEqual(self.client.session.connector.family, socket.AF_INET)
 
     async def test_customer_input_validation(self):
         with self.assertRaises(ValueError):

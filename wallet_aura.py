@@ -9,13 +9,14 @@ import hashlib
 import hmac
 import json
 import re
+import socket
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import quote, urlsplit
 
-from aiohttp import ClientSession, ClientTimeout, web
+from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
 
 
 TEST_BASE_URL = "https://testnet-api.aurawallet.co/v1/partner"
@@ -605,7 +606,8 @@ class AuraClient:
             raise self.error_cls("aura_not_configured", "Aura is not configured", 503)
         await self._throttle()
         if self.session is None:
-            self.session = ClientSession(timeout=ClientTimeout(total=20))
+            # Match the IPv4 address registered in Aura's partner IP allowlist.
+            self.session = ClientSession(timeout=ClientTimeout(total=20), connector=TCPConnector(family=socket.AF_INET))
         headers = {"X-API-Key": self.api_key, "Accept": "application/json"}
         if body is not None:
             headers["Content-Type"] = "application/json"
