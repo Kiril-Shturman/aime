@@ -2960,9 +2960,11 @@ function ProfileSettingsPushView({
   const [chatOpen, setChatOpen] = useState(false);
   const [displayPage, setDisplayPage] =
     useState<keyof typeof profilePageTitles>("personal");
+  const [verificationContacts, setVerificationContacts] = useState(false);
   const aura = useAuraProfile(page ? displayPage : null);
   const { phone, email, setPhone, setEmail } = aura;
   useEffect(() => {
+    setVerificationContacts(false);
     if (page) setDisplayPage(page);
     else setChatOpen(false);
   }, [page]);
@@ -3088,7 +3090,11 @@ function ProfileSettingsPushView({
         scrollContent={displayPage !== "verification"}
         hideNavbar={displayPage === "verification"}
         nativeBack={displayPage === "verification"}
-        onClose={onClose}
+        onClose={() => {
+          if (displayPage === "verification" && verificationContacts)
+            setVerificationContacts(false);
+          else onClose();
+        }}
         onRefreshed={() => showNotice("Данные профиля обновлены")}
       >
         <main
@@ -3241,6 +3247,8 @@ function ProfileSettingsPushView({
           {displayPage === "verification" && (
             <WalletVerification
               aura={aura}
+              contacts={verificationContacts}
+              onContacts={() => setVerificationContacts(true)}
               onPersonal={() => setDisplayPage("personal")}
             />
           )}

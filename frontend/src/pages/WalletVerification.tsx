@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { List, ListInput } from "framework7-react";
 import { Button } from "konsta/react";
 import { Check, LockKeyhole, ArrowUpRight, RefreshCw } from "lucide-react";
@@ -8,9 +7,15 @@ import "./WalletVerification.css";
 type Props = {
   aura: ReturnType<typeof useAuraProfile>;
   onPersonal: () => void;
+  contacts: boolean;
+  onContacts: () => void;
 };
-export default function WalletVerification({ aura, onPersonal }: Props) {
-  const [contacts, setContacts] = useState(false);
+export default function WalletVerification({
+  aura,
+  onPersonal,
+  contacts,
+  onContacts,
+}: Props) {
   const verified = Boolean(aura.kyc?.verified);
   const pending = ["pending", "in_review"].includes(aura.kyc?.status || "");
   const rejected = aura.kyc?.status === "rejected";
@@ -195,7 +200,7 @@ export default function WalletVerification({ aura, onPersonal }: Props) {
             }
             className="!m-0 !w-full"
             onClick={() => {
-              if (!aura.email.trim() || !aura.phone.trim()) setContacts(true);
+              if (!aura.email.trim() || !aura.phone.trim()) onContacts();
               else void aura.start();
             }}
           >

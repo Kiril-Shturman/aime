@@ -229,3 +229,31 @@ test("verification uses Telegram back and a plain Start button", async ({
     )
     .toBe(false);
 });
+
+test("Telegram back from contacts returns to verification start before closing", async ({
+  page,
+}) => {
+  await setup(page, true, "light", true);
+  await page
+    .getByRole("link", { name: "Верификация Подтверждение личности" })
+    .click();
+  await page.getByRole("button", { name: "Начать", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Ваши контакты" }),
+  ).toBeVisible();
+  await page.evaluate(() =>
+    (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {}),
+  );
+  await expect(
+    page.getByRole("button", { name: "Начать", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Контакты для верификации", exact: true }),
+  ).toHaveCount(0);
+  await page.evaluate(() =>
+    (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {}),
+  );
+  await expect(
+    page.getByRole("region", { name: "Проверка личности", exact: true }),
+  ).toHaveCount(0);
+});
