@@ -447,7 +447,7 @@
 }
 .wpay-contact-mail-scene {
   position: relative;
-  height: clamp(175px, 28svh, 245px);
+  height: clamp(155px, 23svh, 210px);
   isolation: isolate;
   perspective: 900px;
   pointer-events: none;
@@ -680,7 +680,7 @@
 }
 @media (max-height: 700px) {
   .wpay-contact-mail-scene {
-    height: 185px;
+    height: 155px;
   }
 }
 
@@ -689,4 +689,18 @@
   left: 30%;
   top: 24%;
   transform: rotate(-17deg);
+}
+
+.wpay-verification-contacts .wpay-verification-contact-body {
+  padding-top: 0;
+}
+.wpay-contact-mailbox {
+  height: 80%;
+  bottom: 16%;
+}
+.wpay-contact-telephone {
+  width: 36%;
+  max-width: 165px;
+  right: 14%;
+  bottom: 16%;
 }
