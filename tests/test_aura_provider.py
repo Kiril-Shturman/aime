@@ -175,9 +175,15 @@ class AuraUnitTests(unittest.TestCase):
             "event": "card.operation", "event_id": "evt_operation",
             "occurred_at": "2026-01-01T00:04:00Z", "partner_id": MOCK_PARTNER,
             "data": {
-                "id": "op_one", "card_id": "card_one", "type": "purchase",
-                "status": "completed", "asset": "USDT", "amount": "2.5",
-                "fee": "0", "merchant": "Store",
+                "operation_id": "op_one", "card_id": "card_one",
+                "type": "purchase", "status": "completed",
+                "previous_status": None, "currency": "USDT", "amount": "2.5",
+                "fee": "0", "merchant_name": "Store", "merchant_country": "US",
+                "mcc": "5734", "merchant_category": "Computer Software Stores",
+                "original_amount": None, "original_currency": None,
+                "refunded_amount": "0", "decline_reason": None,
+                "decline_message": None, "balance_before": "10",
+                "balance_after": "7.5", "created_at": "2026-01-01T00:04:00Z",
                 "updated_at": "2026-01-01T00:04:00Z",
             },
         }
@@ -279,6 +285,60 @@ class AuraUnitTests(unittest.TestCase):
         self.assertEqual(operation["balance_after"], "53.8686")
         self.assertEqual(operation["provider_created_at"], "2026-09-11T10:00:00.000Z")
         self.assertEqual(operation["provider_updated_at"], "2026-09-12T10:00:00.000Z")
+
+    def test_card_operation_contract_rejects_invalid_decline_and_refund_economics(self):
+        opened = {
+            "event": "card.opened", "event_id": "evt_contract_card",
+            "occurred_at": "2026-09-11T09:59:00Z", "partner_id": MOCK_PARTNER,
+            "data": {
+                "card_id": "card_contract", "owner_id": self.customer,
+                "customer_id": "internal-aura-customer", "status": "opened",
+                "card_number_masked": "411111••••••1234",
+            },
+        }
+        base = {
+            "card_id": "card_contract",
+            "operation_id": "4f2a1b0c-9d8e-4f7a-8b6c-5d4e3f2a1b0c",
+            "type": "purchase", "status": "declined", "previous_status": "pending",
+            "amount": "10", "currency": "USDT", "original_amount": None,
+            "original_currency": None, "merchant_name": None,
+            "merchant_country": None, "mcc": None, "merchant_category": None,
+            "refunded_amount": "0", "decline_reason": "other",
+            "decline_message": "Provider rejected purchase", "balance_before": "20",
+            "balance_after": "19", "created_at": "2026-09-11T10:00:00.000Z",
+            "updated_at": "2026-09-11T10:01:00.000Z",
+        }
+        invalid_refund = {
+            **base, "operation_id": "5f2a1b0c-9d8e-4f7a-8b6c-5d4e3f2a1b0c",
+            "status": "partially_refunded", "previous_status": "completed",
+            "decline_reason": None, "decline_message": None,
+            "balance_after": "30", "refunded_amount": "10",
+        }
+        for event in (
+            opened,
+            {"event": "card.operation", "event_id": "evt_invalid_decline",
+             "occurred_at": base["updated_at"], "partner_id": MOCK_PARTNER,
+             "data": base},
+            {"event": "card.operation", "event_id": "evt_invalid_refund",
+             "occurred_at": invalid_refund["updated_at"], "partner_id": MOCK_PARTNER,
+             "data": invalid_refund},
+        ):
+            raw, signature = signed(event)
+            store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        self.assertEqual(
+            self.ledger.db.execute("SELECT COUNT(*) FROM aura_card_operations").fetchone()[0],
+            0,
+        )
+        errors = {
+            row["provider_event_id"]: row["error"]
+            for row in self.ledger.db.execute(
+                "SELECT provider_event_id,error FROM wallet_webhook_inbox "
+                "WHERE provider_event_id IN ('evt_invalid_decline','evt_invalid_refund')"
+            )
+        }
+        self.assertIn("must not change balance", errors["evt_invalid_decline"])
+        self.assertIn("Invalid partially refunded", errors["evt_invalid_refund"])
 
     def test_documented_card_opened_uses_owner_id_not_internal_customer_id(self):
         event = {
@@ -662,8 +722,14 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             "data": {
                 "operation_id": pending_result["operation_id"], "card_id": card_id,
                 "type": "topup", "status": "declined", "previous_status": "pending",
-                "currency": "USDT",
-                "amount": "10", "fee": "0.2", "updated_at": "2026-01-01T00:30:00Z",
+                "currency": "USDT", "amount": "10", "fee": "0.2",
+                "balance_before": "10", "balance_after": "10",
+                "created_at": "2026-01-01T00:20:00Z",
+                "updated_at": "2026-01-01T00:30:00Z",
+                "decline_reason": "other", "decline_message": "Provider rejected topup",
+                "mcc": None, "merchant_category": None, "merchant_country": None,
+                "merchant_name": None, "original_amount": None,
+                "original_currency": None, "refunded_amount": "0",
             },
         }
         raw, signature = signed(declined_event)

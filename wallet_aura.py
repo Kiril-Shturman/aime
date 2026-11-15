@@ -1233,9 +1233,21 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
 
 
 def _store_card_operation(ledger, environment, data):
-    operation_id = _safe_identifier(
-        data.get("operation_id") or data.get("id"), "card operation id"
-    )
+    if not isinstance(data, dict):
+        raise ValueError("Aura card operation data must be an object")
+    required = {
+        "amount", "balance_after", "balance_before", "card_id", "created_at",
+        "currency", "decline_message", "decline_reason", "mcc",
+        "merchant_category", "merchant_country", "merchant_name", "operation_id",
+        "original_amount", "original_currency", "previous_status",
+        "refunded_amount", "status", "type", "updated_at",
+    }
+    missing = sorted(required - data.keys())
+    if missing:
+        raise ValueError(
+            "Aura card operation missing required fields: " + ", ".join(missing)
+        )
+    operation_id = _safe_identifier(data.get("operation_id"), "card operation id")
     card_id = _safe_identifier(data.get("card_id"), "card id")
     card = ledger.db.execute(
         "SELECT user_id FROM aura_cards WHERE card_id=? AND environment=?",
@@ -1244,49 +1256,86 @@ def _store_card_operation(ledger, environment, data):
     if not card:
         raise ValueError("Unknown Aura card operation owner")
     existing = ledger.db.execute(
-        "SELECT provider_updated_at FROM aura_card_operations WHERE operation_id=?",
+        "SELECT status,balance_before,balance_after,provider_updated_at "
+        "FROM aura_card_operations WHERE operation_id=?",
         (operation_id,),
     ).fetchone()
     incoming_updated = str(data.get("updated_at") or "")
     if not incoming_updated:
         raise ValueError("Aura card operation updated_at is required")
-    if (existing and incoming_updated and existing[0]
-            and incoming_updated <= existing[0]):
+    provider_created_at = str(data.get("created_at") or "")
+    if not provider_created_at:
+        raise ValueError("Aura card operation created_at is required")
+    if (existing and existing["provider_updated_at"]
+            and incoming_updated <= existing["provider_updated_at"]):
         return
-    amount = None if data.get("amount") is None else str(_decimal(data["amount"], allow_zero=True))
+    amount_value = _decimal(data["amount"])
+    amount = str(amount_value)
     fee = None if data.get("fee") is None else str(_decimal(data["fee"], allow_zero=True))
-    asset = data.get("currency") or data.get("asset")
-    asset = str(asset).upper()[:20] if asset is not None else None
-    merchant = data.get("merchant_name") or data.get("merchant")
-    if isinstance(merchant, dict):
-        merchant = merchant.get("name") or merchant.get("descriptor")
+    asset = str(data["currency"]).upper()
+    if asset != "USDT":
+        raise ValueError("Aura card operation currency must be USDT")
+    merchant = data.get("merchant_name")
     merchant = str(merchant)[:300] if merchant is not None else None
-    operation_type = data.get("type") or data.get("operation_type")
-    operation_type = str(operation_type)[:100] if operation_type is not None else None
-    status = str(data.get("status") or "unknown")[:100]
+    operation_types = {"purchase", "refund", "reversal", "fee", "topup", "other"}
+    operation_type = str(data["type"])
+    if operation_type not in operation_types:
+        raise ValueError("Unknown Aura card operation type")
+    statuses = {
+        "completed", "pending", "declined", "cancelled", "refunded",
+        "partially_refunded",
+    }
+    status = str(data["status"])
+    if status not in statuses:
+        raise ValueError("Unknown Aura card operation status")
     optional_amount = lambda key: (
         None if data.get(key) is None else str(_decimal(data[key], allow_zero=True))
     )
     original_amount = optional_amount("original_amount")
     refunded_amount = optional_amount("refunded_amount")
+    refunded_value = _decimal(data["refunded_amount"], allow_zero=True)
     balance_before = optional_amount("balance_before")
     balance_after = optional_amount("balance_after")
     original_currency = data.get("original_currency")
-    original_currency = str(original_currency).upper()[:20] if original_currency is not None else None
+    original_currency = str(original_currency).upper() if original_currency is not None else None
+    if original_currency is not None and not re.fullmatch(r"[A-Z]{3}", original_currency):
+        raise ValueError("Invalid Aura card operation original_currency")
     merchant_country = data.get("merchant_country")
     merchant_country = str(merchant_country)[:100] if merchant_country is not None else None
     mcc = data.get("mcc")
-    mcc = str(mcc)[:20] if mcc is not None else None
+    mcc = str(mcc) if mcc is not None else None
+    if mcc is not None and not re.fullmatch(r"\d{4}", mcc):
+        raise ValueError("Invalid Aura card operation MCC")
     merchant_category = data.get("merchant_category")
     merchant_category = str(merchant_category)[:200] if merchant_category is not None else None
     previous_status = data.get("previous_status")
-    previous_status = str(previous_status)[:100] if previous_status is not None else None
+    previous_status = str(previous_status) if previous_status is not None else None
+    if previous_status is not None and previous_status not in statuses:
+        raise ValueError("Unknown Aura card operation previous_status")
     decline_reason = data.get("decline_reason")
-    decline_reason = str(decline_reason)[:200] if decline_reason is not None else None
+    decline_reason = str(decline_reason) if decline_reason is not None else None
+    if decline_reason is not None and decline_reason not in {"insufficient_balance", "other"}:
+        raise ValueError("Unknown Aura card operation decline_reason")
+    if status != "declined" and decline_reason is not None:
+        raise ValueError("Aura card operation decline_reason requires declined status")
     decline_message = data.get("decline_message")
     decline_message = str(decline_message)[:500] if decline_message is not None else None
-    provider_created_at = data.get("created_at")
-    provider_created_at = str(provider_created_at)[:100] if provider_created_at is not None else None
+    if status == "declined" and balance_before is not None and balance_after is not None:
+        if Decimal(balance_before) != Decimal(balance_after):
+            raise ValueError("Declined Aura card operation must not change balance")
+    if status == "partially_refunded" and not (Decimal("0") < refunded_value < amount_value):
+        raise ValueError("Invalid partially refunded Aura card operation amount")
+    if status == "refunded" and refunded_value < amount_value:
+        raise ValueError("Invalid fully refunded Aura card operation amount")
+    if existing and existing["status"] == "pending" and status == "completed":
+        for key, incoming in (
+            ("balance_before", balance_before), ("balance_after", balance_after)
+        ):
+            prior = existing[key]
+            if prior is not None and incoming is not None and Decimal(prior) != Decimal(incoming):
+                raise ValueError(
+                    "Completed Aura card operation changed pending authorization balances"
+                )
     stamp = time.time()
     ledger.db.execute(
         "INSERT INTO aura_card_operations "
