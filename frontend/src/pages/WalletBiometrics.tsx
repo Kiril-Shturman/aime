@@ -61,9 +61,16 @@ function hint() {
     return false;
   }
 }
+function confirmedDisabled() {
+  try {
+    return localStorage.getItem(key()) === "disabled";
+  } catch {
+    return false;
+  }
+}
 function saveHint(enabled: boolean) {
   if (enabled) localStorage.setItem(key(), "enabled");
-  else localStorage.removeItem(key());
+  else localStorage.setItem(key(), "disabled");
 }
 function obscured(value: boolean) {
   document.documentElement.classList.toggle("wpay-biometric-obscured", value);
@@ -107,6 +114,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     [approved, setApproved] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [initializationAttempt, setInitializationAttempt] = useState(0);
   const alive = useRef(true),
     enabledRef = useRef(false),
     busyRef = useRef(false),
@@ -189,7 +197,11 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     const ok = await nativeCall<boolean>((done) => {
       bio.updateBiometricToken(marker, done);
     });
-    if (!ok) throw Error("Telegram не сохранил настройку. Попробуйте ещё раз.");
+    if (!ok)
+      throw Object.assign(
+        Error("Telegram не сохранил настройку. Попробуйте ещё раз."),
+        { definitive: true },
+      );
   }, []);
   const unlock = useCallback(
     async (interactive = true) => {
@@ -250,15 +262,21 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
             ? "Подтвердите включение защиты WPay"
             : "Подтвердите отключение защиты WPay",
         );
-        // Persist a non-secret fail-closed hint before changing native secure storage.
-        saveHint(next);
+        // Enabling is fail-closed; disabled is recorded only after native removal succeeds.
+        if (next) saveHint(true);
         try {
           await store(bio, next);
+          if (!next) saveHint(false);
         } catch (reason) {
-          try {
-            saveHint(previous);
-          } catch {
-            /* Keep native state as the source of protection. */
+          if (next && !(reason instanceof Error && "definitive" in reason)) {
+            // A timed-out enable may have succeeded natively; keep protection on.
+            remember(true);
+          } else {
+            try {
+              saveHint(previous);
+            } catch {
+              /* Native state remains authoritative. */
+            }
           }
           throw reason;
         }
@@ -288,49 +306,81 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     alive.current = true;
     let cancelled = false;
-    const initialize = async () => {
-      const bio = manager();
-      if (!bio) {
-        if (cancelled) return;
-        const protectedDevice = hint();
-        remember(protectedDevice);
-        setReady(true);
-        setLocked(protectedDevice);
-        setAllowed(!protectedDevice);
-        obscured(protectedDevice);
-        if (protectedDevice)
-          setError(
-            "Для разблокировки откройте WPay в Telegram с поддержкой биометрии.",
-          );
-        return;
+    let initializing = true;
+    const applyNativeState = (bio: TgBiometricManager) => {
+      if (cancelled || !initializing || !bio.isInited) return;
+      initializing = false;
+      capability(bio);
+      const protectedDevice = bio.isBiometricTokenSaved || hint();
+      remember(protectedDevice);
+      setLocked(protectedDevice);
+      setAllowed(!protectedDevice);
+      setReady(true);
+      setError("");
+      obscured(protectedDevice);
+      if (!protectedDevice) {
+        try {
+          saveHint(false);
+        } catch {
+          /* Native absence has still been confirmed. */
+        }
       }
+      if (protectedDevice) void unlock(false);
+    };
+    const initialize = async () => {
       try {
-        if (!bio.isInited)
-          await nativeCall<void>((done) => {
-            bio.init(() => done());
-          }, 12000);
-        if (cancelled) return;
-        capability(bio);
-        const protectedDevice = bio.isBiometricTokenSaved || hint();
-        remember(protectedDevice);
-        setLocked(protectedDevice);
-        setAllowed(!protectedDevice);
-        setReady(true);
-        obscured(protectedDevice);
-        if (protectedDevice) void unlock(false);
-      } catch {
-        if (!cancelled) {
+        const bio = manager();
+        const disabled = confirmedDisabled() && !hint();
+        if (disabled && !bio?.isBiometricTokenSaved) {
+          // A previous successful disable must not wait for Telegram at each launch.
+          remember(false);
           setReady(true);
-          setApproved(false);
-          setLocked(true);
-          obscured(true);
-          setError(
-            "Не удалось проверить биометрию Telegram. Повторите открытие миниапки.",
-          );
+          setAllowed(true);
+          setLocked(false);
+          obscured(false);
+        }
+        if (!bio) {
+          if (cancelled) return;
+          initializing = false;
+          const protectedDevice = hint();
+          remember(protectedDevice);
+          setReady(true);
+          setLocked(protectedDevice);
+          setAllowed(!protectedDevice);
+          obscured(protectedDevice);
+          if (protectedDevice)
+            setError(
+              "Для разблокировки откройте WPay в Telegram с поддержкой биометрии.",
+            );
+          return;
+        }
+        tg()?.ready?.();
+        if (!bio.isInited)
+          await nativeCall<void>((done) => bio.init(() => done()), 5000);
+        applyNativeState(bio);
+      } catch {
+        if (!cancelled && initializing) {
+          setReady(true);
+          if (
+            confirmedDisabled() &&
+            !hint() &&
+            !enabledRef.current &&
+            !manager()?.isBiometricTokenSaved
+          ) {
+            setAllowed(true);
+            setLocked(false);
+            obscured(false);
+          } else {
+            setApproved(false);
+            setLocked(true);
+            obscured(true);
+            setError(
+              "Telegram не сообщил состояние защиты. Повторите проверку.",
+            );
+          }
         }
       }
     };
-    void initialize();
     const deactivate = () => {
       background.current = true;
       setApproved(false);
@@ -356,6 +406,10 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     const updated = () => {
       const bio = manager();
       capability(bio);
+      if (initializing && bio?.isInited) {
+        applyNativeState(bio);
+        return;
+      }
       if (
         enabledRef.current &&
         !busyRef.current &&
@@ -373,6 +427,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     app?.onEvent?.("deactivated", deactivate);
     app?.onEvent?.("activated", activate);
     app?.onEvent?.("biometricManagerUpdated", updated);
+    void initialize();
     return () => {
       cancelled = true;
       alive.current = false;
@@ -382,8 +437,9 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
       app?.offEvent?.("biometricManagerUpdated", updated);
       obscured(false);
     };
-  }, [capability, remember, unlock]);
+  }, [capability, remember, unlock, initializationAttempt]);
   const hidden = !ready || locked;
+  const needsInitialization = ready && manager()?.isInited === false;
   return (
     <Context.Provider
       value={{
@@ -452,6 +508,12 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
                 disabled={busy}
                 className="!m-0 !w-full"
                 onClick={() => {
+                  if (needsInitialization) {
+                    setError("");
+                    setReady(false);
+                    setInitializationAttempt((attempt) => attempt + 1);
+                    return;
+                  }
                   if (!approved) {
                     void unlock(true);
                     return;
@@ -469,13 +531,15 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
                 }}
               >
                 <span className="wpay-unlock-label">
-                  {!approved && <FaceIdIcon />}
+                  {!approved && !needsInitialization && <FaceIdIcon />}
                   <span>
                     {busy
                       ? "Подтверждение…"
-                      : approved
-                        ? "Открыть"
-                        : "Разблокировать"}
+                      : needsInitialization
+                        ? "Повторить проверку"
+                        : approved
+                          ? "Открыть"
+                          : "Разблокировать"}
                   </span>
                 </span>
               </Button>

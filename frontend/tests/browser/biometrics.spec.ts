@@ -1,14 +1,22 @@
 import { test, expect, type Page } from "@playwright/test";
 
-async function setup(page: Page, saved = false, avatar?: Buffer) {
+async function setup(
+  page: Page,
+  saved = false,
+  avatar?: Buffer,
+  infoResponsive = true,
+) {
   const vault = {
     token: saved ? "device-marker" : "",
     authorized: true,
     rejectRemoval: false,
+    infoResponsive,
     posts: [] as string[],
   };
   await page.exposeFunction("nativeBiometry", (type: string, raw: string) => {
     vault.posts.push(type);
+    if (type === "web_app_biometry_get_info" && !vault.infoResponsive)
+      return null;
     if (
       type === "web_app_biometry_get_info" ||
       type === "web_app_biometry_request_access"
@@ -132,10 +140,14 @@ test("native Face ID: enable, cancel disable, then confirm disable", async ({
   await expect(page.getByRole("main", { name: "Блокировка WPay" })).toHaveCount(
     0,
   );
+  vault.infoResponsive = false;
   await page.reload();
   await expect(
     page.getByRole("button", { name: "Профиль", exact: true }),
-  ).toBeVisible();
+  ).toBeVisible({ timeout: 2000 });
+  await expect(
+    page.getByText("Проверяем защиту устройства…", { exact: true }),
+  ).toHaveCount(0);
   expect(authCalls()).toBe(before);
 });
 test("saved native marker locks on reload even without local hint; cancellation does not reveal wallet", async ({
@@ -271,4 +283,55 @@ test("badge paints the authenticated same-origin avatar into its texture", async
       }),
     )
     .toEqual([255, 0, 0]);
+});
+
+test("late native information recovers startup without bypassing an unknown lock", async ({
+  page,
+}) => {
+  const vault = await setup(page, false, undefined, false);
+  await expect(
+    page.getByRole("button", { name: "Повторить проверку", exact: true }),
+  ).toBeVisible({ timeout: 8000 });
+  await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
+  await page.evaluate(() =>
+    (window as any).Telegram.WebView.receiveEvent("biometry_info_received", {
+      available: true,
+      type: "face",
+      access_requested: true,
+      access_granted: true,
+      token_saved: false,
+      device_id: "test-device",
+    }),
+  );
+  await expect(
+    page.getByRole("button", { name: "Профиль", exact: true }),
+  ).toBeVisible();
+  expect(
+    vault.posts.filter((type) => type === "web_app_biometry_request_auth"),
+  ).toHaveLength(0);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Профиль", exact: true }),
+  ).toBeVisible({ timeout: 2000 });
+});
+test("retry initializes a saved native lock and still requires authentication and Open", async ({
+  page,
+}) => {
+  const vault = await setup(page, true, undefined, false);
+  await expect(
+    page.getByRole("button", { name: "Повторить проверку", exact: true }),
+  ).toBeVisible({ timeout: 8000 });
+  await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
+  vault.infoResponsive = true;
+  await page
+    .getByRole("button", { name: "Повторить проверку", exact: true })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Добро пожаловать", exact: true }),
+  ).toBeVisible();
+  await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
+  await page.getByRole("button", { name: "Открыть", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Профиль", exact: true }),
+  ).toBeVisible();
 });
