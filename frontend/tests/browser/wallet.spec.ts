@@ -810,243 +810,6 @@ const publicCustodyWallet = (network = "BTC") => ({
   deposit_enabled: false,
   withdraw_enabled: false,
 });
-async function openCustody(page: import("@playwright/test").Page) {
-  await page.goto("/wallet");
-  return page.getByRole("region", { name: "Собственные кошельки WPay" });
-}
-for (const theme of ["light", "dark"])
-  test(`${theme}: create an owned wallet for free and keep it on reopen`, async ({
-    page,
-  }) => {
-    await setup(page, theme);
-    let creates = 0;
-    const wallets: ReturnType<typeof publicCustodyWallet>[] = [];
-    await page.route("**/api/wallet/custody-status", (route) =>
-      route.fulfill({ json: custodyStatus }),
-    );
-    await page.route("**/api/wallet/custody-wallets", (route) =>
-      route.fulfill({ json: { items: wallets } }),
-    );
-    await page.route("**/api/wallet/custody-wallet", (route) => {
-      creates++;
-      expect(route.request().postDataJSON()).toEqual({ network: "BTC" });
-      wallets.push(publicCustodyWallet());
-      return route.fulfill({ json: wallets[0] });
-    });
-    const panel = await openCustody(page);
-    await expect(
-      panel.getByText("Тестовые сети. Не отправляйте реальные средства.", {
-        exact: true,
-      }),
-    ).toBeVisible();
-    await panel
-      .getByRole("button", { name: "Создать кошелёк Bitcoin", exact: true })
-      .click();
-    await expect(panel.getByLabel("Адрес Bitcoin", { exact: true })).toHaveText(
-      publicCustodyWallet().address,
-    );
-    await expect(
-      panel.getByRole("button", {
-        name: "Создать кошелёк Bitcoin",
-        exact: true,
-      }),
-    ).toHaveCount(0);
-    await expect(
-      panel.getByRole("button", {
-        name: "Скопировать адрес Bitcoin",
-        exact: true,
-      }),
-    ).toBeVisible();
-    await expect(panel.getByText("$2.00", { exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: "Профиль", exact: true }).click();
-    await expect(page.getByRole("link", { name: /Мои кошельки/ })).toHaveCount(
-      0,
-    );
-    await expect(panel).toHaveCount(0);
-    await page.getByRole("link", { name: "Кошелёк", exact: true }).click();
-    await expect(panel.getByLabel("Адрес Bitcoin", { exact: true })).toHaveText(
-      publicCustodyWallet().address,
-    );
-    expect(creates).toBe(1);
-  });
-
-test("wallet creation supports all six networks without secret parameters", async ({
-  page,
-}) => {
-  await setup(page, "light");
-  const requested: string[] = [];
-  await page.route("**/api/wallet/custody-status", (route) =>
-    route.fulfill({ json: custodyStatus }),
-  );
-  await page.route("**/api/wallet/custody-wallets", (route) =>
-    route.fulfill({ json: { items: [] } }),
-  );
-  await page.route("**/api/wallet/custody-wallet", (route) => {
-    const body = route.request().postDataJSON();
-    expect(Object.keys(body)).toEqual(["network"]);
-    requested.push(body.network);
-    return route.fulfill({ json: publicCustodyWallet(body.network) });
-  });
-  const panel = await openCustody(page);
-  for (const network of custodyNetworks) {
-    await panel
-      .getByRole("button", {
-        name: "Создать кошелёк " + network.name,
-        exact: true,
-      })
-      .click();
-    await expect(
-      panel.getByLabel("Адрес " + network.name, { exact: true }),
-    ).toBeVisible();
-  }
-  expect(requested).toEqual(["BTC", "ETH", "BSC", "TON", "SOL", "TRON"]);
-});
-
-test("wallet generation failure never displays a fake address", async ({
-  page,
-}) => {
-  await setup(page, "light");
-  await page.route("**/api/wallet/custody-status", (route) =>
-    route.fulfill({ json: custodyStatus }),
-  );
-  await page.route("**/api/wallet/custody-wallets", (route) =>
-    route.fulfill({ json: { items: [] } }),
-  );
-  await page.route("**/api/wallet/custody-wallet", (route) =>
-    route.fulfill({
-      status: 503,
-      json: { detail: "Создание кошелька недоступно" },
-    }),
-  );
-  const panel = await openCustody(page);
-  await panel
-    .getByRole("button", { name: "Создать кошелёк Bitcoin", exact: true })
-    .click();
-  await expect(panel.getByRole("alert")).toHaveText(
-    "Создание кошелька недоступно",
-  );
-  await expect(panel.getByLabel("Адрес Bitcoin", { exact: true })).toHaveCount(
-    0,
-  );
-  await expect(
-    panel.getByRole("button", { name: "Создать кошелёк Bitcoin", exact: true }),
-  ).toBeEnabled();
-});
-
-test("unconfigured custody disables generation", async ({ page }) => {
-  await setup(page, "dark");
-  await page.route("**/api/wallet/custody-status", (route) =>
-    route.fulfill({
-      json: { ...custodyStatus, configured: false, generation_enabled: false },
-    }),
-  );
-  await page.route("**/api/wallet/custody-wallets", (route) =>
-    route.fulfill({ json: { items: [] } }),
-  );
-  const panel = await openCustody(page);
-  await expect(
-    panel.getByText("Создание кошельков пока недоступно", { exact: true }),
-  ).toBeVisible();
-  for (const network of custodyNetworks)
-    await expect(
-      panel.getByRole("button", {
-        name: "Создать кошелёк " + network.name,
-        exact: true,
-      }),
-    ).toBeDisabled();
-});
-
-for (const theme of ["light", "dark"])
-  test(`${theme}: owned wallet menu is aligned and hides without destroying the address`, async ({
-    page,
-  }) => {
-    await setup(page, theme);
-    let hidden = false,
-      hides = 0;
-    await page.route("**/api/wallet/custody-status", (route) =>
-      route.fulfill({ json: { ...custodyStatus, chain_env: "mainnet" } }),
-    );
-    const row = { ...publicCustodyWallet("SOL"), chain_env: "mainnet" };
-    await page.route("**/api/wallet/custody-wallets", (route) =>
-      route.fulfill({ json: { items: hidden ? [] : [row] } }),
-    );
-    await page.route("**/api/wallet/custody-wallet-hide", (route) => {
-      expect(route.request().postDataJSON()).toEqual({ wallet_id: row.id });
-      hidden = true;
-      hides++;
-      return route.fulfill({ json: { id: row.id, hidden: true } });
-    });
-    await page.route("**/api/wallet/custody-wallet", (route) => {
-      hidden = false;
-      return route.fulfill({ json: row });
-    });
-    const panel = await openCustody(page);
-    await panel
-      .getByRole("button", { name: "Открыть кошелёк Solana", exact: true })
-      .click();
-    const details = page.getByRole("main", {
-      name: "Собственный кошелёк",
-      exact: true,
-    });
-    const surface = details.locator(
-      "xpath=ancestor::section[@data-wallet-surface][1]",
-    );
-    await expect(
-      details.getByText("Не удалось прочитать баланс сети", { exact: true }),
-    ).toBeVisible();
-    await expect(details.getByText("425.5", { exact: true })).toHaveCount(0);
-    await details
-      .getByRole("button", { name: "Пополнить", exact: true })
-      .click();
-    await expect(
-      details.getByRole("region", { name: "QR-код собственного кошелька" }),
-    ).toBeVisible();
-    await details.getByRole("button", { name: "Вывести", exact: true }).click();
-    await expect(
-      page.getByText("Вывод для собственных кошельков ещё не подключён", {
-        exact: true,
-      }),
-    ).toBeVisible();
-    const trigger = surface.getByLabel("Ещё", { exact: true });
-    await trigger.click();
-    const menu = page.locator('[aria-label="Меню кошелька"]:visible');
-    for (const title of ["Пополнить", "Вывести", "Обменять", "Удалить кошелёк"])
-      await expect(menu.getByText(title, { exact: true })).toBeVisible();
-    const triggerBox = (await trigger.boundingBox())!,
-      menuBox = (await menu.boundingBox())!;
-    expect(menuBox.y).toBeGreaterThanOrEqual(triggerBox.y + triggerBox.height);
-    expect(menuBox.x).toBeGreaterThanOrEqual(0);
-    expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(390);
-    await trigger.click();
-    await expect(menu).toHaveCount(0);
-    await trigger.click();
-    await menu.getByText("Удалить кошелёк", { exact: true }).click();
-    await page
-      .locator(".dialog.modal-in .dialog-button")
-      .filter({ hasText: /^Отмена$/ })
-      .click();
-    expect(hides).toBe(0);
-    await trigger.click();
-    await menu.getByText("Удалить кошелёк", { exact: true }).click();
-    await page
-      .locator(".dialog.modal-in .dialog-button")
-      .filter({ hasText: /^Удалить$/ })
-      .click();
-    await expect(
-      panel.getByRole("button", {
-        name: "Создать кошелёк Solana",
-        exact: true,
-      }),
-    ).toBeVisible();
-    expect(hides).toBe(1);
-    await panel
-      .getByRole("button", { name: "Создать кошелёк Solana", exact: true })
-      .click();
-    await expect(panel.getByLabel("Адрес Solana", { exact: true })).toHaveText(
-      row.address,
-    );
-  });
-
 test("address details menu contains wallet actions and no illustrative balance", async ({
   page,
 }) => {
@@ -1109,6 +872,7 @@ async function ownChainSetup(
     BTC: ["BTC"],
     TRX: ["TRON"],
     XAUT: ["ETH"],
+    TON: ["TON"],
     USDT: ["BSC", "ETH", "TON", "SOL", "TRON"],
   };
   const names: Record<string, string> = {
@@ -1119,7 +883,7 @@ async function ownChainSetup(
     TRX: "TRON",
     XAUT: "GOLD (XAUT)",
     USDT: "Tether",
-    GRAM: "Gram",
+    TON: "Toncoin",
   };
   const amounts: Record<string, string> = {
     ETH: "1.123456789012345678",
@@ -1128,6 +892,7 @@ async function ownChainSetup(
     BTC: "0.12345678",
     TRX: "42.000001",
     XAUT: "0.000001",
+    TON: "3.123456789",
     USDT: "15.000005",
   };
   const wallets = new Map<string, ReturnType<typeof publicCustodyWallet>>();
@@ -1220,7 +985,7 @@ async function ownChainSetup(
   };
   return { requested, open, amounts };
 }
-for (const code of ["BTC", "ETH", "BNB", "SOL", "TRX", "XAUT"])
+for (const code of ["BTC", "ETH", "BNB", "SOL", "TRX", "XAUT", "TON"])
   test(`opening ${code} automatically creates its owned wallet and shows on-chain precision`, async ({
     page,
   }) => {
@@ -1267,16 +1032,111 @@ test("failed chain observation remains unknown instead of showing a zero or part
     panel.getByRole("button", { name: "Открыть адрес SOL", exact: true }),
   ).toContainText("—");
 });
-test("unverified GRAM contract never creates a pretend wallet balance", async ({
+
+for (const theme of ["light", "dark"])
+  test(`${theme}: wallet home has Toncoin and no extra wallet creation block`, async ({
+    page,
+  }) => {
+    await ownChainSetup(page, theme);
+    const home = page.locator(".wpay-wallet-home");
+    await expect(
+      home.locator("span.font-semibold").filter({ hasText: /^Toncoin$/ }),
+    ).toBeVisible();
+    await expect(
+      home.locator("span.font-semibold").filter({ hasText: /^Gram$/ }),
+    ).toHaveCount(0);
+    await expect(
+      home.getByRole("heading", { name: "Мои кошельки", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      home.getByRole("region", {
+        name: "Собственные кошельки WPay",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      home.getByText(
+        "Создание бесплатно. В каждой сети — свой постоянный адрес.",
+        { exact: true },
+      ),
+    ).toHaveCount(0);
+  });
+for (const theme of ["light", "dark"])
+  test(`${theme}: TON wallet menu is aligned and hidden address is restored on reopening the coin`, async ({
+    page,
+  }) => {
+    const { open, requested } = await ownChainSetup(page, theme);
+    let hides = 0;
+    await page.route("**/api/wallet/custody-wallet-hide", (route) => {
+      expect(route.request().postDataJSON()).toEqual({
+        wallet_id: "owned-TON",
+      });
+      hides++;
+      return route.fulfill({ json: { id: "owned-TON", hidden: true } });
+    });
+    const portfolio = await open("TON");
+    await portfolio
+      .getByRole("button", { name: "Открыть адрес TON", exact: true })
+      .click();
+    const hero = page.getByRole("region", {
+      name: "Баланс адреса",
+      exact: true,
+    });
+    await expect(hero).toContainText("3.123456789 TON");
+    const surface = hero.locator(
+      "xpath=ancestor::section[@data-wallet-surface][1]",
+    );
+    const trigger = surface.getByLabel("Ещё", { exact: true });
+    await trigger.click();
+    const menu = page.locator('[aria-label="Меню кошелька"]:visible');
+    for (const title of ["Пополнить", "Вывести", "Обменять", "Удалить кошелёк"])
+      await expect(menu.getByText(title, { exact: true })).toBeVisible();
+    const tb = (await trigger.boundingBox())!,
+      mb = (await menu.boundingBox())!;
+    expect(mb.y).toBeGreaterThanOrEqual(tb.y + tb.height);
+    expect(mb.x).toBeGreaterThanOrEqual(0);
+    expect(mb.x + mb.width).toBeLessThanOrEqual(390);
+    await trigger.click();
+    await expect(menu).toHaveCount(0);
+    await trigger.click();
+    await menu.getByText("Удалить кошелёк", { exact: true }).click();
+    await page.locator(".dialog.modal-in .dialog-button").first().click();
+    expect(hides).toBe(0);
+    await trigger.click();
+    await menu.getByText("Удалить кошелёк", { exact: true }).click();
+    await page.locator(".dialog.modal-in .dialog-button").last().click();
+    await expect(
+      portfolio.getByRole("button", { name: "Открыть адрес TON", exact: true }),
+    ).toHaveCount(0);
+    expect(hides).toBe(1);
+    const coinSurface = page.locator(
+      '[data-wallet-surface="asset"][aria-hidden="false"]',
+    );
+    await coinSurface.getByLabel("Назад", { exact: true }).click();
+    await open("TON");
+    await expect(
+      portfolio.getByRole("button", { name: "Открыть адрес TON", exact: true }),
+    ).toContainText("3.123456789");
+    expect(requested).toEqual(["TON", "TON"]);
+  });
+test("automatic TON creation failure never invents an address or zero balance", async ({
   page,
 }) => {
-  const { requested, open } = await ownChainSetup(page);
-  const panel = await open("GRAM");
+  const { open } = await ownChainSetup(page);
+  await page.route("**/api/wallet/custody-asset", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { detail: "Создание кошелька недоступно" },
+    }),
+  );
+  const panel = await open("TON");
   await expect(panel.getByRole("alert")).toContainText(
-    "нужен проверенный контракт",
+    "Создание кошелька недоступно",
   );
   await expect(
-    panel.getByRole("button", { name: /Открыть адрес/ }),
+    panel.getByRole("button", { name: "Открыть адрес TON", exact: true }),
   ).toHaveCount(0);
-  expect(requested).toEqual(["GRAM"]);
+  await expect(
+    panel.getByLabel("Фактический баланс актива", { exact: true }),
+  ).toContainText("— TON");
 });

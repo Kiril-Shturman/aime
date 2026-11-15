@@ -295,7 +295,7 @@ export default function WalletAddressDetails({
               </dt>
               <dd className="text-right text-[15px] font-medium">
                 {name}
-                {["BTC", "TRX"].includes(code)
+                {["BTC", "TRX", "TON"].includes(code)
                   ? ""
                   : " · " +
                     (addressNetworkStandards[entry.network] ?? entry.network)}

@@ -48,6 +48,10 @@ const networkStandards: Record<string, string> = {
 };
 
 const descriptions: Record<string, { title: string; text: string }> = {
+  TON: {
+    title: "Что такое Toncoin?",
+    text: "Toncoin (TON) — основная монета сети TON. Она используется для переводов и оплаты сетевых комиссий. Это отдельный актив от токенов в сети TON, включая GRAM и USDT.",
+  },
   USDT: {
     title: "Что такое Tether?",
     text: "USDT (Tether) — цифровой токен, ориентированный на стоимость доллара США. Баланс хранится в USDT; при пополнении важно выбрать правильную сеть.",
@@ -486,7 +490,11 @@ export default function WalletAssetPanel({
         <Card className="!m-0 !rounded-[30px]" contentWrapPadding="p-5">
           {!transactions.length && (
             <p className="py-3 text-center text-[14px] text-black/45 dark:text-white/45">
-              {wallet.custody ? "История сети ещё не подключена" : <>Операций в {code} пока нет</>}
+              {wallet.custody ? (
+                "История сети ещё не подключена"
+              ) : (
+                <>Операций в {code} пока нет</>
+              )}
             </p>
           )}
           {(allHistory ? transactions : transactions.slice(0, 3)).map(

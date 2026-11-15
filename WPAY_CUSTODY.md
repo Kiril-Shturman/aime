@@ -7,8 +7,10 @@ Deposits, credits and withdrawals remain disabled.
 
 ## User-visible behavior
 
-The “Кошелёк” tab → “Мои кошельки” section lists the six networks, below
-the asset list. The former profile entry is removed. Creation is free; the API creates
+The wallet tab shows assets directly. TON is listed as Toncoin (TON), replacing
+the incorrectly labeled GRAM row with the TON icon. Opening a cryptocurrency
+automatically ensures its address. The extra “Мои кошельки” block beneath the
+assets and the former profile entry are removed. Creation is free; the API creates
 one permanent wallet per authenticated user/network/environment. Repeating a POST,
 including from concurrent processes, returns the existing address. Private keys
 and recovery seeds are never returned to the browser. Copy copies only an address.
@@ -138,7 +140,7 @@ excluded from the existing admin database browser. Routes work without GoSwap.
 ## Validation and remaining scope
 
 127 backend tests, 4 frontend unit tests and
-38 Playwright tests pass. Production TypeScript/Vite build and frontend lint pass;
+36 Playwright tests pass. Production TypeScript/Vite build and frontend lint pass;
 existing repository warnings remain. Tests cover recovery on all six networks,
 known vectors, encrypted-only storage, wrong keys, swapped/tampered envelopes,
 rotation, immutable rows, restart, two independent SQLite connections creating

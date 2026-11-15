@@ -1,5 +1,4 @@
 import { walletRequest } from "../lib/wallet-api";
-import WalletCustody from "./WalletCustody";
 import WalletNetworkExchange from "./WalletNetworkExchange";
 import { resolveDeposit } from "../wallet/deposit";
 import WalletAssetAvatar from "./WalletAssetAvatar";
@@ -128,7 +127,6 @@ import { assetNetworks as previewNetworks } from "../wallet/catalog";
 import {
   WalletLiveProvider,
   useLiveWallet,
-  WalletConnectionNote,
   LiveDepositPanel,
   LiveHistory,
   LiveQrPanel,
@@ -255,8 +253,8 @@ const assets: Asset[] = [
     icon: <SiEthereum size={25} />,
   },
   {
-    code: "GRAM",
-    name: "Gram",
+    code: "TON",
+    name: "Toncoin",
     rate: "",
     color: "#0098EA",
     iconColor: "#fff",
@@ -662,14 +660,6 @@ function WalletScreen() {
                 </List>
               )}
             </section>
-
-            <div className="mt-8">
-              <WalletCustody
-                active={activeTab === "wallet"}
-                showNotice={showNotice}
-              />
-            </div>
-            <WalletConnectionNote />
           </main>
         )}
 
@@ -923,7 +913,7 @@ function AssetPushView({
         open={asset !== null && addressEntry !== null}
         title={
           addressEntry
-            ? `${displayAsset.code} ${["BTC", "TRX"].includes(displayAsset.code) ? "" : (addressNetworkStandards[addressEntry.network] ?? "")}`.trim()
+            ? `${displayAsset.code} ${["BTC", "TRX", "TON"].includes(displayAsset.code) ? "" : (addressNetworkStandards[addressEntry.network] ?? "")}`.trim()
             : "Адрес"
         }
         subtitle={
@@ -1482,7 +1472,7 @@ function CryptoFlowPushView({
   });
   const [networkExchange, setNetworkExchange] = useState(true);
   const [fromCode, setFromCode] = useState("USDT");
-  const [toCode, setToCode] = useState("GRAM");
+  const [toCode, setToCode] = useState("TON");
   const [amount, setAmount] = useState("");
   const [assetPicker, setAssetPicker] = useState<"from" | "to" | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
@@ -1499,7 +1489,7 @@ function CryptoFlowPushView({
       setToCode((previous) =>
         previous === flow.assetCode
           ? flow.assetCode === "USDT"
-            ? "GRAM"
+            ? "TON"
             : "USDT"
           : previous,
       );

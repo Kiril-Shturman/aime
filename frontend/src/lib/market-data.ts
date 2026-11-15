@@ -7,7 +7,7 @@ export const chartPeriods = [
   {label:'1Г',interval:'1d',minutes:1440,count:365,days:365},
   {label:'Все',interval:'1w',minutes:10080,count:1000,days:0},
 ]
-const assets = new Set(['USDT','TRX','BNB','ETH','GRAM','SOL','BTC','XAUT'])
+const assets = new Set(['USDT','TRX','BNB','ETH','TON','GRAM','SOL','BTC','XAUT'])
 const cache = new Map<string,MarketHistory>()
 async function json(url: string, signal: AbortSignal): Promise<unknown> {
   const controller = new AbortController()

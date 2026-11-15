@@ -2,14 +2,15 @@
 
 Opening a cryptocurrency page in custody mode POSTs only its asset ticker to
 custody-asset. BTC/ETH/BNB/SOL/TRX create or restore the permanent wallet for their
-network. TON is also supported in the own-wallet list. USDT creates/restores
+network. TON is listed as Toncoin in the main asset list and auto-creates its TON wallet. USDT creates/restores
 BSC/ETH/TON/SOL/TRON wallets. XAUT reuses the ETH wallet. A network wallet holds
 native coins and tokens at the same address; opening XAUT after ETH does not
 create a new key. No creation happens on opening the main wallet tab or by GET.
 Encrypted keys and existing addresses are retained. Reopening is idempotent.
 
-GRAM remains unsupported until the intended jetton master is specified and
-verified. No token is selected by symbol alone. Its UI explains the missing
+The former GRAM-with-TON-icon row was replaced by native Toncoin, retaining eight
+assets. GRAM remains unsupported until the intended jetton master is specified and
+verified. No token is selected by symbol alone. The API rejects the missing
 contract instead of creating a misleading wallet/balance.
 
 ## API and storage
@@ -85,7 +86,7 @@ A confirmation/reorg-aware indexer and isolated signer remain future work.
 ## Validation
 
 127 backend tests (including 18 new chain/HTTP scenarios), 4 frontend unit tests,
-38 Playwright scenarios and production build. Coverage includes exact decimals,
+36 Playwright scenarios and production build. Coverage includes exact decimals,
 wrong EVM chain, empty ABI, wrong SPL/jetton identity, BTC mempool separation,
 TRON read-only calls, zero vs failure, durable cache/restart, concurrent
 single-flight, ownership, auto-creation, hidden-wallet read refresh, unchanged
@@ -101,3 +102,9 @@ Primary references:
 - https://github.com/Blockstream/esplora/blob/master/API.md
 - https://developers.tron.network/docs/interacting-with-contracts
 - https://tether.to/en/supported-protocols/
+
+The redundant own-wallet creation widget under the main asset list has been
+removed. Its manual-button UI tests were replaced by native TON auto-creation,
+unknown-balance failure, repeat-open address reuse, aligned address menu and
+light/dark hide/restore scenarios. Server-side encrypted wallet creation,
+visibility and key recovery tests remain in place.
