@@ -22,7 +22,7 @@ async function setup(
         json: { can_withdraw: true, can_transfer: true, currencies: [] },
       });
     if (path.endsWith("/status"))
-      return route.fulfill({ json: { configured: true } });
+      return route.fulfill({ json: { configured: true, asset_routes: { USDT: ["BSC", "ETH", "TON", "SOL", "TRON"], TRX: ["TRON"], BNB: ["BSC"], ETH: ["ETH"], GRAM: ["TON"], SOL: ["SOL"], BTC: ["BTC"], XAUT: ["ETH"] } } });
     if (path.endsWith("/overview"))
       return route.fulfill({
         json: {
@@ -117,14 +117,9 @@ test("provider failure does not create demo balances or addresses", async ({
   page,
 }) => {
   await setup(page, "light", true);
-  await page
-    .locator(".wpay-wallet-home span.font-semibold")
-    .filter({ hasText: /^Tether$/ })
-    .first()
-    .click();
-  await expect(
-    page.getByRole("button", { name: "Открыть адрес BSC", exact: true }),
-  ).toBeDisabled();
+  // Without a trusted asset-route response no actionable assets are shown.
+  await expect(page.locator(".wpay-wallet-home span.font-semibold").filter({ hasText: /^Tether$/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Открыть адрес BSC", exact: true })).toHaveCount(0);
   await expect(page.getByText("1,234.56 USDT", { exact: true })).toHaveCount(0);
   await expect(page.getByText("0x8e908…0a268", { exact: true })).toHaveCount(0);
 });
