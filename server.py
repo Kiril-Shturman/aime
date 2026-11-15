@@ -1980,6 +1980,11 @@ async def _configure_wpay_bot(app):
     await asyncio.to_thread(configure)
 
 
+async def _start_wpay_bot_config(app):
+    # Bot profile updates are best-effort and must never delay the HTTP listener.
+    app["wpay_bot_config_task"] = asyncio.create_task(_configure_wpay_bot(app))
+
+
 async def wpay_telegram_webhook(request):
     """Rich Telegram front door for the wallet and protected admin Mini App."""
     token = os.environ.get("WPAY_BOT_TOKEN", "")
@@ -2632,7 +2637,7 @@ def make_app():
     os.makedirs(os.path.join(ROOT, "shots"), exist_ok=True)
     app.router.add_static("/shots", os.path.join(ROOT, "shots"))
     app.router.add_get("/{tail:.*}", spa)
-    app.on_startup.append(_configure_wpay_bot)
+    app.on_startup.append(_start_wpay_bot_config)
     app.on_shutdown.append(rozpustit_spojeni)
     return app
 
@@ -2642,6 +2647,9 @@ async def rozpustit_spojeni(app):
 
     Иначе доска ждёт, пока сами закроются открытые каналы и минутные
     длинные запросы, и всё это время сайт отвечает 502."""
+    config_task = app.get("wpay_bot_config_task")
+    if config_task and not config_task.done():
+        config_task.cancel()
     for mid in list(_cekaji):
         probudit(mid)
     for sokety in list(_kanaly.values()):
