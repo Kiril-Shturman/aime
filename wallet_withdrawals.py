@@ -90,7 +90,7 @@ def apply_outcome(ledger, payload, money, ApiError):
         raise
 
 
-async def reconcile(ledger, provider, money, ApiError, uid=None, spend_id=None):
+async def reconcile(ledger, provider, money, ApiError, uid=None, spend_id=None, background=False):
     query = "SELECT spend_id FROM wallet_withdrawal_intents WHERE state IN ('reserved','processing','failed','completed')" if spend_id else "SELECT spend_id FROM wallet_withdrawal_intents WHERE state IN ('reserved','processing','failed')"
     params = []
     if uid is not None:
@@ -99,7 +99,9 @@ async def reconcile(ledger, provider, money, ApiError, uid=None, spend_id=None):
     if spend_id is not None:
         query += ' AND spend_id=?'
         params.append(spend_id)
-    # Scan all tracked IDs in batches: a correction may arrive after a failure.
+    if background:
+        query+=" AND intent_id NOT IN (SELECT entity FROM wallet_poll_schedule WHERE kind='withdrawal' AND next_at>?) ORDER BY COALESCE((SELECT next_at FROM wallet_poll_schedule WHERE kind='withdrawal' AND entity=intent_id),0) LIMIT 200"
+        params.append(time.time())
     rows = ledger.db.execute(query, params).fetchall()
     for offset in range(0, len(rows), 100):
         ids = {row['spend_id'] for row in rows[offset:offset+100]}
@@ -107,6 +109,9 @@ async def reconcile(ledger, provider, money, ApiError, uid=None, spend_id=None):
         for item in result.get('items', []):
             if item.get('spend_id') in ids:
                 apply_outcome(ledger, item, money, ApiError)
+        if background:
+            for value in ids:
+                ledger.db.execute("INSERT OR REPLACE INTO wallet_poll_schedule SELECT 'withdrawal',intent_id,?+CASE WHEN state='failed' THEN 3600 ELSE 60 END FROM wallet_withdrawal_intents WHERE spend_id=?",(time.time(),value))
 
 
 async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiError):
@@ -125,6 +130,8 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
         asset, network = str(body.get('asset', '')).upper(), str(body.get('network', '')).upper()
         if asset == 'BTC':
             raise ValueError('BTC по API пока не выводится')
+        if (await provider.call('getMe')).get('can_withdraw') is not True:
+            raise ApiError('NOT_ENABLED', 'Вывод для организации недоступен', 403)
         currencies = await provider.call('getCurrencies')
         rows = currencies if isinstance(currencies, list) else currencies.get('items', [])
         if not any((row.get('code') or row.get('currency_code')) == asset and row.get('can_withdraw') is True for row in rows):
@@ -150,6 +157,8 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
         return web.json_response({**canonical, 'intent_id': intent_id, 'expires_at': time.time()+120})
     intent_id = body.get('intent_id')
     pending=ledger.db.execute('SELECT state,body FROM wallet_withdrawal_intents WHERE intent_id=? AND user_id=?',(intent_id,uid)).fetchone()
+    if pending and pending['state'] in {'estimated','reserved'} and (await provider.call('getMe')).get('can_withdraw') is not True:
+        raise ApiError('NOT_ENABLED','Вывод для организации недоступен',403)
     if pending and pending['state']=='estimated':
         check=json.loads(pending['body'])
         if ledger.balance(uid,check['asset'])[0]<money(check['total']):raise ApiError('INSUFFICIENT_FUNDS','Недостаточно средств с учётом комиссии',409)

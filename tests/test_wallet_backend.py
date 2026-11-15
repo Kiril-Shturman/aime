@@ -388,7 +388,7 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.withdrawal_timeout = False
         self.withdrawal_create_calls = []
         async def scripted(method, data=None, post=False):
-            if method == 'getMe': return {}
+            if method == 'getMe': return {'can_withdraw':True}
             if method == 'getBalance': return [{'currency_code':'USDT','available':'100'}]
             if method == 'getCurrencies': return [{'code': 'USDT', 'can_withdraw': True}]
             if method == 'estimateWithdrawal': return {**data, 'fee': '1', 'total': str(Decimal(data['amount'])+1)}

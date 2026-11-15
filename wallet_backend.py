@@ -178,6 +178,10 @@ class Ledger:
 
         prepare_withdrawals(self)
         self.book = Book(self.db, ApiError)
+        self.db.execute('CREATE TABLE IF NOT EXISTS wallet_deposit_owners (deposit_id TEXT PRIMARY KEY,user_id TEXT NOT NULL,asset TEXT NOT NULL)')
+        for event in self.db.execute("SELECT event_id,user_id,asset FROM wallet_events WHERE type='deposit'").fetchall():
+            if event['event_id'].startswith('deposit:'):
+                self.db.execute('INSERT OR IGNORE INTO wallet_deposit_owners VALUES (?,?,?)',(event['event_id'][8:],event['user_id'],event['asset']))
         columns = {row[1] for row in self.db.execute('PRAGMA table_info(wallet_accounts)')}
         for name, definition in {
             'telegram_id': 'INTEGER',
@@ -288,6 +292,7 @@ class Ledger:
         event_id = 'deposit:' + str(payload['deposit_id'])
         self.begin('deposit','provider',event_id)
         try:
+            self.db.execute('INSERT OR IGNORE INTO wallet_deposit_owners VALUES (?,?,?)',(str(payload['deposit_id']),uid[0],asset))
             if self.db.execute('SELECT 1 FROM wallet_events WHERE event_id=?', (event_id,)).fetchone():
                 self.commit()
                 return False

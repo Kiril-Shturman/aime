@@ -1,6 +1,6 @@
 import { WalletTransfer } from "./WalletUserFinance";
 import { SiTether } from "@icons-pack/react-simple-icons";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Button,
   Card,
@@ -515,6 +515,33 @@ function CoreWithdrawalForm({ method }: { method: WithdrawalMethod }) {
 }
 
 export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
+  const wallet = useLiveWallet();
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  useEffect(() => {
+    let active = true;
+    if (method !== "usdt") return;
+    walletRequest<{ can_withdraw: boolean }>("financial-capabilities")
+      .then((value) => {
+        if (active) setAllowed(value.can_withdraw === true);
+      })
+      .catch(() => {
+        if (active) setAllowed(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [method]);
+  if (method === "usdt" && !wallet.demo && allowed !== true)
+    return (
+      <p
+        role="status"
+        className="p-5 text-center text-black/50 dark:text-white/50"
+      >
+        {allowed === null
+          ? "Проверяем доступность…"
+          : "Вывод в сеть недоступен"}
+      </p>
+    );
   return method === "username" ? (
     <WalletTransfer />
   ) : (

@@ -17,6 +17,10 @@ async function setup(
         status: 503,
         json: { detail: "Сервис недоступен" },
       });
+    if (path.endsWith("/financial-capabilities"))
+      return route.fulfill({
+        json: { can_withdraw: true, can_transfer: true, currencies: [] },
+      });
     if (path.endsWith("/status"))
       return route.fulfill({ json: { configured: true } });
     if (path.endsWith("/overview"))
@@ -469,4 +473,79 @@ test("invoice creation keeps server ownership and rechecks the same intent", asy
   ).toBeVisible();
   expect(prepares).toBe(1);
   expect(creates).toBe(2);
+});
+
+test("organization without withdrawal capability sees unavailable", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  let moneyCalls = 0;
+  await page.route("**/api/wallet/financial-capabilities", (route) =>
+    route.fulfill({ json: { can_withdraw: false } }),
+  );
+  await page.route("**/api/wallet/withdrawal-estimate", (route) => {
+    moneyCalls++;
+    return route.fulfill({ json: {} });
+  });
+  await page
+    .locator(".wpay-wallet-home span.font-semibold")
+    .filter({ hasText: /^Tether$/ })
+    .first()
+    .click();
+  await page
+    .locator('[data-wallet-surface="asset"]')
+    .getByRole("button", { name: "Вывести", exact: true })
+    .click();
+  await page
+    .locator('[aria-hidden="false"]')
+    .last()
+    .getByText("Tether", { exact: true })
+    .last()
+    .click();
+  await expect(
+    page.getByText("Вывод в сеть недоступен", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Сумма вывода USDT", { exact: true }),
+  ).toHaveCount(0);
+  expect(moneyCalls).toBe(0);
+});
+
+test("definitive invoice rejection unlocks a new intent", async ({ page }) => {
+  await setup(page, "light");
+  let prepares = 0,
+    creates = 0;
+  await page.route("**/api/wallet/invoice-prepare", (route) => {
+    prepares++;
+    return route.fulfill({ json: { intent_id: "new-" + prepares } });
+  });
+  await page.route("**/api/wallet/invoice-create", (route) => {
+    creates++;
+    expect(route.request().postDataJSON()).toEqual({
+      intent_id: "new-" + creates,
+    });
+    return creates === 1
+      ? route.fulfill({
+          status: 422,
+          json: {
+            error: { name: "INVOICE_REJECTED" },
+            detail: "Сумма отклонена",
+          },
+        })
+      : route.fulfill({ json: { invoice_id: "1001", status: "active" } });
+  });
+  await page.getByRole("link", { name: "История", exact: true }).click();
+  await page
+    .getByLabel("Фильтр операций")
+    .getByRole("button", { name: "Счета", exact: true })
+    .click();
+  await page.getByLabel("Сумма счёта", { exact: true }).fill("10");
+  await page.getByRole("button", { name: "Создать счёт", exact: true }).click();
+  await expect(page.getByLabel("Сумма счёта", { exact: true })).toBeEnabled();
+  await page.getByLabel("Сумма счёта", { exact: true }).fill("12");
+  await page.getByRole("button", { name: "Создать счёт", exact: true }).click();
+  await expect(
+    page.getByText("Счёт № 1001 · active", { exact: true }),
+  ).toBeVisible();
+  expect(prepares).toBe(2);
 });

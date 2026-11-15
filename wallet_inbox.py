@@ -91,13 +91,13 @@ def store(ledger, raw, signature, valid, origin="webhook", event=None):
         raise
 
 
-async def fetch_pages(ledger, provider, ApiError):
+async def fetch_pages(ledger, provider, ApiError, max_pages=10):
     row = ledger.db.execute(
         "SELECT value FROM wallet_provider_cursor WHERE id=1"
     ).fetchone()
     cursor = row[0] if row else 0
     pages = []
-    for _ in range(10):
+    for _ in range(max_pages):
         page = await provider.call("getTransactions", {"after": cursor, "count": 1000})
         next_cursor = page.get("cursor", cursor)
         if (

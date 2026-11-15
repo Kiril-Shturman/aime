@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button, Card } from "konsta/react";
-import { walletRequest } from "../lib/wallet-api";
+import { WalletApiError, walletRequest } from "../lib/wallet-api";
 import { useLiveWallet } from "./WalletLive";
 
 const card = "!m-0 !rounded-[28px]";
@@ -215,6 +215,8 @@ export function WalletInvoiceCreate({ onCreated }: { onCreated?: () => void }) {
       setResult(await walletRequest("invoice-create", { intent_id: id }));
       onCreated?.();
     } catch (error) {
+      if (error instanceof WalletApiError && error.code === "INVOICE_REJECTED")
+        setIntent(null);
       setError(
         error instanceof Error ? error.message : "Не удалось создать счёт",
       );

@@ -111,10 +111,21 @@ def apply_transfer(ledger, item, money, ApiError):
         raise
 
 
-async def sync_transfers(ledger, provider, money, ApiError, uid=None):
+async def sync_transfers(ledger, provider, money, ApiError, uid=None, background=False):
     rows = ledger.db.execute(
-        "SELECT spend_id FROM wallet_user_transfers WHERE state NOT IN ('prepared','rejected')"
-        + (" AND user_id=?" if uid else ""),
+        (
+            "SELECT spend_id FROM wallet_user_transfers WHERE state IN ('reserved','pending') AND intent_id NOT IN (SELECT entity FROM wallet_poll_schedule WHERE kind='transfer' AND next_at>"
+            + str(time.time())
+            + ")"
+            if background
+            else "SELECT spend_id FROM wallet_user_transfers WHERE state NOT IN ('prepared','rejected')"
+        )
+        + (" AND user_id=?" if uid else "")
+        + (
+            " ORDER BY COALESCE((SELECT next_at FROM wallet_poll_schedule WHERE kind='transfer' AND entity=intent_id),0) LIMIT 200"
+            if background
+            else ""
+        ),
         (uid,) if uid else (),
     ).fetchall()
     for start in range(0, len(rows), 100):
@@ -122,6 +133,12 @@ async def sync_transfers(ledger, provider, money, ApiError, uid=None):
         result = await provider.call(
             "getTransfers", {"spend_id": ",".join(sorted(ids)), "count": 100}
         )
+        if background:
+            for spend_id in ids:
+                ledger.db.execute(
+                    "INSERT OR REPLACE INTO wallet_poll_schedule SELECT 'transfer',intent_id,? FROM wallet_user_transfers WHERE spend_id=?",
+                    (time.time() + 60, spend_id),
+                )
         for item in result.get("items", []):
             if item.get("spend_id") in ids:
                 apply_transfer(ledger, item, money, ApiError)
@@ -162,6 +179,7 @@ async def route(request, action, uid, ledger, provider, money, ApiError):
         return web.json_response(
             {
                 "can_transfer": me.get("can_transfer") is True,
+                "can_withdraw": me.get("can_withdraw") is True,
                 "currencies": await provider.call("getCurrencies"),
             }
         )
@@ -484,6 +502,8 @@ async def create_invoice(ledger, provider, uid, intent, ApiError):
     ).fetchone()
     if not row:
         raise ApiError("NOT_FOUND", "Счёт не найден", 404)
+    if row["state"] == "rejected":
+        raise ApiError("INVOICE_REJECTED", "Счёт отклонён. Создайте новую заявку.", 409)
     if row["invoice_id"]:
         return web.json_response(json.loads(row["outcome"]))
     if row["state"] != "prepared":
@@ -505,7 +525,18 @@ async def create_invoice(ledger, provider, uid, intent, ApiError):
     ).rowcount
     if changed != 1:
         raise ApiError("OUTCOME_UNKNOWN", "Счёт уже создаётся, дождитесь сверки", 503)
-    result = await provider.call("createInvoice", json.loads(row["body"]), post=True)
+    try:
+        result = await provider.call(
+            "createInvoice", json.loads(row["body"]), post=True
+        )
+    except ApiError as error:
+        if error.status in {400, 401, 403, 404, 405, 422}:
+            ledger.db.execute(
+                "UPDATE wallet_user_invoices SET state='rejected' WHERE intent_id=? AND state='creating'",
+                (intent,),
+            )
+            raise ApiError("INVOICE_REJECTED", error.detail, error.status)
+        raise
     ledger.begin("invoice_created", uid, "Bind invoice " + intent)
     try:
         bind_invoice(ledger, row, result)
@@ -516,9 +547,21 @@ async def create_invoice(ledger, provider, uid, intent, ApiError):
     return web.json_response(result)
 
 
-async def sync_invoices(ledger, provider, uid=None):
+async def sync_invoices(ledger, provider, uid=None, background=False):
     rows = ledger.db.execute(
-        "SELECT * FROM wallet_user_invoices" + (" WHERE user_id=?" if uid else ""),
+        (
+            "SELECT * FROM wallet_user_invoices WHERE state NOT IN ('paid','rejected','prepared') AND intent_id NOT IN (SELECT entity FROM wallet_poll_schedule WHERE kind='invoice' AND next_at>"
+            + str(time.time())
+            + ")"
+            if background
+            else "SELECT * FROM wallet_user_invoices WHERE 1=1"
+        )
+        + (" AND user_id=?" if uid else "")
+        + (
+            " ORDER BY COALESCE((SELECT next_at FROM wallet_poll_schedule WHERE kind='invoice' AND entity=intent_id),0) LIMIT 1000"
+            if background
+            else ""
+        ),
         (uid,) if uid else (),
     ).fetchall()
     known = {row["invoice_id"]: row for row in rows if row["invoice_id"]}
@@ -531,6 +574,14 @@ async def sync_invoices(ledger, provider, uid=None):
             row = known.get(str(item.get("invoice_id")))
             if row and item.get("payload") == row["payload"]:
                 bind_invoice(ledger, row, item)
+    if background:
+        for row in rows:
+            # Expired invoices can still be paid late; check them rarely.
+            delay = 3600 if row["state"] == "expired" else 60
+            ledger.db.execute(
+                "INSERT OR REPLACE INTO wallet_poll_schedule VALUES ('invoice',?,?)",
+                (row["intent_id"], time.time() + delay),
+            )
     unknown = {
         row["payload"]: row
         for row in rows
@@ -542,7 +593,7 @@ async def sync_invoices(ledger, provider, uid=None):
             "SELECT offset FROM wallet_invoice_scan WHERE scope=?", (scope,)
         ).fetchone()
         offset = progress[0] if progress else 0
-        for _ in range(10):
+        for _ in range(1 if background else 10):
             result = await provider.call(
                 "getInvoices", {"count": 1000, "offset": offset}
             )
@@ -587,13 +638,17 @@ def apply_journal(ledger, item, money, ApiError):
     )
     if kind in {"invoice_payment", "hold_release", "invoice_refund"} and not invoice:
         return False
-    if (
-        kind in {"deposit", "deposit_return"}
-        and not invoice
-        and not details.get("client_ref")
-    ):
-        return False
     uid = invoice["user_id"] if invoice else None
+    if kind == "deposit_return":
+        owner = ledger.db.execute(
+            "SELECT user_id,asset FROM wallet_deposit_owners WHERE deposit_id=?",
+            (details.get("deposit_id"),),
+        ).fetchone()
+        if not owner:
+            return False
+        if owner["asset"] != item["asset"]:
+            raise ValueError("Deposit return asset mismatch")
+        uid = owner["user_id"]
     if not uid:
         account = ledger.db.execute(
             "SELECT user_id FROM wallet_accounts WHERE client_ref=?",
@@ -604,6 +659,8 @@ def apply_journal(ledger, item, money, ApiError):
         uid = account[0]
     delta = money(item["net"], positive=False)
     asset = item["asset"]
+    if kind == "deposit_return" and delta >= 0:
+        raise ValueError("Deposit return must debit")
     ledger.begin(
         "provider_" + kind, "provider", "Provider journal row " + str(item["id"])
     )

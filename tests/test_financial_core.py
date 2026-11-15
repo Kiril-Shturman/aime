@@ -50,7 +50,10 @@ class Provider(FakeProvider):
     async def call(self, method, data=None, post=False):
         self.calls.append((method, data, post))
         if method == "getMe":
-            return {"can_transfer": self.can_transfer}  # No can_withdraw field.
+            return {
+                "can_transfer": self.can_transfer,
+                "can_withdraw": True,
+            }
         if method == "getBalance":
             return [{"currency_code": "USDT", "available": str(self.org)}]
         if method == "getCurrencies":
@@ -264,7 +267,7 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
     def balance(self):
         return self.ledger.balance("tg:123", "USDT")
 
-    async def test_withdrawal_without_getme_flag_and_without_tron_address(self):
+    async def test_authorized_withdrawal_without_tron_address(self):
         quote = await (
             await self.post(
                 "withdrawal-estimate",
@@ -491,6 +494,7 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
         self.provider.payments[0]["status"] = "completed"
         await Worker(self.ledger, self.provider, money, ApiError).step()
         self.assertEqual(self.balance(), (D("90.87"), D(0)))
+        self.ledger.db.execute("DELETE FROM wallet_poll_schedule WHERE kind='qr'")
         self.provider.payments[0]["status"] = "refunded"
         self.provider.org += D("9.13")
         await Worker(self.ledger, self.provider, money, ApiError).step()
@@ -746,3 +750,215 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
             )
         finally:
             second.db.close()
+
+    async def test_withdrawal_permission_requires_explicit_true(self):
+        original = self.provider.call
+        for me in [{}, {"can_withdraw": False}]:
+
+            async def denied(method, data=None, post=False):
+                if method == "getMe":
+                    return me
+                return await original(method, data, post)
+
+            self.provider.call = denied
+            response = await self.post(
+                "withdrawal-estimate",
+                {
+                    "asset": "USDT",
+                    "network": "TRON",
+                    "address": "T" + "a" * 33,
+                    "amount": "10",
+                },
+            )
+            self.assertEqual(response.status, 403)
+        self.assertFalse(
+            any(
+                m in {"estimateWithdrawal", "createWithdrawal"}
+                for m, _, _ in self.provider.calls
+            )
+        )
+
+    async def test_withdrawal_permission_revoked_after_estimate(self):
+        quote = await (
+            await self.post(
+                "withdrawal-estimate",
+                {
+                    "asset": "USDT",
+                    "network": "TRON",
+                    "address": "T" + "a" * 33,
+                    "amount": "10",
+                },
+            )
+        ).json()
+        original = self.provider.call
+
+        async def denied(method, data=None, post=False):
+            if method == "getMe":
+                return {}
+            return await original(method, data, post)
+
+        self.provider.call = denied
+        self.assertEqual(
+            (
+                await self.post("withdrawal-create", {"intent_id": quote["intent_id"]})
+            ).status,
+            403,
+        )
+        self.assertEqual(self.balance(), (D(100), D(0)))
+
+    async def test_deposit_return_uses_original_owner_and_deduplicates(self):
+        from wallet_inbox import apply_pages
+
+        self.provider.entry("deposit_return", "-40", {"deposit_id": "seed"})
+        for _ in range(2):
+            apply_pages(
+                self.ledger,
+                [{"items": self.provider.journal, "cursor": 5}],
+                money,
+                ApiError,
+            )
+        self.assertEqual(self.balance(), (D(60), D(0)))
+        self.assertEqual(
+            self.ledger.db.execute(
+                "SELECT COUNT(*) FROM finance_provider_effects"
+            ).fetchone()[0],
+            1,
+        )
+
+    async def test_spent_deposit_return_creates_debt_and_restart_restores_owner(self):
+        from wallet_inbox import apply_pages
+
+        self.ledger.put_balance("tg:123", "USDT", D(5), D(0))
+        self.ledger.db.execute("DELETE FROM wallet_deposit_owners")
+        other = Ledger(self.path)
+        prepare_operations(other)
+        prepare_ops(other)
+        prepare_inbox(other)
+        prepare_worker(other)
+        try:
+            self.provider.entry("deposit_return", "-40", {"deposit_id": "seed"})
+            for _ in range(2):
+                apply_pages(
+                    other,
+                    [{"items": self.provider.journal, "cursor": 5}],
+                    money,
+                    ApiError,
+                )
+            self.assertEqual(other.balance("tg:123", "USDT"), (D(0), D(0)))
+            self.assertEqual(other.book.bucket("tg:123", "USDT", "debt"), D(35))
+        finally:
+            other.db.close()
+
+    async def test_definitive_invoice_failure_rejects_intent(self):
+        original = self.provider.call
+        for status in [400, 403, 422]:
+            intent = await self.invoice()
+
+            async def reject(method, data=None, post=False):
+                if method == "createInvoice":
+                    raise ApiError("REJECTED", "definitive", status)
+                return await original(method, data, post)
+
+            self.provider.call = reject
+            response = await self.post("invoice-create", {"intent_id": intent})
+            self.assertEqual(response.status, status)
+            self.assertEqual(
+                (await response.json())["error"]["name"], "INVOICE_REJECTED"
+            )
+            self.assertEqual(
+                self.ledger.db.execute(
+                    "SELECT state FROM wallet_user_invoices WHERE intent_id=?",
+                    (intent,),
+                ).fetchone()[0],
+                "rejected",
+            )
+            self.assertEqual(
+                (await self.post("invoice-create", {"intent_id": intent})).status, 409
+            )
+        self.provider.call = original
+        new = await self.invoice()
+        self.assertEqual(
+            (await self.post("invoice-create", {"intent_id": new})).status, 200
+        )
+
+    async def test_terminal_history_does_not_consume_worker_calls(self):
+        for n in range(3000):
+            self.ledger.db.execute(
+                "INSERT INTO wallet_user_transfers VALUES (?,?,?,?,?,?,?,?)",
+                (str(n), "tg:123", "old" + str(n), "{}", "completed", None, str(n), 0),
+            )
+            self.ledger.db.execute(
+                "INSERT INTO wallet_user_invoices VALUES (?,?,?,?,?,?,?,?)",
+                (str(n), "tg:123", "payload" + str(n), "{}", "paid", str(n), "{}", 0),
+            )
+        await Worker(self.ledger, self.provider, money, ApiError).step()
+        self.assertFalse(
+            any(m in {"getTransfers", "getInvoices"} for m, _, _ in self.provider.calls)
+        )
+        self.assertTrue(any(m == "getTransactions" for m, _, _ in self.provider.calls))
+        self.assertTrue(any(m == "getBalance" for m, _, _ in self.provider.calls))
+
+    async def test_worker_budget_and_backoff_survive_restart(self):
+        from wallet_finance_worker import BudgetProvider, BudgetExhausted
+
+        worker = Worker(self.ledger, self.provider, money, ApiError)
+        limited = BudgetProvider(worker)
+        for _ in range(4):
+            await limited.call("getBalance")
+        with self.assertRaises(BudgetExhausted):
+            await limited.call("getBalance")
+        original = self.provider.call
+
+        async def unavailable(method, data=None, post=False):
+            if method == "getInvoices":
+                raise ApiError("RATE_LIMITED", "rate", 429, "120")
+            return await original(method, data, post)
+
+        self.provider.call = unavailable
+        with self.assertRaises(ApiError):
+            await BudgetProvider(worker).call("getInvoices", {})
+        with self.assertRaises(BudgetExhausted):
+            await BudgetProvider(
+                Worker(self.ledger, self.provider, money, ApiError)
+            ).call("getInvoices", {})
+        await Worker(self.ledger, self.provider, money, ApiError).step()
+        self.assertTrue(any(m == "getTransactions" for m, _, _ in self.provider.calls))
+        self.assertTrue(any(m == "getBalance" for m, _, _ in self.provider.calls))
+
+    async def test_terminal_transfer_refreshed_from_journal_only_once(self):
+        intent = await self.transfer()
+        self.provider.next_transfer = "completed"
+        result = await (await self.post("transfer-send", {"intent_id": intent})).json()
+        self.provider.transfers[result["spend_id"]]["status"] = "reverted"
+        self.provider.org += 10
+        self.provider.entry(
+            "transfer_revoked",
+            "10",
+            {"spend_id": result["spend_id"], "transfer_id": result["transfer_id"]},
+        )
+        await Worker(self.ledger, self.provider, money, ApiError).step()
+        self.assertEqual(self.balance(), (D(100), D(0)))
+        reads = sum(m == "getTransfers" for m, _, _ in self.provider.calls)
+        await Worker(self.ledger, self.provider, money, ApiError).step()
+        self.assertEqual(
+            sum(m == "getTransfers" for m, _, _ in self.provider.calls), reads
+        )
+        self.assertEqual(self.balance(), (D(100), D(0)))
+
+    async def test_cycle_total_call_budget_is_enforced(self):
+        from wallet_finance_worker import BudgetProvider, BudgetExhausted
+
+        limited = BudgetProvider(Worker(self.ledger, self.provider, money, ApiError))
+        for method in [
+            "getBalance",
+            "getMe",
+            "getCurrencies",
+            "getDeposits",
+            "getTransactions",
+            "getInvoices",
+        ]:
+            for _ in range(4):
+                await limited.call(method, {"after": 0})
+        self.assertEqual(limited.total, 24)
+        with self.assertRaises(BudgetExhausted):
+            await limited.call("getQrPayments", {})

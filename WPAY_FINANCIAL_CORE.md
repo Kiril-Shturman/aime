@@ -8,8 +8,9 @@ production or the public demo. Existing guarded GoSwap admin console is retained
 A client has one available/reserved balance per asset. Deposit addresses do not
 hold independent spendable balances. Withdrawal selects asset, output network,
 external recipient and amount; TRON needs no permanent deposit address.
-`getMe.can_withdraw` is not required. `getCurrencies.can_withdraw` and the result
-of `estimateWithdrawal` validate the operation. Withdrawal reserves amount + fee,
+`getMe.can_withdraw === true` is mandatory for the organization, independently
+of `getCurrencies.can_withdraw` for the asset. `estimateWithdrawal` validates
+the chosen pair, address and fee. Missing organization capability denies output. Withdrawal reserves amount + fee,
 uses a server spend_id and accepted max_fee, and tracks provider versions.
 
 Transfers use server-owned intents and spend_id, require getMe.can_transfer=true
@@ -103,9 +104,10 @@ configured webhook URL are required; no key is shipped to the browser.
 
 ## Verification
 
-- 63 backend tests: all previous 36 plus 27 financial cases.
+- 72 backend tests: the previous 63 plus 9 audit regressions.
 - 3 frontend unit tests.
-- 13 Playwright tests: all previous 10 plus disabled transfer, confirmation/retry
+- 15 Playwright tests: all previous 13 plus withdrawal permission denial and
+  recovery after a definitive invoice rejection; the prior tests cover confirmation/retry
   of the same server intent, invoice creation/recovery UI.
 - Production TypeScript/Vite build and frontend lint succeed. Existing lint
   warnings and the large Framework7 bundle warning remain.
@@ -118,3 +120,29 @@ addresses, corrected withdrawal debt repayment and exact zero posting totals.
 These tests use an in-process fake provider and intercepted browser API requests.
 No real monetary GoSwap operations, live worker restart or production migration
 have been performed. Review this commit before any deployment.
+
+## Audit corrections after ae198c8
+
+- `wallet_deposit_owners(deposit_id,user_id,asset)` persists original ownership in
+  the same SQL transaction as credit; startup backfills from existing deposit
+  events. Returns resolve by deposit_id, validate the asset, apply negative net,
+  create debt when available is insufficient, and deduplicate by journal row ID.
+- `wallet_poll_schedule(kind,entity,next_at)` persists fair polling rotation.
+  Background transfers select reserved/pending only; invoices exclude paid,
+  rejected and prepared. Active checks wait at least 60 seconds; expired invoices,
+  failed withdrawals and completed QR payments are checked no more than hourly.
+  Terminal transfer changes trigger a targeted provider GET from journal rows;
+  invoice money corrections continue through immutable journal net.
+- Each cycle permits at most 24 provider calls and 4 calls per method. Journal,
+  inbox and coverage run before bulk polls. Method failures persist exponential
+  backoff (60 seconds to one hour), honoring a larger Retry-After. One failed
+  bulk method does not prevent independent priority phases. Unknown invoice
+  discovery reads at most one page per background cycle and resumes its offset.
+- An explicit 400/401/403/404/405/422 createInvoice rejection persists rejected;
+  the UI unlocks its fields and starts a new server intent on retry. Ambiguous
+  timeout/408/429/5xx remain creating and use payload-based discovery.
+
+All earlier tests are retained; authorized withdrawal fixtures now explicitly
+include the organization capability, with separate denial cases for missing and
+false flags. The QR recovery test advances its polling schedule to exercise the
+new hourly terminal sweep. No production/demo deployment was performed.
