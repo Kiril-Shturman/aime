@@ -3,9 +3,9 @@ import { Button } from 'konsta/react'
 import { chartPeriods, getMarketHistory, type MarketHistory } from '../lib/market-data'
 export { chartPeriods }
 const W=360,H=207,L=3,R=357,T=14,B=191
-const number = (value:number) => value.toLocaleString('ru-RU',{maximumFractionDigits:value>=1000?2:value>=1?4:6})
+const number = (value:number) => value.toLocaleString('en-US',{maximumFractionDigits:value>=1000?2:value>=1?4:6})
 const date = (time:number) => new Date(time).toLocaleString('ru-RU',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
-export default function WalletMarketChart({code,period,active=true,icon}: {code:string;period:number;active?:boolean;icon?:ReactNode}) {
+export default function WalletMarketChart({code,period,active=true,icon,onPeriodChange}: {code:string;period:number;active?:boolean;icon?:ReactNode;onPeriodChange?:(percent:number|null)=>void}) {
   const [data,setData]=useState<MarketHistory|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false),[attempt,setAttempt]=useState(0),[selected,setSelected]=useState<number|null>(null)
   const finger=useRef(false)
   const gradient=useId().replace(/:/g,'')
@@ -24,6 +24,9 @@ export default function WalletMarketChart({code,period,active=true,icon}: {code:
   const y=(value:number)=>B-(value-low)/(high-low)*(B-T)
   const line=points.map((p,i)=>`${i?'L':'M'}${x(i).toFixed(2)},${y(p.value).toFixed(2)}`).join(' ')
   const difference=first&&point?point.value-first.value:0,percent=first?difference/first.value*100:0
+  useEffect(()=>{
+    onPeriodChange?.(first&&point&&first.value>0?percent:null)
+  },[first,point,percent,onPeriodChange])
   const positive=difference>=0
   function inspect(clientX:number,svg:SVGSVGElement){
     const rect=svg.getBoundingClientRect(),local=(clientX-rect.left)/rect.width*W
@@ -41,7 +44,7 @@ export default function WalletMarketChart({code,period,active=true,icon}: {code:
         <defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="currentColor" stopOpacity=".12"/><stop offset="100%" stopColor="currentColor" stopOpacity="0"/></linearGradient></defs>
         {[0,1,2,3].map(i=>{const yy=T+(B-T)*i/3;return <line key={i} x1={L} x2={R} y1={yy} y2={yy} className="stroke-black/[.07] dark:stroke-white/10" strokeWidth="1"/>})}
         <path d={`${line} L${R},${B} L${L},${B} Z`} fill={`url(#${gradient})`}/><path d={line} fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round"/>
-        {[0,1,2,3].map(i=>{const value=high-(high-low)*i/3,yy=T+(B-T)*i/3;const label=new Intl.NumberFormat('ru-RU',{notation:value>=1000?'compact':'standard',maximumFractionDigits:value>=1000?1:tickDecimals}).format(value).replace(/\s/g,'').replace('тыс.','к').replace('млн','м');return <text key={i} data-price-tick x={R-2} y={yy-4} textAnchor="end" fontSize="9" paintOrder="stroke" strokeWidth="3" strokeLinejoin="round" pointerEvents="none" className="fill-black/40 stroke-white dark:fill-white/40 dark:stroke-[#1c1c1e]">{label}</text>})}
+        {[0,1,2,3].map(i=>{const value=high-(high-low)*i/3,yy=T+(B-T)*i/3;const label=new Intl.NumberFormat('en-US',{notation:value>=1000?'compact':'standard',maximumFractionDigits:value>=1000?1:tickDecimals}).format(value).replace(/\s/g,'').replace('тыс.','к').replace('млн','м');return <text key={i} data-price-tick x={R-2} y={yy-4} textAnchor="end" fontSize="9" paintOrder="stroke" strokeWidth="3" strokeLinejoin="round" pointerEvents="none" className="fill-black/40 stroke-white dark:fill-white/40 dark:stroke-[#1c1c1e]">{label}</text>})}
         {selected!==null&&point&&<g><line x1={x(selected)} x2={x(selected)} y1={T} y2={B} stroke="currentColor" opacity=".4" strokeDasharray="3 3"/><line x1={L} x2={R} y1={y(point.value)} y2={y(point.value)} stroke="currentColor" opacity=".2" strokeDasharray="3 3"/><circle cx={x(selected)} cy={y(point.value)} r="4" fill="currentColor" stroke="white" strokeWidth="2"/></g>}
         <text x={L} y={H-2} fontSize="10" className="fill-black/35 dark:fill-white/35">{new Date(first.time).toLocaleDateString('ru-RU',{day:'numeric',month:'short',...(period===4?{year:'numeric'}:{})})}</text>
         <text x={R} y={H-2} textAnchor="end" fontSize="10" className="fill-black/35 dark:fill-white/35">{new Date(last.time).toLocaleDateString('ru-RU',{day:'numeric',month:'short'})}</text>

@@ -41,12 +41,15 @@ export function getUser(): TgUser | null {
   return tg()?.initDataUnsafe?.user ?? null
 }
 
+let hapticSequence = 0
+
 export function haptic(
   kind: 'light' | 'medium' | 'heavy' | 'success' | 'error' | 'warning' = 'light',
 ) {
   try {
     const t = tg()
     if (!t?.HapticFeedback) return
+    hapticSequence += 1
     if (kind === 'success' || kind === 'error' || kind === 'warning')
       t.HapticFeedback.notificationOccurred(kind)
     else t.HapticFeedback.impactOccurred(kind)
@@ -125,4 +128,20 @@ export function forgetBoardKey() {
   } catch {
     /* памяти нет — и ладно */
   }
+}
+
+/** One light impact per enabled wallet action, including portal buttons. */
+export function installWalletButtonHaptics() {
+  const onClick = (event: MouseEvent) => {
+    if (!(event.target instanceof Element)) return
+    const button = event.target.closest<HTMLElement>('[data-wpay-primary],.wpay-intro-next,.support-send')
+    if (!button || button.matches(':disabled,[aria-disabled="true"]')) return
+    const before = hapticSequence
+    queueMicrotask(() => {
+      // An action may already emit its own success or impact feedback.
+      if (hapticSequence === before) haptic('light')
+    })
+  }
+  document.addEventListener('click', onClick, true)
+  return () => document.removeEventListener('click', onClick, true)
 }

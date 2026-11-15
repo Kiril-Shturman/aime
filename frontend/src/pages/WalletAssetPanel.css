@@ -1,0 +1,95 @@
+.wpay-address-avatar{position:relative;display:block;flex-shrink:0;width:44px;height:44px}
+.wpay-address-network-badge{position:absolute;right:-9px;bottom:-3px;display:flex;align-items:center;justify-content:center;width:23px;height:23px;border:2px solid #fff;border-radius:6px;background:#fff;overflow:hidden}
+.wpay-address-network-badge .wpay-network-icon{width:19px;height:19px;border-radius:6px}
+.wpay-address-network-badge svg{width:13px;height:13px}
+.dark .wpay-address-network-badge{border-color:#1c1c1e;background:#1c1c1e}
+
+.wpay-address-network-badge .wpay-network-icon{color:#fff}
+.wpay-address-network-badge .wpay-network-icon--bsc{background:#e5ad17}
+.wpay-address-network-badge .wpay-network-icon--eth{background:#6975cd}
+.wpay-address-network-badge .wpay-network-icon--ton{background:#0098ea}
+.wpay-address-network-badge .wpay-network-icon--sol{background:#8860cf}
+.wpay-address-network-badge .wpay-network-icon--tron{background:#eb3348}
+
+.wpay-portfolio-networks{position:relative}
+.wpay-portfolio-networks::before{content:"";position:absolute;top:0;left:-16px;right:-16px;height:1px;background:rgb(0 0 0 / .06)}
+.dark .wpay-portfolio-networks::before{background:rgb(255 255 255 / .08)}
+
+.wpay-address-network-badge .wpay-network-icon--btc{background:#f7931a}
+
+.wpay-address-row{-webkit-tap-highlight-color:transparent;position:relative}
+.wpay-address-row::before{content:"";position:absolute;inset:0 -16px;pointer-events:none}
+.wpay-address-row:active:not(:disabled)::before{background:rgb(0 0 0 / .05)}
+.dark .wpay-address-row:active:not(:disabled)::before{background:rgb(255 255 255 / .08)}
+
+.wpay-address-hero .wpay-address-avatar{width:72px;height:72px}
+.wpay-address-hero .wpay-address-network-badge{width:28px;height:28px;right:-4px;bottom:-2px;border-radius:8px}
+.wpay-address-hero .wpay-network-icon{width:24px;height:24px;border-radius:6px}
+.wpay-address-hero .wpay-address-network-badge svg{width:17px;height:17px}
+
+.wpay-address-fiat{font-variant-numeric:tabular-nums;font-size:16px;line-height:20px;font-weight:400;-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.wpay-address-fiat>span{font:inherit;letter-spacing:inherit;color:inherit}
+
+.wpay-deposit-method-sheet.sheet-modal{border-radius:44px 44px 0 0;overflow:hidden;height:auto;min-height:min(400px,84dvh);max-height:84dvh;background:#efeff4}
+.dark .wpay-deposit-method-sheet.sheet-modal{background:#1c1c1e}
+.dark .wpay-deposit-method-sheet .k-list{background:#2c2c2e}
+
+.wpay-deposit-network-avatar .wpay-network-icon{width:28px;height:28px;border-radius:9px}
+.wpay-deposit-network-avatar svg{width:19px;height:19px}
+
+.wpay-deposit-network-avatar .wpay-network-icon{color:#fff}
+.wpay-deposit-network-avatar .wpay-network-icon--bsc{background:#e5ad17}
+.wpay-deposit-network-avatar .wpay-network-icon--eth{background:#6975cd}
+.wpay-deposit-network-avatar .wpay-network-icon--ton{background:#0098ea}
+.wpay-deposit-network-avatar .wpay-network-icon--sol{background:#8860cf}
+.wpay-deposit-network-avatar .wpay-network-icon--tron{background:#eb3348}
+.wpay-deposit-network-avatar .wpay-network-icon--btc{background:#f7931a}
+
+.wpay-asset-actions.wpay-asset-actions--two{grid-template-columns:minmax(0,1fr) minmax(0,1fr) 56px}
+
+.wpay-deposit-method-sheet--all.sheet-modal{height:min(680px,90dvh);min-height:0;max-height:90dvh}
+
+@layer theme{.wpay-exchange-circle{width:56px !important;padding:0 !important}}
+@layer theme{.wpay-asset-actions--two>button:not(.wpay-exchange-circle){font-size:16px !important}}
+
+.wpay-asset-actions.wpay-asset-actions--pair{grid-template-columns:repeat(2,minmax(0,1fr))}
+@layer theme{.wpay-asset-actions--pair>button{font-size:16px !important}}
+
+.wpay-create-address-sheet.sheet-modal{height:min(720px,90dvh);max-height:90dvh;border-radius:44px 44px 0 0;background:#efeff4}
+.dark .wpay-create-address-sheet.sheet-modal{background:#1c1c1e}
+.wpay-paid-address-list.list{--f7-list-bg-color:#fff;--f7-list-item-title-font-size:17px;--f7-list-item-title-font-weight:600;--f7-list-item-subtitle-font-size:14px;--f7-checkbox-active-color:#3983f5;--f7-checkbox-icon-color:#fff;background:#fff}
+.dark .wpay-paid-address-list.list{--f7-list-bg-color:#2c2c2e;background:#2c2c2e}
+.wpay-paid-address-list .item-content{height:64px;min-height:64px;position:relative}
+.wpay-paid-address-list label.item-checkbox>.icon-checkbox{position:absolute;right:16px;margin:0}
+.wpay-paid-address-list label.item-checkbox .item-inner{min-height:64px;padding-right:54px}
+.wpay-paid-address-list .item-media{padding-top:10px;padding-bottom:10px}
+.wpay-paid-address-list .item-title{color:#000}
+.wpay-paid-address-list .item-subtitle{color:rgb(0 0 0 / .45)}
+.dark .wpay-paid-address-list .item-title{color:#fff}
+.dark .wpay-paid-address-list .item-subtitle{color:rgb(255 255 255 / .45)}
+
+.wpay-paid-address-list ul{list-style:none;margin:0;padding:0}
+.wpay-paid-address-list label.item-content{display:flex;align-items:center;padding-left:16px;cursor:pointer}
+.wpay-paid-address-list .item-media{display:flex;flex-shrink:0;align-items:center;margin-right:16px}
+.wpay-paid-address-list .item-inner{position:relative;display:flex;flex:1;min-width:0;flex-direction:column;justify-content:center;align-items:flex-start;padding-top:8px;padding-bottom:8px}
+.wpay-paid-address-list .item-inner::after{content:"";position:absolute;bottom:0;left:0;right:0;height:.5px;background:rgb(0 0 0 / .08)}
+.dark .wpay-paid-address-list .item-inner::after{background:rgb(255 255 255 / .1)}
+.wpay-paid-address-list li:last-child .item-inner::after{display:none}
+.wpay-paid-address-list .item-title{font-size:17px;line-height:24px;font-weight:600}
+.wpay-paid-address-list .item-subtitle{font-size:14px;line-height:20px;margin-top:2px}
+.wpay-paid-address-list label.item-content:active{background:rgb(0 0 0 / .05)}
+.dark .wpay-paid-address-list label.item-content:active{background:rgb(255 255 255 / .06)}
+
+.wpay-f7-root .dialog.wpay-address-confirm{z-index:14000}
+.wpay-f7-root .dialog-backdrop{z-index:13990}
+
+/* Keep the address sheet surface distinct from its white content cards. */
+.wpay-f7-root .wpay-create-address-sheet.sheet-modal,
+.wpay-f7-root .wpay-create-address-sheet .sheet-modal-inner{background:#efeff4}
+.wpay-f7-root.dark .wpay-create-address-sheet.sheet-modal,
+.wpay-f7-root.dark .wpay-create-address-sheet .sheet-modal-inner{background:#1c1c1e}
+
+.wpay-f7-root .wpay-deposit-method-sheet.sheet-modal,
+.wpay-f7-root .wpay-deposit-method-sheet .sheet-modal-inner{background:#efeff4}
+.wpay-f7-root.dark .wpay-deposit-method-sheet.sheet-modal,
+.wpay-f7-root.dark .wpay-deposit-method-sheet .sheet-modal-inner{background:#1c1c1e}

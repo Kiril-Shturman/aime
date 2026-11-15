@@ -9,3 +9,6 @@
 .dark .wpay-network-icon--ton{background:#38b1f51a;color:#55bfff}
 .dark .wpay-network-icon--sol{background:#ad84ef18;color:#b993f5}
 .dark .wpay-network-icon--tron{background:#f2506b1a;color:#ff758b}
+
+.wpay-network-icon--btc{background:#f7931a18;color:#e88c19}
+.dark .wpay-network-icon--btc{color:#ffb04a}

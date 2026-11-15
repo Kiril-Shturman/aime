@@ -185,7 +185,7 @@ input:-webkit-autofill:active {
   --wpay-top-surface: #1c1c1e;
   --wpay-lower-surface: #000000;
 }
-.wpay-bottom-menu { padding-bottom: calc(var(--wpay-bottom-inset) + 12px) !important; }
+.wpay-bottom-menu { padding-bottom: calc(var(--wpay-bottom-inset) + 4px) !important; }
 /* A 48px action button and the 64px main menu share the same center line. */
 .wpay-asset-actions { padding-bottom: calc(var(--wpay-bottom-inset) + 20px); }
 @keyframes wpay-icon-in {

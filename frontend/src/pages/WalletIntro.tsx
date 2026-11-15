@@ -1,0 +1,45 @@
+import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { ArrowLeftRight, Wallet, Gift, Check, Globe2, Sparkles, Hotel, Plane, ShoppingBag, Bot, QrCode } from 'lucide-react'
+import { getUser, tg, applyTgTheme } from '../lib/telegram'
+import { useTheme } from '../store/ThemeStore'
+import './WalletIntro.css'
+const slides=[
+ {art:'cards',label:'Знакомьтесь, WPay',title:<>Ваши деньги.<br/>Ваш WPay.</>,description:'Кошелёк, карты и повседневные платежи — в одном приложении. Управляйте активами без лишних экранов.',note:'Часть возможностей готовится к запуску.'},
+ {art:'sbp',label:'Два способа пополнения',title:<>Рубли по СБП.<br/>Криптовалюта.</>,description:'Пополняйте кошелёк через СБП в рублях или переводите криптовалюту. Выбирайте удобный способ, валюту и сеть.',note:'Пополнение через СБП готовится к запуску. Доступные криптовалюты и сети указаны в разделе пополнения.'},
+ {art:'pay',label:'Карта в вашем смартфоне',title:<>Добавьте карту<br/>в Apple Pay<br/>или Google Pay.</>,description:'Привяжите карту к кошельку смартфона и оплачивайте покупки одним касанием — без пластика.',note:'Поддержка Apple Pay и Google Pay зависит от программы карты. Выпуск карт готовится к запуску.'},
+ {art:'qr',label:'Оплата по QR-коду СБП',title:<>Сканируйте QR.<br/>Оплачивайте.</>,description:'Сканируйте QR-код магазина, проверьте сумму в рублях и получателя. Подтвердите оплату со своего кошелька.',note:'При подключённом сервисе списание идёт в USDT. Курс и сумма списания показываются до подтверждения.'},
+ {art:'friends',label:'Ваш круг',title:<>Делитесь WPay.<br/>Растите вместе.</>,description:'Приглашайте друзей по своей ссылке и следите за вознаграждениями в реферальном разделе.',note:'Реферальная программа готовится к запуску. Условия будут опубликованы отдельно.'},
+]
+function IntroArt({kind}:{kind:string}){
+ const user=getUser()
+ if(kind==='qr')return <div className="wpay-intro-qr-art"><div className="wpay-intro-qr-paper"><span className="wpay-intro-qr-paper-brand">WPay</span><QrCode size={126} strokeWidth={1.4}/><span className="wpay-intro-qr-paper-sbp"><img src="/brands/sbp-symbol.svg" alt=""/>Оплата по СБП</span></div><div className="wpay-intro-qr-scanner"><span className="wpay-intro-qr-scanner-head">Наведите камеру</span><div className="wpay-intro-qr-scan-frame"><QrCode size={74} strokeWidth={1.5}/><span/></div><span className="wpay-intro-qr-scanner-status"><Check size={15}/> Проверьте сумму</span></div><span className="wpay-intro-qr-caption">Покупка в ₽ · Списание в USDT</span></div>
+ if(kind==='services')return <div className="wpay-intro-services">{[{title:'Отели и жильё',text:'Booking, Airbnb, Trip.com',Icon:Hotel,color:'stay'},{title:'Авиабилеты и путешествия',text:'Авиакомпании и сервисы бронирования',Icon:Plane,color:'travel'},{title:'Покупки по всему миру',text:'Зарубежные магазины и маркетплейсы',Icon:ShoppingBag,color:'shopping'},{title:'Онлайн-сервисы и ИИ',text:'ChatGPT, Netflix, Steam и другие',Icon:Bot,color:'digital'}].map(({title,text,Icon,color})=><div className={`wpay-intro-service service-${color}`} key={color}><span><strong>{title}</strong><small>{text}</small></span><span className="wpay-intro-service-icon" aria-hidden="true"><Icon size={33} strokeWidth={1.4}/></span></div>)}</div>
+ if(kind==='sbp')return <div className="wpay-intro-sbp"><div className="wpay-intro-sbp-tile"><img src="/brands/sbp-symbol.svg" alt="" width="95" height="109"/></div><svg className="wpay-intro-sbp-arrow" viewBox="0 0 300 300" fill="none"><defs><linearGradient id="wpay-sbp-arrow" x1="10" y1="220" x2="230" y2="45" gradientUnits="userSpaceOnUse"><stop stopColor="#3d6daa"/><stop offset=".65" stopColor="#93d6ff"/><stop offset="1" stopColor="#e8f6ff"/></linearGradient></defs><path d="M80 242C16 190 12 94 76 61c48-24 103-5 128 40" stroke="url(#wpay-sbp-arrow)" strokeWidth="27" strokeLinecap="round"/><path d="m161 105 64 24-2-68" stroke="url(#wpay-sbp-arrow)" strokeWidth="24" strokeLinecap="round" strokeLinejoin="round"/></svg><span className="wpay-intro-sbp-currency"><b>₽</b><small>СБП</small></span><span className="wpay-intro-topup-crypto"><span>₮</span><span>₿</span><small>Криптовалюта</small></span></div>
+ if(kind==='pay')return <div className="wpay-intro-mobile-pay"><div className="wpay-intro-pay-brands"><span><img src="/brands/apple-pay.svg" alt=""/></span><span><img src="/brands/google-pay.svg" alt=""/></span></div><div className="wpay-intro-terminal"><div className="wpay-intro-receipt"><i/><i/><i/><i/></div><div className="wpay-intro-terminal-screen"><Check size={38}/></div><div className="wpay-intro-terminal-keys">•••<br/>•••<br/>•••</div></div><div className="wpay-intro-phone"><span className="wpay-intro-phone-speaker"/><div className="wpay-intro-phone-card"><strong>WPay</strong><span>•••• 0001</span></div><span className="wpay-intro-phone-check"><Check size={29}/></span><span className="wpay-intro-phone-label">Одно касание.</span><span className="wpay-intro-phone-line"/></div></div>
+ if(kind==='wallet')return <div className="wpay-intro-coins"><div className="wpay-intro-orbit"/><div className="wpay-intro-coin coin-usdt">₮</div><div className="wpay-intro-coin coin-bitcoin">₿</div><div className="wpay-intro-coin coin-eth">Ξ</div><div className="wpay-intro-wallet"><Wallet size={42} strokeWidth={1.5}/><span>Ваш баланс</span><strong>Всё на виду</strong><small><Check size={13}/> История каждой операции</small></div><span className="wpay-intro-float"><ArrowLeftRight size={21}/> Обмен</span></div>
+ if(kind==='friends')return <div className="wpay-intro-friends"><div className="friend-orbit one"/><div className="friend-orbit two"/><span className="friend-center">{(user?.first_name||'W').slice(0,1).toUpperCase()}</span>{['А','М','К','Д'].map((letter,i)=><span key={i} className={`friend friend-${i}`}>{letter}</span>)}<span className="wpay-intro-friend-badge"><Gift size={18}/> Больше возможностей вместе</span></div>
+ return <div className="wpay-intro-card-stack">
+  <div className="intro-card card-back"><span className="intro-card-brand">WPay</span><Globe2 className="intro-card-art" size={116} strokeWidth={.8}/><span className="intro-card-caption">Больше возможностей</span></div>
+  <div className="intro-card card-middle"><span className="intro-card-brand">WPay</span><Sparkles className="intro-card-art" size={108} strokeWidth={.8}/><span className="intro-card-caption">Для ваших планов</span></div>
+  <div className="intro-card card-front"><span className="intro-card-brand">WPay<span className="intro-card-dot"/></span><span className="intro-card-chip"/><span className="intro-card-art"><Wallet size={88} strokeWidth={1}/></span><span className="intro-card-bottom"><span>•••• 0001</span><span>VIRTUAL</span></span></div>
+ </div>
+}
+export default function WalletIntro({onDone}:{onDone:()=>void}){
+ const [step,setStep]=useState(0),ref=useRef<HTMLDialogElement>(null),start=useRef<number|null>(null)
+ const {theme}=useTheme()
+ const slide=slides[step]
+ useEffect(()=>{const app=tg();for(const method of [app?.setHeaderColor,app?.setBackgroundColor,app?.setBottomBarColor]){try{method?.call(app,'#061937')}catch{}}return()=>applyTgTheme(theme)},[theme])
+ useEffect(()=>{const dialog=ref.current;const frame=requestAnimationFrame(()=>{if(dialog?.isConnected&&!dialog.open){dialog.showModal();dialog.focus()}});return()=>{cancelAnimationFrame(frame);dialog?.close()}},[])
+ return createPortal(<dialog ref={ref} tabIndex={-1} className="wpay-intro" aria-labelledby="wpay-intro-title" onCancel={e=>{e.preventDefault();onDone()}} onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();setStep(n=>Math.min(n+1,slides.length-1))}if(e.key==='ArrowLeft'){e.preventDefault();setStep(n=>Math.max(0,n-1))}}}>
+  <div className="wpay-intro-shell">
+   <div className="wpay-intro-progress" aria-label="Экраны знакомства">{slides.map((_,i)=><button type="button" key={i} aria-label={`Слайд ${i+1} из ${slides.length}`} aria-current={step===i?'step':undefined} onClick={()=>setStep(i)}><span className={i<=step?'filled':''}/></button>)}</div>
+   <div className={`wpay-intro-slide ${slide.art==='services'?'wpay-intro-slide-services':''}`} key={step} onPointerDown={e=>{start.current=e.clientX}} onPointerUp={e=>{if(start.current!==null){const delta=e.clientX-start.current;if(Math.abs(delta)>60)setStep(n=>Math.max(0,Math.min(slides.length-1,n+(delta<0?1:-1))))}start.current=null}}>
+    <div className="wpay-intro-copy" aria-live="polite"><p className="wpay-intro-label">{slide.label}</p><h1 id="wpay-intro-title">{slide.title}</h1>{slide.description&&<p className="wpay-intro-description">{slide.description}</p>}</div>
+    <div className="wpay-intro-art" aria-hidden={slide.art==='services'?undefined:true}><IntroArt kind={slide.art}/></div>
+   </div>
+   <div className="wpay-intro-bottom"><button type="button" className="wpay-intro-next" onClick={()=>step===slides.length-1?onDone():setStep(step+1)}>{step===slides.length-1?'Открыть кошелёк':'Далее'}</button></div>
+  </div>
+ </dialog>,document.body)
+}
+export const walletIntroKey='wpay:intro:v1'

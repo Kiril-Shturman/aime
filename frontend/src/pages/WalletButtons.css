@@ -1,0 +1,29 @@
+/* Shared blue action style, including controls rendered in popup portals. */
+[data-wpay-primary],.support-send {
+  border:1px solid #77d4ff !important;
+  border-radius:999px !important;
+  background:#3983f5 !important;
+  color:#fff !important;
+  font-weight:600;
+  box-shadow:inset 0 0 0 1px #ffffff12 !important;
+  transition:background .18s ease,transform .18s ease;
+}
+[data-wpay-primary]:hover:not(:disabled),.support-send:hover:not(:disabled){background:#478ffc !important}
+[data-wpay-primary]:active:not(:disabled),.support-send:active:not(:disabled){background:#2e74df !important;transform:scale(.985)}
+[data-wpay-primary]:focus-visible,.support-send:focus-visible{outline:3px solid #174ca8;outline-offset:3px}
+.dark [data-wpay-primary]:focus-visible,.dark .support-send:focus-visible{outline-color:#fff}
+[data-wpay-primary]:disabled,.support-send:disabled{opacity:.4;cursor:default;pointer-events:none}
+@media(prefers-reduced-motion:reduce){[data-wpay-primary],.support-send{transition:none}}
+/* Match Tailwind's important utility precedence for existing radius overrides. */
+@layer theme {
+  [data-wpay-primary],.support-send{border-radius:999px !important}
+}
+@layer theme {
+  [data-wpay-primary]{height:56px !important;min-height:56px !important;font-size:18px !important;line-height:26px !important;padding-top:14px !important;padding-bottom:14px !important;box-sizing:border-box !important}
+  [data-wpay-primary][aria-label="Ещё действия"]{width:56px !important;padding:0 !important}
+}
+.wpay-asset-actions{position:fixed;left:50%;bottom:0;width:100%;max-width:560px;transform:translateX(-50%);grid-template-columns:1fr 1fr 56px;padding:0 24px max(8px,env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px));background:transparent}
+.wpay-asset-scroll>main{padding-bottom:96px}
+.wpay-bottom-action{position:fixed !important;left:50%;bottom:max(8px,env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px));width:calc(100% - 48px) !important;max-width:512px;translate:-50% 0;z-index:20;margin:0 !important}
+.wpay-exchange-desktop{padding-bottom:100px !important}
+@layer theme{.wpay-bottom-action{width:calc(100% - 48px) !important;margin:0 !important}}

@@ -15,7 +15,7 @@ const kinds = {
 }
 const statuses = {completed:{label:'Выполнено',icon:Check},processing:{label:'В обработке',icon:Clock},failed:{label:'Не выполнено',icon:X},refunded:{label:'Возвращено',icon:RotateCcw}}
 const incoming = (kind:Kind)=>['deposit','ruble_deposit','refund','referral'].includes(kind)
-const number = (value:string)=>Number(value).toLocaleString('ru-RU',{maximumFractionDigits:8})
+const number = (value:string)=>Number(value).toLocaleString('en-US',{maximumFractionDigits:8})
 export function transactionFromApi(item:WalletTransaction):TransactionView {
   const d=item.detail
   const status:Status=item.type==='qr_failed'?'failed':item.type==='qr_refunded'?'refunded':item.type==='qr_processing'?'processing':'completed'
@@ -32,8 +32,8 @@ const examples:TransactionView[] = [
   ['withdrawal','-50','USDT',[['Сеть','TRON · TRC20'],['Получатель','Внешний кошелёк'],['Комиссия сети','1 USDT']]],
   ['transfer','-25','USDT',[['Получатель','@username'],['Комментарий','За ужин']]],
   ['check','-10','USDT',[['Получатель','Предъявитель чека'],['Состояние чека','Активирован']]],
-  ['exchange','-100','USDT',[['Получено','0,0011 BTC'],['Курс','1 BTC = 90 909,09 USDT'],['Комиссия','Включена в курс']]],
-  ['qr','-9.13','USDT',[['Получатель','Кофейня'],['Сумма покупки','700 ₽'],['Курс','76,67 ₽ за 1 USDT']]],
+  ['exchange','-100','USDT',[['Получено','0.0011 BTC'],['Курс','1 BTC = 90,909.09 USDT'],['Комиссия','Включена в курс']]],
+  ['qr','-9.13','USDT',[['Получатель','Кофейня'],['Сумма покупки','700 ₽'],['Курс','76.67 ₽ за 1 USDT']]],
   ['card_payment','-20','USD',[['Магазин','OpenAI'],['Карта','Visa · •• 0001'],['Категория','Подписки']]],
   ['card_topup','100','USD',[['Карта','Visa · •• 0001'],['Списано с кошелька','100 USDT']]],
   ['card_issue','-5','USD',[['Карта','Виртуальная Visa'],['Тариф','Пример тарифа']]],
@@ -69,9 +69,13 @@ export function TransactionDetails({item,onClose}:{item:TransactionView|null;onC
 export function TransactionExamples({onSelect}:{onSelect:(item:TransactionView)=>void}) {
  const [expanded,setExpanded]=useState(false)
  return <section className="mx-4 mt-7"><button type="button" aria-expanded={expanded} onClick={()=>setExpanded(!expanded)} className="flex min-h-14 w-full items-center justify-between rounded-[22px] bg-white px-4 text-left text-[16px] font-medium text-blue-600 dark:bg-[#1c1c1e] dark:text-blue-400">Примеры операций <span aria-hidden="true">{expanded?'−':'+'}</span></button>{expanded&&<><p className="px-2 py-3 text-[13px] leading-5 text-black/45 dark:text-white/45">Просмотр дизайна. Это не ваша история операций.</p><List strong inset dividers className="!mx-0 !mt-0 overflow-hidden !rounded-[32px] [&>ul]:!rounded-[32px]">{examples.map(item=>{
+ return <TransactionListRow key={item.id} item={item} onSelect={onSelect}/>
+ })}</List><div className="mt-3 flex gap-2">{(['processing','failed','refunded'] as const).map(status=><button key={status} type="button" onClick={()=>onSelect({...examples[6],status,amount:status==='failed'?'0':status==='refunded'?'9.13':'-9.13'})} className="min-h-11 flex-1 rounded-2xl bg-white px-2 text-[12px] text-black/60 dark:bg-[#1c1c1e] dark:text-white/60">{statuses[status].label}</button>)}</div></>}</section>
+}
+
+export function TransactionListRow({item,onSelect}:{item:TransactionView;onSelect:(item:TransactionView)=>void}) {
  const Icon=kinds[item.kind].icon,positive=incoming(item.kind)
  const context=item.rows.find(([label])=>['Магазин','Получатель','Сеть','Способ','Карта','Получено','Период'].includes(label))?.[1]??'WPay'
  const amount=`${positive?'+':'−'}${number(String(Math.abs(Number(item.amount))))} ${item.asset==='RUB'?'₽':item.asset}`
- return <ListItem key={item.id} link chevron={false} onClick={()=>onSelect(item)} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={22}/></span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{kinds[item.kind].title}</span><span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">{context} · Демо</span></span><span className={`shrink-0 text-right text-[16px] font-medium tabular-nums ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{amount}</span></span>}/>
- })}</List><div className="mt-3 flex gap-2">{(['processing','failed','refunded'] as const).map(status=><button key={status} type="button" onClick={()=>onSelect({...examples[6],status,amount:status==='failed'?'0':status==='refunded'?'9.13':'-9.13'})} className="min-h-11 flex-1 rounded-2xl bg-white px-2 text-[12px] text-black/60 dark:bg-[#1c1c1e] dark:text-white/60">{statuses[status].label}</button>)}</div></>}</section>
+ return <ListItem link chevron={false} onClick={()=>onSelect(item)} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={22}/></span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{kinds[item.kind].title}</span><span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">{context}{item.demo?' · Демо':''}</span></span><span className={`shrink-0 text-right text-[16px] font-medium tabular-nums ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{amount}</span></span>}/>
 }

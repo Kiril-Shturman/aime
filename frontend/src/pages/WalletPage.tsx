@@ -1,4 +1,9 @@
+import WalletCryptoDeposit from './WalletCryptoDeposit'
+import WalletNetworkIcon from './WalletNetworkIcon'
+import WalletAddressDetails, { addressNetworkNames, addressNetworkStandards, type WalletAddressSelection } from './WalletAddressDetails'
+import WalletIntro, { walletIntroKey } from './WalletIntro'
 import './WalletInputTheme.css'
+import './WalletButtons.css'
 import WalletSheetClose from './WalletSheetClose'
 import { DesktopSidebar, DesktopOverview } from './WalletDesktop'
 import './WalletDesktop.css'
@@ -64,7 +69,7 @@ import SliderHorizontal3 from 'framework7-icons/react/esm/SliderHorizontal3.js'
 import Snow from 'framework7-icons/react/esm/Snow.js'
 import SunMax from 'framework7-icons/react/esm/SunMax.js'
 import WalletFill from 'framework7-icons/react/esm/WalletFill.js'
-import { applyTgTheme, getUser, haptic, tg } from '../lib/telegram'
+import { applyTgTheme, getUser, haptic, installWalletButtonHaptics, tg } from '../lib/telegram'
 import { useTheme } from '../store/ThemeStore'
 
 type Action = {
@@ -72,7 +77,8 @@ type Action = {
   icon: ComponentType<{ className?: string }>
 }
 
-import WalletAssetPanel from './WalletAssetPanel'
+import WalletAssetPanel, { portfolioExamples, previewNetworks } from './WalletAssetPanel'
+import { walletRequest } from '../lib/wallet-api'
 import { WalletLiveProvider, useLiveWallet, WalletConnectionNote, LiveDepositPanel,  LiveHistory, LiveQrPanel, cryptoAmount, usd, usdPrice } from './WalletLive'
 
 type Asset = {
@@ -87,7 +93,7 @@ type Asset = {
 Framework7.use(Framework7React)
 
 type WalletTab = 'wallet' | 'history' | 'cards' | 'profile'
-type CryptoFlow = { kind: 'deposit' | 'withdraw' | 'exchange'; assetCode?: string }
+type CryptoFlow = { kind: 'deposit' | 'withdraw' | 'exchange'; assetCode?: string; network?: string; depositAddress?:WalletAddressSelection }
 
 const tabMeta: Record<WalletTab, { title: string; subtitle: string }> = {
   wallet: { title: 'Кошелёк', subtitle: 'Все активы' },
@@ -104,8 +110,8 @@ const actions: Action[] = [
 ]
 
 const walletActionClass = '!m-0 !h-[62px] !min-w-0 !rounded-[22px] !bg-black/[.055] !px-1 !text-primary active:!bg-black/10 dark:!bg-white/[.10] dark:active:!bg-white/[.16]'
-function WalletActionGrid({items, label = 'Действия с кошельком'}: {items: {label:string; icon:Action['icon']; onClick:()=>void}[];label?:string}) {
-  return <section className="grid grid-cols-4 gap-2 px-safe-4" aria-label={label}>
+function WalletActionGrid({items, label = 'Действия с кошельком',columns=4}: {columns?:3|4;items: {label:string; icon:Action['icon']; onClick:()=>void}[];label?:string}) {
+  return <section className={`grid ${columns===3?'grid-cols-3':'grid-cols-4'} gap-2 px-safe-4`} aria-label={label}>
     {items.map(({label,icon:Icon,onClick}) => <Button key={label} rounded clear onClick={onClick} className={walletActionClass}><span className="flex min-w-0 flex-col items-center justify-center gap-1"><Icon className="text-[22px]"/><span className="w-full truncate text-[10px] font-medium leading-none normal-case">{label}</span></span></Button>)}
   </section>
 }
@@ -292,6 +298,7 @@ function PullRefreshIndicator({ distance, refreshing, dragging }: { distance: nu
 }
 
 export default function WalletPage() {
+  useEffect(installWalletButtonHaptics, [])
   const {theme}=useTheme()
   useEffect(()=>{
     const host=document.querySelector<HTMLElement>('.wpay-f7-root')
@@ -320,6 +327,8 @@ function WalletScreen() {
   const [selectedAssetCode, setSelectedAssetCode] = useState<string | null>(null)
   const [cryptoFlow, setCryptoFlow] = useState<CryptoFlow | null>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [introOpen,setIntroOpen]=useState(()=>{try{return localStorage.getItem(walletIntroKey)!=='seen'}catch{return true}})
+  const finishIntro=()=>{try{localStorage.setItem(walletIntroKey,'seen')}catch{}setIntroOpen(false)}
   const [loading, setLoading] = useState(true)
   const [balanceHidden, setBalanceHidden] = useState(false)
   const [notice, setNotice] = useState('')
@@ -351,6 +360,11 @@ function WalletScreen() {
         title: 'История операций',
         icon: <Clock />,
         action: () => selectTab('history'),
+      },
+      {
+        title: 'О WPay',
+        icon: <QuestionCircleFill />,
+        action: () => setIntroOpen(true),
       },
       {
         title: 'Настройки кошелька',
@@ -476,6 +490,7 @@ function WalletScreen() {
         }
       />
       {menu}
+      {introOpen&&<WalletIntro onDone={finishIntro}/>}
 
       <PullRefreshIndicator distance={pull.distance} refreshing={pull.refreshing} dragging={pull.dragging} />
 
@@ -536,10 +551,11 @@ function WalletScreen() {
       </div>
 
       <AssetPushView
+        onScan={scanPaymentQr}
         asset={assets.find((item) => item.code === selectedAssetCode) ?? null}
         onClose={() => setSelectedAssetCode(null)}
         showNotice={showNotice}
-        openFlow={(kind, assetCode) => setCryptoFlow({ kind, assetCode })}
+        openFlow={(kind, assetCode, network, depositAddress) => setCryptoFlow({ kind, assetCode, network, depositAddress })}
       />
 
       <CryptoFlowPushView
@@ -629,20 +645,54 @@ function PullToRefreshContent({
   )
 }
 
-function AssetPushView({asset,onClose,showNotice,openFlow}: {asset:Asset|null;onClose:()=>void;showNotice:NoticeHandler;openFlow:(kind:CryptoFlow['kind'],assetCode:string)=>void}) {
+function AssetPushView({asset,onClose,showNotice,openFlow,onScan}: {onScan:()=>void;asset:Asset|null;onClose:()=>void;showNotice:NoticeHandler;openFlow:(kind:CryptoFlow['kind'],assetCode:string,network?:string,depositAddress?:WalletAddressSelection)=>void}) {
+  const [historyRequest,setHistoryRequest]=useState(0)
   const [displayAsset,setDisplayAsset]=useState(asset??assets[0])
+  const [addressEntry,setAddressEntry]=useState<WalletAddressSelection|null>(null)
+  const [depositChoice,setDepositChoice]=useState(false),[allDepositNetworks,setAllDepositNetworks]=useState(false),[choosingDeposit,setChoosingDeposit]=useState(false)
+  const depositRequest=useRef(0)
   const live=useLiveWallet()
-  useEffect(()=>{if(asset)setDisplayAsset(asset)},[asset])
-  return <PushViewShell open={asset!==null} assetSurface title={displayAsset.name} subtitle={displayAsset.code} onClose={onClose} onRefreshed={()=>{void live.refresh(true);showNotice('Обновляем баланс')}}><WalletAssetPanel active={asset!==null} key={displayAsset.code} code={displayAsset.code} name={displayAsset.name} icon={displayAsset.icon} color={displayAsset.color} iconColor={displayAsset.iconColor} onDeposit={()=>openFlow('deposit',displayAsset.code)} onWithdraw={()=>openFlow('withdraw',displayAsset.code)} onExchange={()=>openFlow('exchange',displayAsset.code)}/></PushViewShell>
+  useEffect(()=>{if(asset)setDisplayAsset(asset);else {setAddressEntry(null);setDepositChoice(false)}},[asset])
+  async function chooseDeposit(code:string,network?:string){
+    if(choosingDeposit)return
+    const run=++depositRequest.current
+    let selected=code==='RUB'?undefined:addressEntry??undefined
+    if(code!=='RUB'&&network&&!selected){
+      if(!live.configured&&!live.loading){const sample=portfolioExamples[network];selected={network,address:sample.address,demo:true,amount:sample.amount,rate:1}}
+      else if(live.configured&&code==='USDT'&&network!=='TRON'){
+        setChoosingDeposit(true)
+        try{const result=await walletRequest<{items?:{address:string;network:string}[]}>('addresses');if(run!==depositRequest.current)return;const saved=result.items?.find(item=>item.network===network);if(saved)selected={...saved,demo:false,amount:null,rate:live.rate(code)}}catch{if(run===depositRequest.current)showNotice('Не удалось загрузить адрес. Откроем получение реквизитов.')}finally{setChoosingDeposit(false)}
+      }
+    }
+    if(run!==depositRequest.current)return
+    setDepositChoice(false);setAddressEntry(null);openFlow('deposit',code,network,selected)
+  }
+  return <><PushViewShell open={asset!==null} assetSurface menuItems={displayAsset.code==='USDT'?[
+    {title:'Пополнить',icon:<PlusCircleFill className="text-[22px] text-primary"/>,onClick:()=>{setAllDepositNetworks(true);setDepositChoice(true)}},
+    {title:'Вывести',icon:<ArrowUpCircleFill className="text-[22px] text-primary"/>,onClick:()=>openFlow('withdraw',displayAsset.code)},
+    {title:'Обменять',icon:<ArrowRightArrowLeft className="text-[22px] text-primary"/>,onClick:()=>openFlow('exchange',displayAsset.code)},
+    {title:'История транзакций',icon:<ClockFill className="text-[22px] text-primary"/>,onClick:()=>setHistoryRequest(value=>value+1)},
+    {title:'AML проверка',icon:<LockShieldFill className="text-[22px] text-primary"/>,onClick:()=>showNotice('AML проверка пока не подключена')},
+  ]:undefined} title={displayAsset.name} subtitle={displayAsset.code} onClose={onClose} onRefreshed={()=>{void live.refresh(true);showNotice('Обновляем баланс')}}><WalletAssetPanel historyRequest={historyRequest} onOpenAddress={setAddressEntry} active={asset!==null} key={displayAsset.code} code={displayAsset.code} name={displayAsset.name} icon={displayAsset.icon} color={displayAsset.color} iconColor={displayAsset.iconColor} onDeposit={network=>{if(!network){setAllDepositNetworks(displayAsset.code==='USDT');setDepositChoice(true)}else openFlow('deposit',displayAsset.code,network)}} onWithdraw={()=>openFlow('withdraw',displayAsset.code)} onExchange={()=>openFlow('exchange',displayAsset.code)}/></PushViewShell><PushViewShell open={asset!==null&&addressEntry!==null} title={addressEntry?`${displayAsset.code} ${['BTC','TRX'].includes(displayAsset.code)?'':addressNetworkStandards[addressEntry.network]??''}`.trim():'Адрес'} subtitle={addressEntry?addressNetworkNames[addressEntry.network]:undefined} zClass="z-[80]" onClose={()=>setAddressEntry(null)}>{addressEntry&&<WalletAddressDetails actions={<div className="-mx-4"><WalletActionGrid columns={3} label="Действия с адресом" items={actions.filter(action=>action.label!=='QR-код').map(action=>({...action,onClick:()=>{haptic('light');if(action.label==='Пополнить'){setAllDepositNetworks(false);setDepositChoice(true);return}setAddressEntry(null);if(action.label==='QR-код')onScan();else openFlow(action.label==='Пополнить'?'deposit':action.label==='Вывести'?'withdraw':'exchange',displayAsset.code,addressEntry.network)}}))}/></div>} entry={addressEntry} code={displayAsset.code} icon={displayAsset.icon} color={displayAsset.color} iconColor={displayAsset.iconColor}/>}</PushViewShell>{createPortal(<F7Sheet opened={depositChoice&&asset!==null} backdrop closeByBackdropClick closeOnEscape swipeToClose swipeHandler=".wpay-deposit-method-header" className={`wpay-exchange-sheet wpay-deposit-method-sheet ${allDepositNetworks?'wpay-deposit-method-sheet--all':''}`} onSheetClose={()=>{depositRequest.current++;setChoosingDeposit(false)}} onSheetClosed={()=>setDepositChoice(false)}>
+  <header className="wpay-deposit-method-header shrink-0 px-5 pb-6 pt-3"><div className="mx-auto mb-4 h-1 w-9 rounded-full bg-black/15 dark:bg-white/20"/><div className="flex items-center justify-between gap-3"><div><h2 className="text-[23px] font-semibold text-black dark:text-white">Пополнить</h2><p className="mt-1 text-[14px] text-black/45 dark:text-white/45">Выберите способ пополнения</p></div><WalletSheetClose label="Закрыть способы пополнения" onClick={()=>setDepositChoice(false)}/></div></header>
+  <div className="min-h-0 overflow-y-auto px-4 pb-[max(20px,env(safe-area-inset-bottom))]">
+   <List strong inset className="!mx-0 !mb-4 !mt-0 overflow-hidden !rounded-full [&>ul]:!rounded-full"><CurrencyRow asset={sbpDepositAsset} deposit onClick={()=>chooseDeposit('RUB')}/></List>
+   <List strong inset dividers={allDepositNetworks} className={`!mx-0 !my-0 overflow-hidden ${allDepositNetworks?'!rounded-[30px] [&>ul]:!rounded-[30px]':'!rounded-full [&>ul]:!rounded-full'}`}>{(allDepositNetworks?['BSC','ETH','TON','SOL','TRON']:[addressEntry?.network??previewNetworks[displayAsset.code]?.[0]??'']).map(network=><ListItem key={network} link chevron={false} onClick={()=>void chooseDeposit(displayAsset.code,network)} contentClassName="!h-[64px]" innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30" media={<span className="wpay-address-avatar"><span className="wpay-currency-icon flex h-11 w-11 items-center justify-center rounded-full [&>svg]:!h-6 [&>svg]:!w-6" style={assetIconStyle(displayAsset)}>{displayAsset.icon}</span><span className="wpay-address-network-badge"><WalletNetworkIcon network={network}/></span></span>} innerChildren={<span className="flex h-full w-full items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{displayAsset.code}{!['BTC','TRX'].includes(displayAsset.code)?' · '+(addressNetworkStandards[network]??network):''}</span><span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">{addressNetworkNames[network]}</span></span><ChevronRight className="shrink-0 text-[19px] text-black/25 dark:text-white/30"/></span>}/>)}</List>
+   {choosingDeposit&&<p role="status" className="mt-3 px-2 text-[13px] text-black/45 dark:text-white/45">Открываем реквизиты…</p>}
+  </div>
+ </F7Sheet>,document.querySelector('.wpay-f7-root')??document.body)}</>
 }
 
-function WalletNavbar({title, subtitle, left, right, assetSurface = false}: {title: string; subtitle?: string; left?: ReactNode; right?: ReactNode; assetSurface?: boolean}) {
+type WalletMenuItem = {title: string; icon: ReactNode; onClick: () => void}
+
+function WalletNavbar({title, subtitle, left, right, menuItems, active = true, assetSurface = false}: {title: string; subtitle?: string; left?: ReactNode; right?: ReactNode; menuItems?: WalletMenuItem[]; active?: boolean; assetSurface?: boolean}) {
   const [opened, setOpened] = useState(false)
   const target = useRef<HTMLElement | null>(null)
+  useEffect(()=>{if(!active)setOpened(false)},[active])
   const {theme, toggle} = useTheme()
   return <>
-    <Navbar title={title} subtitle={subtitle} left={left} colors={assetSurface ? {bgIos: 'bg-gradient-to-b from-white to-transparent dark:from-[#1c1c1e]'} : undefined} right={right ?? <span ref={target} className="inline-flex h-11 w-11"><KLink iconOnly aria-label="Ещё" onClick={()=>setOpened(true)} className="!h-full !w-full !text-black dark:!text-white"><Ellipsis className="text-[25px]"/></KLink></span>}/>
-    {!right && createPortal(<Popover opened={opened} target={target} onBackdropClick={()=>setOpened(false)} className="!z-[100] !w-64"><List nested className="!my-0"><ListItem link title={theme==='dark'?'Светлая тема':'Тёмная тема'} media={theme==='dark'?<SunMax className="text-[22px] text-primary"/>:<MoonStars className="text-[22px] text-primary"/>} onClick={()=>{toggle();setOpened(false)}}/></List></Popover>,document.querySelector('.k-app') ?? document.body)}
+    <Navbar title={title} subtitle={subtitle} left={left} onClickCapture={event=>{if((event.target as Element).closest('[aria-label="Назад"]'))setOpened(false)}} colors={assetSurface ? {bgIos: 'bg-gradient-to-b from-white to-transparent dark:from-[#1c1c1e]'} : undefined} right={right ?? <span ref={target} className="inline-flex h-11 w-11"><KLink iconOnly aria-label="Ещё" aria-expanded={opened} onClick={()=>setOpened(value=>!value)} className="!h-full !w-full !text-black dark:!text-white"><Ellipsis className="text-[25px]"/></KLink></span>}/>
+    {!right && createPortal(<Popover opened={opened && active} target={target.current} onBackdropClick={()=>setOpened(false)} className="!z-[100] !mt-3 !w-72"><List nested className="!my-0">{menuItems ? menuItems.map(item=><ListItem key={item.title} link chevron={false} contentClassName="!h-13" innerClassName="!min-w-0 !h-13 !py-0 after:!opacity-30" media={<span className="flex h-6 w-6 items-center justify-center text-[21px] text-primary">{item.icon}</span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="truncate text-[16px] font-medium text-black dark:text-white">{item.title}</span><ChevronRight aria-hidden="true" className="shrink-0 text-[18px] text-black/30 dark:text-white/30"/></span>} onClick={()=>{setOpened(false);item.onClick()}}/>) : <ListItem link title={theme==='dark'?'Светлая тема':'Тёмная тема'} media={theme==='dark'?<SunMax className="text-[22px] text-primary"/>:<MoonStars className="text-[22px] text-primary"/>} onClick={()=>{toggle();setOpened(false)}}/>}</List></Popover>,document.querySelector('.k-app') ?? document.body)}
   </>
 }
 
@@ -657,6 +707,7 @@ function PushViewShell({
   assetSurface = false,
   scrollContent = true,
   interactiveSwipe = false,
+  menuItems,
 }: {
   open: boolean
   title: string
@@ -668,6 +719,7 @@ function PushViewShell({
   assetSurface?: boolean
   scrollContent?: boolean
   interactiveSwipe?: boolean
+  menuItems?: WalletMenuItem[]
 }) {
   const { theme } = useTheme()
   useEffect(() => { applyTgTheme(theme) }, [open, theme])
@@ -680,6 +732,8 @@ function PushViewShell({
       <WalletNavbar
         title={title}
         assetSurface={assetSurface}
+        menuItems={menuItems}
+        active={open}
         subtitle={subtitle}
         left={
           <KLink onClick={onClose} aria-label="Назад" className="!-ml-2 !gap-0 !text-primary">
@@ -738,19 +792,33 @@ function NotificationSheet({open,title,onClose,children}: ComponentProps<typeof 
 }
 
 function DepositMethodsView({ flow, onClose }: { flow: CryptoFlow | null; onClose: () => void; showNotice: NoticeHandler }) {
+  const live = useLiveWallet()
+  const [entry,setEntry]=useState<WalletAddressSelection|null>(null)
+  const [network,setNetwork]=useState<string|null>(null)
   const [selected, setSelected] = useState<string | null>(null)
-  useEffect(() => { if (flow) setSelected(flow.assetCode??null) }, [flow])
+  useEffect(() => { setSelected(flow?.assetCode??null);setEntry(flow?.depositAddress??null);setNetwork(flow?.network??null) }, [flow])
+  function chooseNetwork(code:string,network:string){
+    setSelected(code);setNetwork(network)
+    if(!live.configured){const sample=portfolioExamples[network];if(sample)setEntry({network,address:sample.address,demo:true,amount:null,rate:null})}
+  }
+  function chooseAsset(code:string){
+    setSelected(code);setEntry(null);setNetwork(null)
+    if(code!=='RUB'&&code!=='USDT')chooseNetwork(code,previewNetworks[code][0])
+  }
+  function back(){if(entry){setEntry(null);if(selected!=='USDT'){setSelected(null);setNetwork(null)}else setNetwork(null)}else if(network){setNetwork(null);if(selected!=='USDT')setSelected(null)}else if(selected)setSelected(null);else onClose()}
+  const selectedAsset=assets.find(item=>item.code===selected)
   const depositAssets = assets
-  return <PushViewShell open={flow !== null} title={selected ? `Пополнить ${selected}` : 'Пополнить'} onClose={() => selected ? setSelected(null) : onClose()}>
-    {selected ? <LiveDepositPanel defaultAsset={selected} onAssetChange={setSelected} options={[sbpDepositAsset,...assets].map(item=>({code:item.code,name:item.name,icon:item.icon,style:assetIconStyle(item)}))}/> : <main className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
+  if(entry&&selected&&selectedAsset)return <PushViewShell open={flow!==null} title={`Пополнить ${selected}`} subtitle={addressNetworkNames[entry.network]} onClose={flow?.depositAddress?onClose:back}><WalletCryptoDeposit code={selected} entry={entry} icon={selectedAsset.icon} color={selectedAsset.color} iconColor={selectedAsset.iconColor}/></PushViewShell>
+  return <PushViewShell open={flow !== null} title={selected ? `Пополнить ${selected}` : 'Пополнить'} onClose={back}>
+    {selected==='USDT'&&!network ? <main className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1"><p className="mb-4 text-center text-[14px] text-black/45 dark:text-white/45">Выберите сеть</p><List strong inset dividers className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">{previewNetworks.USDT.map(net=><ListItem key={net} link chevron={false} onClick={()=>chooseNetwork('USDT',net)} contentClassName="!h-[64px]" innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30" media={<span className="wpay-address-avatar"><span className="wpay-currency-icon flex h-11 w-11 items-center justify-center rounded-full [&>svg]:!h-6 [&>svg]:!w-6" style={assetIconStyle(assets[0])}>{assets[0].icon}</span><span className="wpay-address-network-badge"><WalletNetworkIcon network={net}/></span></span>} innerChildren={<span className="flex h-full w-full items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{assets[0].code}{!['BTC','TRX'].includes(assets[0].code)?' · '+(addressNetworkStandards[net]??net):''}</span><span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">{addressNetworkNames[net]}</span></span><ChevronRight className="shrink-0 text-[19px] text-black/25 dark:text-white/30"/></span>}/>)}</List></main> : selected ? <LiveDepositPanel defaultNetwork={network??flow?.network} defaultAsset={selected} onAssetChange={chooseAsset} options={[sbpDepositAsset,...assets].map(item=>({code:item.code,name:item.name,icon:item.icon,style:assetIconStyle(item)}))}/> : <main aria-busy={live.loading} aria-label="Способы пополнения" className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
       <p className="mb-4 mt-1 text-center text-[14px] text-black/45 dark:text-white/45">Выберите способ пополнения</p>
       <List strong inset className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
-        <CurrencyRow asset={sbpDepositAsset} deposit onClick={() => setSelected('RUB')}/>
+        {live.loading ? <CurrencySkeletonRow rubles deposit/> : <CurrencyRow asset={sbpDepositAsset} deposit onClick={() => chooseAsset('RUB')}/>}
       </List>
       <h2 className="mb-2 mt-6 px-1 text-[17px] font-semibold text-black/50 dark:text-white/50">Криптовалютой</h2>
       <List strong inset dividers className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
-        {depositAssets.map(item => <CurrencyRow key={item.code} asset={item} deposit onClick={() => {
-          setSelected(item.code);haptic('light')
+        {live.loading ? depositAssets.map(item=><CurrencySkeletonRow key={item.code} deposit/>) : depositAssets.map(item => <CurrencyRow key={item.code} asset={item} deposit onClick={() => {
+          chooseAsset(item.code);haptic('light')
         }}/>) }
       </List>
     </main>}
@@ -793,7 +861,7 @@ function CryptoFlowPushView({
   const exchangeRate = (usdRates[fromAsset.code] ?? 0) / (usdRates[toAsset.code] || 1)
   const receiveAmount = parsedAmount * exchangeRate
   const formatCrypto = (value: number, maximumFractionDigits = 6) =>
-    value.toLocaleString('ru-RU', { maximumFractionDigits })
+    value.toLocaleString('en-US', { maximumFractionDigits })
 
   const selectExchangeAsset = (code: string) => {
     if (assetPicker === 'from') {setFromCode(code);if(code===toCode)setToCode(fromCode)}
@@ -819,8 +887,8 @@ function CryptoFlowPushView({
     const balancePercent = balances[fromCode]>0?Math.min(100,Math.max(0,parsedAmount/balances[fromCode]*100)):0
     const enterKey=(key:string)=>{haptic('light');setAmount(previous=>{
       if(key==='delete')return previous.slice(0,-1)
-      const digit=key==='.'?',':key
-      if(digit===',')return /[.,]/.test(previous)?previous:(previous||'0')+','
+      const digit=key===','?'.':key
+      if(digit==='.')return /[.,]/.test(previous)?previous:(previous||'0')+'.'
       if(previous.length>=18)return previous
       const fraction=previous.split(/[.,]/)[1]
       if(fraction!==undefined&&fraction.length>=8)return previous
@@ -834,7 +902,7 @@ function CryptoFlowPushView({
             {(['from','to'] as const).map(side=>{const giving=side==='from',asset=giving?fromAsset:toAsset;return <section key={side} className={`bg-white px-5 py-4 dark:bg-[#1c1c1e] ${giving?'rounded-t-[32px] rounded-b-lg':'rounded-t-lg rounded-b-[32px]'}`}>
               <div className="flex items-center justify-between text-[15px] text-black/45 dark:text-white/45"><span>{giving?'Отдаёте':'Получаете'}</span><span className="flex items-center gap-1.5 text-[13px]"><WalletFill className="text-[15px]"/><span className="tabular-nums">{live.ready?formatCrypto(balances[asset.code]??0):'—'}</span></span></div>
               <div className="mt-4 flex h-12 items-center gap-3">
-                {giving?<input aria-label={`Сумма в ${asset.code}`} inputMode="none" readOnly value={amount} placeholder="0" onKeyDown={e=>{if(/^[0-9.,]$/.test(e.key)){e.preventDefault();enterKey(e.key)}else if(e.key==='Backspace'){e.preventDefault();enterKey('delete')}}} className="min-w-0 flex-1 bg-transparent p-0 text-left text-[44px] font-medium leading-none tracking-tight text-black outline-none placeholder:text-black/30 dark:text-white dark:placeholder:text-white/30"/>:<output aria-label="Сумма получения" className={`min-w-0 flex-1 truncate text-[44px] font-medium leading-none tracking-tight ${receiveAmount>0&&hasRate?'text-black dark:text-white':'text-black/30 dark:text-white/30'}`}>{hasRate&&receiveAmount>0?formatCrypto(receiveAmount,8):'0,00'}</output>}
+                {giving?<input aria-label={`Сумма в ${asset.code}`} inputMode="none" readOnly value={amount} placeholder="0" onKeyDown={e=>{if(/^[0-9.,]$/.test(e.key)){e.preventDefault();enterKey(e.key)}else if(e.key==='Backspace'){e.preventDefault();enterKey('delete')}}} className="min-w-0 flex-1 bg-transparent p-0 text-left text-[44px] font-medium leading-none tracking-tight text-black outline-none placeholder:text-black/30 dark:text-white dark:placeholder:text-white/30"/>:<output aria-label="Сумма получения" className={`min-w-0 flex-1 truncate text-[44px] font-medium leading-none tracking-tight ${receiveAmount>0&&hasRate?'text-black dark:text-white':'text-black/30 dark:text-white/30'}`}>{hasRate&&receiveAmount>0?formatCrypto(receiveAmount,8):'0.00'}</output>}
                 <button type="button" aria-label={giving?'Валюта списания':'Валюта получения'} onClick={()=>{setPickerQuery('');setAssetPicker(side)}} className="flex min-h-12 shrink-0 items-center gap-2 py-1 pl-2 text-black dark:text-white"><span className="flex h-8 w-8 items-center justify-center rounded-full [&>svg]:!h-[21px] [&>svg]:!w-[21px]" style={assetIconStyle(asset)}>{asset.icon}</span><span className="text-[18px] font-semibold">{asset.code}</span><ChevronRight className="rotate-90 text-[16px] text-black/35 dark:text-white/35"/></button>
               </div>
             </section>})}
@@ -842,8 +910,8 @@ function CryptoFlowPushView({
           </div>
           <p role="status" className="my-4 text-center text-[13px] text-black/45 dark:text-white/45">{hasRate?`1 ${fromAsset.code} ≈ ${formatCrypto(exchangeRate,8)} ${toAsset.code}`:'Курс пока недоступен'}</p>
           <div className="flex h-11 items-center gap-4 px-2"><button type="button" onClick={()=>setAmount('')} className="min-h-11 text-[14px] font-medium text-primary">Мин</button><input aria-label="Доля доступного баланса" type="range" min="0" max="100" step="1" value={balancePercent} disabled={!live.ready||!(balances[fromCode]>0)} onChange={e=>setAmount(String(Number(((balances[fromCode]??0)*Number(e.target.value)/100).toFixed(8))))} className="h-1.5 min-w-0 flex-1 cursor-pointer accent-[#3275e9] disabled:opacity-35"/><button type="button" disabled={!live.ready} onClick={()=>setAmount(String(balances[fromCode]??0))} className="min-h-11 text-[14px] font-medium text-primary disabled:opacity-40">Макс</button></div>
-          <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1" aria-label="Цифровая клавиатура">{['1','2','3','4','5','6','7','8','9',',','0','delete'].map(key=><button key={key} type="button" aria-label={key==='delete'?'Удалить цифру':key===','?'Десятичный разделитель':key} onClick={()=>enterKey(key)} className="flex h-[clamp(44px,7dvh,64px)] items-center justify-center rounded-2xl text-[31px] font-medium text-black transition-colors active:bg-black/5 dark:text-white dark:active:bg-white/10">{key==='delete'?<Delete size={25} strokeWidth={1.8}/>:key}</button>)}</div>
-          <Button large rounded disabled={!(parsedAmount>0)||!hasRate||!live.ready||parsedAmount>(balances[fromCode]??0)} onClick={()=>showNotice('Обмен пока недоступен. Средства не списываются.')} className="!mt-5 !h-14 !w-full !rounded-[22px] !text-[17px] !font-semibold">Продолжить</Button>
+          <div className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1" aria-label="Цифровая клавиатура">{['1','2','3','4','5','6','7','8','9','.','0','delete'].map(key=><button key={key} type="button" aria-label={key==='delete'?'Удалить цифру':key==='.'?'Десятичный разделитель':key} onClick={()=>enterKey(key)} className="flex h-[clamp(44px,7dvh,64px)] items-center justify-center rounded-2xl text-[31px] font-medium text-black transition-colors active:bg-black/5 dark:text-white dark:active:bg-white/10">{key==='delete'?<Delete size={25} strokeWidth={1.8}/>:key}</button>)}</div>
+          <Button data-wpay-primary="" large rounded disabled={!(parsedAmount>0)||!hasRate||!live.ready||parsedAmount>(balances[fromCode]??0)} onClick={()=>showNotice('Обмен пока недоступен. Средства не списываются.')} className="wpay-bottom-action !mt-5 !h-14 !w-full !rounded-[22px] !text-[17px] !font-semibold">Продолжить</Button>
           <p className="mt-3 text-center text-[12px] text-black/35 dark:text-white/35">Расчёт справочный. Обмен пока недоступен.</p>
         </main>
         {createPortal(<F7Sheet opened={assetPicker!==null&&flow!==null} backdrop closeByBackdropClick closeOnEscape swipeToClose swipeHandler=".wpay-exchange-picker-header" className="wpay-exchange-sheet" onSheetClosed={()=>{setAssetPicker(null);setPickerQuery('')}}>
@@ -873,7 +941,7 @@ function WithdrawalMethodsView({open,onClose}:{open:boolean;onClose:()=>void}) {
 }
 
 const bankCards = [
-  { id: 'rub', name: 'Основная карта', currency: '₽', balance: '0,00 ₽', last4: '0000', network: 'Visa', gradient: 'from-[#1d4ed8] via-[#2563eb] to-[#60a5fa]' },
+  { id: 'rub', name: 'Основная карта', currency: '₽', balance: '0.00 ₽', last4: '0000', network: 'Visa', gradient: 'from-[#1d4ed8] via-[#2563eb] to-[#60a5fa]' },
   { id: 'usd', name: 'Долларовая карта', currency: '$', balance: '$0.00', last4: '0001', network: 'Visa', gradient: 'from-[#312e81] via-[#5b21b6] to-[#a855f7]' },
   { id: 'amex', name: 'Green', currency: '$', balance: '$0.00', last4: '1002', network: 'American Express', gradient: 'from-[#f1f3f6] via-[#cdd3dc] to-[#e6ebf0]' },
 ]
@@ -935,14 +1003,14 @@ function CardOfferArtwork({offer}:{offer:CardOffer}) {
 function CardOfferDetails({offer,onOrder,checkout=false}:{offer:CardOffer;onOrder?:()=>void;checkout?:boolean}) {
   return <div className="px-4 pb-7 pt-6"><h2 className="text-[27px] font-semibold tracking-tight text-black dark:text-white">{offer.name}</h2><p className="mt-2 text-[16px] leading-6 text-black/45 dark:text-white/45">{offer.caption}. Отдельная карта в долларах поможет разделить расходы и подписки.</p>
     <List strong dividers className="!mx-0 !mb-5 !mt-5 overflow-hidden !rounded-[28px] [&>ul]:!rounded-[28px]">{['Выпуск карты','Обслуживание','Пополнение'].map(title=><ListItem key={title} title={title} after="Уточняется" contentClassName="!h-14" innerClassName="!h-14 after:!opacity-30"/>)}</List>
-    <Button rounded large disabled={checkout} className="!m-0 !w-full !rounded-[22px]" onClick={onOrder}>{checkout?'Выпуск пока недоступен':'Заказать карту'}</Button>
+    <Button data-wpay-primary="" rounded large disabled={checkout} className="!m-0 !w-full !rounded-[22px]" onClick={onOrder}>{checkout?'Выпуск пока недоступен':'Заказать карту'}</Button>
     <p className="mt-3 px-2 text-center text-[13px] leading-5 text-black/40 dark:text-white/40">{checkout?'Провайдер выпуска ещё не подключён. Цена, комиссии и доступные способы оплаты появятся до подтверждения заказа. Средства не списываются.':'Предварительный каталог. Условия и стоимость выпуска пока не опубликованы.'}</p>
   </div>
 }
 function CardPurchaseView({offer,onSelect,onClose}:{offer:CardOffer|null;onSelect:(offer:CardOffer)=>void;onClose:()=>void}) {
   const [displayOffer,setDisplayOffer]=useState(cardOffers[0])
   useEffect(()=>{if(offer)setDisplayOffer(offer)},[offer])
-  return <NotificationSheet open={offer!==null} title="Новая карта" onClose={onClose}><main className="mx-auto w-full max-w-[560px] pb-6"><div className="flex gap-2 px-4 pb-4 pt-3">{cardOffers.map(item=><button key={item.id} type="button" aria-pressed={displayOffer.id===item.id} onClick={()=>onSelect(item)} className={`min-h-10 flex-1 rounded-full px-3 text-[14px] font-medium ${displayOffer.id===item.id?'bg-primary text-white dark:bg-primary':'bg-black/5 text-black/50 dark:bg-white/10 dark:text-white/50'}`}>{item.name}</button>)}</div><div className="px-4"><CardOfferArtwork offer={displayOffer}/></div><CardOfferDetails offer={displayOffer} checkout/></main></NotificationSheet>
+  return <NotificationSheet open={offer!==null} title="Новая карта" onClose={onClose}><main className="mx-auto w-full max-w-[560px] pb-6"><div className="flex gap-2 px-4 pb-4 pt-3">{cardOffers.map(item=><button key={item.id} type="button" data-wpay-primary={displayOffer.id===item.id?'':undefined} aria-pressed={displayOffer.id===item.id} onClick={()=>onSelect(item)} className={`min-h-10 flex-1 rounded-full px-3 text-[14px] font-medium ${displayOffer.id===item.id?'bg-primary text-white dark:bg-primary':'bg-black/5 text-black/50 dark:bg-white/10 dark:text-white/50'}`}>{item.name}</button>)}</div><div className="px-4"><CardOfferArtwork offer={displayOffer}/></div><CardOfferDetails offer={displayOffer} checkout/></main></NotificationSheet>
 }
 
 function CardsSection({showNotice}: {showNotice:NoticeHandler}) {
@@ -1189,7 +1257,7 @@ function ProfileSettingsPushView({
             <F7ListInput label="Telegram" inputId="profile-telegram" type="text" readonly value={user?.username?`@${user.username}`:'Имя пользователя не указано'} />
             <F7ListInput label="KYC · Проверка личности" inputId="profile-verification" type="text" readonly value="Не пройдена" />
           </F7List>
-          <div className="px-4"><Button rounded large disabled={!firstName.trim()} className="!m-0 !w-full !rounded-[22px]" onClick={()=>{onSaveName([firstName.trim(),lastName.trim()].filter(Boolean).join(' '));setNameSaved(true)}}>Сохранить</Button><p role="status" className="mt-3 px-2 text-center text-[13px] leading-5 text-black/45 dark:text-white/45">{nameSaved?'Данные обновлены в текущей сессии.':'Изменения сохраняются только в текущей сессии WPay. Профиль Telegram не изменится.'}</p></div>
+          <div className="px-4"><Button data-wpay-primary="" rounded large disabled={!firstName.trim()} className="!m-0 !w-full !rounded-[22px]" onClick={()=>{onSaveName([firstName.trim(),lastName.trim()].filter(Boolean).join(' '));setNameSaved(true)}}>Сохранить</Button><p role="status" className="mt-3 px-2 text-center text-[13px] leading-5 text-black/45 dark:text-white/45">{nameSaved?'Данные обновлены в текущей сессии.':'Изменения сохраняются только в текущей сессии WPay. Профиль Telegram не изменится.'}</p></div>
         </>}
 
         {displayPage === 'provider' && (
@@ -1199,7 +1267,7 @@ function ProfileSettingsPushView({
               <h2 className="mb-0 mt-3 text-[19px] font-semibold">Провайдер не подключён</h2>
               <p className="mb-0 mt-2 text-[15px] leading-6 text-black/45 dark:text-white/45">После подключения станут доступны выпуск карт, пополнение, вывод и реальные платежи.</p>
             </Card>
-            <div className="px-safe-4"><Button rounded large className="!m-0 !w-full" onClick={() => showNotice('Заявка на подключение подготовлена')}><span className="normal-case">Подключить провайдера</span></Button></div>
+            <div className="px-safe-4"><Button data-wpay-primary="" rounded large className="!m-0 !w-full" onClick={() => showNotice('Заявка на подключение подготовлена')}><span className="normal-case">Подключить провайдера</span></Button></div>
           </>
         )}
 
@@ -1260,12 +1328,12 @@ function SupportChatPushView({open,onClose}: {open:boolean;onClose:()=>void}) {
   </PushViewShell>
 }
 
-function CurrencySkeletonRow({ rubles = false }: { rubles?: boolean }) {
+function CurrencySkeletonRow({ rubles = false, deposit = false }: { rubles?: boolean; deposit?: boolean }) {
   const block = 'animate-pulse motion-reduce:animate-none rounded-full bg-black/[.07] dark:bg-white/[.09]'
   return <ListItem chevron={false} contentClassName="!h-[64px]" innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30" media={<span className={`block h-11 w-11 shrink-0 ${block}`}/>} innerChildren={
     <span className="flex h-full w-full min-w-0 items-center justify-between gap-3" aria-hidden="true">
       <span className="min-w-0"><span className={`block h-3.5 w-24 max-w-full ${block}`}/><span className={`mt-2 block h-3 w-16 max-w-full ${block}`}/></span>
-      <span className="shrink-0"><span className={`ml-auto block h-3.5 w-14 ${block}`}/>{!rubles && <span className={`ml-auto mt-2 block h-3 w-11 ${block}`}/>}</span>
+      <span className="shrink-0">{deposit ? <span className={`block h-4 w-2 ${block}`}/> : <><span className={`ml-auto block h-3.5 w-14 ${block}`}/>{!rubles && <span className={`ml-auto mt-2 block h-3 w-11 ${block}`}/>}</>}</span>
     </span>
   }/>
 }

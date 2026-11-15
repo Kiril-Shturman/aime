@@ -1,0 +1,112 @@
+.wpay-intro{outline:none;position:fixed;inset:0;margin:0;width:100vw;max-width:none;height:100dvh;max-height:none;padding:0;border:0;color:white;background:radial-gradient(ellipse at 75% 65%,#1748b9 0%,transparent 65%),linear-gradient(150deg,#061937,#09295a 65%,#0b346f);overflow:auto;overscroll-behavior:contain;color-scheme:dark}
+.wpay-intro::backdrop{background:#041128}
+.wpay-intro-shell{display:flex;flex-direction:column;min-height:100%;max-width:620px;margin:auto;padding:calc(max(env(safe-area-inset-top,0px),var(--tg-safe-area-inset-top,0px) + var(--tg-content-safe-area-inset-top,0px)) + 18px) 24px max(20px,env(safe-area-inset-bottom,0px));box-sizing:border-box}
+.wpay-intro-progress{display:flex;gap:6px}
+.wpay-intro-progress button{flex:1;min-width:0;padding:8px 0}
+.wpay-intro-progress span{display:block;height:3px;border-radius:10px;background:#ffffff35;transition:background .2s}
+.wpay-intro-progress span.filled{background:#fff}
+.wpay-intro-top{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.wpay-intro-logo{font-size:22px;font-weight:700;letter-spacing:-1px}.wpay-intro-logo>span{font-weight:500}
+.wpay-intro-top>button{display:flex;width:42px;height:42px;align-items:center;justify-content:center;border:1px solid #ffffff12;border-radius:50%;background:#ffffff12;backdrop-filter:blur(12px);color:#fff}
+.wpay-intro-slide{display:flex;flex:1;flex-direction:column;min-height:0;animation:wpay-intro-appear .4s ease-out;touch-action:pan-y}
+.wpay-intro-copy{position:relative;z-index:2;padding-top:26px}
+.wpay-intro-label{font-size:12px;font-weight:500;letter-spacing:.3px;color:#97bcff}
+.wpay-intro-copy h1{margin-top:12px;font-size:clamp(32px,8vw,48px);font-weight:650;line-height:1.06;letter-spacing:-1.3px}
+.wpay-intro-description{max-width:450px;margin-top:18px;font-size:16px;line-height:1.5;color:#d8e4f5}
+.wpay-intro-art{position:relative;flex:1;display:flex;min-height:260px;align-items:center;justify-content:center;margin-top:16px}
+.wpay-intro-card-stack{position:relative;width:100%;height:310px;perspective:900px}
+.intro-card{position:absolute;left:50%;width:290px;height:180px;padding:21px 23px;border:1px solid #ffffff35;border-radius:23px;box-shadow:0 20px 45px #0004;overflow:hidden}
+.card-back{top:10px;transform:translateX(-40%) rotate(-12deg);background:linear-gradient(135deg,#6666d8,#322e78)}
+.card-middle{top:70px;transform:translateX(-54%) rotate(7deg);background:linear-gradient(135deg,#34384a,#10131c)}
+.card-front{top:140px;transform:translateX(-55%) rotate(-9deg);background:radial-gradient(ellipse at 90% 20%,#69afff80,transparent 60%),linear-gradient(130deg,#2674ec,#1745ac)}
+.intro-card-brand{position:relative;z-index:1;display:flex;align-items:center;gap:3px;font-size:20px;font-weight:650;letter-spacing:-1px}
+.intro-card-dot{width:4px;height:4px;border-radius:50%;background:#c8fb8f}
+.intro-card-art{position:absolute;right:12px;top:24px;color:#ffffff30;transform:rotate(-10deg)}
+.intro-card-caption{position:absolute;bottom:22px;font-size:11px;color:#ffffff80}
+.intro-card-chip{display:block;width:30px;height:23px;margin-top:20px;border-radius:6px;background:linear-gradient(145deg,#f1dfb0,#b9a36c);border:1px solid #ffffff50}
+.intro-card-bottom{position:absolute;left:23px;right:23px;bottom:18px;display:flex;justify-content:space-between;font-size:12px;letter-spacing:2px}.intro-card-bottom>span:last-child{font-size:9px;letter-spacing:1px;color:#ffffff90}
+.wpay-intro-bottom{position:relative;z-index:3;margin-top:18px}
+.wpay-intro-next{display:flex;width:100%;min-height:56px;align-items:center;justify-content:center;padding:14px 24px;border:1px solid #77d4ff;border-radius:999px;background:#3983f5;color:#fff;font-size:18px;line-height:26px;font-weight:600;box-shadow:inset 0 0 0 1px #ffffff12;transition:background .18s ease,transform .18s ease}
+.wpay-intro-next:hover{background:#478ffc}.wpay-intro-next:active{background:#2e74df;transform:scale(.985)}.wpay-intro-next:focus-visible{outline:3px solid #ffffff;outline-offset:4px}
+.wpay-intro-bottom>p{min-height:32px;margin:12px auto 0;text-align:center;font-size:10px;line-height:1.5;color:#ffffff75;max-width:410px}
+.wpay-intro button:focus-visible{outline:2px solid white;outline-offset:4px}
+.wpay-intro-coins{position:relative;width:310px;height:300px}
+.wpay-intro-orbit{position:absolute;inset:8px;border:1px dashed #ffffff25;border-radius:50%}
+.wpay-intro-wallet{position:absolute;top:72px;left:30px;right:30px;padding:25px;border:1px solid #ffffff25;border-radius:26px;background:linear-gradient(145deg,#ffffff20,#ffffff08);box-shadow:0 20px 50px #0003;backdrop-filter:blur(14px);transform:rotate(-5deg)}
+.wpay-intro-wallet>svg{color:#a8d0ff}.wpay-intro-wallet>span{display:block;margin-top:15px;font-size:12px;color:#b0c4e2}.wpay-intro-wallet strong{display:block;margin-top:4px;font-size:23px;font-weight:600}.wpay-intro-wallet small{display:flex;gap:5px;align-items:center;margin-top:14px;font-size:10px;color:#b9decd}
+.wpay-intro-coin{position:absolute;z-index:2;display:grid;place-items:center;width:62px;height:62px;border-radius:50%;font-size:32px;font-weight:600;border:1px solid #ffffff50;box-shadow:0 12px 25px #0003}.coin-usdt{top:15px;left:22px;background:linear-gradient(145deg,#42ccb0,#128365)}.coin-bitcoin{top:44px;right:0;background:linear-gradient(145deg,#ffcf67,#e98b18);transform:rotate(12deg)}.coin-eth{bottom:0;left:5px;background:linear-gradient(145deg,#b0baff,#566bd0);transform:rotate(-12deg)}
+.wpay-intro-float{position:absolute;right:3px;bottom:4px;display:flex;align-items:center;gap:8px;padding:12px 17px;border:1px solid #ffffff25;border-radius:17px;background:#224d90;color:#d6e7ff;font-size:13px;transform:rotate(5deg)}
+.wpay-intro-qr{position:absolute;z-index:3;right:0;bottom:8px;display:flex;align-items:center;gap:12px;padding:14px;border-radius:22px;background:#fff;box-shadow:0 10px 30px #0003;color:#12356d;transform:rotate(7deg);font-size:12px;font-weight:600}
+.wpay-intro-friends{position:relative;width:310px;height:290px}.friend-orbit{position:absolute;inset:4px 14px;border:1px dashed #ffffff30;border-radius:50%}.friend-orbit.two{inset:50px 60px}
+.friend-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:82px;height:82px;border:5px solid #ffffff30;border-radius:50%;background:linear-gradient(145deg,#6ac8ff,#3477ee);font-size:30px;font-weight:600;box-shadow:0 0 0 12px #ffffff07}
+.friend{position:absolute;display:grid;place-items:center;width:44px;height:44px;border:2px solid #ffffff35;border-radius:50%;font-size:18px;font-weight:600;box-shadow:0 8px 25px #0002}.friend-0{left:25px;top:35px;background:#8981ce}.friend-1{right:10px;top:60px;background:#b4777f}.friend-2{left:0;bottom:45px;background:#4b9e98}.friend-3{right:30px;bottom:20px;background:#b29356}
+.wpay-intro-friend-badge{position:absolute;left:50%;bottom:4px;display:flex;align-items:center;gap:7px;white-space:nowrap;transform:translateX(-50%);padding:11px 14px;border:1px solid #ffffff25;border-radius:16px;background:#173e78;font-size:11px;color:#d0e1ff}
+@keyframes wpay-intro-appear{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@media(min-width:900px){.wpay-intro-shell{max-width:1100px;min-height:100dvh;padding:35px 48px 24px}.wpay-intro-slide{display:grid;grid-template-columns:1fr 1fr;gap:45px;align-items:center}.wpay-intro-copy{padding-top:0}.wpay-intro-copy h1{font-size:60px;letter-spacing:-2px}.wpay-intro-description{font-size:18px}.wpay-intro-art{min-height:420px;margin:0}.wpay-intro-card-stack{transform:scale(1.2)}.wpay-intro-bottom{max-width:430px;margin-top:0}.wpay-intro-copy .wpay-intro-label{font-size:14px}}
+@media(max-height:740px) and (max-width:899px){.wpay-intro-copy{padding-top:12px}.wpay-intro-copy h1{font-size:32px}.wpay-intro-description{font-size:14px;margin-top:12px}.wpay-intro-art{min-height:205px}.wpay-intro-art>div{transform:scale(.8)}.wpay-intro-card-stack{height:260px}.wpay-intro-bottom{margin-top:8px}}
+@media(prefers-reduced-motion:reduce){.wpay-intro-slide{animation:none}.wpay-intro-progress span{transition:none}}
+
+.wpay-intro-sbp{position:relative;width:310px;height:310px;perspective:900px}
+.wpay-intro-sbp-tile{position:absolute;right:2px;bottom:12px;display:grid;place-items:center;width:210px;height:220px;border-radius:42px;border:1px solid #ffffff95;background:linear-gradient(145deg,#fff,#d4e6fa 65%,#a3c3e7);box-shadow:8px 12px 0 #7ea5d4,12px 20px 0 #4e78ae,0 35px 45px #0004;transform:rotate(-14deg) rotateY(-10deg)}
+.wpay-intro-sbp-tile img{width:95px;height:109px;object-fit:contain;filter:drop-shadow(0 4px 2px #0000000a)}
+.wpay-intro-sbp-arrow{position:absolute;inset:-28px 0 auto -18px;width:290px;height:290px;filter:drop-shadow(0 10px 5px #163a7255)}
+.wpay-intro-sbp-currency{position:absolute;left:4px;bottom:15px;display:flex;align-items:center;gap:16px;padding:13px 21px;border:1px solid #ffffff30;border-radius:20px;background:#174989;box-shadow:0 12px 24px #0003;color:#d9eeff;transform:rotate(-6deg)}
+.wpay-intro-sbp-currency b{font-size:27px;font-weight:500}
+
+.wpay-intro-mobile-pay{position:relative;width:310px;height:310px;perspective:900px}
+.wpay-intro-pay-brands{position:absolute;top:10px;left:0;display:grid;gap:10px;z-index:3}
+.wpay-intro-pay-brands>span{display:flex;width:86px;height:43px;align-items:center;justify-content:center;border-radius:24px;background:#fff;box-shadow:0 8px 20px #0002}
+.wpay-intro-pay-brands img{max-width:66px;max-height:34px;object-fit:contain}
+.wpay-intro-terminal{position:absolute;left:40px;top:80px;width:170px;height:220px;padding:22px 14px;border-radius:24px;background:linear-gradient(135deg,#60bdff,#1a62b5);border:1px solid #99d8ff;box-shadow:-8px 9px 0 #16498b,0 20px 35px #0004;transform:rotate(22deg)}
+.wpay-intro-terminal-screen{display:flex;height:86px;align-items:center;justify-content:center;border:4px solid #b9d8ec;border-radius:12px;background:#eaf6ff;color:#21b768}
+.wpay-intro-terminal-keys{margin-top:12px;font-size:28px;line-height:18px;letter-spacing:18px;text-align:center;color:#ffffff90}
+.wpay-intro-receipt{position:absolute;left:20px;top:-55px;width:128px;height:70px;padding:13px 14px;background:linear-gradient(#fff,#e1eaf5);box-shadow:0 0 4px #0001;transform:rotate(-7deg);border-radius:12px 0 0 0}
+.wpay-intro-receipt i{display:block;height:3px;margin-bottom:7px;background:#a3b3c333}.wpay-intro-receipt i:nth-child(2){width:70%}
+.wpay-intro-phone{position:absolute;right:0;bottom:0;width:158px;height:265px;padding:22px 12px;border:5px solid #83c9ff;border-radius:29px;background:linear-gradient(145deg,#fff,#e5f1fa);box-shadow:5px 7px 0 #2875c3,0 20px 32px #0004;transform:rotate(-16deg);color:#2868a0}
+.wpay-intro-phone-speaker{position:absolute;top:8px;left:50%;width:39px;height:4px;transform:translateX(-50%);border-radius:5px;background:#c4d8e8}
+.wpay-intro-phone-card{display:flex;flex-direction:column;justify-content:space-between;height:84px;padding:12px;border-radius:11px;background:linear-gradient(130deg,#337af2,#65bafa);color:white;box-shadow:0 4px 10px #3275e92a}
+.wpay-intro-phone-card strong{font-size:17px;letter-spacing:-.7px}.wpay-intro-phone-card>span{font-size:9px;letter-spacing:2px}
+.wpay-intro-phone-check{display:flex;width:48px;height:48px;align-items:center;justify-content:center;margin:21px auto 0;border:2px solid #4fa3ce40;border-radius:50%;color:#3a9dc6}
+.wpay-intro-phone-label{display:block;margin-top:10px;text-align:center;font-size:11px;color:#6e8ba6}
+.wpay-intro-phone-line{position:absolute;bottom:8px;left:50%;width:42px;height:3px;transform:translateX(-50%);border-radius:5px;background:#9bb8d14a}
+.wpay-intro-pay-brands>span{overflow:hidden}
+.wpay-intro-pay-brands>span:last-child img{width:130px;height:88px;max-width:none;max-height:none;flex-shrink:0}
+
+.wpay-intro-services{display:grid;width:100%;gap:12px}
+.wpay-intro-service{display:flex;min-height:79px;align-items:center;justify-content:space-between;gap:10px;overflow:hidden;padding:16px 17px;border:1px solid #ffffff09;border-radius:24px;background:linear-gradient(115deg,#ffffff0c,#ffffff12)}
+.wpay-intro-service>span:first-child{min-width:0}.wpay-intro-service strong{display:block;font-size:16px;font-weight:600;line-height:1.3;letter-spacing:-.3px}.wpay-intro-service small{display:block;margin-top:7px;font-size:11px;line-height:1.4;color:#b9cee9}
+.wpay-intro-service-icon{display:flex;align-items:center;justify-content:center;flex:0 0 47px;height:47px;margin-right:-4px;border:1px solid #ffffff20;border-radius:17px;background:linear-gradient(145deg,#c5eaff35,#6bb8ff10);box-shadow:0 5px 14px #0001,inset 0 1px 0 #ffffff1a;color:#a8dbff;transform:rotate(-10deg)}
+.service-travel .wpay-intro-service-icon{transform:rotate(10deg);color:#a3d8ff}.service-shopping .wpay-intro-service-icon{color:#bbd7ff}.service-digital .wpay-intro-service-icon{color:#c6c1ff}
+.wpay-intro-slide-services .wpay-intro-art{margin-top:23px}
+@media(max-height:740px) and (max-width:899px){.wpay-intro-slide-services .wpay-intro-art>div{transform:none}.wpay-intro-services{gap:8px}.wpay-intro-service{min-height:66px;padding:12px 15px}.wpay-intro-service strong{font-size:15px}.wpay-intro-service small{margin-top:4px;font-size:10px}.wpay-intro-service-icon{height:40px;flex-basis:40px}}
+@media(min-width:900px){.wpay-intro-services{gap:16px}.wpay-intro-service{min-height:98px;padding:22px}.wpay-intro-service strong{font-size:19px}.wpay-intro-service small{font-size:13px}}
+
+.wpay-intro-sbp-currency small{font-size:14px;font-weight:600}
+.wpay-intro-topup-crypto{position:absolute;right:0;top:18px;z-index:3;display:flex;align-items:center;gap:0;padding:9px 12px;border:1px solid #ffffff25;border-radius:20px;background:#123c76;box-shadow:0 8px 22px #0002;transform:rotate(7deg)}
+.wpay-intro-topup-crypto>span{display:grid;width:30px;height:30px;place-items:center;border-radius:50%;font-size:21px;color:#fff;background:#27a57d}.wpay-intro-topup-crypto>span+span{margin-left:-5px;background:#efa839;border:2px solid #123c76}
+.wpay-intro-topup-crypto small{margin-left:8px;font-size:11px;color:#d6eaff}
+.wpay-intro-qr-art{position:relative;width:310px;height:310px;perspective:900px}
+.wpay-intro-qr-paper{position:absolute;top:10px;left:14px;display:flex;align-items:center;flex-direction:column;width:190px;height:245px;padding:18px;border:1px solid #ffffff80;border-radius:24px;background:linear-gradient(140deg,#fff,#deedfa);color:#17447d;box-shadow:-5px 6px 0 #91b6df,0 20px 35px #0004;transform:rotate(-13deg)}
+.wpay-intro-qr-paper-brand{align-self:flex-start;margin-bottom:15px;font-size:17px;font-weight:650;letter-spacing:-.7px}
+.wpay-intro-qr-paper-sbp{display:flex;align-items:center;gap:6px;margin-top:13px;font-size:10px;color:#7186a0}.wpay-intro-qr-paper-sbp img{width:15px;height:18px;object-fit:contain}
+.wpay-intro-qr-scanner{position:absolute;top:68px;right:0;display:flex;align-items:center;flex-direction:column;width:148px;height:218px;padding:20px 10px;border:4px solid #78bdff;border-radius:26px;background:linear-gradient(145deg,#103c79,#0b2452);box-shadow:5px 7px 0 #225da5,0 15px 30px #0003;transform:rotate(13deg)}
+.wpay-intro-qr-scanner-head{font-size:10px;color:#b4d7ff}.wpay-intro-qr-scan-frame{position:relative;display:grid;place-items:center;width:101px;height:101px;margin-top:17px;border:1px solid #72bbff70;border-radius:13px;background:#ffffff08;color:#8cc5ff}
+.wpay-intro-qr-scan-frame>span{position:absolute;left:-4px;right:-4px;top:49%;height:2px;background:#77dcff;box-shadow:0 0 10px #78d9ff}
+.wpay-intro-qr-scanner-status{display:flex;align-items:center;gap:4px;margin-top:15px;font-size:9px;color:#8bdcb9}.wpay-intro-qr-caption{position:absolute;left:7px;bottom:0;z-index:3;padding:11px 14px;border:1px solid #ffffff25;border-radius:17px;background:#17467d;box-shadow:0 8px 20px #0002;font-size:11px;color:#d6e9ff;transform:rotate(-5deg)}
+
+/* Keep the action visible while only the story content scrolls. */
+.wpay-intro{overflow:hidden}
+.wpay-intro-shell{height:100%;min-height:0;overflow:hidden;padding-bottom:max(8px,env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px))}
+.wpay-intro-progress,.wpay-intro-top{flex-shrink:0}
+.wpay-intro-slide{overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:none}
+.wpay-intro-slide::-webkit-scrollbar{display:none}
+.wpay-intro-art{flex-shrink:0}
+.wpay-intro-bottom{display:flex;flex-direction:column;flex-shrink:0;margin-top:12px}
+.wpay-intro-bottom>p{order:-1;min-height:0;margin:0 auto 12px}
+@media(min-width:900px){.wpay-intro-shell{min-height:0}.wpay-intro-bottom{width:100%;margin-top:12px}}
+
+/* The button floats over the story without a footer panel. */
+.wpay-intro-shell{position:relative;padding-bottom:0}
+.wpay-intro-slide{padding-bottom:88px}
+.wpay-intro-bottom{position:absolute;left:24px;right:24px;bottom:max(8px,env(safe-area-inset-bottom,0px),var(--tg-safe-area-inset-bottom,0px));margin:0;padding:0;background:transparent;border:0;box-shadow:none;backdrop-filter:none}
+@media(min-width:900px){.wpay-intro-bottom{left:48px;right:auto;width:calc(100% - 96px);margin:0}}

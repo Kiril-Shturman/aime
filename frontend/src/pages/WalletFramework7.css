@@ -2276,3 +2276,76 @@
   --f7-text-color: #fff;
   --f7-bars-bg-color: rgba(0, 0, 0, 0.5);
 }
+
+/* Native Framework7 9.1.3 button rules (MIT), scoped to dialogs. */
+.wpay-f7-root .dialog .button {
+  --f7-touch-ripple-color: rgba(var(--f7-theme-color-rgb), 0.25);
+  text-decoration: none;
+  text-align: center;
+  display: flex;
+  appearance: none;
+  background: none;
+  margin: 0;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  position: relative;
+  overflow: hidden;
+  font-family: inherit;
+  cursor: pointer;
+  outline: 0;
+  box-sizing: border-box;
+  vertical-align: middle;
+  justify-content: center;
+  align-items: center;
+  border: var(--f7-button-border-width, 0px) solid var(--f7-button-border-color, var(--f7-theme-color));
+  font-size: var(--f7-button-font-size);
+  color: var(--f7-button-text-color, var(--f7-theme-color));
+  height: var(--f7-button-height);
+  line-height: calc(var(--f7-button-height) - var(--f7-button-border-width, 0) * 2);
+  padding: var(--f7-button-padding-vertical, 0px) var(--f7-button-padding-horizontal);
+  border-radius: var(--f7-button-border-radius);
+  min-width: var(--f7-button-min-width);
+  font-weight: var(--f7-button-font-weight);
+  letter-spacing: var(--f7-button-letter-spacing);
+  text-transform: var(--f7-button-text-transform);
+  background-color: var(--f7-button-bg-color);
+  box-shadow: var(--f7-button-box-shadow);
+}
+.wpay-f7-root .dialog .button.active-state {
+  color: var(--f7-button-pressed-text-color, var(--f7-button-text-color, var(--f7-theme-color)));
+}
+.wpay-f7-root .dialog .button-round {
+  --f7-button-border-radius: var(--f7-button-height);
+}
+.wpay-f7-root .dialog .button-fill {
+  --f7-button-bg-color: var(--f7-button-fill-bg-color, var(--f7-theme-color));
+  --f7-button-text-color: var(--f7-button-fill-text-color, #fff);
+  --f7-touch-ripple-color: var(--f7-touch-ripple-white);
+}
+.wpay-f7-root .dialog .button-fill {
+  --f7-button-pressed-bg-color: var(--f7-button-fill-pressed-bg-color);
+}
+.wpay-f7-root .dialog .button-tonal {
+  --f7-button-bg-color: var(--f7-button-tonal-bg-color);
+  --f7-button-text-color: var(--f7-button-tonal-text-color);
+  --f7-button-pressed-bg-color: var(--f7-button-tonal-pressed-bg-color);
+}
+.wpay-f7-root .dialog .button-large {
+  --f7-button-height: var(--f7-button-large-height);
+  --f7-button-font-size: var(--f7-button-large-font-size);
+  --f7-button-font-weight: var(--f7-button-large-font-weight);
+  --f7-button-text-transform: var(--f7-button-large-text-transform);
+}
+.wpay-f7-root.ios .dialog .button {
+  transition-duration: 100ms;
+}
+.wpay-f7-root.ios .dialog .button.active-state {
+  background-color: var(--f7-button-pressed-bg-color, rgba(var(--f7-theme-color-rgb), 0.15));
+}
+.wpay-f7-root.ios .dialog .button-fill {
+  --f7-button-pressed-bg-color: var(--f7-button-fill-pressed-bg-color, var(--f7-theme-color-tint));
+}
+.wpay-f7-root .dialog .button {
+  -webkit-user-select: none;
+  user-select: none;
+}
