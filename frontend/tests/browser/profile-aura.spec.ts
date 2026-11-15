@@ -1,5 +1,10 @@
 import { test, expect, type Page } from "@playwright/test";
-async function setup(page: Page, enabled = true, theme = "light") {
+async function setup(
+  page: Page,
+  enabled = true,
+  theme = "light",
+  nativeBack = false,
+) {
   const state = {
     contact: null as null | { phone: string; email: string },
     verified: false,
@@ -57,7 +62,9 @@ async function setup(page: Page, enabled = true, theme = "light") {
     /https:\/\/(?:api\.kraken|data-api\.binance|api\.gateio)/,
     (route) => route.abort(),
   );
-  await page.goto("/wallet");
+  await page.goto(
+    nativeBack ? "/wallet#tgWebAppVersion=6.1&tgWebAppPlatform=ios" : "/wallet",
+  );
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
   return state;
 }
@@ -93,7 +100,7 @@ test("contacts persist through server, hosted KYC updates from pending to verifi
   await page
     .getByRole("link", { name: "Верификация Подтверждение личности" })
     .click();
-  await page.getByRole("button", { name: "Пройти", exact: true }).click();
+  await page.getByRole("button", { name: "Начать", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "Продолжить проверку" }),
   ).toHaveAttribute("href", "https://verify.example/session-private");
@@ -106,7 +113,7 @@ test("contacts persist through server, hosted KYC updates from pending to verifi
   await expect(
     page.getByRole("heading", { name: "Личность подтверждена" }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Пройти" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Начать" })).toHaveCount(0);
 });
 test("invalid contacts never post; viewing KYC never registers a customer", async ({
   page,
@@ -115,7 +122,7 @@ test("invalid contacts never post; viewing KYC never registers a customer", asyn
   await page
     .getByRole("link", { name: "Верификация Подтверждение личности" })
     .click();
-  await page.getByRole("button", { name: "Пройти", exact: true }).click();
+  await page.getByRole("button", { name: "Начать", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Сначала заполните");
   expect(state.posts).toHaveLength(0);
   await page
@@ -161,7 +168,7 @@ for (const theme of ["light", "dark"]) {
       { width: 768, height: 1024 },
     ]) {
       await page.setViewportSize(size);
-      const button = page.getByRole("button", { name: "Пройти", exact: true });
+      const button = page.getByRole("button", { name: "Начать", exact: true });
       await expect(button).toBeVisible();
       const rect = await button.boundingBox();
       expect(rect!.y + rect!.height).toBeGreaterThan(size.height - 40);
@@ -174,3 +181,40 @@ for (const theme of ["light", "dark"]) {
     });
   });
 }
+
+test("verification uses Telegram back and a plain Start button", async ({
+  page,
+}) => {
+  await setup(page, true, "light", true);
+  await page
+    .getByRole("link", { name: "Верификация Подтверждение личности" })
+    .click();
+  const screen = page.getByRole("region", {
+    name: "Проверка личности",
+    exact: true,
+  });
+  await expect(screen).toBeVisible();
+  await expect(
+    screen.getByRole("button", { name: "Начать", exact: true }).locator("svg"),
+  ).toHaveCount(0);
+  const view = screen.locator(
+    'xpath=ancestor::section[contains(@class,"wpay-viewport")]',
+  );
+  await expect(view.locator(".k-navbar")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).Telegram.WebApp.BackButton.isVisible),
+    )
+    .toBe(true);
+  await page.evaluate(() =>
+    (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {}),
+  );
+  await expect(
+    page.getByRole("region", { name: "Проверка личности", exact: true }),
+  ).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as any).Telegram.WebApp.BackButton.isVisible),
+    )
+    .toBe(false);
+});

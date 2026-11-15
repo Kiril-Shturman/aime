@@ -3086,6 +3086,8 @@ function ProfileSettingsPushView({
         title={profilePageTitles[displayPage]}
         subtitle="Настройки профиля"
         scrollContent={displayPage !== "verification"}
+        hideNavbar={displayPage === "verification"}
+        nativeBack={displayPage === "verification"}
         onClose={onClose}
         onRefreshed={() => showNotice("Данные профиля обновлены")}
       >

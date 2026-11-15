@@ -7,7 +7,7 @@ import Ellipsis from "framework7-icons/react/esm/Ellipsis.js";
 import SunMax from "framework7-icons/react/esm/SunMax.js";
 import MoonStars from "framework7-icons/react/esm/MoonStars.js";
 import { useTheme } from "../store/ThemeStore";
-import { applyTgTheme } from "../lib/telegram";
+import { applyTgTheme, tg } from "../lib/telegram";
 import { PullToRefreshContent } from "./WalletScroll";
 export type WalletMenuItem = {
   title: string;
@@ -146,6 +146,8 @@ export function PushViewShell({
   onRefreshed,
   assetSurface = false,
   scrollContent = true,
+  hideNavbar = false,
+  nativeBack = false,
   interactiveSwipe = false,
   menuItems,
 }: {
@@ -158,6 +160,8 @@ export function PushViewShell({
   onRefreshed?: () => void;
   assetSurface?: boolean;
   scrollContent?: boolean;
+  hideNavbar?: boolean;
+  nativeBack?: boolean;
   interactiveSwipe?: boolean;
   menuItems?: WalletMenuItem[];
 }) {
@@ -175,7 +179,20 @@ export function PushViewShell({
     }
   }, [open]);
 
-  const navbar = (
+  useEffect(() => {
+    if (!open || !nativeBack) return;
+    const app = tg();
+    const back = app?.BackButton;
+    if (!back || app?.isVersionAtLeast?.("6.1") === false) return;
+    app?.onEvent?.("backButtonClicked", onClose);
+    back.show();
+    return () => {
+      app?.offEvent?.("backButtonClicked", onClose);
+      back.hide();
+    };
+  }, [open, nativeBack, onClose]);
+
+  const navbar = hideNavbar ? null : (
     <WalletNavbar
       title={title}
       assetSurface={assetSurface}

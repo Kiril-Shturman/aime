@@ -1,11 +1,5 @@
 import { Button } from "konsta/react";
-import {
-  Flag,
-  Check,
-  LockKeyhole,
-  ArrowUpRight,
-  RefreshCw,
-} from "lucide-react";
+import { Check, LockKeyhole, ArrowUpRight, RefreshCw } from "lucide-react";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
 import "./WalletVerification.css";
 
@@ -120,8 +114,7 @@ export default function WalletVerification({ aura, onPersonal }: Props) {
             onClick={() => void aura.start()}
           >
             <span className="wpay-verification-button-content">
-              <Flag size={20} fill="currentColor" strokeWidth={1.6} />
-              <span>{aura.busy ? "Подготавливаем…" : "Пройти"}</span>
+              <span>{aura.busy ? "Подготавливаем…" : "Начать"}</span>
             </span>
           </Button>
         ) : (
