@@ -822,6 +822,8 @@ def install_wallet(app, root, owner_check):
             if action == 'aura-kyc' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('sbp_buy'):
+                    raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
                 body = await request.json()
                 allowed = {'email', 'phone'}
                 if not isinstance(body, dict) or set(body) - allowed:
@@ -837,7 +839,7 @@ def install_wallet(app, root, owner_check):
                 return response
             if action == 'aura-cards' and request.method == 'GET':
                 cards = [dict(row) for row in ledger.db.execute(
-                    'SELECT card_id,kind,status,frozen,masked_pan,provider_updated_at '
+                    'SELECT card_id,kind,status,frozen,masked_pan,delivery_status,provider_updated_at '
                     'FROM aura_cards WHERE user_id=? AND environment=? ORDER BY updated_at DESC',
                     (uid, aura_environment),
                 )]
@@ -863,6 +865,8 @@ def install_wallet(app, root, owner_check):
             if action == 'aura-sbp-rate' and request.method == 'GET':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('sbp_buy'):
+                    raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
                 response = web.json_response(await aura_client.get_sbp_rate())
                 response.headers['Cache-Control'] = 'no-store'
                 return response

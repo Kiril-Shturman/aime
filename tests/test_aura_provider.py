@@ -164,6 +164,7 @@ class AuraUnitTests(unittest.TestCase):
             "data": {
                 "id": "card_one", "customer_id": self.customer,
                 "kind": "virtual", "status": "opened", "masked_pan": "**** 4242",
+                "shipment_stage": "packing",
                 "updated_at": "2026-01-01T00:03:00Z",
             },
         }
@@ -184,6 +185,7 @@ class AuraUnitTests(unittest.TestCase):
         self.assertEqual(process_inbox(self.ledger, "test"), 2)
         card = self.ledger.db.execute("SELECT * FROM aura_cards").fetchone()
         self.assertEqual(card["status"], "opened")
+        self.assertEqual(card["delivery_status"], "issued")
         self.assertNotIn("4242424242424242", card["body"])
         stored_operation = self.ledger.db.execute(
             "SELECT * FROM aura_card_operations"
@@ -319,6 +321,13 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         order = (await created.json())["order"]
         self.assertEqual((await self.client.list_sbp_orders())["data"][0]["id"], order["id"])
         self.assertEqual((await self.client.get_sbp_order(order["id"]))["status"], "completed")
+
+    async def test_product_capability_is_authoritative(self):
+        self.assertTrue(await self.client.product_enabled("sbp_buy"))
+        self.mock.app["state"].products["sbp_buy"] = False
+        self.assertTrue(await self.client.product_enabled("sbp_buy"))
+        await self.client.get_me(refresh=True)
+        self.assertFalse(await self.client.product_enabled("sbp_buy"))
 
     async def test_environment_key_guard(self):
         with self.assertRaises(ValueError):
@@ -494,6 +503,17 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         rate = await self.wpay.get("/api/wallet/aura-sbp-rate", headers=self.owner)
         self.assertEqual(rate.status, 200)
         self.assertEqual((await rate.json())["fiat"], "RUB")
+
+    async def test_disabled_sbp_product_blocks_kyc_start_and_rate(self):
+        self.mock.app["state"].products["sbp_buy"] = False
+        kyc = await self.wpay.post(
+            "/api/wallet/aura-kyc", headers=self.owner,
+            json={"email": "owner@example.com"},
+        )
+        self.assertEqual(kyc.status, 403, await kyc.text())
+        self.assertEqual((await kyc.json())["error"]["name"], "sbp_buy_not_enabled")
+        rate = await self.wpay.get("/api/wallet/aura-sbp-rate", headers=self.owner)
+        self.assertEqual(rate.status, 403, await rate.text())
 
 
 if __name__ == "__main__":

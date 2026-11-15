@@ -24,6 +24,8 @@ class State:
         self.cards = {}
         self.card_operations = []
         self.orders = {}
+        self.products = {"crypto_processing": True, "cards": True,
+                         "sbp_buy": True, "qr_pay": True}
         self.addresses = {}
         self.deposits = []
         self.balance = Decimal("0")
@@ -61,8 +63,7 @@ def make_app():
     async def me(_):
         return web.json_response({
             "partner_id": MOCK_PARTNER, "environment": "test",
-            "products": {"crypto_processing": True, "cards": True,
-                         "sbp_buy": True, "qr_pay": True},
+            "products": dict(state.products),
         })
 
     async def customers(request):

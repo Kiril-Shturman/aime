@@ -299,7 +299,8 @@ ordinary support messages.
   display the live partner fee from `GET /cards-fees`, not hard-code 70.
 - Physical delivery state: `issuing` → `issued` → `out_for_delivery` →
   `activated`. `shipment_stage` is deprecated compatibility data and must not
-  drive new logic.
+  drive new logic. Compatibility decoding maps legacy `packing` to `issued` and
+  `sent` to `out_for_delivery`, then stores only `delivery_status`.
 - Tracking and address are returned for physical cards; activation codes are
   secrets and must never be stored/logged.
 - Recharge moves funds from partner platform balance to an individual card and
@@ -366,6 +367,14 @@ list alone. Ask Aura whether REST has been deployed after the documentation was
 written, whether our key has it, and obtain a successful testnet `POST /orders`
 before building the user flow. If gRPC is the only live interface, obtain its
 protobuf/service contract and operational requirements first.
+
+Aura's later clarification is stricter: partner SBP purchase is currently
+disabled in production. `GET /me -> products.sbp_buy` is `false`, and production
+calls to hosted-KYC start, `GET /rate`, `POST /quotes` and every `/orders*`
+route return `403 sbp_buy_not_enabled`. WPay therefore treats the `GET /me`
+capability as authoritative, caches it only briefly, and blocks KYC start/rate
+locally when the product is disabled. The SBP flow remains testnet-only until
+Aura changes the production capability.
 
 ## API evolution and deprecation
 
@@ -712,7 +721,7 @@ Implemented:
 
 Verification on this branch:
 
-- 93 backend unit/integration tests passed, including duplicate delivery,
+- 95 backend unit/integration tests passed, including duplicate delivery,
   pending-to-confirmed transition, invalid-signature recovery, event-ID reuse,
   environment guards and the complete mock deposit route.
 - Frontend tests passed (3/3), production build passed and lint completed with

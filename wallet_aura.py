@@ -74,7 +74,7 @@ def prepare(ledger):
       CREATE TABLE IF NOT EXISTS aura_cards (
         card_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, customer_id TEXT NOT NULL,
         environment TEXT NOT NULL, kind TEXT, status TEXT NOT NULL,
-        frozen INTEGER NOT NULL DEFAULT 0, masked_pan TEXT,
+        frozen INTEGER NOT NULL DEFAULT 0, masked_pan TEXT, delivery_status TEXT,
         provider_updated_at TEXT, body TEXT NOT NULL,
         created_at REAL NOT NULL, updated_at REAL NOT NULL
       );
@@ -131,6 +131,9 @@ def prepare(ledger):
         )
     if "provider_event_id" not in columns:
         ledger.db.execute("ALTER TABLE wallet_webhook_inbox ADD COLUMN provider_event_id TEXT")
+    card_columns = {row[1] for row in ledger.db.execute("PRAGMA table_info(aura_cards)")}
+    if "delivery_status" not in card_columns:
+        ledger.db.execute("ALTER TABLE aura_cards ADD COLUMN delivery_status TEXT")
     ledger.db.execute(
         "CREATE INDEX IF NOT EXISTS wallet_webhook_provider_pending "
         "ON wallet_webhook_inbox(provider,processed_at,next_attempt_at)"
@@ -223,6 +226,8 @@ class AuraClient:
         self._limit_lock = asyncio.Lock()
         self.remaining = None
         self.reset_at = 0.0
+        self._me_cache = None
+        self._me_cache_until = 0.0
 
     @property
     def configured(self):
@@ -300,8 +305,19 @@ class AuraClient:
             error.retry_policy = "later"
             raise error
 
-    async def get_me(self):
-        return await self.request("GET", "/me")
+    async def get_me(self, *, refresh=False):
+        if not refresh and self._me_cache is not None and time.monotonic() < self._me_cache_until:
+            return self._me_cache
+        result = await self.request("GET", "/me")
+        if not isinstance(result, dict) or not isinstance(result.get("products"), dict):
+            raise self.error_cls("aura_invalid_response", "Aura /me has no products map", 502)
+        self._me_cache = result
+        self._me_cache_until = time.monotonic() + 60
+        return result
+
+    async def product_enabled(self, product):
+        result = await self.get_me()
+        return result["products"].get(str(product)) is True
 
     async def upsert_customer(self, customer_id, *, email=None, phone=None):
         body = {"id": _safe_identifier(customer_id, "customer id")}
@@ -658,17 +674,27 @@ def _store_card_event(ledger, environment, kind, data):
     kind_value = str(kind_value)[:100] if kind_value is not None else None
     masked_pan = data.get("masked_pan") or data.get("last4")
     masked_pan = str(masked_pan)[:32] if masked_pan is not None else None
+    delivery_status = data.get("delivery_status")
+    if delivery_status is None and data.get("shipment_stage") is not None:
+        delivery_status = {
+            "packing": "issued", "sent": "out_for_delivery",
+        }.get(str(data["shipment_stage"]), str(data["shipment_stage"]))
+    delivery_status = str(delivery_status)[:100] if delivery_status is not None else None
     safe = _redact_card_data(data)
     stamp = time.time()
     ledger.db.execute(
-        "INSERT INTO aura_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
+        "INSERT INTO aura_cards "
+        "(card_id,user_id,customer_id,environment,kind,status,frozen,masked_pan,"
+        "delivery_status,provider_updated_at,body,created_at,updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(card_id) DO UPDATE SET kind=COALESCE(excluded.kind,aura_cards.kind),"
         "status=excluded.status,frozen=excluded.frozen,"
         "masked_pan=COALESCE(excluded.masked_pan,aura_cards.masked_pan),"
+        "delivery_status=COALESCE(excluded.delivery_status,aura_cards.delivery_status),"
         "provider_updated_at=excluded.provider_updated_at,body=excluded.body,"
         "updated_at=excluded.updated_at",
         (card_id, owner[0], customer_id, environment, kind_value, status, int(frozen),
-         masked_pan, incoming_updated or None,
+         masked_pan, delivery_status, incoming_updated or None,
          json.dumps(safe, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
     )
 
