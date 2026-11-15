@@ -33,6 +33,7 @@ import GmailConnectPage from './pages/GmailConnectPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import WalletPage from './pages/WalletPage'
+import WalletAdminPage from './pages/WalletAdminPage'
 import TabPill from './components/TabPill'
 import DesktopSidebar from './components/DesktopSidebar'
 import CopyToast from './components/CopyToast'
@@ -85,7 +86,7 @@ function Themed() {
 function AppRoutes() {
   const { pathname } = useLocation()
   if (isWalletHost()) {
-    return <WalletPage />
+    return pathname === '/admin' ? <WalletAdminPage /> : <WalletPage />
   }
   const hasTabPill =
     pathname === '/' ||
