@@ -416,7 +416,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
           </div>
           {ready && locked && <WalletLockBadge />}
           <div className="wpay-lock-copy">
-            <h1>{approved ? "Добро пожаловать" : ready ? "WPay заблокирован" : "WPay"}</h1>
+            <h1>{approved ? "Добро пожаловать" : ready ? "wPay заблокирован" : "WPay"}</h1>
             <p>
               {approved ? "Вход подтверждён" : ready
                 ? `Подтвердите вход с помощью ${label}`

@@ -318,3 +318,9 @@
 .wpay-lock-badge-fallback { justify-content: flex-start; }
 .wpay-lock-badge-fallback img { height: 40%; }
 .wpay-lock-badge-strap { height: 14%; }
+
+.wpay-lock-badge:has(canvas) { animation: wpay-badge-arrive 1.25s cubic-bezier(.17,.72,.25,1) both; }
+.wpay-lock-badge:not(:has(canvas)) .wpay-lock-badge-fallback { animation: wpay-badge-fallback 1s both; }
+@keyframes wpay-badge-arrive { 0% { transform: translateY(-65%); opacity: 0; } 18% { opacity: 1; } 68% { transform: translateY(1.2%); } 86% { transform: translateY(-.5%); } 100% { transform: translateY(0); opacity: 1; } }
+@keyframes wpay-badge-fallback { 0%, 85% { opacity: 0; } 100% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .wpay-lock-badge:has(canvas), .wpay-lock-badge:not(:has(canvas)) .wpay-lock-badge-fallback { animation: none; } }

@@ -40,7 +40,7 @@ export interface LanyardProps {
   elasticity?: number;
   breeze?: number;
   interactive?: boolean;
-  intro?: boolean;
+  intro?: boolean | "drop";
   className?: string;
   style?: CSSProperties;
 }
@@ -65,7 +65,7 @@ interface Settings {
   elasticity: number;
   breeze: number;
   interactive: boolean;
-  intro: boolean;
+  intro: boolean | "drop";
 }
 
 interface Images {
@@ -736,16 +736,19 @@ const solvePin = (body: Body, grab: Grab, target: THREE.Vector3) => {
   pushBody(body, r, normal.multiplyScalar(lambda));
 };
 
-const placeHanging = (sim: Simulation, layout: CardLayout, intro: boolean) => {
+const placeHanging = (sim: Simulation, layout: CardLayout, intro: boolean | "drop") => {
   const { nodes, previous, velocities, body, anchor } = sim;
   nodes[0].copy(anchor);
   for (let i = 1; i <= JOINTS; i++) {
     nodes[i].copy(nodes[i - 1]);
-    if (intro) nodes[i].x += sim.rest;
+    if (intro === "drop") {
+      nodes[i].x += sim.rest * 0.32;
+      nodes[i].y -= sim.rest * Math.sqrt(1 - 0.32 ** 2);
+    } else if (intro) nodes[i].x += sim.rest;
     else nodes[i].y -= sim.rest;
   }
   body.quaternion.identity();
-  if (intro) body.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2);
+  if (intro) body.quaternion.setFromAxisAngle(new THREE.Vector3(0, 0, 1), intro === "drop" ? 0.24 : Math.PI / 2);
   body.hang.set(0, layout.hangY, 0);
   const offset = scratch.a.copy(body.hang).applyQuaternion(body.quaternion);
   body.position.copy(nodes[JOINTS]).sub(offset);
@@ -756,6 +759,11 @@ const placeHanging = (sim: Simulation, layout: CardLayout, intro: boolean) => {
   for (let i = 0; i <= JOINTS; i++) {
     previous[i].copy(nodes[i]);
     velocities[i].set(0, 0, 0);
+  }
+  if (intro === "drop") {
+    body.velocity.set(-0.6, -0.3, 0);
+    body.angular.set(0.12, 0.18, -1.6);
+    for (let i = 1; i <= JOINTS; i++) velocities[i].set(-0.4 * i / JOINTS, 0, 0);
   }
   sim.lengths.fill(sim.rest);
   sim.turn = 0;
@@ -1126,7 +1134,7 @@ const Lanyard = ({
       if (framingKey !== applied.framingKey) {
         frameView();
         if (!placed) {
-          placeHanging(sim, layout, s.intro && !reducedMotion);
+          placeHanging(sim, layout, reducedMotion ? false : s.intro);
           placed = true;
         } else if (layoutKey !== applied.layoutKey) {
           placeHanging(sim, layout, false);

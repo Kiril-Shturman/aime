@@ -108,9 +108,19 @@ test("saved native marker locks on reload even without local hint; cancellation 
   page,
 }) => {
   const vault = await setup(page, true);
-  await expect(page.getByRole("heading", { name: "Добро пожаловать", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Открыть", exact: true }).locator("svg")).toHaveCount(0);
-  await expect.poll(() => vault.posts.filter(type => type === "web_app_request_fullscreen").length).toBe(1);
+  await expect(
+    page.getByRole("heading", { name: "Добро пожаловать", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Открыть", exact: true }).locator("svg"),
+  ).toHaveCount(0);
+  await expect
+    .poll(
+      () =>
+        vault.posts.filter((type) => type === "web_app_request_fullscreen")
+          .length,
+    )
+    .toBe(1);
   await page.getByRole("button", { name: "Открыть", exact: true }).click();
   await profile(page);
   vault.authorized = false;
@@ -123,6 +133,11 @@ test("saved native marker locks on reload even without local hint; cancellation 
   ).toBeVisible();
   await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
   await expect(page.locator(".wpay-lock-aurora")).toBeVisible();
+  await expect(page.locator(".wpay-lock-badge canvas")).toHaveCount(1);
+  await expect(page.getByLabel("Бейдж профиля")).toHaveCSS(
+    "animation-name",
+    "wpay-badge-arrive",
+  );
   await expect(page.getByLabel("Бейдж профиля")).toBeVisible();
   await expect(page.locator(".wpay-lock-badge-fallback img")).toHaveAttribute(
     "src",
@@ -140,22 +155,30 @@ test("saved native marker locks on reload even without local hint; cancellation 
   ]) {
     await page.setViewportSize(size);
     const badge = await page.getByLabel("Бейдж профиля").boundingBox();
-    expect(badge!.height).toBe(size.height);
+    expect(badge!.height).toBeCloseTo(size.height, 2);
     const copy = await page.locator(".wpay-lock-copy").boundingBox();
     const actions = await page.locator(".wpay-lock-actions").boundingBox();
     expect(copy!.y + copy!.height).toBeLessThan(actions!.y);
   }
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.screenshot({
+    path: test.info().outputPath("white-badge.png"),
+    animations: "disabled",
+  });
   vault.authorized = true;
   await page
     .getByRole("button", { name: "Разблокировать", exact: true })
     .click();
-  await expect(page.getByRole("button", { name: "Открыть", exact: true })).toBeEnabled();
+  await expect(
+    page.getByRole("button", { name: "Открыть", exact: true }),
+  ).toBeEnabled();
   await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
   await expect(page.getByLabel("Бейдж профиля")).toBeVisible();
 
   await page.getByRole("button", { name: "Открыть", exact: true }).click();
-  await expect(page.getByRole("main", { name: "Блокировка WPay" })).toHaveCount(0);
+  await expect(page.getByRole("main", { name: "Блокировка WPay" })).toHaveCount(
+    0,
+  );
   await expect(page.locator(".wpay-biometric-content")).toBeVisible();
   vault.authorized = false;
   await page.evaluate(() =>
@@ -173,4 +196,17 @@ test("saved native marker locks on reload even without local hint; cancellation 
     }),
   );
   await expect(page.getByRole("alert")).toContainText("Подтверждение отменено");
+});
+
+test("badge respects reduced motion", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await setup(page, true);
+  await expect(
+    page.getByRole("button", { name: "Открыть", exact: true }),
+  ).toBeEnabled();
+  await expect(page.locator(".wpay-lock-badge canvas")).toHaveCount(1);
+  await expect(page.getByLabel("Бейдж профиля")).toHaveCSS(
+    "animation-name",
+    "none",
+  );
 });
