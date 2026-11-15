@@ -138,7 +138,6 @@ export default function WalletDeposit({
     const version = ++generation.current;
     setBusy(true);
     setError("");
-    setDeposit(null);
     void walletRequest<Deposit>(
       "deposit",
       { asset, network },
@@ -225,6 +224,55 @@ export default function WalletDeposit({
       />
     );
 
+  if (mode === "address")
+    return (
+      <main className="mx-auto flex w-full max-w-[560px] flex-col gap-6 px-4 pb-28 pt-5 text-black dark:text-white">
+        {error || !available || !wallet.configured ? (
+          <section className="rounded-[28px] bg-white p-6 text-center dark:bg-[#252b36]">
+            <p role="alert" className="text-[15px] leading-6">
+              {error || "Адрес в этой сети сейчас недоступен."}
+            </p>
+            {available && wallet.configured && (
+              <Button
+                data-wpay-primary=""
+                rounded
+                disabled={busy}
+                onClick={() => void create()}
+                className="!mt-5"
+              >
+                Повторить загрузку адреса
+              </Button>
+            )}
+          </section>
+        ) : (
+          <div
+            role="status"
+            aria-label="Загрузка реквизитов"
+            aria-busy="true"
+            className="animate-pulse motion-reduce:animate-none"
+          >
+            <div className="flex justify-center py-3">
+              <div className="h-[242px] w-[242px] rounded-[28px] bg-black/[.05] dark:bg-white/[.08]" />
+            </div>
+            <div className="mt-6 h-5 w-44 rounded-md bg-black/[.05] dark:bg-white/[.08]" />
+            <div className="mt-3 overflow-hidden rounded-[28px] bg-white px-5 dark:bg-[#252b36]">
+              {[0, 1, 2].map((row) => (
+                <div
+                  key={row}
+                  className="flex h-16 items-center justify-between border-b border-black/[.04] last:border-0 dark:border-white/[.06]"
+                >
+                  <div className="h-4 w-16 rounded bg-black/[.05] dark:bg-white/[.08]" />
+                  <div className="h-4 w-32 rounded bg-black/[.05] dark:bg-white/[.08]" />
+                </div>
+              ))}
+            </div>
+            <p className="mt-5 text-center text-[13px] text-black/40 dark:text-white/40">
+              Получаем адрес кошелька…
+            </p>
+          </div>
+        )}
+      </main>
+    );
   return (
     <main className="wpay-deposit-page mx-auto w-full max-w-[560px] px-4 pb-8 pt-5 text-black dark:text-white">
       <div className="mb-6 text-center">

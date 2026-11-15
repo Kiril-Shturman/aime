@@ -585,12 +585,17 @@ test("Aura TRON deposit opens permanent QR without requesting an exact amount", 
     }),
   );
   let calls = 0;
-  await page.route("**/api/wallet/deposit", (route) => {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/wallet/deposit", async (route) => {
     calls++;
     expect(route.request().postDataJSON()).toEqual({
       asset: "USDT",
       network: "TRON",
     });
+    await pending;
     return route.fulfill({
       json: {
         provider: "aura",
@@ -608,6 +613,18 @@ test("Aura TRON deposit opens permanent QR without requesting an exact amount", 
   const flow = page.locator('[aria-hidden="false"]').last();
   await flow.locator("li").filter({ hasText: "USDT" }).first().click();
   await flow.getByText("USDT · TRC20", { exact: true }).click();
+  try {
+    await expect(
+      flow.getByRole("status", { name: "Загрузка реквизитов", exact: true }),
+    ).toBeVisible();
+    await expect(flow.getByText("Валюта", { exact: true })).toHaveCount(0);
+    await expect(
+      flow.getByRole("button", { name: "Получаем реквизиты…", exact: true }),
+    ).toHaveCount(0);
+  } finally {
+    release();
+  }
+
   await expect(
     flow.getByLabel("QR-код пополнения", { exact: true }),
   ).toBeVisible();
