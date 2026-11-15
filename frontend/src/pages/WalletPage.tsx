@@ -17,6 +17,7 @@ import WalletIntro, { walletIntroKey } from "./WalletIntro";
 import "./WalletInputTheme.css";
 import "./WalletButtons.css";
 import WalletSheetClose from "./WalletSheetClose";
+import WalletAuraCards from "./WalletAuraCards";
 import { DesktopSidebar, DesktopOverview } from "./WalletDesktop";
 import "./WalletDesktop.css";
 import {
@@ -683,7 +684,11 @@ function WalletScreen() {
         )}
         {activeTab === "history" && <LiveHistory />}
         {activeTab === "cards" && live.capabilities.cards && (
-          <CardsSection showNotice={showNotice} />
+          live.demo ? (
+            <CardsSection showNotice={showNotice} />
+          ) : (
+            <WalletAuraCards showNotice={showNotice} />
+          )
         )}
         {activeTab === "profile" && (
           <ProfileSection

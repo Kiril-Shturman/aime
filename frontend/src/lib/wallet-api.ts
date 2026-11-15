@@ -22,6 +22,7 @@ async function requestOnce<T>(
   body?: unknown,
   signal?: AbortSignal,
   idempotencyKey?: string,
+  allowNull = false,
 ): Promise<T> {
   const network =
     typeof body === "object" && body !== null && "network" in body
@@ -63,12 +64,18 @@ async function requestOnce<T>(
       response.headers.get("Retry-After"),
       response.status,
     );
-  if (data === null)
+  if (data === null && !allowNull)
     throw new WalletApiError(
       "INVALID_RESPONSE",
       "Сервис вернул некорректный ответ",
     );
   return data as T;
+}
+export function walletNullableRequest<T>(
+  action: string,
+  signal?: AbortSignal,
+): Promise<T | null> {
+  return requestOnce<T | null>(action, undefined, signal, undefined, true);
 }
 export function walletIdempotentRequest<T>(
   action: string,
