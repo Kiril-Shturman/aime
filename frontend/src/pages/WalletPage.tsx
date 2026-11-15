@@ -1,3 +1,4 @@
+import { walletRequest } from "../lib/wallet-api";
 import WalletCustody from "./WalletCustody";
 import WalletNetworkExchange from "./WalletNetworkExchange";
 import { resolveDeposit } from "../wallet/deposit";
@@ -586,14 +587,16 @@ function WalletScreen() {
                     <div className="mt-2 text-[52px] font-semibold leading-none tracking-[-0.045em] tabular-nums text-black dark:text-white">
                       {balanceHidden
                         ? "••••••"
-                        : live.ready
+                        : live.ready && live.totalKnown
                           ? usd(live.total)
                           : "—"}
                     </div>
                     <div className="mt-3 text-[14px] text-black/40 dark:text-white/40">
-                      {live.ready
-                        ? "Доступно в криптовалюте"
-                        : "Ожидает подключения"}
+                      {live.custody
+                        ? "Баланс адресов в сетях"
+                        : live.ready
+                          ? "Доступно в криптовалюте"
+                          : "Ожидает подключения"}
                     </div>
                   </>
                 )}
@@ -632,7 +635,7 @@ function WalletScreen() {
                   Криптовалюты
                 </h2>
                 <span className="text-[13px] text-black/40 dark:text-white/40">
-                  Всего: {live.ready ? usd(live.total) : "—"}
+                  Всего: {live.ready && live.totalKnown ? usd(live.total) : "—"}
                 </span>
               </div>
 
@@ -778,7 +781,8 @@ function AssetPushView({
     }
   });
   const [historyRequest, setHistoryRequest] = useState(0);
-  const [displayAsset, setDisplayAsset] = useState(asset ?? assets[0]);
+  const [cachedAsset, setDisplayAsset] = useState(asset ?? assets[0]);
+  const displayAsset = asset ?? cachedAsset;
   const [addressEntry, setAddressEntry] =
     useState<WalletAddressSelection | null>(null);
   const [depositChoice, setDepositChoice] = useState(false),
@@ -800,8 +804,32 @@ function AssetPushView({
     if (code !== "RUB" && network && !selected) {
       setChoosingDeposit(true);
       try {
-        selected =
-          (await resolveDeposit(code, network, live.demo)) ?? undefined;
+        if (live.custody) {
+          const result = await walletRequest<{
+            items: {
+              id: string;
+              network: string;
+              address: string;
+              balance: { amount: string | null; checked_at: number };
+            }[];
+          }>(`custody-asset-balances?asset=${encodeURIComponent(code)}`);
+          const row = result.items.find((item) => item.network === network);
+          if (!row)
+            throw Error(
+              "Кошелёк ещё создаётся. Повторите через несколько секунд.",
+            );
+          selected = {
+            custody_id: row.id,
+            network: row.network,
+            address: row.address,
+            demo: false,
+            amount: row.balance.amount,
+            observed_at: row.balance.checked_at,
+            rate: live.rate(code),
+          };
+        } else
+          selected =
+            (await resolveDeposit(code, network, live.demo)) ?? undefined;
       } catch (error) {
         if (run === depositRequest.current)
           showNotice(
@@ -935,20 +963,45 @@ function AssetPushView({
               if (!addressEntry) return;
               const entry = addressEntry;
               f7.dialog.confirm(
-                "Адрес будет скрыт на этом устройстве. Адрес в сети и средства не удаляются.",
+                entry.custody_id
+                  ? "Кошелёк будет скрыт из списка, ключ сохранится. При открытии этой криптовалюты вернётся тот же адрес."
+                  : "Адрес будет скрыт на этом устройстве. Адрес в сети и средства не удаляются.",
                 "Удалить кошелёк?",
                 () => {
                   const key = `${displayAsset.code}:${entry.network}:${entry.address}`;
                   const next = [...new Set([...hiddenAddresses, key])];
                   try {
-                    localStorage.setItem(hiddenKey, JSON.stringify(next));
+                    if (!entry.custody_id)
+                      localStorage.setItem(hiddenKey, JSON.stringify(next));
                   } catch {
                     showNotice("Не удалось сохранить изменения");
                     return;
                   }
-                  setHiddenAddresses(next);
-                  setAddressEntry(null);
-                  showNotice("Кошелёк скрыт на этом устройстве");
+                  if (entry.custody_id) {
+                    void walletRequest("custody-wallet-hide", {
+                      wallet_id: entry.custody_id,
+                    })
+                      .then(() => {
+                        window.dispatchEvent(
+                          new CustomEvent("wpay:custody-hidden", {
+                            detail: entry.custody_id,
+                          }),
+                        );
+                        setAddressEntry(null);
+                        showNotice("Кошелёк скрыт. Ключ сохранён.");
+                      })
+                      .catch((reason) =>
+                        showNotice(
+                          reason instanceof Error
+                            ? reason.message
+                            : "Не удалось скрыть кошелёк",
+                        ),
+                      );
+                  } else {
+                    setHiddenAddresses(next);
+                    setAddressEntry(null);
+                    showNotice("Кошелёк скрыт на этом устройстве");
+                  }
                 },
               );
             },

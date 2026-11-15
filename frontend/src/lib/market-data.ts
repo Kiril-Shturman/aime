@@ -64,7 +64,7 @@ export async function getMarketHistory(code: string, period: number, signal: Abo
 
 // Current quotes are separate from wallet connectivity and financial balances.
 export async function getMarketUsdRates(signal: AbortSignal): Promise<Record<string,number>> {
-  const major=['BTC','ETH','BNB','SOL','TRX']
+  const major=['BTC','ETH','BNB','SOL','TRX','TON']
   const binanceSymbols=encodeURIComponent(JSON.stringify(major.map(code=>`${code}USDT`)))
   const gate=(code:string)=>json(`https://api.gateio.ws/api/v4/spot/tickers?currency_pair=${code}_USDT`,signal)
   const results=await Promise.allSettled([

@@ -32,6 +32,7 @@ NETWORKS = {
     "BSC": {"name": "BNB Smart Chain", "asset": "BNB"},
     "TON": {"name": "TON", "asset": "TON"},
     "SOL": {"name": "Solana", "asset": "SOL"},
+    "TRON": {"name": "TRON", "asset": "TRX"},
 }
 PUBLIC_KEY_KIND = "wpay.custody.public.v1"
 PRIVATE_KEY_KIND = "wpay.custody.private.v1"
@@ -57,7 +58,16 @@ def derive(seed, network, chain_env):
         or len(seed) not in {32, 64}
     ):
         raise ValueError("Unsupported wallet derivation")
-    if network == "SOL":
+    if network == "TRON":
+        wallet = Bip44.FromSeed(seed, Bip44Coins.TRON).DeriveDefaultPath()
+        address = wallet.PublicKey().ToAddress()
+        public_key = wallet.PublicKey().RawCompressed().ToHex()
+        specification = {
+            "recipe": "bip44-tron-v1",
+            "path": "m/44'/195'/0'/0/0",
+            "chain": "tron" if chain_env == "mainnet" else "nile",
+        }
+    elif network == "SOL":
         # Solana Keypair.fromSeed-compatible Ed25519 key, not a mnemonic/HD path.
         if len(seed) != 32:
             raise ValueError("Solana requires a 32-byte Ed25519 seed")
@@ -367,8 +377,47 @@ async def custody_route(request, action, uid, custody):
         "custody-wallets",
         "custody-wallet",
         "custody-wallet-hide",
+        "custody-asset",
+        "custody-asset-balances",
+        "custody-balance",
+        "custody-overview",
     }:
         return None
+    if action == "custody-overview" and request.method == "GET":
+        if request.query:
+            raise ValueError("No ownership filters accepted")
+        if not custody.configured:
+            raise custody.error("CUSTODY_NOT_CONFIGURED", "Кошельки не подключены", 503)
+        return web.json_response(await request.app["wpay_chain"].overview(custody, uid))
+    if action == "custody-asset-balances" and request.method == "GET":
+        if set(request.query) != {"asset"}:
+            raise ValueError("Only asset is accepted")
+        if not custody.configured:
+            raise custody.error("CUSTODY_NOT_CONFIGURED", "Кошельки не подключены", 503)
+        return web.json_response(
+            await request.app["wpay_chain"].asset(
+                custody, uid, request.query["asset"], create=False
+            )
+        )
+    if action == "custody-asset" and request.method == "POST":
+        body = await request.json()
+        if (
+            not isinstance(body, dict)
+            or set(body) != {"asset"}
+            or not isinstance(body["asset"], str)
+        ):
+            raise ValueError("Only asset is accepted")
+        return web.json_response(
+            await request.app["wpay_chain"].asset(custody, uid, body["asset"])
+        )
+    if action == "custody-balance" and request.method == "GET":
+        if set(request.query) != {"wallet_id", "asset"}:
+            raise ValueError("Only wallet_id and asset are accepted")
+        return web.json_response(
+            await request.app["wpay_chain"].balance(
+                custody, uid, request.query["wallet_id"], request.query["asset"]
+            )
+        )
     if action == "custody-status" and request.method == "GET":
         return web.json_response(custody.capabilities())
     if action == "custody-wallets" and request.method == "GET":

@@ -5,8 +5,10 @@ import {
 import { useEffect, useState, type ReactNode } from "react";
 import { Card, List } from "konsta/react";
 import { Copy, Check } from "lucide-react";
+import type { ChainBalance } from "./WalletChainPortfolio";
 import { haptic } from "../lib/telegram";
 import WalletNetworkIcon from "./WalletNetworkIcon";
+import { chainAmount } from "../lib/chain-amount";
 import { cryptoAmount, usd, useLiveWallet } from "./WalletLive";
 import { walletRequest } from "../lib/wallet-api";
 import {
@@ -19,7 +21,9 @@ export interface WalletAddressSelection {
   network: string;
   address: string;
   demo: boolean;
-  amount: number | null;
+  amount: number | string | null;
+  custody_id?: string;
+  observed_at?: number;
   rate: number | null;
   min_deposit?: string;
 }
@@ -43,6 +47,56 @@ export default function WalletAddressDetails({
   iconColor: string;
 }) {
   const wallet = useLiveWallet();
+  const [observed, setObserved] = useState<ChainBalance | null>(null);
+  const [balanceError, setBalanceError] = useState("");
+  useEffect(() => {
+    if (!entry.custody_id) return;
+    const abort = new AbortController();
+    let running = false;
+    const load = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const result = await walletRequest<ChainBalance>(
+          `custody-balance?wallet_id=${encodeURIComponent(entry.custody_id!)}&asset=${encodeURIComponent(code)}`,
+          undefined,
+          abort.signal,
+        );
+        if (!abort.signal.aborted) {
+          setObserved(result);
+          setBalanceError(result.error ?? "");
+        }
+      } catch (reason) {
+        if (!abort.signal.aborted) {
+          setObserved({
+            wallet_id: entry.custody_id!,
+            asset: code,
+            network: entry.network,
+            chain_env: "",
+            amount: null,
+            checked_at: Date.now() / 1000,
+            status: "unavailable",
+            error: "",
+          });
+          setBalanceError(
+            reason instanceof Error
+              ? reason.message
+              : "Не удалось прочитать баланс",
+          );
+        }
+      } finally {
+        running = false;
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 30000);
+    return () => {
+      abort.abort();
+      window.clearInterval(timer);
+    };
+  }, [entry.custody_id, entry.network, code]);
   const [copied, setCopied] = useState(false),
     [copyError, setCopyError] = useState(""),
     [toastTick, setToastTick] = useState(0);
@@ -67,7 +121,7 @@ export default function WalletAddressDetails({
     setDeposits([]);
     setCopied(false);
     setCopyError("");
-    if (entry.demo) return;
+    if (entry.demo || entry.custody_id) return;
     setLoading(true);
     walletRequest<{
       items?: {
@@ -140,10 +194,16 @@ export default function WalletAddressDetails({
     : inverseRubQuote && Number(inverseRubQuote.rate) > 0
       ? 1 / Number(inverseRubQuote.rate)
       : null;
-  const amount = entry.demo ? null : entry.amount;
+  const amount = entry.demo
+    ? null
+    : entry.custody_id &&
+        observed?.wallet_id === entry.custody_id &&
+        observed.asset === code
+      ? observed.amount
+      : entry.amount;
   const rubAmount =
     amount !== null && entry.rate !== null && rubRate !== null
-      ? amount * entry.rate * rubRate
+      ? Number(amount) * entry.rate * rubRate
       : null;
   const history: TransactionView[] = entry.demo
     ? []
@@ -187,7 +247,11 @@ export default function WalletAddressDetails({
           </span>
         </span>
         <p className="mt-6 text-[40px] font-semibold leading-tight tracking-tight tabular-nums">
-          {amount !== null ? cryptoAmount(amount) : "—"}{" "}
+          {amount !== null
+            ? entry.custody_id
+              ? chainAmount(String(amount))
+              : cryptoAmount(amount)
+            : "—"}{" "}
           <span className="text-[30px] font-medium text-black/40 dark:text-white/40">
             {code}
           </span>
@@ -195,7 +259,7 @@ export default function WalletAddressDetails({
         <div className="wpay-address-fiat mt-2 flex items-center justify-center gap-3 whitespace-nowrap text-black/45 dark:text-white/45">
           <span className="tabular-nums">
             {amount !== null && entry.rate !== null
-              ? usd(amount * entry.rate)
+              ? usd(Number(amount) * entry.rate)
               : "—"}
           </span>
           <span aria-label="Баланс адреса в рублях" className="tabular-nums">
@@ -208,6 +272,16 @@ export default function WalletAddressDetails({
           </span>
         </div>
       </section>
+      {balanceError && (
+        <p role="alert" className="text-[14px] text-red-600 dark:text-red-400">
+          {balanceError}
+        </p>
+      )}
+      {entry.custody_id && (
+        <p className="text-center text-[12px] text-black/45 dark:text-white/45">
+          Баланс из сети · обновление каждые 30 секунд
+        </p>
+      )}
       {actions}
       <section aria-label="Реквизиты кошелька">
         <h2 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">

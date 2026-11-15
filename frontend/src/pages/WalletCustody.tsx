@@ -11,6 +11,9 @@ import {
 import { f7 } from "framework7-react";
 import "framework7/components/dialog/css";
 import QRCode from "react-qr-code";
+import type { ChainBalance } from "./WalletChainPortfolio";
+import { chainAmount } from "../lib/chain-amount";
+import { useLiveWallet, usd } from "./WalletLive";
 import { PushViewShell } from "./WalletNavigation";
 import WalletNetworkIcon from "./WalletNetworkIcon";
 import { walletRequest } from "../lib/wallet-api";
@@ -45,8 +48,49 @@ export default function WalletCustody({
     [wallets, setWallets] = useState<OwnWallet[]>([]),
     [error, setError] = useState(""),
     [busy, setBusy] = useState<string | null>(null);
+  const live = useLiveWallet();
+  const [observed, setObserved] = useState<ChainBalance | null>(null);
   const [selected, setSelected] = useState<OwnWallet | null>(null);
   const [showQr, setShowQr] = useState(false);
+  useEffect(() => {
+    if (!selected) return;
+    const abort = new AbortController();
+    let running = false;
+    const load = async () => {
+      if (running) return;
+      running = true;
+      try {
+        const result = await walletRequest<ChainBalance>(
+          `custody-balance?wallet_id=${encodeURIComponent(selected.id)}&asset=${encodeURIComponent(selected.asset)}`,
+          undefined,
+          abort.signal,
+        );
+        if (!abort.signal.aborted) setObserved(result);
+      } catch {
+        if (!abort.signal.aborted)
+          setObserved({
+            wallet_id: selected.id,
+            asset: selected.asset,
+            network: selected.network,
+            chain_env: selected.chain_env,
+            amount: null,
+            checked_at: Date.now() / 1000,
+            status: "unavailable",
+            error: "Не удалось прочитать баланс сети",
+          });
+      } finally {
+        running = false;
+      }
+    };
+    void load();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 30000);
+    return () => {
+      abort.abort();
+      window.clearInterval(timer);
+    };
+  }, [selected]);
   const lifecycle = useRef<AbortSignal | null>(null);
   useEffect(() => {
     if (!active) return;
@@ -80,6 +124,32 @@ export default function WalletCustody({
         }
       });
     return () => abort.abort();
+  }, [active]);
+  useEffect(() => {
+    if (!active) return;
+    const abort = new AbortController();
+    const changed = () => {
+      void walletRequest<{ items: OwnWallet[] }>(
+        "custody-wallets",
+        undefined,
+        abort.signal,
+      )
+        .then((result) => {
+          if (!abort.signal.aborted) setWallets(result.items);
+        })
+        .catch(() => {});
+    };
+    const hidden = (event: Event) => {
+      const id = (event as CustomEvent<string>).detail;
+      setWallets((rows) => rows.filter((row) => row.id !== id));
+    };
+    window.addEventListener("wpay:custody-created", changed);
+    window.addEventListener("wpay:custody-hidden", hidden);
+    return () => {
+      abort.abort();
+      window.removeEventListener("wpay:custody-created", changed);
+      window.removeEventListener("wpay:custody-hidden", hidden);
+    };
   }, [active]);
   async function create(network: string) {
     if (busy || !status?.generation_enabled || !active) return;
@@ -138,6 +208,9 @@ export default function WalletCustody({
       );
       if (!scope.aborted) {
         setWallets((rows) => rows.filter((row) => row.id !== selected.id));
+        window.dispatchEvent(
+          new CustomEvent("wpay:custody-hidden", { detail: selected.id }),
+        );
         setSelected(null);
         showNotice("Кошелёк удалён из списка");
       }
@@ -347,13 +420,23 @@ export default function WalletCustody({
                   : "Тестовая сеть"}
               </p>
               <p className="text-[36px] font-semibold text-black dark:text-white">
-                —{" "}
+                {observed?.wallet_id === selected.id && observed.amount !== null
+                  ? chainAmount(observed.amount)
+                  : "—"}{" "}
                 <span className="text-black/40 dark:text-white/40">
                   {selected.asset}
                 </span>
               </p>
               <p className="text-[14px] text-black/45 dark:text-white/45">
-                Баланс сети ещё не подключён
+                {observed?.wallet_id === selected.id
+                  ? observed.status === "ok"
+                    ? live.rate(selected.asset) !== null
+                      ? usd(
+                          Number(observed.amount) * live.rate(selected.asset)!,
+                        )
+                      : "Котировка недоступна"
+                    : "Не удалось прочитать баланс сети"
+                  : "Читаем баланс сети…"}
               </p>
             </section>
             <section

@@ -21,6 +21,7 @@ from urllib.parse import parse_qsl, urlsplit
 from aiohttp import ClientSession, ClientTimeout, web
 
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
+from wallet_chain import ChainReader
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
 from wallet_book import Book
 from wallet_user_ops import prepare as prepare_user_ops, route as user_ops_route
@@ -405,6 +406,7 @@ def install_wallet(app, root, owner_check):
     exchange.ledger=ledger
     prepare_custody(ledger)
     custody=Custody(ledger,ApiError,os.environ.get('WPAY_CUSTODY_ENABLED')=='1',os.environ.get('WPAY_CUSTODY_PUBLIC_KEY_FILE',''),os.environ.get('WPAY_CUSTODY_CHAIN_ENV','testnet'))
+    app['wpay_chain'] = ChainReader(ledger,ApiError)
     app['wpay_custody'] = custody
     app['wpay_exchange'] = exchange
     app['wpay_provider'] = provider
@@ -672,7 +674,7 @@ def install_wallet(app, root, owner_check):
         try:
             action = request.match_info['action']
             if action == 'status' and request.method == 'GET':
-                return web.json_response({'configured': bool(token), 'telegram_auth': bool(bot_token)})
+                return web.json_response({'configured': bool(token), 'telegram_auth': bool(bot_token), 'custody_configured': custody.configured})
             if action == 'webhook' and request.method == 'POST':
                 return await receive_webhook(request,ledger,provider,token,money,ApiError)
             uid = identity(request)
@@ -831,6 +833,7 @@ def install_wallet(app, root, owner_check):
             return web.json_response({'ok': False, 'error': {'name': 'INVALID_REQUEST'}, 'detail': 'Некорректные данные запроса или ответа провайдера'}, status=400)
 
     async def cleanup(_):
+        await app['wpay_chain'].close()
         task=app.get('wpay_finance_task')
         if task:
             task.cancel();await asyncio.gather(task,return_exceptions=True)

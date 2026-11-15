@@ -1,3 +1,4 @@
+import { chainAmount } from "../lib/chain-amount";
 import { ListItem } from "konsta/react";
 import ChevronRight from "framework7-icons/react/esm/ChevronRight.js";
 import { useLiveWallet, cryptoAmount, usd, usdPrice } from "./WalletLive";
@@ -51,15 +52,17 @@ export function CurrencyRow({
                   ? "••••"
                   : rubles
                     ? "— ₽"
-                    : live.ready
-                      ? cryptoAmount(live.balance(asset.code))
+                    : live.ready && live.known(asset.code)
+                      ? live.custody
+                        ? chainAmount(live.balance(asset.code))
+                        : cryptoAmount(live.balance(asset.code))
                       : "—"}
               </span>
               {!rubles && (
                 <span className="block text-[12px] leading-5 tabular-nums text-black/40 dark:text-white/40">
                   {balanceHidden
                     ? "••••"
-                    : live.ready && rate !== null
+                    : live.ready && live.known(asset.code) && rate !== null
                       ? usd(Number(live.balance(asset.code)) * rate)
                       : "—"}
                 </span>

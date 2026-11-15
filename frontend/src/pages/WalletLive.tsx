@@ -51,6 +51,9 @@ export const cryptoAmount = (n: string | number) =>
   Number(n).toLocaleString("en-US", { maximumFractionDigits: 8 });
 interface WalletContextValue {
   demo: boolean;
+  custody: boolean;
+  known: (asset: string) => boolean;
+  totalKnown: boolean;
   data: WalletOverview;
   ready: boolean;
   configured: boolean;
@@ -75,6 +78,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
     [configured, setConfigured] = useState(false),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
+  const [custody, setCustody] = useState(false);
   const [marketRates, setMarketRates] = useState<Record<string, number>>({});
   const marketRequest = useRef<AbortController | null>(null);
   const refreshMarket = useCallback(async () => {
@@ -118,13 +122,29 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
       }
       setLoading(true);
       try {
-        const status = await walletRequest<{ configured: boolean }>(
-          "status",
-          undefined,
-          controller.signal,
-        );
+        const status = await walletRequest<{
+          configured: boolean;
+          custody_configured?: boolean;
+        }>("status", undefined, controller.signal);
         if (controller.signal.aborted) return;
         setConfigured(status.configured);
+        setCustody(Boolean(status.custody_configured));
+        if (status.custody_configured) {
+          const overview = await walletRequest<WalletOverview>(
+            "custody-overview",
+            undefined,
+            controller.signal,
+          );
+          if (controller.signal.aborted) return;
+          setData(overview);
+          setReady(true);
+          setError(
+            overview.unavailable_assets?.length
+              ? "Часть сетей временно недоступна. Балансы не заменяются нулями."
+              : "Балансы прочитаны из сетей. Вывод пока не подключён.",
+          );
+          return;
+        }
         if (!status.configured) {
           setData(empty);
           setReady(false);
@@ -157,7 +177,14 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
   );
   useEffect(() => {
     void refresh();
-    return () => walletRequestController.current?.abort();
+    const changed = () => {
+      void refresh();
+    };
+    window.addEventListener("wpay:custody-created", changed);
+    return () => {
+      window.removeEventListener("wpay:custody-created", changed);
+      walletRequestController.current?.abort();
+    };
   }, [refresh]);
   const balance = useCallback(
     (asset: string) =>
@@ -167,13 +194,13 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
   const rate = useCallback(
     (asset: string) => {
       if (marketRates[asset] !== undefined) return marketRates[asset];
-      if (asset === "USDT" || asset === "USDC") return 1;
+      if (!custody && (asset === "USDT" || asset === "USDC")) return 1;
       const entry = data.rates.find(
         (x) => x.source === asset && x.target === "USD" && x.is_valid,
       );
       return entry ? Number(entry.rate) : null;
     },
-    [data, marketRates],
+    [data, marketRates, custody],
   );
   const total = useMemo(
     () =>
@@ -187,6 +214,15 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
     <WalletContext.Provider
       value={{
         demo,
+        custody,
+        known: (asset) =>
+          !custody || data.balances.some((row) => row.asset === asset),
+        totalKnown:
+          !custody ||
+          (!data.unavailable_assets?.length &&
+            data.balances.every(
+              (row) => Number(row.available) === 0 || rate(row.asset) !== null,
+            )),
         data,
         ready,
         configured,

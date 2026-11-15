@@ -48,7 +48,7 @@ class CustodyTests(unittest.TestCase):
     def test_each_network_is_recoverable_and_no_plaintext_seed_is_stored(self):
         seed = bytes(range(32))
         with patch("wallet_custody.secrets.token_bytes", return_value=seed):
-            for network in ["BTC", "ETH", "BSC", "TON", "SOL"]:
+            for network in ["BTC", "ETH", "BSC", "TON", "SOL", "TRON"]:
                 wallet = self.custody.create("tg:123", network)
                 row = self.row(wallet)
                 self.assertEqual(
@@ -128,10 +128,10 @@ class CustodyTests(unittest.TestCase):
         wallets = [
             self.custody.create(uid, net)
             for uid in ["tg:123", "tg:999"]
-            for net in ["BTC", "ETH", "BSC", "TON", "SOL"]
+            for net in ["BTC", "ETH", "BSC", "TON", "SOL", "TRON"]
         ]
-        self.assertEqual(len({item["address"] for item in wallets}), 10)
-        self.assertEqual(len(self.custody.wallets("tg:123")), 5)
+        self.assertEqual(len({item["address"] for item in wallets}), 12)
+        self.assertEqual(len(self.custody.wallets("tg:123")), 6)
         self.assertFalse(
             set(item["id"] for item in self.custody.wallets("tg:123"))
             & set(item["id"] for item in self.custody.wallets("tg:999"))
@@ -141,7 +141,7 @@ class CustodyTests(unittest.TestCase):
         main = Custody(
             self.ledger, ApiError, True, self.files["public_file"], "mainnet"
         )
-        for network in ["BTC", "ETH", "BSC", "TON", "SOL"]:
+        for network in ["BTC", "ETH", "BSC", "TON", "SOL", "TRON"]:
             test = self.custody.create("tg:123", network)
             real = main.create("tg:123", network)
             self.assertNotEqual(test["id"], real["id"])
@@ -426,6 +426,77 @@ class CustodyRouteTests(unittest.IsolatedAsyncioTestCase):
     async def create(self, body, headers=None):
         return await self.client.post(
             "/api/wallet/custody-wallet", json=body, headers=headers or self.user
+        )
+
+    async def test_chain_routes_create_on_open_and_enforce_server_ownership(self):
+        from unittest.mock import AsyncMock
+
+        reader = self.app["wpay_chain"]
+        with patch.object(
+            reader, "read", new=AsyncMock(return_value=("2.5", "latest"))
+        ):
+            response = await self.client.post(
+                "/api/wallet/custody-asset", json={"asset": "ETH"}
+            )
+            self.assertEqual(response.status, 401)
+            response = await self.client.post(
+                "/api/wallet/custody-asset", json={"asset": "ETH"}, headers=self.user
+            )
+            result = await response.json()
+            self.assertEqual(response.status, 200)
+            self.assertEqual(result["amount"], "2.5")
+            wallet_id = result["items"][0]["id"]
+            response = await self.client.get(
+                "/api/wallet/custody-balance?wallet_id=" + wallet_id + "&asset=ETH",
+                headers=self.foreign,
+            )
+            self.assertEqual(response.status, 404)
+            response = await self.client.get(
+                "/api/wallet/custody-balance?wallet_id=" + wallet_id + "&asset=ETH",
+                headers=self.user,
+            )
+            self.assertEqual((await response.json())["amount"], "2.5")
+            response = await self.client.get(
+                "/api/wallet/custody-asset-balances?asset=ETH", headers=self.foreign
+            )
+            self.assertEqual((await response.json())["items"], [])
+            response = await self.client.get(
+                "/api/wallet/custody-overview", headers=self.foreign
+            )
+            self.assertEqual((await response.json())["balances"], [])
+        self.assertEqual(self.app["wpay_provider"].calls, [])
+        self.assertEqual(
+            self.app["wpay_ledger"]
+            .db.execute("SELECT COUNT(*) FROM finance_transactions")
+            .fetchone()[0],
+            0,
+        )
+
+    async def test_chain_routes_reject_browser_address_network_and_contract_parameters(
+        self,
+    ):
+        for body in [
+            {"asset": "ETH", "user_id": "tg:999"},
+            {"asset": "USDT", "address": "0x123"},
+            {"asset": "USDT", "contract": "0x123"},
+            {"asset": "USDT", "network": "ETH"},
+            {"asset": "GRAM"},
+            {"asset": []},
+        ]:
+            response = await self.client.post(
+                "/api/wallet/custody-asset", json=body, headers=self.user
+            )
+            self.assertEqual(response.status, 400)
+        response = await self.client.get(
+            "/api/wallet/custody-balance?wallet_id=x&asset=ETH&url=http://localhost",
+            headers=self.user,
+        )
+        self.assertEqual(response.status, 400)
+        self.assertEqual(
+            self.app["wpay_ledger"]
+            .db.execute("SELECT COUNT(*) FROM custody_wallets")
+            .fetchone()[0],
+            0,
         )
 
     async def test_ownership_and_auth_without_any_goswap_call(self):

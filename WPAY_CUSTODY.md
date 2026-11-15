@@ -1,13 +1,13 @@
 # Own wallet address generation
 
 Branch: `wpay/self-hosted-crypto`. Implements the address-generation portion of
-custody for BTC, Ethereum, BNB Smart Chain, TON and Solana. The separate VSE
+custody for BTC, Ethereum, BNB Smart Chain, TON, Solana and TRON. The separate VSE
 preview now enables mainnet address generation; the working WPay service is unchanged.
 Deposits, credits and withdrawals remain disabled.
 
 ## User-visible behavior
 
-The “Кошелёк” tab → “Мои кошельки” section lists the five networks, below
+The “Кошелёк” tab → “Мои кошельки” section lists the six networks, below
 the asset list. The former profile entry is removed. Creation is free; the API creates
 one permanent wallet per authenticated user/network/environment. Repeating a POST,
 including from concurrent processes, returns the existing address. Private keys
@@ -137,9 +137,9 @@ excluded from the existing admin database browser. Routes work without GoSwap.
 
 ## Validation and remaining scope
 
-109 backend tests (previous 85 plus 24 custody cases), 3 frontend unit tests and
-29 Playwright tests pass. Production TypeScript/Vite build and frontend lint pass;
-existing repository warnings remain. Tests cover recovery on all five networks,
+127 backend tests, 4 frontend unit tests and
+38 Playwright tests pass. Production TypeScript/Vite build and frontend lint pass;
+existing repository warnings remain. Tests cover recovery on all six networks,
 known vectors, encrypted-only storage, wrong keys, swapped/tampered envelopes,
 rotation, immutable rows, restart, two independent SQLite connections creating
 concurrently, HTTP retries, ownership, no monetary changes, private-file
@@ -162,9 +162,10 @@ Solana seed vector checked with the official SDK: https://solana-foundation.gith
 ## Wallet actions and visibility
 
 The own-wallet detail menu anchors below the ellipsis and includes Deposit,
-Withdraw, Exchange and Delete. Deposit reveals the actual address/QR together
+Withdraw, Exchange and Delete. Native and supported-token balances are now read
+from chain endpoints (see WPAY_CHAIN_BALANCES.md). Deposit reveals the actual address/QR together
 with the not-yet-enabled crediting notice. Withdrawal/exchange remain explicitly
-unavailable until the signer/order state machines exist. Unknown chain balances
+unavailable until the signer/order state machines exist. Unavailable chain balances
 are shown as an em dash, never example holdings or fabricated fiat values.
 Legacy address details no longer turn demo holdings into an address balance or
 fake transaction history; the demo amount is not evidence of funds on chain.
@@ -176,3 +177,7 @@ are retained; POST custody-wallet restores the same wallet/address. Activity
 records distinguish hide and restore. Foreign/unknown IDs return the same 404.
 Provider addresses in the legacy view can only be hidden on the current device;
 they cannot be deleted from a blockchain or the upstream provider by this UI.
+
+TRON address generation now uses BIP44 m/44'/195'/0'/0/0 (Bip44Coins.TRON),
+with independent seeds as for other networks. Mainnet and Nile are recorded in
+metadata. Generating an address does not activate a TRON account or pay energy.

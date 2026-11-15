@@ -120,6 +120,8 @@ export interface WalletTransaction {
   detail: Record<string, unknown>;
 }
 export interface WalletOverview {
+  custody?: boolean;
+  unavailable_assets?: string[];
   debts?: { asset: string; amount: string }[];
   balances: { asset: string; available: string; reserved: string }[];
   rates: { source: string; target: string; rate: string; is_valid: boolean }[];

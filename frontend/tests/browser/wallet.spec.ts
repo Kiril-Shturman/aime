@@ -21,6 +21,21 @@ async function setup(
       return route.fulfill({
         json: { can_withdraw: true, can_transfer: true, currencies: [] },
       });
+    if (path.endsWith("/custody-balance")) {
+      const params = new URL(route.request().url()).searchParams;
+      return route.fulfill({
+        json: {
+          wallet_id: params.get("wallet_id"),
+          asset: params.get("asset"),
+          network: "SOL",
+          chain_env: "mainnet",
+          amount: null,
+          status: "unavailable",
+          error: "Не удалось прочитать баланс сети",
+          checked_at: Date.now() / 1000,
+        },
+      });
+    }
     if (path.endsWith("/custody-status"))
       return route.fulfill({
         json: {
@@ -767,6 +782,7 @@ const custodyNetworks = [
   { network: "BSC", name: "BNB Smart Chain", asset: "BNB" },
   { network: "TON", name: "TON", asset: "TON" },
   { network: "SOL", name: "Solana", asset: "SOL" },
+  { network: "TRON", name: "TRON", asset: "TRX" },
 ];
 const custodyStatus = {
   configured: true,
@@ -854,7 +870,7 @@ for (const theme of ["light", "dark"])
     expect(creates).toBe(1);
   });
 
-test("wallet creation supports all five networks without secret parameters", async ({
+test("wallet creation supports all six networks without secret parameters", async ({
   page,
 }) => {
   await setup(page, "light");
@@ -883,7 +899,7 @@ test("wallet creation supports all five networks without secret parameters", asy
       panel.getByLabel("Адрес " + network.name, { exact: true }),
     ).toBeVisible();
   }
-  expect(requested).toEqual(["BTC", "ETH", "BSC", "TON", "SOL"]);
+  expect(requested).toEqual(["BTC", "ETH", "BSC", "TON", "SOL", "TRON"]);
 });
 
 test("wallet generation failure never displays a fake address", async ({
@@ -976,7 +992,7 @@ for (const theme of ["light", "dark"])
       "xpath=ancestor::section[@data-wallet-surface][1]",
     );
     await expect(
-      details.getByText("Баланс сети ещё не подключён", { exact: true }),
+      details.getByText("Не удалось прочитать баланс сети", { exact: true }),
     ).toBeVisible();
     await expect(details.getByText("425.5", { exact: true })).toHaveCount(0);
     await details
@@ -1077,4 +1093,190 @@ test("address details menu contains wallet actions and no illustrative balance",
   await expect(menu.getByText("Тёмная тема", { exact: true })).toHaveCount(0);
   await details.getByLabel("Назад", { exact: true }).click();
   await expect(menu).toHaveCount(0);
+});
+
+async function ownChainSetup(
+  page: import("@playwright/test").Page,
+  theme = "light",
+  unavailable = false,
+) {
+  await setup(page, theme);
+  const requested: string[] = [];
+  const networkMap: Record<string, string[]> = {
+    ETH: ["ETH"],
+    BNB: ["BSC"],
+    SOL: ["SOL"],
+    BTC: ["BTC"],
+    TRX: ["TRON"],
+    XAUT: ["ETH"],
+    USDT: ["BSC", "ETH", "TON", "SOL", "TRON"],
+  };
+  const names: Record<string, string> = {
+    ETH: "Ethereum",
+    BNB: "BNB",
+    SOL: "Solana",
+    BTC: "Bitcoin",
+    TRX: "TRON",
+    XAUT: "GOLD (XAUT)",
+    USDT: "Tether",
+    GRAM: "Gram",
+  };
+  const amounts: Record<string, string> = {
+    ETH: "1.123456789012345678",
+    BNB: "4.5",
+    SOL: "2.123456789",
+    BTC: "0.12345678",
+    TRX: "42.000001",
+    XAUT: "0.000001",
+    USDT: "15.000005",
+  };
+  const wallets = new Map<string, ReturnType<typeof publicCustodyWallet>>();
+  const observation = (network: string, asset: string) => ({
+    wallet_id: "owned-" + network,
+    asset,
+    network,
+    chain_env: "mainnet",
+    amount:
+      unavailable && network === "SOL"
+        ? null
+        : asset === "USDT"
+          ? String(networkMap.USDT.indexOf(network) + 1) + ".000001"
+          : (amounts[asset] ?? "0"),
+    checked_at: Date.now() / 1000,
+    status: unavailable && network === "SOL" ? "unavailable" : "ok",
+    error: unavailable && network === "SOL" ? "Сеть недоступна" : null,
+  });
+  await page.route("**/api/wallet/status", (route) =>
+    route.fulfill({ json: { configured: false, custody_configured: true } }),
+  );
+  await page.route("**/api/wallet/custody-overview", (route) =>
+    route.fulfill({
+      json: {
+        custody: true,
+        balances: [],
+        rates: [],
+        transactions: [],
+        unavailable_assets: [],
+      },
+    }),
+  );
+  await page.route("**/api/wallet/custody-status", (route) =>
+    route.fulfill({ json: { ...custodyStatus, chain_env: "mainnet" } }),
+  );
+  await page.route("**/api/wallet/custody-wallets", (route) =>
+    route.fulfill({ json: { items: [...wallets.values()] } }),
+  );
+  await page.route("**/api/wallet/custody-asset", (route) => {
+    const body = route.request().postDataJSON();
+    expect(Object.keys(body)).toEqual(["asset"]);
+    requested.push(body.asset);
+    if (!networkMap[body.asset])
+      return route.fulfill({
+        status: 400,
+        json: {
+          error: { name: "ASSET_UNSUPPORTED" },
+          detail: "Этот токен ещё не подключён: нужен проверенный контракт",
+        },
+      });
+    const items = networkMap[body.asset].map((network) => {
+      const wallet = {
+        ...publicCustodyWallet(network),
+        id: "owned-" + network,
+        chain_env: "mainnet",
+      };
+      wallets.set(network, wallet);
+      return { ...wallet, balance: observation(network, body.asset) };
+    });
+    return route.fulfill({
+      json: {
+        asset: body.asset,
+        items,
+        complete: !unavailable,
+        amount: unavailable ? null : amounts[body.asset],
+      },
+    });
+  });
+  await page.route("**/api/wallet/custody-balance?*", (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    return route.fulfill({
+      json: observation(
+        params.get("wallet_id")!.replace("owned-", ""),
+        params.get("asset")!,
+      ),
+    });
+  });
+  await page.goto("/wallet");
+  const open = async (asset: string) => {
+    await page
+      .locator(".wpay-wallet-home span.font-semibold")
+      .filter({ hasText: names[asset] })
+      .filter({ visible: true })
+      .first()
+      .click();
+    return page.getByRole("region", {
+      name: "Портфель из блокчейна",
+      exact: true,
+    });
+  };
+  return { requested, open, amounts };
+}
+for (const code of ["BTC", "ETH", "BNB", "SOL", "TRX", "XAUT"])
+  test(`opening ${code} automatically creates its owned wallet and shows on-chain precision`, async ({
+    page,
+  }) => {
+    const { requested, open, amounts } = await ownChainSetup(page);
+    expect(requested).toEqual([]);
+    const panel = await open(code);
+    await expect(
+      panel.getByLabel("Фактический баланс актива", { exact: true }),
+    ).toContainText(amounts[code] + " " + code);
+    expect(requested).toEqual([code]);
+    await expect(
+      panel.getByRole("button", { name: /Открыть адрес/ }),
+    ).toHaveCount(1);
+  });
+test("USDT opening creates its networks once and address details show the token balance", async ({
+  page,
+}) => {
+  const { requested, open } = await ownChainSetup(page, "dark");
+  const panel = await open("USDT");
+  await expect(
+    panel.getByLabel("Фактический баланс актива", { exact: true }),
+  ).toContainText("15.000005 USDT");
+  await expect(
+    panel.getByRole("button", { name: /Открыть адрес/ }),
+  ).toHaveCount(5);
+  await panel
+    .getByRole("button", { name: "Открыть адрес BSC", exact: true })
+    .click();
+  const hero = page.getByRole("region", { name: "Баланс адреса", exact: true });
+  await expect(hero).toContainText("1.000001 USDT");
+  expect(requested).toEqual(["USDT"]);
+  await expect(hero).not.toContainText("425.5");
+});
+test("failed chain observation remains unknown instead of showing a zero or partial USDT total", async ({
+  page,
+}) => {
+  const { open } = await ownChainSetup(page, "light", true);
+  const panel = await open("USDT");
+  await expect(panel.getByRole("alert")).toBeVisible();
+  await expect(
+    panel.getByLabel("Фактический баланс актива", { exact: true }),
+  ).toContainText("— USDT");
+  await expect(
+    panel.getByRole("button", { name: "Открыть адрес SOL", exact: true }),
+  ).toContainText("—");
+});
+test("unverified GRAM contract never creates a pretend wallet balance", async ({
+  page,
+}) => {
+  const { requested, open } = await ownChainSetup(page);
+  const panel = await open("GRAM");
+  await expect(panel.getByRole("alert")).toContainText(
+    "нужен проверенный контракт",
+  );
+  await expect(
+    panel.getByRole("button", { name: /Открыть адрес/ }),
+  ).toHaveCount(0);
+  expect(requested).toEqual(["GRAM"]);
 });
