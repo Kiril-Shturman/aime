@@ -1,5 +1,5 @@
 import telephoneArtwork from "../assets/verification/telephone.webp";
-import mailboxArtwork from "../assets/verification/mailbox.webp";
+import mailboxArtwork from "../assets/verification/mailbox-envelope.webp";
 import passportArtwork from "../assets/verification/passport.webp";
 import cardArtwork from "../assets/verification/wpay-card.webp";
 import { List, ListInput } from "framework7-react";
@@ -57,13 +57,6 @@ export default function WalletVerification({
           }}
         >
           <div className="wpay-verification-contact-body">
-            <div
-              className="wpay-verification-steps"
-              aria-label="Шаг 1 из 2: контакты"
-            >
-              <span className="is-current">01 · Контакты</span>
-              <span>02 · Документы</span>
-            </div>
             <div className="wpay-contact-mail-scene" aria-hidden="true">
               <span className="wpay-contact-mail-glow" />
               <div className="wpay-contact-mailbox">
@@ -77,7 +70,7 @@ export default function WalletVerification({
                 />
                 <img
                   className="wpay-contact-mailbox-logo"
-                  src="/brands/wpay-wordmark-light.svg"
+                  src="/brands/wpay-wordmark.svg"
                   alt=""
                 />
               </div>
@@ -97,6 +90,12 @@ export default function WalletVerification({
                 <Mail />
               </span>
               <span className="wpay-contact-letter wpay-contact-letter--three">
+                <Mail />
+              </span>
+              <span className="wpay-contact-letter wpay-contact-letter--four">
+                <Mail />
+              </span>
+              <span className="wpay-contact-letter wpay-contact-letter--five">
                 <Mail />
               </span>
               <span className="wpay-contact-mail-at">
