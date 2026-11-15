@@ -61,6 +61,7 @@ import asyncio
 import base64
 import hashlib
 import hmac
+import html
 import json
 import os
 import pathlib
@@ -1744,8 +1745,243 @@ def whoami(request):
 OPEN_PATHS = ("/api/whoami",)
 
 
+def _wpay_admin_url(app_url):
+    parsed = urllib.parse.urlsplit(app_url)
+    index_path = pathlib.Path(__file__).resolve().parent / "static" / "index.html"
+    try:
+        version = hashlib.sha256(index_path.read_bytes()).hexdigest()[:12]
+    except OSError:
+        version = "current"
+    return urllib.parse.urlunsplit((
+        parsed.scheme, parsed.netloc, "/admin",
+        urllib.parse.urlencode({"v": version}), "",
+    ))
+
+
+def _wpay_amount(value):
+    """Compact money formatting without losing provider precision."""
+    text = str(value or "0")
+    if "." in text:
+        text = text.rstrip("0").rstrip(".")
+    return text or "0"
+
+
+def _wpay_bot_snapshot(ledger, sender_id, environment):
+    uid = f"tg:{sender_id}"
+    balances = [dict(row) for row in ledger.db.execute(
+        "SELECT asset,available,reserved FROM wallet_balances "
+        "WHERE user_id=? ORDER BY CASE WHEN asset='USDT' THEN 0 ELSE 1 END,asset",
+        (uid,),
+    )]
+    cards = [dict(row) for row in ledger.db.execute(
+        "SELECT kind,status,frozen,masked_pan,delivery_status FROM aura_cards "
+        "WHERE user_id=? AND environment=? ORDER BY updated_at DESC",
+        (uid, environment),
+    )]
+    return balances, cards
+
+
+def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None):
+    """Return rich HTML and a classic-message fallback for a bot screen."""
+    first_name = html.escape(str(sender.get("first_name") or "друг")[:80])
+    balance_rows = [
+        f"<tr><td><b>{html.escape(str(row['asset']))}</b></td>"
+        f"<td align=\"right\">{html.escape(_wpay_amount(row['available']))}</td>"
+        f"<td align=\"right\">{html.escape(_wpay_amount(row['reserved']))}</td></tr>"
+        for row in balances
+    ] or ["<tr><td><b>USDT</b></td><td align=\"right\">0</td><td align=\"right\">0</td></tr>"]
+    plain_balances = [
+        f"{row['asset']}: {_wpay_amount(row['available'])} доступно"
+        + (f", {_wpay_amount(row['reserved'])} в резерве" if str(row['reserved']) != "0" else "")
+        for row in balances
+    ] or ["USDT: 0 доступно"]
+
+    if view == "balance":
+        rich = (
+            "<h1>Баланс WPay</h1>"
+            "<table compact><tr><th>Актив</th><th>Доступно</th><th>Резерв</th></tr>"
+            + "".join(balance_rows) + "</table>"
+            "<blockquote>Пополнение USDT TRC-20 зачисляется после подтверждения сети.</blockquote>"
+        )
+        plain = "Баланс WPay\n\n" + "\n".join(plain_balances)
+    elif view == "cards":
+        if cards:
+            items = []
+            plain_items = []
+            for card in cards:
+                kind = "Виртуальная" if card.get("kind") == "virtual" else "Физическая"
+                state = "заморожена" if card.get("frozen") else str(card.get("status") or "неизвестно")
+                masked = html.escape(str(card.get("masked_pan") or "без номера"))
+                items.append(f"<li><b>{kind}</b> · {masked}<br>{html.escape(state)}</li>")
+                plain_items.append(f"{kind}: {card.get('masked_pan') or 'без номера'} · {state}")
+            rich = "<h1>Карты WPay</h1><ul>" + "".join(items) + "</ul>"
+            plain = "Карты WPay\n\n" + "\n".join(plain_items)
+        else:
+            rich = (
+                "<h1>Карты WPay</h1><p>У вас пока нет выпущенных карт.</p>"
+                "<blockquote>Выпуск и управление картой доступны в защищённом Mini App.</blockquote>"
+            )
+            plain = "Карты WPay\n\nУ вас пока нет выпущенных карт."
+    elif view == "help":
+        rich = (
+            "<h1>Что умеет WPay</h1><ul>"
+            "<li>USDT TRC-20: пополнение и вывод</li>"
+            "<li>Виртуальные и физические карты</li>"
+            "<li>Покупка USDT через СБП после KYC</li>"
+            "<li>Оплата российских QR-кодов</li></ul>"
+            "<details><summary>Команды</summary>"
+            "/wallet — главное меню<br>/balance — баланс<br>/cards — карты<br>"
+            "/deposit — пополнение<br>/verify — верификация<br>/help — помощь</details>"
+        )
+        plain = (
+            "Что умеет WPay\n\nUSDT TRC-20, карты, СБП после KYC и оплата QR.\n\n"
+            "/wallet · /balance · /cards · /deposit · /verify · /help"
+        )
+    elif view == "deposit":
+        rich = (
+            "<h1>Пополнить WPay</h1>"
+            "<p>Откройте Mini App и выберите <b>USDT → TRON (TRC-20)</b>.</p>"
+            "<blockquote>Переводите только USDT в сети TRON на выданный персональный адрес.</blockquote>"
+        )
+        plain = "Пополнить WPay\n\nОткройте Mini App и выберите USDT → TRON (TRC-20)."
+    elif view == "verify":
+        rich = (
+            "<h1>Верификация</h1>"
+            "<ol><li>Укажите почту</li><li>Укажите телефон +7</li>"
+            "<li>Пройдите защищённую проверку Aura</li></ol>"
+            "<blockquote>WPay не запрашивает паспортные данные в чате бота.</blockquote>"
+        )
+        plain = "Верификация\n\nУкажите почту и телефон в Mini App, затем пройдите защищённую проверку Aura."
+    elif view == "admin_denied":
+        rich = "<h1>Нет доступа</h1><p>Админка WPay доступна только владельцу.</p>"
+        plain = "Нет доступа к админке WPay."
+    elif view == "admin":
+        rich = (
+            "<h1>Админка WPay</h1><p>Провайдеры, активы, API-консоли, события и сверка.</p>"
+        )
+        plain = "Админка WPay"
+    else:
+        usdt = next((row for row in balances if row["asset"] == "USDT"), None)
+        available = _wpay_amount(usdt["available"] if usdt else "0")
+        rich = (
+            f"<h1>WPay</h1><p>Привет, <b>{first_name}</b>.</p>"
+            f"<blockquote><b>{html.escape(available)} USDT</b> доступно<br>"
+            f"Карт: <b>{len(cards)}</b></blockquote>"
+            "<p>Кошелёк, карты, СБП и QR-платежи — в одном Mini App.</p>"
+        )
+        plain = f"WPay\n\nПривет, {sender.get('first_name') or 'друг'}.\nДоступно: {available} USDT\nКарт: {len(cards)}"
+
+    if view == "admin" and admin_url:
+        rich += (
+            "<tg-button-row><tg-button type=\"web_app\" style=\"primary\" url=\""
+            + html.escape(admin_url, quote=True) + "\">Открыть админку</tg-button></tg-button-row>"
+        )
+        keyboard = [[{"text": "Открыть админку", "web_app": {"url": admin_url}, "style": "primary"}]]
+    elif view == "admin_denied":
+        rich += "<tg-button-row><tg-button type=\"callback_data\" data=\"wpay:home\">Назад</tg-button></tg-button-row>"
+        keyboard = [[{"text": "Назад", "callback_data": "wpay:home"}]]
+    else:
+        rich += (
+            "<tg-button-row><tg-button type=\"web_app\" style=\"primary\" url=\""
+            + html.escape(app_url, quote=True) + "\">Открыть WPay</tg-button></tg-button-row>"
+            "<tg-button-row>"
+            "<tg-button type=\"callback_data\" data=\"wpay:balance\">Баланс</tg-button>"
+            "<tg-button type=\"callback_data\" data=\"wpay:cards\">Карты</tg-button>"
+            "<tg-button type=\"callback_data\" data=\"wpay:help\">Помощь</tg-button>"
+            "</tg-button-row>"
+            "<tg-button-row>"
+            "<tg-button type=\"callback_data\" style=\"success\" data=\"wpay:deposit\">Пополнить</tg-button>"
+            "<tg-button type=\"callback_data\" data=\"wpay:verify\">Верификация</tg-button>"
+            "</tg-button-row>"
+        )
+        keyboard = [
+            [{"text": "Открыть WPay", "web_app": {"url": app_url}, "style": "primary"}],
+            [
+                {"text": "Баланс", "callback_data": "wpay:balance"},
+                {"text": "Карты", "callback_data": "wpay:cards"},
+                {"text": "Помощь", "callback_data": "wpay:help"},
+            ],
+            [
+                {"text": "Пополнить", "callback_data": "wpay:deposit", "style": "success"},
+                {"text": "Верификация", "callback_data": "wpay:verify"},
+            ],
+        ]
+        if admin_url:
+            rich += (
+                "<tg-button-row><tg-button type=\"web_app\" style=\"danger\" url=\""
+                + html.escape(admin_url, quote=True) + "\">Админка</tg-button></tg-button-row>"
+            )
+            keyboard.append([{"text": "Админка", "web_app": {"url": admin_url}, "style": "danger"}])
+    return rich, plain, {"inline_keyboard": keyboard}
+
+
+def _telegram_bot_api(token, method, payload):
+    request = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/{method}",
+        data=json.dumps(payload, ensure_ascii=False).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=12) as response:
+            body = json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        try:
+            body = json.loads(error.read())
+        except (ValueError, TypeError):
+            body = {"ok": False, "description": f"HTTP {error.code}"}
+    if not body.get("ok"):
+        raise ValueError(str(body.get("description") or f"Telegram {method} failed")[:300])
+    return body.get("result")
+
+
+async def _configure_wpay_bot(app):
+    """Keep the Telegram command menu and Mini App button in sync with WPay."""
+    token = os.environ.get("WPAY_BOT_TOKEN", "")
+    if not token:
+        return
+    app_url = os.environ.get("WPAY_APP_URL", "https://wallet.178-236-255-214.nip.io/wallet")
+    commands = [
+        {"command": "start", "description": "Открыть главное меню WPay"},
+        {"command": "wallet", "description": "Кошелёк и быстрые действия"},
+        {"command": "balance", "description": "Показать баланс"},
+        {"command": "cards", "description": "Мои карты"},
+        {"command": "deposit", "description": "Пополнить USDT TRC-20"},
+        {"command": "verify", "description": "Пройти верификацию"},
+        {"command": "help", "description": "Возможности и помощь"},
+    ]
+
+    def configure():
+        calls = [
+            ("setMyCommands", {"commands": commands, "language_code": "ru"}),
+            ("setMyCommands", {"commands": commands}),
+            ("setChatMenuButton", {
+                "menu_button": {"type": "web_app", "text": "Открыть WPay", "web_app": {"url": app_url}},
+            }),
+            ("setMyShortDescription", {"short_description": "Кошелёк, карты, USDT, СБП и QR-платежи"}),
+            ("setMyDescription", {
+                "description": "WPay — кошелёк с USDT TRC-20, картами, пополнением через СБП и оплатой QR. Все денежные действия подтверждаются в защищённом Mini App.",
+            }),
+        ]
+        admin_ids = [
+            int(value.strip()) for value in os.environ.get("WPAY_ADMIN_IDS", "").split(",")
+            if value.strip().isdigit()
+        ]
+        for admin_id in admin_ids:
+            calls.append(("setMyCommands", {
+                "scope": {"type": "chat", "chat_id": admin_id},
+                "commands": commands + [{"command": "admin", "description": "Админка WPay"}],
+            }))
+        for method, payload in calls:
+            try:
+                _telegram_bot_api(token, method, payload)
+            except Exception as exc:
+                print(f"[wpay-bot] {method} failed: {exc}", flush=True)
+
+    await asyncio.to_thread(configure)
+
+
 async def wpay_telegram_webhook(request):
-    """Open the wallet or the protected admin mini-app from the WPay bot."""
+    """Rich Telegram front door for the wallet and protected admin Mini App."""
     token = os.environ.get("WPAY_BOT_TOKEN", "")
     secret = os.environ.get("WPAY_TELEGRAM_WEBHOOK_SECRET", "")
     supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
@@ -1767,48 +2003,54 @@ async def wpay_telegram_webhook(request):
             f"tg:{sender_id}", sender, bot_started=True, source="bot",
             start_param=start_param, touch=True,
         )
-    if command not in {"/start", "/admin"}:
+    callback_data = str(callback.get("data") or "")
+    view_by_command = {
+        "/start": "home", "/wallet": "home", "/balance": "balance",
+        "/cards": "cards", "/deposit": "deposit", "/verify": "verify",
+        "/help": "help", "/admin": "admin",
+    }
+    view_by_callback = {
+        "wpay:home": "home", "wpay:balance": "balance",
+        "wpay:cards": "cards", "wpay:deposit": "deposit",
+        "wpay:verify": "verify", "wpay:help": "help",
+    }
+    view = view_by_command.get(command) or view_by_callback.get(callback_data)
+    if not view:
         return web.json_response({"ok": True})
-    chat_id = (message.get("chat") or {}).get("id")
+    chat_id = (message.get("chat") or (callback.get("message") or {}).get("chat") or {}).get("id")
     if not chat_id:
         return web.json_response({"ok": True})
     admin_ids = {value.strip() for value in os.environ.get("WPAY_ADMIN_IDS", "").split(",") if value.strip().isdigit()}
     app_url = os.environ.get("WPAY_APP_URL", "https://wallet.178-236-255-214.nip.io/wallet")
-    if command == "/admin":
-        if str(sender_id) not in admin_ids:
-            payload = {"chat_id": chat_id, "text": "Нет доступа к админке WPay."}
-        else:
-            parsed = urllib.parse.urlsplit(app_url)
-            index_path = pathlib.Path(__file__).resolve().parent / "static" / "index.html"
-            try:
-                admin_version = hashlib.sha256(index_path.read_bytes()).hexdigest()[:12]
-            except OSError:
-                admin_version = "current"
-            admin_url = urllib.parse.urlunsplit((
-                parsed.scheme, parsed.netloc, "/admin",
-                urllib.parse.urlencode({"v": admin_version}), "",
-            ))
-            payload = {
-                "chat_id": chat_id,
-                "text": "Админка WPay",
-                "reply_markup": {"inline_keyboard": [[{"text": "Открыть админку", "web_app": {"url": admin_url}}]]},
-            }
-    else:
-        payload = {
-            "chat_id": chat_id,
-            "text": "Добро пожаловать в WPay. Откройте мини-приложение кнопкой ниже.",
-            "reply_markup": {"inline_keyboard": [[{"text": "Открыть WPay", "web_app": {"url": app_url}}]]},
-        }
+    is_admin = str(sender_id) in admin_ids
+    if view == "admin" and not is_admin:
+        view = "admin_denied"
+    environment = os.environ.get("AURA_ENVIRONMENT", "test")
+    balances, cards = _wpay_bot_snapshot(request.app["wpay_ledger"], sender_id, environment)
+    admin_url = _wpay_admin_url(app_url) if is_admin else None
+    rich, plain, reply_markup = _wpay_bot_view(
+        view, sender, balances, cards, app_url, admin_url=admin_url,
+    )
 
     def send_message():
-        telegram_request = urllib.request.Request(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            data=json.dumps(payload).encode(),
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(telegram_request, timeout=12) as response:
-            if not json.loads(response.read()).get("ok"):
-                raise ValueError("Telegram sendMessage failed")
+        if callback.get("id"):
+            try:
+                _telegram_bot_api(token, "answerCallbackQuery", {"callback_query_id": callback["id"]})
+            except Exception:
+                pass
+        try:
+            return _telegram_bot_api(token, "sendRichMessage", {
+                "chat_id": chat_id,
+                "rich_message": {"html": rich},
+                "protect_content": view in {"balance", "cards"},
+            })
+        except Exception:
+            return _telegram_bot_api(token, "sendMessage", {
+                "chat_id": chat_id,
+                "text": plain,
+                "reply_markup": reply_markup,
+                "protect_content": view in {"balance", "cards"},
+            })
 
     try:
         await asyncio.to_thread(send_message)
@@ -2390,6 +2632,7 @@ def make_app():
     os.makedirs(os.path.join(ROOT, "shots"), exist_ok=True)
     app.router.add_static("/shots", os.path.join(ROOT, "shots"))
     app.router.add_get("/{tail:.*}", spa)
+    app.on_startup.append(_configure_wpay_bot)
     app.on_shutdown.append(rozpustit_spojeni)
     return app
 
