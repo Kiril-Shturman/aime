@@ -23,6 +23,7 @@ class State:
         self.kyc = {}
         self.cards = {}
         self.card_operations = []
+        self.orders = {}
         self.addresses = {}
         self.deposits = []
         self.balance = Decimal("0")
@@ -225,6 +226,46 @@ def make_app():
         }
         return web.json_response({"operation": item, "webhook": event})
 
+    async def sbp_rate(_):
+        return web.json_response({
+            "rate": "92.50", "fiat": "RUB", "asset": "USDT",
+            "min_amount": "1000", "max_amount": "100000",
+            "updated_at": "2026-01-01T00:00:00Z",
+        })
+
+    async def orders(request):
+        items = list(reversed(list(state.orders.values())))
+        limit = min(max(int(request.query.get("limit", "100")), 1), 100)
+        return web.json_response({"data": items[:limit], "next_cursor": None})
+
+    async def order(request):
+        order_id = request.match_info["order_id"]
+        if order_id not in state.orders:
+            return envelope("order_not_found", "Order not found", 404)
+        return web.json_response(state.orders[order_id])
+
+    async def create_order_event(request):
+        body = await request.json()
+        customer_id = str(body.get("customer_id") or "")
+        if customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        status = str(body.get("status") or "completed")
+        order_id = "order_" + uuid.uuid4().hex
+        item = {
+            "id": order_id, "customer_id": customer_id, "status": status,
+            "rub_amount": str(body.get("rub_amount") or "9250"),
+            "usdt_amount": str(body.get("usdt_amount") or "100"),
+            "fee": str(body.get("fee") or "0"),
+            "updated_at": "2026-01-01T00:05:00Z",
+        }
+        state.orders[order_id] = item
+        event = {
+            "event": "order." + status, "event_id": "evt_" + uuid.uuid4().hex,
+            "occurred_at": item["updated_at"], "partner_id": MOCK_PARTNER,
+            "data": item,
+        }
+        return web.json_response({"order": item, "webhook": event})
+
     async def create_deposit(request):
         body = await request.json()
         customer_id = str(body.get("customer_id") or "")
@@ -273,10 +314,14 @@ def make_app():
     app.router.add_get("/v1/partner/cards/operations", card_operations)
     app.router.add_get("/v1/partner/cards/{card_id}/operations", card_operations)
     app.router.add_get("/v1/partner/cards/{card_id}", card)
+    app.router.add_get("/v1/partner/rate", sbp_rate)
+    app.router.add_get("/v1/partner/orders", orders)
+    app.router.add_get("/v1/partner/orders/{order_id}", order)
     app.router.add_post("/mock/deposits", create_deposit)
     app.router.add_post("/mock/kyc", set_kyc)
     app.router.add_post("/mock/cards", create_card)
     app.router.add_post("/mock/card-operations", create_card_operation)
+    app.router.add_post("/mock/orders", create_order_event)
     return app
 
 

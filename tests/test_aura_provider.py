@@ -205,6 +205,28 @@ class AuraUnitTests(unittest.TestCase):
         self.assertIn(b"sensitive_payload_sha256", bytes(inbox))
         self.assertEqual(process_inbox(self.ledger, "test"), 1)
 
+    def test_sbp_terminal_webhook_records_without_crediting_unknown_contract(self):
+        event = {
+            "event": "order.completed", "event_id": "evt_order",
+            "occurred_at": "2026-01-01T00:05:00Z", "partner_id": MOCK_PARTNER,
+            "data": {
+                "id": "order_one", "customer_id": self.customer,
+                "status": "completed", "rub_amount": "9250",
+                "usdt_amount": "100", "fee": "0",
+                "updated_at": "2026-01-01T00:05:00Z",
+                "qr_payload": "must-not-be-persisted",
+            },
+        }
+        raw, signature = signed(event)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        order = self.ledger.db.execute("SELECT * FROM aura_sbp_orders").fetchone()
+        self.assertEqual(order["status"], "completed")
+        self.assertEqual(order["rub_amount"], "9250")
+        self.assertEqual(order["usdt_amount"], "100")
+        self.assertNotIn("qr_payload", order["body"])
+        self.assertEqual(str(self.ledger.balance(self.uid, "USDT")[0]), "0")
+
 
 class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -284,6 +306,19 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         card_operations = await self.client.list_card_operations(card["id"])
         self.assertEqual(len(all_operations["data"]), 1)
         self.assertEqual(len(card_operations["data"]), 1)
+
+    async def test_sbp_read_contracts(self):
+        uid = "tg:780"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(uid, ref)
+        rate = await self.client.get_sbp_rate()
+        self.assertEqual(rate["fiat"], "RUB")
+        created = await self.mock.post(
+            "/mock/orders", json={"customer_id": customer_id, "status": "completed"}
+        )
+        order = (await created.json())["order"]
+        self.assertEqual((await self.client.list_sbp_orders())["data"][0]["id"], order["id"])
+        self.assertEqual((await self.client.get_sbp_order(order["id"]))["status"], "completed")
 
     async def test_environment_key_guard(self):
         with self.assertRaises(ValueError):
@@ -434,6 +469,31 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         fees = await self.wpay.get("/api/wallet/aura-card-fees", headers=self.owner)
         self.assertEqual(fees.status, 200)
         self.assertEqual(fees.headers["Cache-Control"], "no-store")
+
+    async def test_sbp_terminal_webhook_feeds_owner_scoped_view(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner, json={}
+        )
+        customer_id = (await registered.json())["customer_id"]
+        created = await self.mock.post(
+            "/mock/orders", json={"customer_id": customer_id, "status": "completed"}
+        )
+        event = (await created.json())["webhook"]
+        raw, signature = signed(event)
+        webhook = await self.wpay.post(
+            "/api/wallet/aura-webhook", data=raw,
+            headers={"X-Aura-Signature-V2": signature},
+        )
+        self.assertEqual(webhook.status, 200, await webhook.text())
+        processed = await self.wpay.post(
+            "/api/wallet/admin-aura-process", headers=self.owner
+        )
+        self.assertEqual((await processed.json())["processed"], 1)
+        orders = await self.wpay.get("/api/wallet/aura-sbp-orders", headers=self.owner)
+        self.assertEqual((await orders.json())["data"][0]["status"], "completed")
+        rate = await self.wpay.get("/api/wallet/aura-sbp-rate", headers=self.owner)
+        self.assertEqual(rate.status, 200)
+        self.assertEqual((await rate.json())["fiat"], "RUB")
 
 
 if __name__ == "__main__":

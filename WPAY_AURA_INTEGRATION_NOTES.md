@@ -703,10 +703,16 @@ Implemented:
   `card.cancelled`, `card.status_changed` and `card.operation`. Stored card data
   is recursively redacted. `card.otp` is signature-checked and deduplicated but
   its code is replaced by a payload hash before the durable inbox write.
+- SBP rate/order read transport, minimal owner-scoped order state, and
+  idempotent terminal lifecycle handling for `order.completed`, `order.failed`,
+  `order.expired` and `order.cancelled`. QR payloads are not retained. A
+  completed order is deliberately not credited to the WPay ledger until the
+  authoritative REST contract identifies the exact net-USDT field and Aura
+  confirms that REST order creation is available for the partner key.
 
 Verification on this branch:
 
-- 90 backend unit/integration tests passed, including duplicate delivery,
+- 93 backend unit/integration tests passed, including duplicate delivery,
   pending-to-confirmed transition, invalid-signature recovery, event-ID reuse,
   environment guards and the complete mock deposit route.
 - Frontend tests passed (3/3), production build passed and lint completed with

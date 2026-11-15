@@ -85,6 +85,13 @@ def prepare(ledger):
         provider_updated_at TEXT, body TEXT NOT NULL,
         created_at REAL NOT NULL, updated_at REAL NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS aura_sbp_orders (
+        order_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, customer_id TEXT NOT NULL,
+        environment TEXT NOT NULL, status TEXT NOT NULL,
+        rub_amount TEXT, usdt_amount TEXT, fee TEXT,
+        provider_updated_at TEXT, body TEXT NOT NULL,
+        created_at REAL NOT NULL, updated_at REAL NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS aura_deposit_addresses (
         address_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, customer_id TEXT NOT NULL,
         environment TEXT NOT NULL, network TEXT NOT NULL, address TEXT NOT NULL,
@@ -350,6 +357,19 @@ class AuraClient:
             card_id = quote(_safe_identifier(card_id, "card id"), safe="")
             path = "/cards/" + card_id + "/operations"
         return await self.request("GET", path, params=params)
+
+    async def get_sbp_rate(self):
+        return await self.request("GET", "/rate")
+
+    async def list_sbp_orders(self, *, cursor=None, limit=100):
+        params = {"limit": min(max(int(limit), 1), 100)}
+        if cursor:
+            params["cursor"] = str(cursor)
+        return await self.request("GET", "/orders", params=params)
+
+    async def get_sbp_order(self, order_id):
+        order_id = quote(_safe_identifier(order_id, "SBP order id"), safe="")
+        return await self.request("GET", "/orders/" + order_id)
 
     async def deposit_addresses(self, customer_id):
         return await self.request("GET", "/customers/" + quote(_safe_identifier(customer_id, "customer id"), safe="") + "/deposit-addresses")
@@ -697,6 +717,55 @@ def _store_card_operation(ledger, environment, data):
     )
 
 
+def _store_sbp_order(ledger, environment, kind, data):
+    order_id = _safe_identifier(data.get("order_id") or data.get("id"), "SBP order id")
+    existing = ledger.db.execute(
+        "SELECT * FROM aura_sbp_orders WHERE order_id=? AND environment=?",
+        (order_id, environment),
+    ).fetchone()
+    customer_id = data.get("customer_id") or (existing["customer_id"] if existing else None)
+    customer_id = _safe_identifier(customer_id, "customer id")
+    owner = ledger.db.execute(
+        "SELECT user_id FROM aura_customers WHERE customer_id=? AND environment=?",
+        (customer_id, environment),
+    ).fetchone()
+    if not owner or (existing and existing["user_id"] != owner[0]):
+        raise ValueError("Unknown Aura SBP order owner")
+    incoming_updated = str(data.get("updated_at") or "")
+    if (existing and incoming_updated and existing["provider_updated_at"]
+            and incoming_updated <= existing["provider_updated_at"]):
+        return
+    status = str(data.get("status") or kind.removeprefix("order."))[:100]
+
+    def amount(*names):
+        for name in names:
+            if data.get(name) is not None:
+                return str(_decimal(data[name], allow_zero=True))
+        return None
+
+    rub_amount = amount("rub_amount", "amount_rub", "fiat_amount")
+    usdt_amount = amount("usdt_amount", "amount_usdt", "net_amount")
+    fee = amount("fee", "fee_amount")
+    safe_body = {
+        "order_id": order_id, "customer_id": customer_id, "status": status,
+        "rub_amount": rub_amount, "usdt_amount": usdt_amount, "fee": fee,
+        "updated_at": incoming_updated or None,
+    }
+    stamp = time.time()
+    ledger.db.execute(
+        "INSERT INTO aura_sbp_orders VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(order_id) DO UPDATE SET status=excluded.status,"
+        "rub_amount=COALESCE(excluded.rub_amount,aura_sbp_orders.rub_amount),"
+        "usdt_amount=COALESCE(excluded.usdt_amount,aura_sbp_orders.usdt_amount),"
+        "fee=COALESCE(excluded.fee,aura_sbp_orders.fee),"
+        "provider_updated_at=excluded.provider_updated_at,body=excluded.body,"
+        "updated_at=excluded.updated_at",
+        (order_id, owner[0], customer_id, environment, status, rub_amount,
+         usdt_amount, fee, incoming_updated or None,
+         json.dumps(safe_body, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
+    )
+
+
 def process_inbox(ledger, environment, limit=20):
     rows = ledger.db.execute(
         "SELECT * FROM wallet_webhook_inbox WHERE provider='aura' AND signature_valid=1 "
@@ -715,7 +784,9 @@ def process_inbox(ledger, environment, limit=20):
             if current[0] is not None:
                 ledger.commit()
                 continue
-            if kind in {"card.opened", "card.failed", "card.cancelled", "card.status_changed"}:
+            if kind in {"order.completed", "order.failed", "order.expired", "order.cancelled"}:
+                _store_sbp_order(ledger, environment, kind, data)
+            elif kind in {"card.opened", "card.failed", "card.cancelled", "card.status_changed"}:
                 _store_card_event(ledger, environment, kind, data)
             elif kind == "card.operation":
                 _store_card_operation(ledger, environment, data)
