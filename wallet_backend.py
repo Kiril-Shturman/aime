@@ -30,6 +30,11 @@ from wallet_finance_worker import prepare as prepare_finance_worker, Worker as F
 from wallet_finance import finance_route, require_coverage
 from wallet_operations import prepare_operations, operations_route, save_address
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
+from wallet_aura import (
+    AuraClient, AuraService, prepare as prepare_aura,
+    receive_webhook as receive_aura_webhook, process_inbox as process_aura_inbox,
+    reconcile as reconcile_aura, run_worker as run_aura_worker,
+)
 
 BASE_URL = 'https://goswap.site/api/'
 NETWORKS = {'BSC', 'ETH', 'TON', 'SOL', 'TRON'}
@@ -79,6 +84,15 @@ def add(a, b):
 
 def now():
     return datetime.now(timezone.utc).isoformat()
+
+
+def safe_aura_event_for_admin(event):
+    """Return an event without exposing short-lived card secrets to the UI."""
+    result = json.loads(json.dumps(event))
+    if result.get('type') == 'card.otp' and isinstance(result.get('data'), dict):
+        if 'code' in result['data']:
+            result['data']['code'] = '[REDACTED]'
+    return result
 
 
 def telegram_payload(raw, token):
@@ -286,18 +300,20 @@ class Ledger:
 
     def set_debt(self, uid, asset, amount):self.book.set_debt(uid,asset,amount)
 
-    def deposit(self, payload):
+    def deposit(self, payload, manage_transaction=True):
         uid = self.db.execute('SELECT user_id FROM wallet_accounts WHERE client_ref=?', (payload.get('client_ref'),)).fetchone()
         if not uid:
             return False
         amount = money(payload['credited'])
         asset = str(payload['asset']).upper()
         event_id = 'deposit:' + str(payload['deposit_id'])
-        self.begin('deposit','provider',event_id)
+        if manage_transaction:
+            self.begin('deposit','provider',event_id)
         try:
             self.db.execute('INSERT OR IGNORE INTO wallet_deposit_owners VALUES (?,?,?)',(str(payload['deposit_id']),uid[0],asset))
             if self.db.execute('SELECT 1 FROM wallet_events WHERE event_id=?', (event_id,)).fetchone():
-                self.commit()
+                if manage_transaction:
+                    self.commit()
                 return False
             available, reserved = self.balance(uid[0], asset)
             with localcontext() as ctx:
@@ -307,10 +323,12 @@ class Ledger:
                 self.set_debt(uid[0],asset,owed-repayment)
                 self.put_balance(uid[0], asset, available + amount - repayment, reserved)
             self.db.execute('INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)', (event_id, uid[0], asset, str(amount), 'deposit', str(payload.get('credited_at') or now()), json.dumps(payload)))
-            self.commit()
+            if manage_transaction:
+                self.commit()
             return True
         except Exception:
-            self.rollback()
+            if manage_transaction:
+                self.rollback()
             raise
 
     def reserve(self, uid, quote_id):
@@ -389,9 +407,14 @@ def install_wallet(app, root, owner_check):
         with open(secrets_file, encoding='utf-8') as config:
             for line in config:
                 key, sep, value = line.strip().partition('=')
-                if sep and key in {'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS', 'FIXEDFLOAT_API_KEY', 'FIXEDFLOAT_API_SECRET', 'WPAY_CUSTODY_ENABLED', 'WPAY_CUSTODY_PUBLIC_KEY_FILE', 'WPAY_CUSTODY_CHAIN_ENV'}:
+                if sep and key in {'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS', 'FIXEDFLOAT_API_KEY', 'FIXEDFLOAT_API_SECRET', 'WPAY_CUSTODY_ENABLED', 'WPAY_CUSTODY_PUBLIC_KEY_FILE', 'WPAY_CUSTODY_CHAIN_ENV', 'AURA_API_KEY', 'AURA_ENVIRONMENT', 'AURA_BASE_URL', 'AURA_WEBHOOK_SECRET', 'AURA_PARTNER_ID', 'WPAY_AURA_ENABLED'}:
                     os.environ.setdefault(key, value.strip().strip('\"\''))
     token = os.environ.get('GOSWAP_API_TOKEN', '')
+    aura_enabled = os.environ.get('WPAY_AURA_ENABLED', '0') == '1'
+    aura_environment = os.environ.get('AURA_ENVIRONMENT', 'test')
+    aura_token = os.environ.get('AURA_API_KEY', '')
+    aura_secret = os.environ.get('AURA_WEBHOOK_SECRET', '')
+    aura_partner_id = os.environ.get('AURA_PARTNER_ID', '') or None
     bot_token = os.environ.get('WPAY_BOT_TOKEN') or os.environ.get('BOARD_BOT_TOKEN', '')
     admin_ids = {value.strip() for value in os.environ.get('WPAY_ADMIN_IDS', '').split(',') if value.strip().isdigit()}
     ledger = Ledger(os.environ.get('WPAY_DB_PATH', os.path.join(root, 'wpay.sqlite3')))
@@ -399,6 +422,7 @@ def install_wallet(app, root, owner_check):
     prepare_withdrawals(ledger)
     prepare_user_ops(ledger)
     prepare_inbox(ledger)
+    prepare_aura(ledger)
     prepare_finance_worker(ledger)
     provider = GoSwap(token)
     exchange = FixedFloat(os.environ.get('FIXEDFLOAT_API_KEY',''),os.environ.get('FIXEDFLOAT_API_SECRET',''),ApiError)
@@ -409,7 +433,13 @@ def install_wallet(app, root, owner_check):
     app['wpay_chain'] = ChainReader(ledger,ApiError)
     app['wpay_custody'] = custody
     app['wpay_exchange'] = exchange
+    aura_client = AuraClient(
+        aura_token, aura_environment, ApiError,
+        base_url=os.environ.get('AURA_BASE_URL') or None,
+    )
+    aura_service = AuraService(ledger, aura_client, aura_environment)
     app['wpay_provider'] = provider
+    app['wpay_aura_provider'] = aura_client
     app['wpay_ledger'] = ledger
     app['wpay_broadcast_tasks'] = set()
 
@@ -674,9 +704,22 @@ def install_wallet(app, root, owner_check):
         try:
             action = request.match_info['action']
             if action == 'status' and request.method == 'GET':
-                return web.json_response({'configured': bool(token), 'telegram_auth': bool(bot_token), 'custody_configured': custody.configured})
+                return web.json_response({
+                    'configured': bool(token), 'exchange_configured': exchange.configured, 'telegram_auth': bool(bot_token),
+                    'providers': {
+                        'goswap': {'configured': bool(token)},
+                        'aura': {'enabled': aura_enabled, 'configured': aura_client.configured,
+                                 'environment': aura_environment},
+                    },
+                })
             if action == 'webhook' and request.method == 'POST':
                 return await receive_webhook(request,ledger,provider,token,money,ApiError)
+            if action == 'aura-webhook' and request.method == 'POST':
+                if not aura_enabled or not aura_secret:
+                    raise ApiError('NOT_CONFIGURED', 'Aura webhook is not configured', 503)
+                return await receive_aura_webhook(
+                    request, ledger, aura_secret, ApiError, aura_partner_id
+                )
             uid = identity(request)
             exchange_response=await exchange_route(request,action,uid,exchange)
             if exchange_response is not None:return exchange_response
@@ -717,8 +760,368 @@ def install_wallet(app, root, owner_check):
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
                 return web.json_response(await admin_goswap_action(request))
+            if action == 'admin-providers' and request.method == 'GET':
+                aura_state = {
+                    'enabled': aura_enabled,
+                    'configured': aura_client.configured,
+                    'environment': aura_environment,
+                    'routes': [dict(row) for row in ledger.db.execute(
+                        "SELECT * FROM wallet_provider_routes ORDER BY product,asset,network,environment"
+                    )],
+                    'reconciliation': [dict(row) for row in ledger.db.execute(
+                        "SELECT * FROM wallet_provider_reconciliation ORDER BY provider,environment,asset"
+                    )],
+                }
+                if aura_enabled and aura_client.configured:
+                    aura_state['capabilities'] = await aura_client.get_me()
+                return web.json_response({
+                    'goswap': {'enabled': bool(token), 'configured': bool(token)},
+                    'aura': aura_state,
+                })
+            if action == 'admin-aura-process' and request.method == 'POST':
+                if not aura_enabled:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is disabled', 503)
+                count = process_aura_inbox(ledger, aura_environment)
+                result = {'processed': count}
+                if aura_client.configured:
+                    result['reconciliation'] = await reconcile_aura(
+                        ledger, aura_client, aura_environment
+                    )
+                return web.json_response(result)
+            if action == 'admin-aura-events' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                event_types = []
+                for value in request.query.getall('type', []):
+                    event_types.extend(part for part in value.split(',') if part)
+                result = await aura_client.list_events(
+                    event_types=event_types or None,
+                    created_after=request.query.get('created_after'),
+                    created_before=request.query.get('created_before'),
+                    cursor=request.query.get('cursor'),
+                    limit=request.query.get('limit', '25'),
+                )
+                return web.json_response({
+                    'data': [safe_aura_event_for_admin(item) for item in result['data']],
+                    'next_cursor': result['next_cursor'],
+                })
+            if action == 'admin-aura-event' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                event_id = request.query.get('event_id')
+                if not event_id:
+                    raise ValueError('event_id is required')
+                return web.json_response(safe_aura_event_for_admin(
+                    await aura_client.get_event(event_id)
+                ))
+            if action == 'admin-aura-event-redeliver' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'event_id'}:
+                    raise ValueError('event_id is required')
+                key = request.headers.get('Idempotency-Key', '')
+                if not 1 <= len(key) <= 200:
+                    raise ApiError(
+                        'idempotency_key_required', 'Idempotency-Key is required', 400
+                    )
+                return web.json_response(safe_aura_event_for_admin(
+                    await aura_client.redeliver_event(
+                        str(body['event_id']), idempotency_key=key
+                    )
+                ))
+            if action == 'admin-aura-qr-payments' and request.method == 'GET':
+                return web.json_response({'data': [dict(row) for row in ledger.db.execute(
+                    'SELECT payment_id,status,amount_rub,rate,total_usdt,merchant,provider_updated_at '
+                    'FROM aura_qr_payments WHERE environment=? ORDER BY updated_at DESC LIMIT 200',
+                    (aura_environment,),
+                )]})
+            if action == 'admin-aura-withdrawals' and request.method == 'GET':
+                return web.json_response({'data': [dict(row) for row in ledger.db.execute(
+                    'SELECT withdrawal_id,status,amount,fee,recipient,transaction_hash,provider_updated_at '
+                    'FROM aura_withdrawals WHERE environment=? ORDER BY updated_at DESC LIMIT 200',
+                    (aura_environment,),
+                )]})
+            if action == 'admin-provider-route' and request.method == 'POST':
+                body = await request.json()
+                allowed = {
+                    ('crypto_deposit', 'USDT', 'TRON', 'test', 'aura'),
+                    ('crypto_deposit', 'USDT', 'TRON', 'live', 'aura'),
+                }
+                key = (
+                    str(body.get('product') or ''), str(body.get('asset') or '').upper(),
+                    str(body.get('network') or '').upper(),
+                    str(body.get('environment') or ''), str(body.get('provider') or ''),
+                )
+                if key not in allowed or type(body.get('enabled')) is not bool:
+                    raise ApiError('INVALID_ROUTE', 'Unsupported provider route', 400)
+                if key[3] == 'live' and aura_environment != 'live':
+                    raise ApiError('ENVIRONMENT_MISMATCH', 'Aura live route requires live configuration', 409)
+                ledger.db.execute(
+                    "INSERT OR REPLACE INTO wallet_provider_routes VALUES (?,?,?,?,?,?,?)",
+                    (*key, int(body['enabled']), time.time()),
+                )
+                return web.json_response({'ok': True, 'route': {
+                    'product': key[0], 'asset': key[1], 'network': key[2],
+                    'environment': key[3], 'provider': key[4], 'enabled': body['enabled'],
+                }})
             if action == 'admin-broadcasts' and request.method in {'GET', 'POST'}:
                 return web.json_response(await admin_broadcasts(request, uid))
+            if action == 'aura-customer' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                body = await request.json()
+                allowed = {'email', 'phone'}
+                if not isinstance(body, dict) or set(body) - allowed:
+                    raise ValueError('Unsupported Aura customer fields')
+                customer_id = await aura_service.ensure_customer(
+                    uid, client_ref, email=body.get('email'), phone=body.get('phone')
+                )
+                return web.json_response({'customer_id': customer_id, 'registered': True})
+            if action == 'aura-customer' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                row = ledger.db.execute(
+                    'SELECT customer_id FROM aura_customers WHERE user_id=? AND environment=?',
+                    (uid, aura_environment),
+                ).fetchone()
+                if not row:
+                    raise ApiError('CUSTOMER_NOT_REGISTERED', 'Aura customer is not registered', 404)
+                result = await aura_client.get_customer(row['customer_id'])
+                return web.json_response(result, headers={'Cache-Control': 'no-store'})
+            if action == 'aura-kyc' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                return web.json_response(await aura_service.get_kyc(uid, client_ref), headers={'Cache-Control': 'no-store'})
+            if action == 'aura-kyc' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('sbp_buy'):
+                    raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
+                body = await request.json()
+                allowed = {'email', 'phone'}
+                if not isinstance(body, dict) or set(body) - allowed:
+                    raise ValueError('Unsupported Aura KYC fields')
+                return web.json_response(await aura_service.start_kyc(
+                    uid, client_ref, email=body.get('email'), phone=body.get('phone')
+                ), headers={'Cache-Control': 'no-store'})
+            if action == 'aura-card-fees' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                response = web.json_response(await aura_client.get_card_fees())
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-cards' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('cards'):
+                    raise ApiError('cards_not_enabled', 'Aura cards are not enabled', 403)
+                idempotency_key = request.headers.get('Idempotency-Key', '')
+                if not 1 <= len(idempotency_key) <= 200:
+                    raise ApiError('idempotency_key_required', 'Idempotency-Key is required', 400)
+                body = await request.json()
+                allowed = {'kind', 'shipping_address'}
+                if not isinstance(body, dict) or set(body) - allowed:
+                    raise ValueError('Unsupported Aura card fields')
+                return web.json_response(await aura_service.create_card_request(
+                    uid, client_ref, kind=body.get('kind', 'virtual'),
+                    idempotency_key=idempotency_key,
+                    shipping_address=body.get('shipping_address'),
+                ))
+            if action == 'aura-cards' and request.method == 'GET':
+                cards = [dict(row) for row in ledger.db.execute(
+                    'SELECT card_id,kind,status,frozen,masked_pan,delivery_status,provider_updated_at '
+                    'FROM aura_cards WHERE user_id=? AND environment=? ORDER BY updated_at DESC',
+                    (uid, aura_environment),
+                )]
+                for item in cards:
+                    item['frozen'] = bool(item['frozen'])
+                return web.json_response({'data': cards})
+            if action == 'aura-card-credentials' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                card_id = str(request.query.get('card_id') or '')
+                if not card_id:
+                    raise ValueError('card_id is required')
+                owned = ledger.db.execute(
+                    'SELECT 1 FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?',
+                    (card_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
+                access_id = uuid.uuid4().hex
+                ledger.db.execute(
+                    'INSERT INTO aura_sensitive_access_audit '
+                    '(access_id,user_id,card_id,environment,action,outcome,created_at,completed_at) '
+                    'VALUES (?,?,?,?,?,?,?,NULL)',
+                    (access_id, uid, card_id, aura_environment,
+                     'card.credentials.reveal', 'requested', time.time()),
+                )
+                try:
+                    credentials = await aura_client.get_card_credentials(card_id)
+                except Exception:
+                    ledger.db.execute(
+                        'UPDATE aura_sensitive_access_audit SET outcome=?,completed_at=? '
+                        'WHERE access_id=?', ('failed', time.time(), access_id),
+                    )
+                    raise
+                ledger.db.execute(
+                    'UPDATE aura_sensitive_access_audit SET outcome=?,completed_at=? '
+                    'WHERE access_id=?', ('succeeded', time.time(), access_id),
+                )
+                response = web.json_response(credentials)
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-card-otp-latest' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                card_id = str(request.query.get('card_id') or '')
+                if not card_id:
+                    raise ValueError('card_id is required')
+                owned = ledger.db.execute(
+                    'SELECT 1 FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?',
+                    (card_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
+                otp = await aura_client.get_latest_card_otp(card_id)
+                response = web.json_response(otp)
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-card-cancel' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'card_id'}:
+                    raise ValueError('card_id is required')
+                card_id = str(body['card_id'])
+                owned = ledger.db.execute(
+                    'SELECT 1 FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?',
+                    (card_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
+                result = await aura_client.cancel_card(card_id)
+                return web.json_response({'card_id': card_id, 'status': result.get('status')})
+            if action in {
+                'aura-card-freeze', 'aura-card-unfreeze',
+                'aura-card-activate', 'aura-card-pin',
+            } and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                body = await request.json()
+                expected = {'card_id'}
+                if action == 'aura-card-activate':
+                    expected.add('activation_code')
+                elif action == 'aura-card-pin':
+                    expected.add('pin')
+                if not isinstance(body, dict) or set(body) != expected:
+                    raise ValueError('Invalid Aura card control body')
+                card_id = str(body['card_id'])
+                owned = ledger.db.execute(
+                    'SELECT customer_id FROM aura_cards '
+                    'WHERE card_id=? AND user_id=? AND environment=?',
+                    (card_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
+                if action == 'aura-card-freeze':
+                    result = await aura_client.freeze_card(card_id)
+                elif action == 'aura-card-unfreeze':
+                    result = await aura_client.unfreeze_card(card_id)
+                elif action == 'aura-card-activate':
+                    result = await aura_client.activate_card(
+                        card_id, body['activation_code']
+                    )
+                else:
+                    result = await aura_client.set_card_pin(card_id, body['pin'])
+                if result['owner_id'] != owned['customer_id']:
+                    raise ValueError('Aura card owner mismatch')
+                tracking = result.get('tracking')
+                ledger.db.execute(
+                    'UPDATE aura_cards SET frozen=?,status=?,masked_pan=COALESCE(?,masked_pan),'
+                    'delivery_status=COALESCE(?,delivery_status),'
+                    'tracking=COALESCE(?,tracking),provider_updated_at=?,body=?,updated_at=? '
+                    'WHERE card_id=? AND user_id=? AND environment=?',
+                    (int(result['frozen']), result['status'], result['card_number_masked'],
+                     result.get('delivery_status'),
+                     json.dumps(tracking, separators=(',', ':')) if tracking else None,
+                     now(), json.dumps(result, separators=(',', ':'), ensure_ascii=False), time.time(),
+                     card_id, uid, aura_environment),
+                )
+                return web.json_response(result)
+            if action == 'aura-card-recharge' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('cards'):
+                    raise ApiError('cards_not_enabled', 'Aura cards are not enabled', 403)
+                idempotency_key = request.headers.get('Idempotency-Key', '')
+                if not 1 <= len(idempotency_key) <= 200:
+                    raise ApiError('idempotency_key_required', 'Idempotency-Key is required', 400)
+                body = await request.json()
+                if not isinstance(body, dict) or 'card_id' not in body:
+                    raise ValueError('card_id is required')
+                allowed = {'card_id', 'amount', 'amount_spend'}
+                if set(body) - allowed or (('amount' in body) == ('amount_spend' in body)):
+                    raise ValueError('Provide exactly one of amount or amount_spend')
+                return web.json_response(await aura_service.recharge_card_request(
+                    uid, body['card_id'], idempotency_key=idempotency_key,
+                    amount=body.get('amount'), amount_spend=body.get('amount_spend'),
+                ))
+            if action == 'aura-card-operations' and request.method == 'GET':
+                card_id = str(request.query.get('card_id') or '')
+                if not card_id:
+                    raise ValueError('card_id is required')
+                owned = ledger.db.execute(
+                    'SELECT 1 FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?',
+                    (card_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
+                operations = [dict(row) for row in ledger.db.execute(
+                    'SELECT operation_id,operation_type,status,previous_status,asset,amount,fee,merchant,'
+                    'original_amount,original_currency,refunded_amount,balance_before,balance_after,'
+                    'merchant_country,mcc,merchant_category,decline_reason,decline_message,'
+                    'provider_created_at,provider_updated_at '
+                    'FROM aura_card_operations WHERE card_id=? AND user_id=? '
+                    'ORDER BY updated_at DESC LIMIT 200', (card_id, uid),
+                )]
+                return web.json_response({'data': operations})
+            if action == 'aura-sbp-rate' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('sbp_buy'):
+                    raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
+                response = web.json_response(await aura_client.get_sbp_rate())
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-sbp-orders' and request.method == 'GET':
+                orders = [dict(row) for row in ledger.db.execute(
+                    'SELECT order_id,status,rub_amount,usdt_amount,fee,provider_updated_at '
+                    'FROM aura_sbp_orders WHERE user_id=? AND environment=? '
+                    'ORDER BY updated_at DESC LIMIT 200', (uid, aura_environment),
+                )]
+                return web.json_response({'data': orders})
+            if action == 'aura-deposit-address' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                active = ledger.db.execute(
+                    "SELECT enabled FROM wallet_provider_routes WHERE product='crypto_deposit' "
+                    "AND asset='USDT' AND network='TRON' AND environment=? AND provider='aura'",
+                    (aura_environment,),
+                ).fetchone()
+                if not active or not active['enabled']:
+                    raise ApiError('ROUTE_DISABLED', 'Aura TRON deposits are disabled', 503)
+                result = await aura_service.get_or_create_deposit_address(uid, client_ref)
+                return web.json_response(result)
+            if action == 'aura-deposit-fees' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('crypto_processing'):
+                    raise ApiError('crypto_processing_not_enabled', 'Aura crypto processing is not enabled', 403)
+                response = web.json_response(await aura_client.get_deposit_fees())
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
             financial = await finance_route(request,action,uid,admin,ledger,provider,money,ApiError)
@@ -837,12 +1240,16 @@ def install_wallet(app, root, owner_check):
         task=app.get('wpay_finance_task')
         if task:
             task.cancel();await asyncio.gather(task,return_exceptions=True)
+        aura_task = app.get('wpay_aura_task')
+        if aura_task:
+            aura_task.cancel();await asyncio.gather(aura_task,return_exceptions=True)
         for task in app['wpay_broadcast_tasks']:
             task.cancel()
         if app['wpay_broadcast_tasks']:
             await asyncio.gather(*app['wpay_broadcast_tasks'], return_exceptions=True)
         await provider.close()
         await exchange.close()
+        await aura_client.close()
         ledger.db.close()
 
     async def startup(_):
@@ -852,6 +1259,10 @@ def install_wallet(app, root, owner_check):
             task = asyncio.create_task(sync_telegram_users(only_missing=True))
             app['wpay_broadcast_tasks'].add(task)
             task.add_done_callback(app['wpay_broadcast_tasks'].discard)
+        if aura_enabled and aura_secret:
+            app['wpay_aura_task'] = asyncio.create_task(
+                run_aura_worker(ledger, aura_client, aura_environment)
+            )
 
     app.router.add_route('*', '/api/wallet/{action}', route)
     app.on_startup.append(startup)
