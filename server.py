@@ -1964,6 +1964,39 @@ def _wpay_audit_line(request, status, elapsed_ms):
     return " · ".join(parts)
 
 
+def _wpay_audit_response_detail(response):
+    """Extract only allowlisted operational IDs and error codes from JSON."""
+    body = getattr(response, "body", None)
+    if not isinstance(body, (bytes, bytearray)) or len(body) > 1024 * 1024:
+        return ""
+    try:
+        payload = json.loads(body)
+    except (TypeError, ValueError, UnicodeDecodeError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    parts = []
+    error = payload.get("error")
+    if isinstance(error, dict) and isinstance(error.get("name"), str):
+        parts.append("error=" + re.sub(r"[^A-Za-z0-9_.:-]", "", error["name"])[:80])
+    allowed = (
+        "request_id", "event_id", "customer_id", "card_id", "deposit_id",
+        "quote_id", "order_id", "payment_id", "withdrawal_id", "invoice_id",
+        "transfer_id", "spend_id",
+    )
+    containers = [payload]
+    if isinstance(payload.get("data"), dict):
+        containers.append(payload["data"])
+    for container in containers:
+        for key in allowed:
+            value = container.get(key)
+            if isinstance(value, (str, int)) and re.fullmatch(r"[A-Za-z0-9._:-]{1,128}", str(value)):
+                item = f"{key}={value}"
+                if item not in parts:
+                    parts.append(item)
+    return " ".join(parts)[:300]
+
+
 async def _wpay_audit_worker(app):
     token = os.environ.get("WPAY_BOT_TOKEN", "")
     chat_id = os.environ.get("WPAY_LOG_CHAT_ID", "").strip()
@@ -2148,6 +2181,10 @@ async def wpay_audit_middleware(request, handler):
         response = await handler(request)
         status = response.status
         request["wpay_audit_response"] = response
+        response_detail = _wpay_audit_response_detail(response)
+        if response_detail:
+            previous = str(request.get("wpay_audit_detail") or "")
+            request["wpay_audit_detail"] = (previous + " " + response_detail).strip()
         return response
     except web.HTTPException as exc:
         status = exc.status

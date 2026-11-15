@@ -1,6 +1,7 @@
+import json
 import unittest
 
-from server import _wpay_amount, _wpay_audit_line, _wpay_bot_view
+from server import _wpay_amount, _wpay_audit_line, _wpay_audit_response_detail, _wpay_bot_view
 
 
 class FakeRequest(dict):
@@ -57,6 +58,18 @@ class WPayRichBotTests(unittest.TestCase):
         self.assertIn("POST · aura-cards · 201 · tg:123 · 42ms · card:create", line)
         self.assertNotIn("private@example.com", line)
         self.assertNotIn("secret", line)
+
+    def test_audit_response_extracts_ids_but_not_personal_data(self):
+        class Response:
+            body = json.dumps({
+                "data": {"card_id": "card-1", "email": "private@example.com", "cvv": "123"},
+                "request_id": "request-1",
+            }).encode()
+        detail = _wpay_audit_response_detail(Response())
+        self.assertIn("card_id=card-1", detail)
+        self.assertIn("request_id=request-1", detail)
+        self.assertNotIn("private@example.com", detail)
+        self.assertNotIn("123", detail)
 
 
 if __name__ == "__main__":
