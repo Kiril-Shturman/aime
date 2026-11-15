@@ -768,6 +768,18 @@ def install_wallet(app, root, owner_check):
                         ledger, aura_client, aura_environment
                     )
                 return web.json_response(result)
+            if action == 'admin-aura-qr-payments' and request.method == 'GET':
+                return web.json_response({'data': [dict(row) for row in ledger.db.execute(
+                    'SELECT payment_id,status,amount_rub,rate,total_usdt,merchant,provider_updated_at '
+                    'FROM aura_qr_payments WHERE environment=? ORDER BY updated_at DESC LIMIT 200',
+                    (aura_environment,),
+                )]})
+            if action == 'admin-aura-withdrawals' and request.method == 'GET':
+                return web.json_response({'data': [dict(row) for row in ledger.db.execute(
+                    'SELECT withdrawal_id,status,amount,fee,recipient,transaction_hash,provider_updated_at '
+                    'FROM aura_withdrawals WHERE environment=? ORDER BY updated_at DESC LIMIT 200',
+                    (aura_environment,),
+                )]})
             if action == 'admin-provider-route' and request.method == 'POST':
                 body = await request.json()
                 allowed = {
@@ -889,6 +901,14 @@ def install_wallet(app, root, owner_check):
                     raise ApiError('ROUTE_DISABLED', 'Aura TRON deposits are disabled', 503)
                 result = await aura_service.get_or_create_deposit_address(uid, client_ref)
                 return web.json_response(result)
+            if action == 'aura-deposit-fees' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('crypto_processing'):
+                    raise ApiError('crypto_processing_not_enabled', 'Aura crypto processing is not enabled', 403)
+                response = web.json_response(await aura_client.get_deposit_fees())
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
             financial = await finance_route(request,action,uid,admin,ledger,provider,money,ApiError)

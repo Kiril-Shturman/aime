@@ -75,6 +75,7 @@ def prepare(ledger):
         card_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, customer_id TEXT NOT NULL,
         environment TEXT NOT NULL, kind TEXT, status TEXT NOT NULL,
         frozen INTEGER NOT NULL DEFAULT 0, masked_pan TEXT, delivery_status TEXT,
+        tracking TEXT,
         provider_updated_at TEXT, body TEXT NOT NULL,
         created_at REAL NOT NULL, updated_at REAL NOT NULL
       );
@@ -82,6 +83,8 @@ def prepare(ledger):
         operation_id TEXT PRIMARY KEY, card_id TEXT NOT NULL, user_id TEXT NOT NULL,
         environment TEXT NOT NULL, operation_type TEXT, status TEXT NOT NULL,
         asset TEXT, amount TEXT, fee TEXT, merchant TEXT,
+        original_amount TEXT, original_currency TEXT, refunded_amount TEXT,
+        balance_after TEXT, merchant_country TEXT, mcc TEXT, merchant_category TEXT,
         provider_updated_at TEXT, body TEXT NOT NULL,
         created_at REAL NOT NULL, updated_at REAL NOT NULL
       );
@@ -89,6 +92,18 @@ def prepare(ledger):
         order_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, customer_id TEXT NOT NULL,
         environment TEXT NOT NULL, status TEXT NOT NULL,
         rub_amount TEXT, usdt_amount TEXT, fee TEXT,
+        provider_updated_at TEXT, body TEXT NOT NULL,
+        created_at REAL NOT NULL, updated_at REAL NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS aura_qr_payments (
+        payment_id TEXT PRIMARY KEY, environment TEXT NOT NULL, status TEXT NOT NULL,
+        amount_rub TEXT, rate TEXT, total_usdt TEXT, merchant TEXT,
+        provider_updated_at TEXT, body TEXT NOT NULL,
+        created_at REAL NOT NULL, updated_at REAL NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS aura_withdrawals (
+        withdrawal_id TEXT PRIMARY KEY, environment TEXT NOT NULL, status TEXT NOT NULL,
+        amount TEXT, fee TEXT, recipient TEXT, transaction_hash TEXT,
         provider_updated_at TEXT, body TEXT NOT NULL,
         created_at REAL NOT NULL, updated_at REAL NOT NULL
       );
@@ -134,6 +149,15 @@ def prepare(ledger):
     card_columns = {row[1] for row in ledger.db.execute("PRAGMA table_info(aura_cards)")}
     if "delivery_status" not in card_columns:
         ledger.db.execute("ALTER TABLE aura_cards ADD COLUMN delivery_status TEXT")
+    if "tracking" not in card_columns:
+        ledger.db.execute("ALTER TABLE aura_cards ADD COLUMN tracking TEXT")
+    operation_columns = {row[1] for row in ledger.db.execute("PRAGMA table_info(aura_card_operations)")}
+    for name in (
+        "original_amount", "original_currency", "refunded_amount", "balance_after",
+        "merchant_country", "mcc", "merchant_category",
+    ):
+        if name not in operation_columns:
+            ledger.db.execute("ALTER TABLE aura_card_operations ADD COLUMN " + name + " TEXT")
     ledger.db.execute(
         "CREATE INDEX IF NOT EXISTS wallet_webhook_provider_pending "
         "ON wallet_webhook_inbox(provider,processed_at,next_attempt_at)"
@@ -387,6 +411,26 @@ class AuraClient:
         order_id = quote(_safe_identifier(order_id, "SBP order id"), safe="")
         return await self.request("GET", "/orders/" + order_id)
 
+    async def list_qr_payments(self, *, cursor=None, limit=100):
+        params = {"limit": min(max(int(limit), 1), 100)}
+        if cursor:
+            params["cursor"] = str(cursor)
+        return await self.request("GET", "/qr-payments", params=params)
+
+    async def get_qr_payment(self, payment_id):
+        payment_id = quote(_safe_identifier(payment_id, "QR payment id"), safe="")
+        return await self.request("GET", "/qr-payments/" + payment_id)
+
+    async def list_withdrawals(self, *, cursor=None, limit=100):
+        params = {"limit": min(max(int(limit), 1), 100)}
+        if cursor:
+            params["cursor"] = str(cursor)
+        return await self.request("GET", "/withdrawals", params=params)
+
+    async def get_withdrawal(self, withdrawal_id):
+        withdrawal_id = quote(_safe_identifier(withdrawal_id, "withdrawal id"), safe="")
+        return await self.request("GET", "/withdrawals/" + withdrawal_id)
+
     async def deposit_addresses(self, customer_id):
         return await self.request("GET", "/customers/" + quote(_safe_identifier(customer_id, "customer id"), safe="") + "/deposit-addresses")
 
@@ -397,6 +441,13 @@ class AuraClient:
         if customer_id:
             params["customer_id"] = _safe_identifier(customer_id, "customer id")
         return await self.request("GET", "/deposits", params=params)
+
+    async def get_deposit(self, deposit_id):
+        deposit_id = quote(_safe_identifier(deposit_id, "deposit id"), safe="")
+        return await self.request("GET", "/deposits/" + deposit_id)
+
+    async def get_deposit_fees(self):
+        return await self.request("GET", "/deposits-fees")
 
     async def get_balance(self):
         return await self.request("GET", "/balance")
@@ -680,21 +731,33 @@ def _store_card_event(ledger, environment, kind, data):
             "packing": "issued", "sent": "out_for_delivery",
         }.get(str(data["shipment_stage"]), str(data["shipment_stage"]))
     delivery_status = str(delivery_status)[:100] if delivery_status is not None else None
+    tracking = data.get("tracking")
+    if isinstance(tracking, dict):
+        tracking = {
+            "carrier": str(tracking.get("carrier"))[:100] if tracking.get("carrier") is not None else None,
+            "number": str(tracking.get("number"))[:200] if tracking.get("number") is not None else None,
+            "url": str(tracking.get("url"))[:2048] if tracking.get("url") is not None else None,
+        }
+    else:
+        tracking = None
     safe = _redact_card_data(data)
     stamp = time.time()
     ledger.db.execute(
         "INSERT INTO aura_cards "
         "(card_id,user_id,customer_id,environment,kind,status,frozen,masked_pan,"
-        "delivery_status,provider_updated_at,body,created_at,updated_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "delivery_status,tracking,provider_updated_at,body,created_at,updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(card_id) DO UPDATE SET kind=COALESCE(excluded.kind,aura_cards.kind),"
         "status=excluded.status,frozen=excluded.frozen,"
         "masked_pan=COALESCE(excluded.masked_pan,aura_cards.masked_pan),"
         "delivery_status=COALESCE(excluded.delivery_status,aura_cards.delivery_status),"
+        "tracking=COALESCE(excluded.tracking,aura_cards.tracking),"
         "provider_updated_at=excluded.provider_updated_at,body=excluded.body,"
         "updated_at=excluded.updated_at",
         (card_id, owner[0], customer_id, environment, kind_value, status, int(frozen),
-         masked_pan, delivery_status, incoming_updated or None,
+         masked_pan, delivery_status,
+         json.dumps(tracking, separators=(",", ":")) if tracking else None,
+         incoming_updated or None,
          json.dumps(safe, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
     )
 
@@ -729,15 +792,35 @@ def _store_card_operation(ledger, environment, data):
     operation_type = data.get("type") or data.get("operation_type")
     operation_type = str(operation_type)[:100] if operation_type is not None else None
     status = str(data.get("status") or "unknown")[:100]
+    optional_amount = lambda key: (None if data.get(key) is None else str(_signed_decimal(data[key])))
+    original_amount = optional_amount("original_amount")
+    refunded_amount = optional_amount("refunded_amount")
+    balance_after = optional_amount("balance_after")
+    original_currency = data.get("original_currency")
+    original_currency = str(original_currency).upper()[:20] if original_currency is not None else None
+    merchant_country = data.get("merchant_country")
+    merchant_country = str(merchant_country)[:100] if merchant_country is not None else None
+    mcc = data.get("mcc")
+    mcc = str(mcc)[:20] if mcc is not None else None
+    merchant_category = data.get("merchant_category")
+    merchant_category = str(merchant_category)[:200] if merchant_category is not None else None
     stamp = time.time()
     ledger.db.execute(
-        "INSERT INTO aura_card_operations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "INSERT INTO aura_card_operations "
+        "(operation_id,card_id,user_id,environment,operation_type,status,asset,amount,fee,merchant,"
+        "original_amount,original_currency,refunded_amount,balance_after,merchant_country,mcc,merchant_category,"
+        "provider_updated_at,body,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(operation_id) DO UPDATE SET operation_type=excluded.operation_type,"
         "status=excluded.status,asset=excluded.asset,amount=excluded.amount,fee=excluded.fee,"
         "merchant=excluded.merchant,provider_updated_at=excluded.provider_updated_at,"
+        "original_amount=excluded.original_amount,original_currency=excluded.original_currency,"
+        "refunded_amount=excluded.refunded_amount,balance_after=excluded.balance_after,"
+        "merchant_country=excluded.merchant_country,mcc=excluded.mcc,"
+        "merchant_category=excluded.merchant_category,"
         "body=excluded.body,updated_at=excluded.updated_at",
         (operation_id, card_id, card[0], environment, operation_type, status, asset,
-         amount, fee, merchant, incoming_updated or None,
+         amount, fee, merchant, original_amount, original_currency, refunded_amount,
+         balance_after, merchant_country, mcc, merchant_category, incoming_updated or None,
          json.dumps(_redact_card_data(data), separators=(",", ":"), ensure_ascii=False),
          stamp, stamp),
     )
@@ -792,6 +875,78 @@ def _store_sbp_order(ledger, environment, kind, data):
     )
 
 
+def _store_qr_payment(ledger, environment, kind, data):
+    payment_id = _safe_identifier(
+        data.get("payment_id") or data.get("id"), "QR payment id"
+    )
+    existing = ledger.db.execute(
+        "SELECT provider_updated_at FROM aura_qr_payments WHERE payment_id=? AND environment=?",
+        (payment_id, environment),
+    ).fetchone()
+    updated = str(data.get("updated_at") or "")
+    if existing and updated and existing[0] and updated <= existing[0]:
+        return
+    status = str(data.get("status") or kind.removeprefix("qr_payment."))[:100]
+    value = lambda key: (None if data.get(key) is None else str(_decimal(data[key], allow_zero=True)))
+    amount_rub, rate, total_usdt = value("amount_rub"), value("rate"), value("total_usdt")
+    merchant = data.get("merchant_name") or data.get("merchant")
+    merchant = str(merchant)[:300] if merchant is not None else None
+    safe = {
+        "payment_id": payment_id, "status": status, "amount_rub": amount_rub,
+        "rate": rate, "total_usdt": total_usdt, "merchant": merchant,
+        "updated_at": updated or None,
+    }
+    stamp = time.time()
+    ledger.db.execute(
+        "INSERT INTO aura_qr_payments VALUES (?,?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(payment_id) DO UPDATE SET status=excluded.status,"
+        "amount_rub=COALESCE(excluded.amount_rub,aura_qr_payments.amount_rub),"
+        "rate=COALESCE(excluded.rate,aura_qr_payments.rate),"
+        "total_usdt=COALESCE(excluded.total_usdt,aura_qr_payments.total_usdt),"
+        "merchant=COALESCE(excluded.merchant,aura_qr_payments.merchant),"
+        "provider_updated_at=excluded.provider_updated_at,body=excluded.body,updated_at=excluded.updated_at",
+        (payment_id, environment, status, amount_rub, rate, total_usdt, merchant,
+         updated or None, json.dumps(safe, separators=(",", ":")), stamp, stamp),
+    )
+
+
+def _store_withdrawal(ledger, environment, kind, data):
+    withdrawal_id = _safe_identifier(
+        data.get("withdrawal_id") or data.get("id"), "withdrawal id"
+    )
+    existing = ledger.db.execute(
+        "SELECT provider_updated_at FROM aura_withdrawals WHERE withdrawal_id=? AND environment=?",
+        (withdrawal_id, environment),
+    ).fetchone()
+    updated = str(data.get("updated_at") or "")
+    if existing and updated and existing[0] and updated <= existing[0]:
+        return
+    status = str(data.get("status") or kind.removeprefix("withdraw."))[:100]
+    value = lambda key: (None if data.get(key) is None else str(_decimal(data[key], allow_zero=True)))
+    amount, fee = value("amount"), value("fee")
+    recipient = data.get("recipient") or data.get("address")
+    recipient = str(recipient)[:200] if recipient is not None else None
+    transaction_hash = data.get("transaction_hash") or data.get("tx_hash")
+    transaction_hash = str(transaction_hash)[:200] if transaction_hash is not None else None
+    safe = {
+        "withdrawal_id": withdrawal_id, "status": status, "amount": amount,
+        "fee": fee, "recipient": recipient, "transaction_hash": transaction_hash,
+        "updated_at": updated or None,
+    }
+    stamp = time.time()
+    ledger.db.execute(
+        "INSERT INTO aura_withdrawals VALUES (?,?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(withdrawal_id) DO UPDATE SET status=excluded.status,"
+        "amount=COALESCE(excluded.amount,aura_withdrawals.amount),"
+        "fee=COALESCE(excluded.fee,aura_withdrawals.fee),"
+        "recipient=COALESCE(excluded.recipient,aura_withdrawals.recipient),"
+        "transaction_hash=COALESCE(excluded.transaction_hash,aura_withdrawals.transaction_hash),"
+        "provider_updated_at=excluded.provider_updated_at,body=excluded.body,updated_at=excluded.updated_at",
+        (withdrawal_id, environment, status, amount, fee, recipient, transaction_hash,
+         updated or None, json.dumps(safe, separators=(",", ":")), stamp, stamp),
+    )
+
+
 def process_inbox(ledger, environment, limit=20):
     rows = ledger.db.execute(
         "SELECT * FROM wallet_webhook_inbox WHERE provider='aura' AND signature_valid=1 "
@@ -810,9 +965,13 @@ def process_inbox(ledger, environment, limit=20):
             if current[0] is not None:
                 ledger.commit()
                 continue
-            if kind in {"order.completed", "order.failed", "order.expired", "order.cancelled"}:
+            if kind in {"withdraw.sent", "withdraw.confirmed", "withdraw.failed"}:
+                _store_withdrawal(ledger, environment, kind, data)
+            elif kind in {"qr_payment.completed", "qr_payment.failed", "qr_payment.refunded"}:
+                _store_qr_payment(ledger, environment, kind, data)
+            elif kind in {"order.completed", "order.failed", "order.expired", "order.cancelled"}:
                 _store_sbp_order(ledger, environment, kind, data)
-            elif kind in {"card.opened", "card.failed", "card.cancelled", "card.status_changed"}:
+            elif kind in {"card.opened", "card.failed", "card.cancelled", "card.status_changed", "card.delivery_updated"}:
                 _store_card_event(ledger, environment, kind, data)
             elif kind == "card.operation":
                 _store_card_operation(ledger, environment, data)

@@ -24,6 +24,8 @@ class State:
         self.cards = {}
         self.card_operations = []
         self.orders = {}
+        self.qr_payments = {}
+        self.withdrawals = {}
         self.products = {"crypto_processing": True, "cards": True,
                          "sbp_buy": True, "qr_pay": True}
         self.addresses = {}
@@ -155,6 +157,16 @@ def make_app():
                  if not customer_id or item["customer_id"] == customer_id]
         return web.json_response({"data": items[:int(request.query.get("limit", "100"))], "next_cursor": None})
 
+    async def deposit(request):
+        deposit_id = request.match_info["deposit_id"]
+        item = next((item for item in state.deposits if item["id"] == deposit_id), None)
+        if item is None:
+            return envelope("deposit_not_found", "Deposit not found", 404)
+        return web.json_response(item)
+
+    async def deposit_fees(_):
+        return web.json_response({"fee_type": "percent", "fee": "1", "fee_min": "0.5"})
+
     async def balance(_):
         return web.json_response({
             "platform_balance": str(state.balance), "cards_balance": "0",
@@ -267,6 +279,22 @@ def make_app():
         }
         return web.json_response({"order": item, "webhook": event})
 
+    async def list_qr_payments(request):
+        items = list(reversed(list(state.qr_payments.values())))
+        return web.json_response({"data": items[:int(request.query.get("limit", "100"))], "next_cursor": None})
+
+    async def qr_payment(request):
+        item = state.qr_payments.get(request.match_info["payment_id"])
+        return web.json_response(item) if item else envelope("not_found", "Payment not found", 404)
+
+    async def list_withdrawals(request):
+        items = list(reversed(list(state.withdrawals.values())))
+        return web.json_response({"data": items[:int(request.query.get("limit", "100"))], "next_cursor": None})
+
+    async def withdrawal(request):
+        item = state.withdrawals.get(request.match_info["withdrawal_id"])
+        return web.json_response(item) if item else envelope("not_found", "Withdrawal not found", 404)
+
     async def create_deposit(request):
         body = await request.json()
         customer_id = str(body.get("customer_id") or "")
@@ -309,6 +337,8 @@ def make_app():
     app.router.add_post("/v1/partner/customers/{customer_id}/kyc", start_kyc)
     app.router.add_get("/v1/partner/customers/{customer_id}/deposit-addresses", addresses)
     app.router.add_get("/v1/partner/deposits", deposits)
+    app.router.add_get("/v1/partner/deposits-fees", deposit_fees)
+    app.router.add_get("/v1/partner/deposits/{deposit_id}", deposit)
     app.router.add_get("/v1/partner/balance", balance)
     app.router.add_get("/v1/partner/cards-fees", card_fees)
     app.router.add_get("/v1/partner/cards", cards)
@@ -318,6 +348,10 @@ def make_app():
     app.router.add_get("/v1/partner/rate", sbp_rate)
     app.router.add_get("/v1/partner/orders", orders)
     app.router.add_get("/v1/partner/orders/{order_id}", order)
+    app.router.add_get("/v1/partner/qr-payments", list_qr_payments)
+    app.router.add_get("/v1/partner/qr-payments/{payment_id}", qr_payment)
+    app.router.add_get("/v1/partner/withdrawals", list_withdrawals)
+    app.router.add_get("/v1/partner/withdrawals/{withdrawal_id}", withdrawal)
     app.router.add_post("/mock/deposits", create_deposit)
     app.router.add_post("/mock/kyc", set_kyc)
     app.router.add_post("/mock/cards", create_card)

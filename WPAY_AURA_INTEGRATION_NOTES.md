@@ -203,9 +203,10 @@ ordinary support messages.
   today's SBP integration uses gRPC `aura.api.SbpBuyService` and no current REST
   route creates an order. Treat these REST routes as not production-ready until
   Aura confirms activation for our key/version.
-- `POST /qr-payments` and `GET /qr-payments/{payment_id}` are referenced by the
-  idempotency/event documentation for outbound SBP QR payment, but the complete
-  route contract is still needed.
+- `POST /qr-payments/quotes`, `POST /qr-payments`, `GET /qr-payments` and
+  `GET /qr-payments/{payment_id}` implement outbound merchant-SBP-QR payment.
+  Since 3.6 the authoritative cost fields are `amount_rub`, final `rate`, and
+  `total_usdt`; older provider-rate/fee breakdown fields were removed.
 - `GET /customers/{customer_id}/deposit-addresses`,
   `POST /customers/{customer_id}/deposit-addresses`,
   `GET /deposit-addresses/{address_id}` — default/additional persistent TRON
@@ -216,9 +217,10 @@ ordinary support messages.
   `GET /balance/history/{operation_id}` — platform/card totals and movement
   history.
 - `GET /withdrawals`, `POST /withdrawals`, `GET /withdrawals/{withdrawal_id}`
-  appear in the supplied generated route list, but conflict with prose saying
-  API withdrawal was removed in v3.5.0. Treat API withdrawal as unavailable
-  until Aura resolves this contradiction and the live OpenAPI is inspected.
+  are the current TRC-20 withdrawal surface added in 3.7. The 3.5 removal was
+  for the older `/cards-platform/withdraw`, not this replacement route. Current
+  fee is documented as fixed 2 USDT above the amount; POST is idempotent and
+  production requires an IP allowlist.
 
 ## Known asynchronous states/events
 
@@ -351,11 +353,12 @@ ordinary support messages.
 - A network-deposit history amount can change while confirming; reconcile only
   confirmed entries.
 - `GET /balance/history/{operation_id}` supports targeted outcome polling.
-- The prose says production withdrawals are initiated manually in the partner
-  portal and the API route was removed in v3.5.0. The same supplied v3.17.0
-  generated route list advertises `POST /withdrawals`. This is a blocking
-  documentation inconsistency: do not design or expose automated withdrawals
-  until the actual OpenAPI and Aura support identify the authoritative contract.
+- Current `POST /withdrawals` was added in 3.7 after the legacy
+  `/cards-platform/withdraw` removal in 3.5. It sends platform USDT to a TRON
+  recipient, charges a fixed 2 USDT above the amount, requires idempotency, and
+  reports `sent` then `confirmed` or `failed`. WPay may implement the money path
+  only after capturing the exact current request/response schema and must keep
+  production IP allowlisting mandatory.
 
 ## SBP REST availability warning
 
@@ -577,8 +580,9 @@ GoSwap client.
 - Provider IDs are unique only inside their provider namespace.
 - GoSwap remains responsible for its historical operations and for capabilities
   Aura does not cover (other assets/networks, invoices and internal transfers).
-- Aura initially handles customers/KYC, cards, SBP on-ramp and TRON deposits in
-  testnet. Add API withdrawals only after Aura resolves the contract conflict.
+- Aura handles customers/KYC, cards, SBP on-ramp, merchant QR pay, TRON deposits
+  and current TRON withdrawals. Each remains independently capability-gated;
+  production withdrawals additionally require an IP allowlist.
 - Admin routing is per product/capability, not one global provider switch.
 - Provider balances and reconciliation are independent. User liabilities may
   never be considered covered by combining unrelated assets or inaccessible
@@ -718,10 +722,15 @@ Implemented:
   completed order is deliberately not credited to the WPay ledger until the
   authoritative REST contract identifies the exact net-USDT field and Aura
   confirms that REST order creation is available for the partner key.
+- Physical-card delivery updates and sanitized tracking metadata; expanded
+  stable card-operation state for original/refunded amounts, balance after,
+  country/MCC/category; deposit-fee reads including `fee_min`; and restart-safe
+  read/event foundations for merchant QR payments and current TRON withdrawals.
+  QR payloads and removed pre-3.6 fee-breakdown fields are not persisted.
 
 Verification on this branch:
 
-- 95 backend unit/integration tests passed, including duplicate delivery,
+- 97 backend unit/integration tests passed, including duplicate delivery,
   pending-to-confirmed transition, invalid-signature recovery, event-ID reuse,
   environment guards and the complete mock deposit route.
 - Frontend tests passed (3/3), production build passed and lint completed with
@@ -730,7 +739,7 @@ Verification on this branch:
 
 Still not implemented: KYC identity import; card issue/recharge/cancel/freeze/
 unfreeze/PIN request contracts; ephemeral credential/OTP delivery to the owner;
-SBP purchase; outgoing QR payment; and withdrawals. Identity import remains
+SBP purchase; outgoing QR payment mutation; and withdrawal mutation. Identity import remains
 intentionally blocked until the exact passport request schema and retention
 requirements are available; hosted KYC is the safe default. Card mutation and
 sensitive-response routes remain blocked until their exact JSON schemas are

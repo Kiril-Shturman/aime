@@ -207,6 +207,22 @@ class AuraUnitTests(unittest.TestCase):
         self.assertIn(b"sensitive_payload_sha256", bytes(inbox))
         self.assertEqual(process_inbox(self.ledger, "test"), 1)
 
+        delivery = {
+            "event": "card.delivery_updated", "event_id": "evt_delivery",
+            "occurred_at": "2026-01-01T00:07:00Z", "partner_id": MOCK_PARTNER,
+            "data": {"card_id": "card_one", "customer_id": self.customer,
+                     "delivery_status": "out_for_delivery",
+                     "tracking": {"carrier": "DHL", "number": "TRACK1",
+                                  "url": "https://tracking.invalid/TRACK1"},
+                     "updated_at": "2026-01-01T00:07:00Z"},
+        }
+        raw, signature = signed(delivery)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        card = self.ledger.db.execute("SELECT * FROM aura_cards").fetchone()
+        self.assertEqual(card["delivery_status"], "out_for_delivery")
+        self.assertEqual(json.loads(card["tracking"])["number"], "TRACK1")
+
     def test_sbp_terminal_webhook_records_without_crediting_unknown_contract(self):
         event = {
             "event": "order.completed", "event_id": "evt_order",
@@ -228,6 +244,31 @@ class AuraUnitTests(unittest.TestCase):
         self.assertEqual(order["usdt_amount"], "100")
         self.assertNotIn("qr_payload", order["body"])
         self.assertEqual(str(self.ledger.balance(self.uid, "USDT")[0]), "0")
+
+    def test_qr_and_withdrawal_events_are_restart_safe(self):
+        events = [
+            {"event": "qr_payment.completed", "event_id": "evt_qr",
+             "occurred_at": "2026-01-01T00:08:00Z", "partner_id": MOCK_PARTNER,
+             "data": {"id": "qr_one", "status": "completed", "amount_rub": "925",
+                      "rate": "92.50", "total_usdt": "10", "merchant_name": "Shop",
+                      "updated_at": "2026-01-01T00:08:00Z", "qr": "do-not-store"}},
+            {"event": "withdraw.confirmed", "event_id": "evt_withdraw",
+             "occurred_at": "2026-01-01T00:09:00Z", "partner_id": MOCK_PARTNER,
+             "data": {"id": "wd_one", "status": "confirmed", "amount": "20",
+                      "fee": "2", "recipient": "TRecipient", "tx_hash": "tx_one",
+                      "updated_at": "2026-01-01T00:09:00Z"}},
+        ]
+        for event in events:
+            raw, signature = signed(event)
+            store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 2)
+        self.assertEqual(process_inbox(self.ledger, "test"), 0)
+        qr = self.ledger.db.execute("SELECT * FROM aura_qr_payments").fetchone()
+        withdrawal = self.ledger.db.execute("SELECT * FROM aura_withdrawals").fetchone()
+        self.assertEqual(qr["total_usdt"], "10")
+        self.assertNotIn("do-not-store", qr["body"])
+        self.assertEqual(withdrawal["fee"], "2")
+        self.assertEqual(withdrawal["status"], "confirmed")
 
 
 class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
@@ -261,6 +302,8 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.client.remaining, 99)
         report = await reconcile(self.ledger, self.client, "test")
         self.assertEqual(report["state"], "ok")
+        fees = await self.client.get_deposit_fees()
+        self.assertEqual(fees["fee_min"], "0.5")
 
     async def test_customer_and_widget_kyc_contract(self):
         uid = "tg:778"
@@ -321,6 +364,18 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         order = (await created.json())["order"]
         self.assertEqual((await self.client.list_sbp_orders())["data"][0]["id"], order["id"])
         self.assertEqual((await self.client.get_sbp_order(order["id"]))["status"], "completed")
+
+    async def test_qr_and_withdrawal_read_contracts(self):
+        self.mock.app["state"].qr_payments["qr_one"] = {
+            "id": "qr_one", "status": "completed", "total_usdt": "10"
+        }
+        self.mock.app["state"].withdrawals["wd_one"] = {
+            "id": "wd_one", "status": "confirmed", "amount": "20", "fee": "2"
+        }
+        self.assertEqual((await self.client.list_qr_payments())["data"][0]["id"], "qr_one")
+        self.assertEqual((await self.client.get_qr_payment("qr_one"))["status"], "completed")
+        self.assertEqual((await self.client.list_withdrawals())["data"][0]["id"], "wd_one")
+        self.assertEqual((await self.client.get_withdrawal("wd_one"))["status"], "confirmed")
 
     async def test_product_capability_is_authoritative(self):
         self.assertTrue(await self.client.product_enabled("sbp_buy"))
