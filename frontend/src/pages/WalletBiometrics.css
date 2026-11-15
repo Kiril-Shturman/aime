@@ -1,0 +1,320 @@
+.wpay-biometric-content {
+  height: 100%;
+  width: 100%;
+}
+.wpay-face-id-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(155deg, #69b7ff, #007aff 65%, #0665d4);
+  color: white;
+  box-shadow: inset 0 1px 0 #ffffff59;
+}
+.wpay-face-id-icon svg {
+  width: 29px;
+  height: 29px;
+}
+.wpay-biometric-row .item-inner {
+  padding-right: 18px !important;
+}
+.wpay-biometric-row .toggle.disabled {
+  opacity: 0.4;
+}
+.wpay-lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: max(28px, env(safe-area-inset-top)) 28px
+    max(28px, env(safe-area-inset-bottom));
+  background: #efeff4;
+  color: #111;
+  text-align: center;
+}
+.dark .wpay-lock-screen {
+  background: #000;
+  color: #fff;
+}
+.wpay-lock-mark {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  margin-bottom: 14px;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #66b3ff, #007aff);
+  color: #fff;
+  box-shadow: inset 0 1px 0 #ffffff4d;
+}
+.wpay-lock-mark svg {
+  width: 58px;
+  height: 58px;
+}
+.wpay-lock-screen h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+}
+.wpay-lock-screen > p {
+  max-width: 320px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #747986;
+}
+.dark .wpay-lock-screen > p {
+  color: #a2a7b3;
+}
+.wpay-lock-screen > button {
+  max-width: 340px;
+}
+.wpay-lock-screen > p.wpay-lock-error {
+  color: #c13434;
+}
+.dark .wpay-lock-screen > p.wpay-lock-error {
+  color: #ff8b86;
+}
+.wpay-lock-settings {
+  min-height: 44px;
+  padding: 8px 16px;
+  color: #007aff;
+  font-size: 15px;
+}
+.dark .wpay-lock-settings {
+  color: #6eacff;
+}
+.wpay-biometric-obscured .wpay-biometric-content,
+.wpay-biometric-obscured .wpay-viewport,
+.wpay-biometric-obscured .wpay-profile-popup,
+.wpay-biometric-obscured .wpay-exchange-sheet,
+.wpay-biometric-obscured .wpay-create-address-sheet,
+.wpay-biometric-obscured .dialog {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.wpay-biometric-row .item-inner {
+  position: relative;
+}
+.wpay-biometric-row .item-after {
+  position: absolute;
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+}
+.wpay-biometric-row .item-title,
+.wpay-biometric-row .item-subtitle {
+  padding-right: 66px;
+}
+
+/* Aurora stays behind the private lock screen and never receives pointer input. */
+.wpay-lock-screen {
+  isolation: isolate;
+  overflow: hidden;
+  background: #f3f5fa;
+}
+.dark .wpay-lock-screen {
+  background: #090c14;
+}
+.wpay-lock-aurora {
+  position: absolute;
+  z-index: -2;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  background: radial-gradient(ellipse at 55% 15%, #657fbc26, transparent 65%);
+}
+.dark .wpay-lock-aurora {
+  opacity: 0.85;
+}
+.wpay-lock-screen::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    #f3f5fa99 40%,
+    #f3f5fae8 100%
+  );
+}
+.dark .wpay-lock-screen::after {
+  background: linear-gradient(180deg, #090c141a, #090c1480 40%, #090c14e6 100%);
+}
+.wpay-lock-wordmark {
+  position: absolute;
+  top: max(110px, calc(var(--tg-content-safe-area-inset-top, 0px) + 48px));
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  font-weight: 650;
+  color: #65728b;
+}
+.dark .wpay-lock-wordmark {
+  color: #a4adc3;
+}
+.wpay-lock-mark {
+  width: 76px;
+  height: 76px;
+  border-radius: 25px;
+  background: linear-gradient(145deg, #ffffffb3, #ffffff33);
+  color: #3c5b93;
+  border: 1px solid #ffffffb3;
+  box-shadow:
+    inset 0 1px 0 #fff9,
+    0 12px 44px #1838680d;
+  backdrop-filter: blur(18px);
+}
+.dark .wpay-lock-mark {
+  background: linear-gradient(145deg, #ffffff12, #ffffff04);
+  border-color: #ffffff20;
+  color: #b4c7ef;
+  box-shadow:
+    inset 0 1px 0 #ffffff14,
+    0 12px 44px #0002;
+}
+.wpay-lock-mark svg {
+  width: 42px;
+  height: 42px;
+  stroke-width: 1.3;
+}
+.wpay-lock-screen h1 {
+  font-size: clamp(25px, 6vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.8px;
+}
+.wpay-lock-screen > p {
+  font-size: 14px;
+}
+.wpay-lock-settings {
+  margin-top: 4px;
+  font-size: 14px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpay-lock-aurora canvas {
+    display: none;
+  }
+}
+
+.wpay-lock-screen {
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0 24px;
+}
+.wpay-lock-badge {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+.wpay-lock-badge > .relative {
+  position: absolute;
+  inset: 0;
+}
+.wpay-lock-badge:has(canvas) .wpay-lock-badge-fallback {
+  visibility: hidden;
+}
+.wpay-lock-badge-fallback {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+.wpay-lock-badge-fallback img {
+  height: 62%;
+  width: auto;
+  border-radius: 18px;
+  box-shadow: 0 20px 50px #0003;
+}
+.wpay-lock-badge-strap {
+  height: 22%;
+  width: 12px;
+  background: #253657;
+}
+.wpay-lock-copy {
+  position: absolute;
+  top: 63%;
+  left: 24px;
+  right: 24px;
+  text-align: center;
+}
+.wpay-lock-copy > p {
+  margin: 12px auto 0;
+  max-width: 340px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #747986;
+}
+.dark .wpay-lock-copy > p {
+  color: #a2a7b3;
+}
+.wpay-lock-copy > p.wpay-lock-error {
+  margin-top: 10px;
+  color: #c13434;
+  font-size: 13px;
+}
+.dark .wpay-lock-copy > p.wpay-lock-error {
+  color: #ff8b86;
+}
+.wpay-lock-actions {
+  position: absolute;
+  bottom: calc(
+    max(
+        env(safe-area-inset-bottom, 0px),
+        calc(var(--tg-safe-area-inset-bottom, 0px) + var(--tg-content-safe-area-inset-bottom, 0px))
+      ) +
+      16px
+  );
+  left: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.wpay-lock-actions > button {
+  width: 100%;
+  max-width: 430px;
+}
+.wpay-lock-actions .wpay-lock-settings {
+  width: auto;
+  margin: 0;
+  min-height: 36px;
+}
+@media (max-height: 650px) {
+  .wpay-lock-badge {
+    top: 0;
+    height: 100%;
+  }
+  .wpay-lock-copy {
+    top: 53%;
+  }
+  .wpay-lock-screen h1 {
+    font-size: 23px;
+  }
+  .wpay-lock-copy > p {
+    margin-top: 7px;
+  }
+}
+.wpay-lock-actions .wpay-lock-settings {
+  order: -1;
+}
+
+.wpay-unlock-label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.wpay-unlock-label > svg { width: 22px; height: 22px; flex-shrink: 0; }
+
+.wpay-lock-copy, .wpay-lock-actions { z-index: 1; }
+.wpay-lock-badge-fallback { justify-content: flex-start; }
+.wpay-lock-badge-fallback img { height: 40%; }
+.wpay-lock-badge-strap { height: 14%; }

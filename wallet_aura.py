@@ -9,13 +9,14 @@ import hashlib
 import hmac
 import json
 import re
+import socket
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import quote, urlsplit
 
-from aiohttp import ClientSession, ClientTimeout, web
+from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
 
 
 TEST_BASE_URL = "https://testnet-api.aurawallet.co/v1/partner"
@@ -1008,7 +1009,7 @@ class AuraClient:
             raise self.error_cls("aura_not_configured", "Aura is not configured", 503)
         await self._throttle()
         if self.session is None:
-            self.session = ClientSession(timeout=ClientTimeout(total=20))
+            self.session = ClientSession(timeout=ClientTimeout(total=20), connector=TCPConnector(family=socket.AF_INET))
         headers = {"X-API-Key": self.api_key, "Accept": "application/json"}
         if body is not None:
             headers["Content-Type"] = "application/json"
@@ -1051,7 +1052,7 @@ class AuraClient:
             }}
         await self._throttle()
         if self.session is None:
-            self.session = ClientSession(timeout=ClientTimeout(total=20))
+            self.session = ClientSession(timeout=ClientTimeout(total=20), connector=TCPConnector(family=socket.AF_INET))
         headers = {'X-API-Key': self.api_key, 'Accept': 'application/json'}
         if body is not None:
             headers['Content-Type'] = 'application/json'
@@ -1667,6 +1668,10 @@ class AuraService:
     async def ensure_customer(self, uid, client_ref, email=None, phone=None):
         row = self.ledger.db.execute("SELECT * FROM aura_customers WHERE user_id=?", (uid,)).fetchone()
         customer_id = row["customer_id"] if row else client_ref
+        if row and row["environment"] != self.environment:
+            raise ValueError("Aura customer environment mismatch")
+        if row and email is None and phone is None:
+            return customer_id
         result = await self.client.upsert_customer(customer_id, email=email, phone=phone)
         provider_id = str(result.get("id") or result.get("customer_id") or customer_id)
         if provider_id != customer_id:
@@ -1675,8 +1680,8 @@ class AuraService:
         digest = lambda value: hashlib.sha256(str(value).encode()).hexdigest() if value else None
         self.ledger.db.execute(
             "INSERT INTO aura_customers VALUES (?,?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(user_id) DO UPDATE SET state=excluded.state,email_hash=excluded.email_hash,"
-            "phone_hash=excluded.phone_hash,provider_updated_at=excluded.provider_updated_at,updated_at=excluded.updated_at",
+            "ON CONFLICT(user_id) DO UPDATE SET state=excluded.state,email_hash=COALESCE(excluded.email_hash,aura_customers.email_hash),"
+            "phone_hash=COALESCE(excluded.phone_hash,aura_customers.phone_hash),provider_updated_at=excluded.provider_updated_at,updated_at=excluded.updated_at",
             (uid, customer_id, self.environment, str(result.get("status") or "registered"),
              digest(email), digest(phone), result.get("updated_at"), stamp, stamp),
         )
@@ -1730,7 +1735,10 @@ class AuraService:
         }
 
     async def get_kyc(self, uid, client_ref):
-        customer_id = await self.ensure_customer(uid, client_ref)
+        row = self.ledger.db.execute("SELECT customer_id FROM aura_customers WHERE user_id=? AND environment=?", (uid, self.environment)).fetchone()
+        if not row:
+            return {"status": "not_started", "verified": False, "terminal": False, "reason": None}
+        customer_id = row["customer_id"]
         return self._store_kyc(uid, customer_id, await self.client.get_kyc(customer_id))
 
     async def start_kyc(self, uid, client_ref, *, email=None, phone=None):

@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import socket
 import tempfile
 import time
 import unittest
@@ -844,6 +845,25 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             ).fetchone()[0], 1,
         )
         self.assertEqual((await reconcile(self.ledger, self.client, "test"))["state"], "ok")
+
+    async def test_profile_kyc_read_does_not_register_or_clear_saved_contacts(self):
+        uid = "tg:profile-contract"
+        ref = self.ledger.account(uid)
+        state = await self.service.get_kyc(uid, ref)
+        self.assertEqual(state["status"], "not_started")
+        self.assertEqual(self.ledger.db.execute("SELECT count(*) FROM aura_customers WHERE user_id=?", (uid,)).fetchone()[0], 0)
+        await self.service.ensure_customer(uid, ref, email="hello@example.com", phone="+79991234567")
+        before = tuple(self.ledger.db.execute("SELECT email_hash,phone_hash FROM aura_customers WHERE user_id=?", (uid,)).fetchone())
+        await self.service.get_kyc(uid, ref)
+        after = tuple(self.ledger.db.execute("SELECT email_hash,phone_hash FROM aura_customers WHERE user_id=?", (uid,)).fetchone())
+        self.assertEqual(before, after)
+        self.assertTrue(all(before))
+
+
+    async def test_aura_transport_uses_allowlisted_ipv4(self):
+        await self.client.get_me()
+        self.assertEqual(self.client.session.connector.family, socket.AF_INET)
+
 
     async def test_customer_input_validation(self):
         with self.assertRaises(ValueError):

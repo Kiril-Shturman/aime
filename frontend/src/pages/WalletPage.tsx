@@ -1,3 +1,5 @@
+import { useAuraProfile } from "../wallet/useAuraProfile";
+import { WalletBiometricGate, WalletBiometricRow } from "./WalletBiometrics";
 import { resolveDeposit } from "../wallet/deposit";
 import WalletAssetAvatar from "./WalletAssetAvatar";
 import { type PointerEvent as ReactPointerEvent } from "react";
@@ -97,6 +99,7 @@ import Eye from "framework7-icons/react/esm/Eye.js";
 import EyeSlash from "framework7-icons/react/esm/EyeSlash.js";
 import GearAlt from "framework7-icons/react/esm/GearAlt.js";
 import Globe from "framework7-icons/react/esm/Globe.js";
+import CheckmarkShieldFill from "framework7-icons/react/esm/CheckmarkShieldFill.js";
 import LockShieldFill from "framework7-icons/react/esm/LockShieldFill.js";
 import LogoApple from "framework7-icons/react/esm/LogoApple.js";
 import LogoGoogle from "framework7-icons/react/esm/LogoGoogle.js";
@@ -329,9 +332,11 @@ export default function WalletPage() {
       }
     >
       <div className="view wpay-main-view">
-        <WalletLiveProvider>
-          <WalletScreen />
-        </WalletLiveProvider>
+        <WalletBiometricGate>
+          <WalletLiveProvider>
+            <WalletScreen />
+          </WalletLiveProvider>
+        </WalletBiometricGate>
       </div>
     </F7App>
   );
@@ -2647,39 +2652,46 @@ function CardPushView({
 
 function ProfileListItem(props: ComponentProps<typeof F7ListItem>) {
   const title = String(props.title ?? "");
+  const verification = /Верификац/i.test(title);
   const security = /защит|парол|устройств|доступ|Безопасность/.test(title);
   const notification = /Уведомления|Платежи|Пополнения|курсов|Новости/.test(
     title,
   );
   const personal = /Имя|данные|проверки|Документы/.test(title);
-  const Icon = /Реферальная/.test(title)
-    ? PersonCropCircleFill
-    : security
-      ? LockShieldFill
-      : notification
-        ? BellFill
-        : personal
-          ? PersonCropCircleFill
-          : /валюта|RUB|USD|EUR/.test(title)
-            ? Globe
-            : /провайдер/.test(title)
-              ? BuildingColumnsFill
-              : QuestionCircleFill;
-  const color = /Реферальная/.test(title)
-    ? "#FF9500"
-    : security
-      ? "#30C759"
-      : notification
-        ? "#FF3B30"
-        : personal
-          ? "#5856D6"
-          : /валюта|RUB|USD|EUR/.test(title)
-            ? "#8E8E93"
-            : /вопрос/.test(title)
-              ? "#32ADE6"
-              : /поддерж|Чат|проблем/.test(title)
-                ? "#FF9500"
-                : "#AF52DE";
+  const Icon = verification
+    ? CheckmarkShieldFill
+    : /кошельк/i.test(title)
+      ? WalletFill
+      : /Реферальная/.test(title)
+        ? PersonCropCircleFill
+        : security
+          ? LockShieldFill
+          : notification
+            ? BellFill
+            : personal
+              ? PersonCropCircleFill
+              : /валюта|RUB|USD|EUR/.test(title)
+                ? Globe
+                : /провайдер/.test(title)
+                  ? BuildingColumnsFill
+                  : QuestionCircleFill;
+  const color = verification
+    ? "#30C759"
+    : /Реферальная/.test(title)
+      ? "#FF9500"
+      : security
+        ? "#30C759"
+        : notification
+          ? "#FF3B30"
+          : personal
+            ? "#5856D6"
+            : /валюта|RUB|USD|EUR/.test(title)
+              ? "#8E8E93"
+              : /вопрос/.test(title)
+                ? "#32ADE6"
+                : /поддерж|Чат|проблем/.test(title)
+                  ? "#FF9500"
+                  : "#AF52DE";
   return (
     <F7ListItem
       {...props}
@@ -2756,15 +2768,16 @@ function ProfileSection({
           <ProfileListItem
             link
             title="Личные данные"
-            subtitle="Имя и документы"
+            subtitle="Имя и контакты"
             onClick={() => setProfilePage("personal")}
           />
           <ProfileListItem
             link
-            title="Безопасность"
-            subtitle="Код доступа и устройства"
-            onClick={() => setProfilePage("security")}
+            title="Верификация"
+            subtitle="Подтверждение личности"
+            onClick={() => setProfilePage("verification")}
           />
+          <WalletBiometricRow showNotice={showNotice} />
           <ProfileListItem
             link
             title="Уведомления"
@@ -2851,6 +2864,7 @@ function ProfileSection({
 
 const profilePageTitles = {
   personal: "Личные данные",
+  verification: "Верификация",
   security: "Безопасность",
   notifications: "Уведомления",
   currency: "Основная валюта",
@@ -2897,12 +2911,12 @@ function ProfileSettingsPushView({
       }
     },
   );
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
   const [nameSaved, setNameSaved] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [displayPage, setDisplayPage] =
     useState<keyof typeof profilePageTitles>("personal");
+  const aura = useAuraProfile(page ? displayPage : null);
+  const { phone, email, setPhone, setEmail } = aura;
   useEffect(() => {
     if (page) setDisplayPage(page);
     else setChatOpen(false);
@@ -3089,6 +3103,7 @@ function ProfileSettingsPushView({
                 <F7ListInput
                   label="Номер телефона"
                   inputId="profile-phone"
+                  disabled={aura.loading || aura.busy}
                   type="tel"
                   name="tel"
                   autocomplete="tel"
@@ -3103,6 +3118,7 @@ function ProfileSettingsPushView({
                 <F7ListInput
                   label="Электронная почта"
                   inputId="profile-email"
+                  disabled={aura.loading || aura.busy}
                   type="email"
                   name="email"
                   autocomplete="email"
@@ -3125,22 +3141,21 @@ function ProfileSettingsPushView({
                       : "Имя пользователя не указано"
                   }
                 />
-                <F7ListInput
-                  label="KYC · Проверка личности"
-                  inputId="profile-verification"
-                  type="text"
-                  readonly
-                  value="Не пройдена"
-                />
               </F7List>
               <div className="px-4">
                 <Button
                   data-wpay-primary=""
                   rounded
                   large
-                  disabled={!firstName.trim()}
+                  disabled={
+                    !firstName.trim() ||
+                    aura.loading ||
+                    aura.busy ||
+                    !aura.available
+                  }
                   className="!m-0 !w-full !rounded-[22px]"
-                  onClick={() => {
+                  onClick={async () => {
+                    if (!(await aura.save())) return;
                     onSaveName(
                       [firstName.trim(), lastName.trim()]
                         .filter(Boolean)
@@ -3149,18 +3164,111 @@ function ProfileSettingsPushView({
                     setNameSaved(true);
                   }}
                 >
-                  Сохранить
+                  {aura.busy ? "Сохраняем…" : "Сохранить"}
                 </Button>
+                {aura.error && (
+                  <p
+                    role="alert"
+                    className="mt-3 text-center text-[13px] text-red-600 dark:text-red-400"
+                  >
+                    {aura.error}
+                  </p>
+                )}
                 <p
                   role="status"
                   className="mt-3 px-2 text-center text-[13px] leading-5 text-black/45 dark:text-white/45"
                 >
                   {nameSaved
-                    ? "Данные обновлены в текущей сессии."
-                    : "Изменения сохраняются только в текущей сессии WPay. Профиль Telegram не изменится."}
+                    ? "Телефон и почта сохранены."
+                    : aura.loading
+                      ? "Загружаем профиль…"
+                      : "Телефон и почта сохраняются в сервисе. Имя меняется только в этой сессии WPay; профиль Telegram не изменится."}
                 </p>
               </div>
             </>
+          )}
+
+          {displayPage === "verification" && (
+            <Card
+              className="!mx-4 !rounded-[28px] text-center"
+              contentWrapPadding="p-6"
+            >
+              <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] bg-gradient-to-b from-green-400 to-green-600 text-white dark:from-green-400 dark:to-green-700">
+                <CheckmarkShieldFill className="text-[38px]" />
+              </span>
+              <h2 className="mt-5 text-[23px] font-semibold text-black dark:text-white">
+                {aura.kyc?.verified
+                  ? "Личность подтверждена"
+                  : "Подтверждение личности"}
+              </h2>
+              <p
+                role="status"
+                className="mt-3 text-[15px] leading-6 text-black/50 dark:text-white/50"
+              >
+                {aura.loading
+                  ? "Проверяем статус…"
+                  : aura.kyc?.verified
+                    ? "Проверка успешно пройдена."
+                    : aura.kyc?.status === "pending" ||
+                        aura.kyc?.status === "in_review"
+                      ? "Документы на проверке. Статус обновится после завершения."
+                      : aura.kyc?.status === "rejected"
+                        ? "Проверка не пройдена. Обратитесь в поддержку, если нужна помощь."
+                        : "Сохраните телефон и почту в личных данных, затем подтвердите документы в защищённой форме."}
+              </p>
+              {aura.error && (
+                <p
+                  role="alert"
+                  className="mt-3 text-[13px] leading-5 text-red-600 dark:text-red-400"
+                >
+                  {aura.error}
+                </p>
+              )}
+              {!aura.kyc?.verified && (
+                <Button
+                  data-wpay-primary=""
+                  rounded
+                  disabled={
+                    !aura.available ||
+                    aura.loading ||
+                    aura.busy ||
+                    Boolean(aura.kyc?.terminal)
+                  }
+                  className="!mb-0 !mt-6 !w-full"
+                  onClick={() => void aura.start()}
+                >
+                  {aura.busy ? "Подготавливаем…" : "Пройти проверку"}
+                </Button>
+              )}
+              {aura.sessionUrl && (
+                <a
+                  className="mt-4 block text-[15px] text-primary"
+                  href={aura.sessionUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Продолжить проверку
+                </a>
+              )}
+              {aura.available && (
+                <button
+                  type="button"
+                  className="mt-4 min-h-11 px-3 text-[15px] text-primary"
+                  onClick={() => void aura.refresh()}
+                >
+                  Обновить статус
+                </button>
+              )}
+              {!aura.kyc?.verified && (
+                <button
+                  type="button"
+                  className="mt-2 block min-h-11 w-full px-3 text-[15px] text-primary"
+                  onClick={() => setDisplayPage("personal")}
+                >
+                  Личные данные
+                </button>
+              )}
+            </Card>
           )}
 
           {displayPage === "provider" && (

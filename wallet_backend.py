@@ -1291,11 +1291,11 @@ def install_wallet(app, root, owner_check):
                 if not row:
                     raise ApiError('CUSTOMER_NOT_REGISTERED', 'Aura customer is not registered', 404)
                 result = await aura_client.get_customer(row['customer_id'])
-                return web.json_response(result)
+                return web.json_response(result, headers={'Cache-Control': 'no-store'})
             if action == 'aura-kyc' and request.method == 'GET':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
-                return web.json_response(await aura_service.get_kyc(uid, client_ref))
+                return web.json_response(await aura_service.get_kyc(uid, client_ref), headers={'Cache-Control': 'no-store'})
             if action == 'aura-kyc' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
@@ -1307,7 +1307,7 @@ def install_wallet(app, root, owner_check):
                     raise ValueError('Unsupported Aura KYC fields')
                 return web.json_response(await aura_service.start_kyc(
                     uid, client_ref, email=body.get('email'), phone=body.get('phone')
-                ))
+                ), headers={'Cache-Control': 'no-store'})
             if action == 'aura-card-fees' and request.method == 'GET':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
