@@ -56,6 +56,9 @@ BALANCE_OPERATION_TYPES = {
 }
 BALANCE_OPERATION_STATUSES = {"pending", "confirmed", "failed"}
 WITHDRAWAL_STATUSES = {"processing", "broadcast", "completed", "failed"}
+SBP_ORDER_STATUSES = {
+    "awaiting_payment", "completed", "expired", "failed", "cancelled", "unspecified",
+}
 
 
 def prepare(ledger):
@@ -609,6 +612,110 @@ def _kyc_result(payload):
     }
 
 
+def _sbp_rate_result(payload):
+    required = {
+        "rate", "fiat_currency", "crypto_currency", "min_fiat_amount",
+        "max_fiat_amount", "quoted_at",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura SBP rate response")
+    rate = _decimal(payload.get("rate"))
+    minimum = _decimal(payload.get("min_fiat_amount"))
+    maximum = _decimal(payload.get("max_fiat_amount"))
+    if minimum > maximum or payload.get("fiat_currency") != "RUB" \
+            or payload.get("crypto_currency") != "USDT":
+        raise ValueError("Invalid Aura SBP rate bounds")
+    _aura_datetime(payload.get("quoted_at"), "SBP rate quoted_at")
+    return {
+        "rate": str(rate), "fiat_currency": "RUB", "crypto_currency": "USDT",
+        "min_fiat_amount": str(minimum), "max_fiat_amount": str(maximum),
+        "quoted_at": payload["quoted_at"],
+    }
+
+
+def _sbp_quote_result(payload, expected_customer_id):
+    required = {
+        "quote_token", "customer_id", "fiat_amount", "provider_fee", "fiat_net",
+        "fiat_currency", "crypto_amount", "crypto_currency", "rate", "expires_at",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura SBP quote response")
+    customer_id = _safe_identifier(payload.get("customer_id"), "customer id")
+    if customer_id != expected_customer_id:
+        raise ValueError("Aura SBP quote customer mismatch")
+    token = payload.get("quote_token")
+    if not isinstance(token, str) or not token or len(token) > 4096:
+        raise ValueError("Invalid Aura SBP quote token")
+    fiat_amount = _decimal(payload.get("fiat_amount"))
+    provider_fee = _decimal(payload.get("provider_fee"), allow_zero=True)
+    fiat_net = _decimal(payload.get("fiat_net"))
+    crypto_amount = _decimal(payload.get("crypto_amount"))
+    rate = _decimal(payload.get("rate"))
+    if provider_fee >= fiat_amount or fiat_net != fiat_amount - provider_fee:
+        raise ValueError("Invalid Aura SBP quote amounts")
+    if payload.get("fiat_currency") != "RUB" or payload.get("crypto_currency") != "USDT":
+        raise ValueError("Invalid Aura SBP quote currencies")
+    _aura_datetime(payload.get("expires_at"), "SBP quote expires_at")
+    return {
+        "quote_token": token, "customer_id": customer_id,
+        "fiat_amount": str(fiat_amount), "provider_fee": str(provider_fee),
+        "fiat_net": str(fiat_net), "fiat_currency": "RUB",
+        "crypto_amount": str(crypto_amount), "crypto_currency": "USDT",
+        "rate": str(rate), "expires_at": payload["expires_at"],
+    }
+
+
+def _sbp_order_result(payload, expected_order_id=None, expected_customer_id=None):
+    required = {
+        "id", "customer_id", "status", "fiat_amount", "provider_fee", "fiat_net",
+        "fiat_currency", "crypto_amount", "crypto_currency", "rate", "qr_url",
+        "qr_png_base64", "payer_phone_masked", "expires_at", "created_at",
+        "completed_at", "failure_reason",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura SBP order response")
+    order_id = _uuid(payload.get("id"), "SBP order id")
+    customer_id = _safe_identifier(payload.get("customer_id"), "customer id")
+    if expected_order_id is not None and order_id != expected_order_id:
+        raise ValueError("Aura SBP order id mismatch")
+    if expected_customer_id is not None and customer_id != expected_customer_id:
+        raise ValueError("Aura SBP order customer mismatch")
+    status = payload.get("status")
+    if status not in SBP_ORDER_STATUSES:
+        raise ValueError("Invalid Aura SBP order status")
+    fiat_amount = _decimal(payload.get("fiat_amount"))
+    provider_fee = _decimal(payload.get("provider_fee"), allow_zero=True)
+    fiat_net = _decimal(payload.get("fiat_net"))
+    crypto_amount = _decimal(payload.get("crypto_amount"))
+    rate = _decimal(payload.get("rate"))
+    if provider_fee >= fiat_amount or fiat_net != fiat_amount - provider_fee:
+        raise ValueError("Invalid Aura SBP order amounts")
+    if payload.get("fiat_currency") != "RUB" or payload.get("crypto_currency") != "USDT":
+        raise ValueError("Invalid Aura SBP order currencies")
+    for key in ("created_at", "expires_at"):
+        _aura_datetime(payload.get(key), "SBP order " + key)
+    completed_at = payload.get("completed_at")
+    if completed_at is not None:
+        _aura_datetime(completed_at, "SBP order completed_at")
+    for key in ("qr_url", "qr_png_base64", "payer_phone_masked", "failure_reason"):
+        value = payload.get(key)
+        if value is not None and (not isinstance(value, str) or len(value) > 2_000_000):
+            raise ValueError("Invalid Aura SBP order " + key)
+    if status == "awaiting_payment" and not payload.get("qr_url"):
+        raise ValueError("Active Aura SBP order has no QR")
+    return {
+        "id": order_id, "customer_id": customer_id, "status": status,
+        "fiat_amount": str(fiat_amount), "provider_fee": str(provider_fee),
+        "fiat_net": str(fiat_net), "fiat_currency": "RUB",
+        "crypto_amount": str(crypto_amount), "crypto_currency": "USDT",
+        "rate": str(rate), "qr_url": payload.get("qr_url"),
+        "qr_png_base64": payload.get("qr_png_base64"),
+        "payer_phone_masked": payload.get("payer_phone_masked"),
+        "expires_at": payload["expires_at"], "created_at": payload["created_at"],
+        "completed_at": completed_at, "failure_reason": payload.get("failure_reason"),
+    }
+
+
 def _card_otp_result(payload, expected_card_id):
     if payload is None:
         return None
@@ -1079,17 +1186,76 @@ class AuraClient:
         return result
 
     async def get_sbp_rate(self):
-        return await self.request("GET", "/rate")
+        return _sbp_rate_result(await self.request("GET", "/rate"))
 
-    async def list_sbp_orders(self, *, cursor=None, limit=100):
-        params = {"limit": min(max(int(limit), 1), 100)}
+    async def create_sbp_quote(self, customer_id, fiat_amount):
+        customer_id = _safe_identifier(customer_id, "customer id")
+        body = {"customer_id": customer_id, "fiat_amount": str(_decimal(fiat_amount))}
+        return _sbp_quote_result(
+            await self.request("POST", "/quotes", body=body), customer_id
+        )
+
+    async def create_sbp_order(self, customer_id, quote_token, *, idempotency_key):
+        customer_id = _safe_identifier(customer_id, "customer id")
+        if not isinstance(quote_token, str) or not quote_token or len(quote_token) > 4096:
+            raise ValueError("Invalid Aura SBP quote token")
+        payload = await self.request(
+            "POST", "/orders",
+            body={"customer_id": customer_id, "quote_token": quote_token},
+            idempotency_key=idempotency_key,
+        )
+        return _sbp_order_result(payload, expected_customer_id=customer_id)
+
+    async def list_sbp_orders(self, *, customer_id=None, statuses=None,
+                              created_from=None, created_to=None, cursor=None, limit=20):
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid Aura SBP order limit")
+        if not 1 <= limit <= 100:
+            raise ValueError("Invalid Aura SBP order limit")
+        params = [("limit", str(limit))]
+        if customer_id is not None:
+            params.append(("customer_id", _safe_identifier(customer_id, "customer id")))
+        if statuses is not None:
+            if isinstance(statuses, str):
+                statuses = [statuses]
+            if not isinstance(statuses, (list, tuple)) or not statuses:
+                raise ValueError("Invalid Aura SBP order statuses")
+            for status in statuses:
+                if status not in SBP_ORDER_STATUSES:
+                    raise ValueError("Invalid Aura SBP order status")
+                params.append(("status", status))
+        for name, value in (("created_from", created_from), ("created_to", created_to)):
+            if value is not None:
+                _aura_datetime(value, "SBP order " + name)
+                params.append((name, value))
         if cursor:
-            params["cursor"] = str(cursor)
-        return await self.request("GET", "/orders", params=params)
+            params.append(("cursor", str(cursor)))
+        payload = await self.request("GET", "/orders", params=params)
+        if not isinstance(payload, dict) or set(payload) != {"data", "next_cursor"} \
+                or not isinstance(payload["data"], list):
+            raise ValueError("Invalid Aura SBP order list")
+        if payload["next_cursor"] is not None and not isinstance(payload["next_cursor"], str):
+            raise ValueError("Invalid Aura SBP order cursor")
+        return {
+            "data": [_sbp_order_result(item) for item in payload["data"]],
+            "next_cursor": payload["next_cursor"],
+        }
 
     async def get_sbp_order(self, order_id):
-        order_id = quote(_safe_identifier(order_id, "SBP order id"), safe="")
-        return await self.request("GET", "/orders/" + order_id)
+        order_id = _uuid(order_id, "SBP order id")
+        return _sbp_order_result(
+            await self.request("GET", "/orders/" + quote(order_id, safe="")),
+            expected_order_id=order_id,
+        )
+
+    async def cancel_sbp_order(self, order_id):
+        order_id = _uuid(order_id, "SBP order id")
+        return _sbp_order_result(
+            await self.request("POST", "/orders/" + quote(order_id, safe="") + "/cancel"),
+            expected_order_id=order_id,
+        )
 
     async def list_qr_payments(self, *, cursor=None, limit=100):
         params = {"limit": min(max(int(limit), 1), 100)}
@@ -1382,6 +1548,52 @@ class AuraService:
             raise ValueError("Unknown Aura customer identity owner")
         result = await self.client.submit_customer_identity(customer_id, identity)
         return self._store_kyc(uid, customer_id, result)
+
+    def _store_sbp_api_order(self, uid, item):
+        customer = self.ledger.db.execute(
+            "SELECT customer_id FROM aura_customers WHERE user_id=? AND environment=?",
+            (uid, self.environment),
+        ).fetchone()
+        if not customer or item["customer_id"] != customer["customer_id"]:
+            raise ValueError("Aura SBP order owner mismatch")
+        safe = dict(item)
+        safe["qr_png_base64"] = None
+        _store_sbp_order(
+            self.ledger, self.environment, "order." + item["status"],
+            {**safe, "order_id": item["id"], "rub_amount": item["fiat_amount"],
+             "usdt_amount": item["crypto_amount"], "fee": item["provider_fee"],
+             "updated_at": item.get("completed_at") or item["created_at"]},
+        )
+        return item
+
+    async def create_sbp_quote(self, uid, client_ref, fiat_amount):
+        customer_id = await self.ensure_customer(uid, client_ref)
+        return await self.client.create_sbp_quote(customer_id, fiat_amount)
+
+    async def create_sbp_order(self, uid, client_ref, quote_token, *, idempotency_key):
+        customer_id = await self.ensure_customer(uid, client_ref)
+        item = await self.client.create_sbp_order(
+            customer_id, quote_token, idempotency_key=idempotency_key
+        )
+        return self._store_sbp_api_order(uid, item)
+
+    async def get_sbp_order(self, uid, order_id):
+        row = self.ledger.db.execute(
+            "SELECT 1 FROM aura_sbp_orders WHERE order_id=? AND user_id=? AND environment=?",
+            (order_id, uid, self.environment),
+        ).fetchone()
+        if not row:
+            raise self.client.error_cls("not_found", "Order not found", 404)
+        return self._store_sbp_api_order(uid, await self.client.get_sbp_order(order_id))
+
+    async def cancel_sbp_order(self, uid, order_id):
+        row = self.ledger.db.execute(
+            "SELECT 1 FROM aura_sbp_orders WHERE order_id=? AND user_id=? AND environment=?",
+            (order_id, uid, self.environment),
+        ).fetchone()
+        if not row:
+            raise self.client.error_cls("not_found", "Order not found", 404)
+        return self._store_sbp_api_order(uid, await self.client.cancel_sbp_order(order_id))
 
     async def create_card_request(self, uid, client_ref, *, kind="virtual",
                                   idempotency_key, shipping_address=None):

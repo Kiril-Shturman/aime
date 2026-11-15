@@ -602,6 +602,39 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
                 "passport_issue_date": "2010-06-01",
             })
 
+    async def test_sbp_quote_order_replay_and_cancel_contract(self):
+        uid = "tg:sbp-write"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(
+            uid, ref, email="payer@example.com", phone="+79991234567"
+        )
+        await self.service.submit_identity(uid, customer_id, {
+            "first_name": "Иван", "last_name": "Петров",
+            "birth_date": "1990-05-20", "passport": "4510123456",
+            "passport_issue_date": "2010-06-01",
+        })
+        rate = await self.client.get_sbp_rate()
+        self.assertEqual(rate["fiat_currency"], "RUB")
+        quote = await self.service.create_sbp_quote(uid, ref, "9250")
+        self.assertEqual(quote["crypto_amount"], "100.000000")
+        order = await self.service.create_sbp_order(
+            uid, ref, quote["quote_token"], idempotency_key="sbp-order-one"
+        )
+        self.assertEqual(order["status"], "awaiting_payment")
+        replay = await self.service.create_sbp_order(
+            uid, ref, quote["quote_token"], idempotency_key="sbp-order-one"
+        )
+        self.assertEqual(replay["id"], order["id"])
+        fetched = await self.service.get_sbp_order(uid, order["id"])
+        self.assertEqual(fetched["id"], order["id"])
+        cancelled = await self.service.cancel_sbp_order(uid, order["id"])
+        self.assertEqual(cancelled["status"], "cancelled")
+        stored = self.ledger.db.execute(
+            "SELECT body FROM aura_sbp_orders WHERE order_id=?", (order["id"],)
+        ).fetchone()[0]
+        self.assertNotIn("qr.nspk", stored)
+        self.assertNotIn("iVBOR", stored)
+
     async def test_customer_input_validation(self):
         with self.assertRaises(ValueError):
             await self.client.upsert_customer("customer", email="not-an-email")
@@ -931,14 +964,21 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         uid = "tg:780"
         ref = self.ledger.account(uid)
         customer_id = await self.service.ensure_customer(uid, ref)
+        self.mock.app["state"].kyc[customer_id] = {
+            "status": "completed", "verified": True, "reason": None,
+            "terminal": False, "checked_at": "2026-12-01T00:00:00Z",
+        }
         rate = await self.client.get_sbp_rate()
-        self.assertEqual(rate["fiat"], "RUB")
-        created = await self.mock.post(
-            "/mock/orders", json={"customer_id": customer_id, "status": "completed"}
+        self.assertEqual(rate["fiat_currency"], "RUB")
+        quote = await self.client.create_sbp_quote(customer_id, "9250")
+        order = await self.client.create_sbp_order(
+            customer_id, quote["quote_token"], idempotency_key="read-order-one"
         )
-        order = (await created.json())["order"]
         self.assertEqual((await self.client.list_sbp_orders())["data"][0]["id"], order["id"])
-        self.assertEqual((await self.client.get_sbp_order(order["id"]))["status"], "completed")
+        self.assertEqual(
+            (await self.client.get_sbp_order(order["id"]))["status"],
+            "awaiting_payment",
+        )
 
     async def test_qr_and_withdrawal_read_contracts(self):
         self.mock.app["state"].qr_payments["qr_one"] = {
@@ -1558,7 +1598,48 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await orders.json())["data"][0]["status"], "completed")
         rate = await self.wpay.get("/api/wallet/aura-sbp-rate", headers=self.owner)
         self.assertEqual(rate.status, 200)
-        self.assertEqual((await rate.json())["fiat"], "RUB")
+        self.assertEqual((await rate.json())["fiat_currency"], "RUB")
+
+    async def test_sbp_write_flow_is_idempotent_and_owner_scoped(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner,
+            json={"email": "payer@example.com", "phone": "+79991234567"},
+        )
+        customer_id = (await registered.json())["customer_id"]
+        self.mock.app["state"].kyc[customer_id] = {
+            "status": "completed", "verified": True, "reason": None,
+            "terminal": False, "checked_at": "2026-12-01T00:00:00Z",
+        }
+        quote_response = await self.wpay.post(
+            "/api/wallet/aura-sbp-quote", headers=self.owner,
+            json={"fiat_amount": "9250"},
+        )
+        self.assertEqual(quote_response.status, 200, await quote_response.text())
+        self.assertEqual(quote_response.headers["Cache-Control"], "no-store")
+        quote = await quote_response.json()
+        order_response = await self.wpay.post(
+            "/api/wallet/aura-sbp-order",
+            headers={**self.owner, "Idempotency-Key": "route-sbp-order-one"},
+            json={"quote_token": quote["quote_token"]},
+        )
+        self.assertEqual(order_response.status, 200, await order_response.text())
+        order = await order_response.json()
+        replay = await self.wpay.post(
+            "/api/wallet/aura-sbp-order",
+            headers={**self.owner, "Idempotency-Key": "route-sbp-order-one"},
+            json={"quote_token": quote["quote_token"]},
+        )
+        self.assertEqual((await replay.json())["id"], order["id"])
+        foreign = await self.wpay.get(
+            "/api/wallet/aura-sbp-order?order_id=" + order["id"],
+            headers={"X-Telegram-Init-Data": init_data(323)},
+        )
+        self.assertEqual(foreign.status, 404)
+        cancelled = await self.wpay.post(
+            "/api/wallet/aura-sbp-order-cancel", headers=self.owner,
+            json={"order_id": order["id"]},
+        )
+        self.assertEqual((await cancelled.json())["status"], "cancelled")
 
     async def test_disabled_sbp_product_blocks_kyc_start_and_rate(self):
         self.mock.app["state"].products["sbp_buy"] = False

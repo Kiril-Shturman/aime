@@ -26,6 +26,7 @@ class State:
         self.card_operations = []
         self.card_otps = {}
         self.orders = {}
+        self.sbp_quotes = {}
         self.qr_payments = {}
         self.withdrawals = {}
         self.balance_history = {}
@@ -515,10 +516,82 @@ def make_app():
 
     async def sbp_rate(_):
         return web.json_response({
-            "rate": "92.50", "fiat": "RUB", "asset": "USDT",
-            "min_amount": "1000", "max_amount": "100000",
-            "updated_at": "2026-01-01T00:00:00Z",
+            "rate": "92.50", "fiat_currency": "RUB", "crypto_currency": "USDT",
+            "min_fiat_amount": "1000", "max_fiat_amount": "100000",
+            "quoted_at": "2026-01-01T00:00:00Z",
         })
+
+    async def create_quote(request):
+        body = await request.json()
+        if set(body) != {"customer_id", "fiat_amount"}:
+            return envelope("invalid_argument", "Invalid quote body", 400)
+        customer_id = str(body.get("customer_id") or "")
+        customer = state.customers.get(customer_id)
+        if not customer:
+            return envelope("customer_not_found", "Customer not found", 404)
+        kyc = state.kyc.get(customer_id, {})
+        if not kyc.get("verified"):
+            return envelope("kyc_required", "KYC is required", 412)
+        try:
+            fiat_amount = Decimal(str(body["fiat_amount"]))
+        except Exception:
+            return envelope("amount_out_of_range", "Invalid amount", 400)
+        if not Decimal("1000") <= fiat_amount <= Decimal("100000"):
+            return envelope("amount_out_of_range", "Amount is out of range", 400)
+        rate = Decimal("92.50")
+        crypto_amount = (fiat_amount / rate).quantize(
+            Decimal("0.000001"), rounding=ROUND_DOWN
+        )
+        token = "quote_" + uuid.uuid4().hex
+        result = {
+            "quote_token": token, "customer_id": customer_id,
+            "fiat_amount": str(fiat_amount), "provider_fee": "0",
+            "fiat_net": str(fiat_amount), "fiat_currency": "RUB",
+            "crypto_amount": str(crypto_amount), "crypto_currency": "USDT",
+            "rate": str(rate), "expires_at": "2026-12-01T00:02:00Z",
+        }
+        state.sbp_quotes[token] = result
+        return web.json_response(result)
+
+    def order_payload(customer_id, quote, status="awaiting_payment"):
+        active = status == "awaiting_payment"
+        return {
+            "id": str(uuid.uuid4()), "customer_id": customer_id, "status": status,
+            "fiat_amount": quote["fiat_amount"], "provider_fee": quote["provider_fee"],
+            "fiat_net": quote["fiat_net"], "fiat_currency": "RUB",
+            "crypto_amount": quote["crypto_amount"], "crypto_currency": "USDT",
+            "rate": quote["rate"],
+            "qr_url": "https://qr.nspk.ru/mock" if active else None,
+            "qr_png_base64": "iVBORw0KGgo=" if active else None,
+            "payer_phone_masked": "+7•••1234" if active else None,
+            "expires_at": "2026-12-01T01:00:00Z",
+            "created_at": "2026-12-01T00:00:00Z", "completed_at": None,
+            "failure_reason": None,
+        }
+
+    async def create_order(request):
+        body = await request.json()
+        if set(body) != {"customer_id", "quote_token"}:
+            return envelope("invalid_argument", "Invalid order body", 400)
+        customer_id = str(body.get("customer_id") or "")
+        quote_item = state.sbp_quotes.get(str(body.get("quote_token") or ""))
+        if not quote_item or quote_item["customer_id"] != customer_id:
+            return envelope("quote_expired", "Quote is invalid or expired", 400)
+        key = request.headers.get("Idempotency-Key")
+        fingerprint = json.dumps(body, sort_keys=True, separators=(",", ":"))
+        previous = state.idempotency.get((request.method, request.path, key)) if key else None
+        if previous and previous[0] == fingerprint:
+            return idempotent(request, body, lambda: previous[1])
+        if any(item["customer_id"] == customer_id and item["status"] == "awaiting_payment"
+               for item in state.orders.values()):
+            return envelope("already_exists", "Active order already exists", 409)
+
+        def create():
+            item = order_payload(customer_id, quote_item)
+            state.orders[item["id"]] = item
+            return item
+
+        return idempotent(request, body, create)
 
     async def orders(request):
         items = list(reversed(list(state.orders.values())))
@@ -530,6 +603,20 @@ def make_app():
         if order_id not in state.orders:
             return envelope("order_not_found", "Order not found", 404)
         return web.json_response(state.orders[order_id])
+
+    async def cancel_order(request):
+        item = state.orders.get(request.match_info["order_id"])
+        if not item:
+            return envelope("not_found", "Order not found", 404)
+        if item["status"] == "cancelled":
+            return web.json_response(item)
+        if item["status"] != "awaiting_payment":
+            return envelope("failed_precondition", "Order cannot be cancelled", 412)
+        item.update({
+            "status": "cancelled", "qr_url": None, "qr_png_base64": None,
+            "payer_phone_masked": None, "failure_reason": "user_cancelled",
+        })
+        return web.json_response(item)
 
     async def create_order_event(request):
         body = await request.json()
@@ -790,7 +877,10 @@ def make_app():
     app.router.add_post("/v1/partner/cards/{card_id}/activate", activate_card)
     app.router.add_post("/v1/partner/cards/{card_id}/pin", set_card_pin)
     app.router.add_get("/v1/partner/rate", sbp_rate)
+    app.router.add_post("/v1/partner/quotes", create_quote)
     app.router.add_get("/v1/partner/orders", orders)
+    app.router.add_post("/v1/partner/orders", create_order)
+    app.router.add_post("/v1/partner/orders/{order_id}/cancel", cancel_order)
     app.router.add_get("/v1/partner/orders/{order_id}", order)
     app.router.add_get("/v1/partner/qr-payments", list_qr_payments)
     app.router.add_get("/v1/partner/qr-payments/{payment_id}", qr_payment)

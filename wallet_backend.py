@@ -1147,6 +1147,59 @@ def install_wallet(app, root, owner_check):
                 response = web.json_response(await aura_client.get_sbp_rate())
                 response.headers['Cache-Control'] = 'no-store'
                 return response
+            if action == 'aura-sbp-quote' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('sbp_buy'):
+                    raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'fiat_amount'}:
+                    raise ValueError('fiat_amount is required')
+                response = web.json_response(
+                    await aura_service.create_sbp_quote(uid, client_ref, body['fiat_amount'])
+                )
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-sbp-order' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('sbp_buy'):
+                    raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'quote_token'}:
+                    raise ValueError('quote_token is required')
+                key = request.headers.get('Idempotency-Key', '')
+                if not 1 <= len(key) <= 200:
+                    raise ApiError('idempotency_key_required', 'Idempotency-Key is required', 400)
+                response = web.json_response(await aura_service.create_sbp_order(
+                    uid, client_ref, body['quote_token'], idempotency_key=key
+                ))
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-sbp-order' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('sbp_buy'):
+                    raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
+                order_id = request.query.get('order_id')
+                if not order_id:
+                    raise ValueError('order_id is required')
+                response = web.json_response(await aura_service.get_sbp_order(uid, order_id))
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-sbp-order-cancel' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('sbp_buy'):
+                    raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'order_id'}:
+                    raise ValueError('order_id is required')
+                response = web.json_response(
+                    await aura_service.cancel_sbp_order(uid, str(body['order_id']))
+                )
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             if action == 'aura-sbp-orders' and request.method == 'GET':
                 orders = [dict(row) for row in ledger.db.execute(
                     'SELECT order_id,status,rub_amount,usdt_amount,fee,provider_updated_at '
