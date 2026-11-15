@@ -263,6 +263,20 @@ def make_app():
 
         return idempotent(request, body, create)
 
+    async def cancel_card(request):
+        card_id = request.match_info["card_id"]
+        item = state.cards.get(card_id)
+        if not item:
+            return envelope("card_not_found", "Card not found", 404)
+        if item["status"] != "processing":
+            return envelope(
+                "card_request_not_cancelable", "Card request cannot be cancelled", 409
+            )
+        item["status"] = "cancelled"
+        item["updated_at"] = "2026-01-01T00:06:00Z"
+        state.balance += Decimal("15")
+        return web.json_response(item)
+
     async def create_card(request):
         body = await request.json()
         customer_id = str(body.get("customer_id") or "")
@@ -418,6 +432,7 @@ def make_app():
     app.router.add_get("/v1/partner/cards/{card_id}/operations", card_operations)
     app.router.add_get("/v1/partner/cards/{card_id}", card)
     app.router.add_post("/v1/partner/cards/{card_id}/recharge", recharge_card)
+    app.router.add_post("/v1/partner/cards/{card_id}/cancel", cancel_card)
     app.router.add_get("/v1/partner/rate", sbp_rate)
     app.router.add_get("/v1/partner/orders", orders)
     app.router.add_get("/v1/partner/orders/{order_id}", order)

@@ -412,6 +412,10 @@ class AuraClient:
             body=body, idempotency_key=idempotency_key,
         )
 
+    async def cancel_card(self, card_id):
+        card_id = quote(_safe_identifier(card_id, "card id"), safe="")
+        return await self.request("POST", "/cards/" + card_id + "/cancel")
+
     async def list_cards(self, *, cursor=None, limit=100):
         params = {"limit": min(max(int(limit), 1), 100)}
         if cursor:

@@ -288,6 +288,29 @@ class AuraUnitTests(unittest.TestCase):
         self.assertIsNone(card["masked_pan"])
         self.assertEqual(card["provider_updated_at"], event["occurred_at"])
 
+    def test_documented_card_cancelled_is_terminal_without_masked_number(self):
+        event = {
+            "api_version": "2.5.0", "event": "card.cancelled",
+            "event_id": "4e2b7c9d-1a3f-4b5c-8d6e-7f8091a2b3c4",
+            "occurred_at": "2026-09-11T10:02:00.000Z",
+            "partner_id": MOCK_PARTNER,
+            "data": {
+                "card_id": "7b5f3c2a-1d4e-4f60-8a7b-2c3d4e5f6a71",
+                "card_number_masked": None,
+                "customer_id": "5a1c9e42-5b3d-4f18-9c2a-6e7d8f9a0b1e",
+                "owner_id": self.customer, "status": "cancelled",
+            },
+        }
+        raw, signature = signed(event)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        card = self.ledger.db.execute(
+            "SELECT * FROM aura_cards WHERE card_id=?", (event["data"]["card_id"],)
+        ).fetchone()
+        self.assertEqual(card["user_id"], self.uid)
+        self.assertEqual(card["status"], "cancelled")
+        self.assertIsNone(card["masked_pan"])
+
     def test_sbp_terminal_webhook_records_without_crediting_unknown_contract(self):
         event = {
             "event": "order.completed", "event_id": "evt_order",
@@ -445,6 +468,17 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
                 card["id"], amount="26", idempotency_key="recharge-one"
             )
         self.assertEqual(reused.exception.name, "idempotency_key_reused")
+
+        second = await self.client.create_card(
+            customer_id, kind="virtual", idempotency_key="open-card-two"
+        )
+        self.assertEqual(self.mock.app["state"].balance, Decimal("45"))
+        cancelled = await self.client.cancel_card(second["id"])
+        self.assertEqual(cancelled["status"], "cancelled")
+        self.assertEqual(self.mock.app["state"].balance, Decimal("60"))
+        with self.assertRaises(ApiError) as not_cancelable:
+            await self.client.cancel_card(second["id"])
+        self.assertEqual(not_cancelable.exception.name, "card_request_not_cancelable")
 
     async def test_card_money_input_validation(self):
         with self.assertRaises(ValueError):
