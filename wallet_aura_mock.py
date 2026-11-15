@@ -123,6 +123,26 @@ def make_app():
             **item, "verification_url": "https://local.invalid/kyc/" + customer_id,
         })
 
+    async def submit_identity(request):
+        customer_id = request.match_info["customer_id"]
+        customer_item = state.customers.get(customer_id)
+        if not customer_item:
+            return envelope("customer_not_found", "Customer not found", 404)
+        if not customer_item.get("email"):
+            return envelope("kyc_email_required", "Customer email is required", 412)
+        if not customer_item.get("phone"):
+            return envelope("sbp_buy_phone_required", "Customer phone is required", 412)
+        body = await request.json()
+        required = {"first_name", "last_name", "birth_date", "passport", "passport_issue_date"}
+        if not isinstance(body, dict) or not required.issubset(body):
+            return envelope("invalid_argument", "Identity fields are required", 400)
+        result = {
+            "status": "completed", "verified": True, "reason": None,
+            "terminal": False, "checked_at": "2026-09-29T11:31:15Z",
+        }
+        state.kyc[customer_id] = result
+        return web.json_response(result)
+
     async def set_kyc(request):
         body = await request.json()
         customer_id = str(body.get("customer_id") or "")
@@ -151,11 +171,54 @@ def make_app():
         if customer_id not in state.addresses:
             digest = hashlib.sha256(customer_id.encode()).hexdigest()
             state.addresses[customer_id] = [{
-                "id": "addr_" + digest[:24], "customer_id": customer_id,
-                "network": "nile", "address": "T" + digest[:33],
-                "is_default": True, "label": None,
+                "id": str(uuid.uuid5(uuid.NAMESPACE_URL, "aura:" + customer_id)),
+                "customer_id": customer_id, "network": "nile",
+                "address": "T" + digest.replace("0", "1")[:33],
+                "currency": "USDT", "is_default": True, "label": None,
+                "created_at": "2026-10-14T09:00:00Z",
             }]
-        return web.json_response({"data": state.addresses[customer_id], "next_cursor": None})
+        limit = min(max(int(request.query.get("limit", "100")), 1), 100)
+        return web.json_response({"data": state.addresses[customer_id][:limit], "next_cursor": None})
+
+    async def create_address(request):
+        customer_id = request.match_info["customer_id"]
+        if customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        body = await request.json()
+        if not isinstance(body, dict) or set(body) - {"label"}:
+            return envelope("invalid_argument", "Invalid address body", 400)
+        label = body.get("label")
+        if label is not None and (not isinstance(label, str) or not 1 <= len(label) <= 64):
+            return envelope("invalid_argument", "Invalid address label", 400)
+        if customer_id not in state.addresses:
+            digest = hashlib.sha256(customer_id.encode()).hexdigest()
+            state.addresses[customer_id] = [{
+                "id": str(uuid.uuid5(uuid.NAMESPACE_URL, "aura:" + customer_id)),
+                "customer_id": customer_id, "network": "nile",
+                "address": "T" + digest.replace("0", "1")[:33],
+                "currency": "USDT", "is_default": True, "label": None,
+                "created_at": "2026-10-14T09:00:00Z",
+            }]
+        address_id = str(uuid.uuid4())
+        digest = hashlib.sha256(address_id.encode()).hexdigest()
+        item = {
+            "id": address_id, "customer_id": customer_id,
+            "network": "nile", "address": "T" + digest.replace("0", "1")[:33],
+            "currency": "USDT", "is_default": False, "label": label,
+            "created_at": "2026-10-14T09:30:00Z",
+        }
+        state.addresses[customer_id].insert(0, item)
+        return web.json_response(item, status=201)
+
+    async def get_address(request):
+        address_id = request.match_info["address_id"]
+        item = next(
+            (item for rows in state.addresses.values() for item in rows
+             if item["id"] == address_id), None,
+        )
+        return web.json_response(item) if item else envelope(
+            "deposit_address_not_found", "Deposit address not found", 404
+        )
 
     async def deposits(request):
         customer_id = request.query.get("customer_id")
@@ -672,9 +735,11 @@ def make_app():
         if customer_id not in state.addresses:
             digest = hashlib.sha256(customer_id.encode()).hexdigest()
             state.addresses[customer_id] = [{
-                "id": "addr_" + digest[:24], "customer_id": customer_id,
-                "network": "nile", "address": "T" + digest[:33],
-                "is_default": True, "label": None,
+                "id": str(uuid.uuid5(uuid.NAMESPACE_URL, "aura:" + customer_id)),
+                "customer_id": customer_id, "network": "nile",
+                "address": "T" + digest.replace("0", "1")[:33],
+                "currency": "USDT", "is_default": True, "label": None,
+                "created_at": "2026-10-14T09:00:00Z",
             }]
         item = {
             "id": "dep_" + uuid.uuid4().hex, "customer_id": customer_id,
@@ -700,7 +765,10 @@ def make_app():
     app.router.add_get("/v1/partner/customers/{customer_id}", customer)
     app.router.add_get("/v1/partner/customers/{customer_id}/kyc", kyc_status)
     app.router.add_post("/v1/partner/customers/{customer_id}/kyc", start_kyc)
+    app.router.add_post("/v1/partner/customers/{customer_id}/kyc/identity", submit_identity)
     app.router.add_get("/v1/partner/customers/{customer_id}/deposit-addresses", addresses)
+    app.router.add_post("/v1/partner/customers/{customer_id}/deposit-addresses", create_address)
+    app.router.add_get("/v1/partner/deposit-addresses/{address_id}", get_address)
     app.router.add_get("/v1/partner/deposits", deposits)
     app.router.add_get("/v1/partner/deposits-fees", deposit_fees)
     app.router.add_get("/v1/partner/deposits/{deposit_id}", deposit)

@@ -860,6 +860,28 @@ def install_wallet(app, root, owner_check):
                 )
                 store_withdrawal_snapshot(ledger, aura_environment, result)
                 return web.json_response(result)
+            if action == 'admin-aura-kyc-identity' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('sbp_buy'):
+                    raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
+                body = await request.json()
+                if not isinstance(body, dict) or 'customer_id' not in body:
+                    raise ValueError('customer_id is required')
+                customer_id = str(body['customer_id'])
+                row = ledger.db.execute(
+                    'SELECT user_id FROM aura_customers WHERE customer_id=? AND environment=?',
+                    (customer_id, aura_environment),
+                ).fetchone()
+                if not row:
+                    raise ApiError('CUSTOMER_NOT_FOUND', 'Customer not found', 404)
+                result = await aura_service.submit_identity(
+                    row['user_id'], customer_id,
+                    {key: value for key, value in body.items() if key != 'customer_id'},
+                )
+                response = web.json_response(result)
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             if action == 'admin-aura-qr-payments' and request.method == 'GET':
                 return web.json_response({'data': [dict(row) for row in ledger.db.execute(
                     'SELECT payment_id,status,amount_rub,rate,total_usdt,merchant,provider_updated_at '
@@ -1144,6 +1166,46 @@ def install_wallet(app, root, owner_check):
                     raise ApiError('ROUTE_DISABLED', 'Aura TRON deposits are disabled', 503)
                 result = await aura_service.get_or_create_deposit_address(uid, client_ref)
                 return web.json_response(result)
+            if action == 'aura-deposit-address' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                address_id = request.query.get('address_id')
+                if not address_id:
+                    raise ValueError('address_id is required')
+                owned = ledger.db.execute(
+                    'SELECT customer_id FROM aura_deposit_addresses '
+                    'WHERE address_id=? AND user_id=? AND environment=?',
+                    (address_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('DEPOSIT_ADDRESS_NOT_FOUND', 'Deposit address not found', 404)
+                result = await aura_client.get_deposit_address(address_id)
+                if result['customer_id'] != owned['customer_id']:
+                    raise ValueError('Aura deposit address owner mismatch')
+                return web.json_response(result)
+            if action == 'aura-deposit-address-create' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                active = ledger.db.execute(
+                    "SELECT enabled FROM wallet_provider_routes WHERE product='crypto_deposit' "
+                    "AND asset='USDT' AND network='TRON' AND environment=? AND provider='aura'",
+                    (aura_environment,),
+                ).fetchone()
+                if not active or not active['enabled']:
+                    raise ApiError('ROUTE_DISABLED', 'Aura TRON deposits are disabled', 503)
+                if not await aura_client.product_enabled('crypto_processing'):
+                    raise ApiError(
+                        'crypto_processing_not_enabled',
+                        'Aura crypto processing is not enabled', 403,
+                    )
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) - {'label'}:
+                    raise ValueError('Invalid Aura deposit address body')
+                return web.json_response(
+                    await aura_service.create_additional_deposit_address(
+                        uid, client_ref, label=body.get('label')
+                    )
+                )
             if action == 'aura-deposit-fees' and request.method == 'GET':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)

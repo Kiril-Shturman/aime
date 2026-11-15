@@ -489,6 +489,126 @@ def _withdrawal_result(payload, expected_withdrawal_id=None):
     }
 
 
+def _deposit_address_result(payload, *, expected_address_id=None,
+                            expected_customer_id=None, environment=None):
+    required = {
+        "address", "created_at", "currency", "customer_id", "id",
+        "is_default", "label", "network",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura deposit address response")
+    address_id = _uuid(payload.get("id"), "deposit address id")
+    customer_id = _safe_identifier(payload.get("customer_id"), "customer id")
+    if expected_address_id is not None and address_id != expected_address_id:
+        raise ValueError("Aura deposit address id mismatch")
+    if expected_customer_id is not None and customer_id != expected_customer_id:
+        raise ValueError("Aura deposit address owner mismatch")
+    address = payload.get("address")
+    if not isinstance(address, str) or not re.fullmatch(r"T[1-9A-HJ-NP-Za-km-z]{33}", address):
+        raise ValueError("Invalid Aura TRON deposit address")
+    network = payload.get("network")
+    if network not in {"nile", "mainnet"} or payload.get("currency") != "USDT":
+        raise ValueError("Invalid Aura deposit address network")
+    if environment is not None and network != ("nile" if environment == "test" else "mainnet"):
+        raise ValueError("Aura deposit address environment mismatch")
+    label = payload.get("label")
+    if label is not None and (not isinstance(label, str) or not 1 <= len(label) <= 64):
+        raise ValueError("Invalid Aura deposit address label")
+    if not isinstance(payload.get("is_default"), bool):
+        raise ValueError("Invalid Aura deposit address default flag")
+    _aura_datetime(payload.get("created_at"), "deposit address created_at")
+    return {
+        "address": address, "created_at": payload["created_at"],
+        "currency": "USDT", "customer_id": customer_id, "id": address_id,
+        "is_default": payload["is_default"], "label": label, "network": network,
+    }
+
+
+def _identity_request_body(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("Invalid Aura customer identity")
+    required = {"first_name", "last_name", "birth_date", "passport", "passport_issue_date"}
+    optional = {
+        "country_of_passport_issue", "inn", "patronymic",
+        "registration_apartment", "registration_building", "registration_city",
+        "registration_city_en", "registration_country", "registration_house",
+        "registration_index", "registration_state", "registration_street",
+        "registration_street_en",
+    }
+    if not required.issubset(payload) or set(payload) - required - optional:
+        raise ValueError("Invalid Aura customer identity fields")
+    result = {key: str(value).strip() for key, value in payload.items()}
+    name_pattern = r"[А-Яа-яЁё -]+"
+    for key in ("first_name", "last_name"):
+        if not re.fullmatch(name_pattern, result[key]) or len(result[key]) > 100:
+            raise ValueError("Invalid Aura identity " + key)
+    if "patronymic" in result and (
+        not re.fullmatch(name_pattern, result["patronymic"])
+        or len(result["patronymic"]) > 100
+    ):
+        raise ValueError("Invalid Aura identity patronymic")
+    try:
+        birth_date = datetime.strptime(result["birth_date"], "%Y-%m-%d").date()
+        issue_date = datetime.strptime(result["passport_issue_date"], "%Y-%m-%d").date()
+    except ValueError:
+        raise ValueError("Invalid Aura identity date")
+    if issue_date <= birth_date or issue_date > datetime.now(timezone.utc).date():
+        raise ValueError("Invalid Aura passport issue date")
+    passport = result["passport"].replace(" ", "")
+    if not re.fullmatch(r"[0-9]{10}", passport):
+        raise ValueError("Invalid Aura passport")
+    result["passport"] = passport
+    country = result.get("country_of_passport_issue", "RUS")
+    if not re.fullmatch(r"[A-Z]{3}", country):
+        raise ValueError("Invalid Aura passport country")
+    result["country_of_passport_issue"] = country
+    if "inn" in result and not re.fullmatch(r"[0-9]{12}", result["inn"]):
+        raise ValueError("Invalid Aura identity inn")
+    if "registration_country" in result and not re.fullmatch(
+        r"[A-Z]{3}", result["registration_country"]
+    ):
+        raise ValueError("Invalid Aura registration country")
+    for key in optional - {"country_of_passport_issue", "inn", "patronymic", "registration_country"}:
+        if key in result and (not result[key] or len(result[key]) > 200):
+            raise ValueError("Invalid Aura identity " + key)
+    return result
+
+
+def _kyc_result(payload):
+    required = {"status", "verified", "reason", "terminal", "checked_at"}
+    optional = {"message", "next_action", "session_expires_at"}
+    if not isinstance(payload, dict) or not required.issubset(payload) or set(payload) - required - optional:
+        raise ValueError("Invalid Aura KYC response")
+    status = payload.get("status")
+    if status not in {"none", "pending", "completed", "rejected"}:
+        raise ValueError("Invalid Aura KYC status")
+    if not isinstance(payload.get("verified"), bool) or not isinstance(payload.get("terminal"), bool):
+        raise ValueError("Invalid Aura KYC flags")
+    if payload["verified"] and status != "completed":
+        raise ValueError("Invalid Aura verified KYC state")
+    checked_at = payload.get("checked_at")
+    if checked_at is not None:
+        _aura_datetime(checked_at, "KYC checked_at")
+    reason = payload.get("reason")
+    message = payload.get("message")
+    if reason is not None and (not isinstance(reason, str) or len(reason) > 500):
+        raise ValueError("Invalid Aura KYC reason")
+    if message is not None and (not isinstance(message, str) or len(message) > 1000):
+        raise ValueError("Invalid Aura KYC message")
+    next_action = payload.get("next_action")
+    if next_action not in {None, "start_kyc", "wait", "update_phone"}:
+        raise ValueError("Invalid Aura KYC next_action")
+    session_expires_at = payload.get("session_expires_at")
+    if session_expires_at is not None:
+        _aura_datetime(session_expires_at, "KYC session_expires_at")
+    return {
+        "status": status, "verified": payload["verified"], "reason": reason,
+        "terminal": payload["terminal"], "checked_at": checked_at,
+        "message": message, "next_action": next_action,
+        "session_expires_at": session_expires_at,
+    }
+
+
 def _card_otp_result(payload, expected_card_id):
     if payload is None:
         return None
@@ -775,6 +895,14 @@ class AuraClient:
         customer_id = quote(_safe_identifier(customer_id, "customer id"), safe="")
         return await self.request("POST", "/customers/" + customer_id + "/kyc")
 
+    async def submit_customer_identity(self, customer_id, identity):
+        customer_id = _safe_identifier(customer_id, "customer id")
+        payload = await self.request(
+            "POST", "/customers/" + quote(customer_id, safe="") + "/kyc/identity",
+            body=_identity_request_body(identity),
+        )
+        return _kyc_result(payload)
+
     async def get_card_fees(self):
         return await self.request("GET", "/cards-fees")
 
@@ -1020,8 +1148,60 @@ class AuraClient:
         )
         return _withdrawal_result(payload)
 
-    async def deposit_addresses(self, customer_id):
-        return await self.request("GET", "/customers/" + quote(_safe_identifier(customer_id, "customer id"), safe="") + "/deposit-addresses")
+    async def deposit_addresses(self, customer_id, *, cursor=None, limit=100):
+        customer_id = _safe_identifier(customer_id, "customer id")
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid Aura deposit address limit")
+        if not 1 <= limit <= 100:
+            raise ValueError("Invalid Aura deposit address limit")
+        params = {"limit": limit}
+        if cursor:
+            params["cursor"] = str(cursor)
+        payload = await self.request(
+            "GET", "/customers/" + quote(customer_id, safe="") + "/deposit-addresses",
+            params=params,
+        )
+        if not isinstance(payload, dict) or set(payload) != {"data", "next_cursor"}:
+            raise ValueError("Invalid Aura deposit address list")
+        if not isinstance(payload["data"], list) or not payload["data"]:
+            raise ValueError("Aura returned no deposit address")
+        if payload["next_cursor"] is not None and not isinstance(payload["next_cursor"], str):
+            raise ValueError("Invalid Aura deposit address cursor")
+        return {
+            "data": [
+                _deposit_address_result(
+                    item, expected_customer_id=customer_id, environment=self.environment
+                ) for item in payload["data"]
+            ],
+            "next_cursor": payload["next_cursor"],
+        }
+
+    async def create_deposit_address(self, customer_id, *, label=None):
+        customer_id = _safe_identifier(customer_id, "customer id")
+        body = {}
+        if label is not None:
+            label = str(label)
+            if not 1 <= len(label) <= 64:
+                raise ValueError("Invalid Aura deposit address label")
+            body["label"] = label
+        payload = await self.request(
+            "POST", "/customers/" + quote(customer_id, safe="") + "/deposit-addresses",
+            body=body,
+        )
+        return _deposit_address_result(
+            payload, expected_customer_id=customer_id, environment=self.environment
+        )
+
+    async def get_deposit_address(self, address_id):
+        address_id = _uuid(address_id, "deposit address id")
+        payload = await self.request(
+            "GET", "/deposit-addresses/" + quote(address_id, safe="")
+        )
+        return _deposit_address_result(
+            payload, expected_address_id=address_id, environment=self.environment
+        )
 
     async def list_deposits(self, *, cursor=None, limit=100, customer_id=None):
         params = {"limit": min(max(int(limit), 1), 100)}
@@ -1192,6 +1372,16 @@ class AuraService:
             if not session_url.startswith("https://") or len(session_url) > 2048:
                 raise ValueError("Invalid Aura KYC session URL")
         return {**state, "session_url": session_url}
+
+    async def submit_identity(self, uid, customer_id, identity):
+        row = self.ledger.db.execute(
+            "SELECT customer_id FROM aura_customers WHERE user_id=? AND environment=?",
+            (uid, self.environment),
+        ).fetchone()
+        if not row or row["customer_id"] != customer_id:
+            raise ValueError("Unknown Aura customer identity owner")
+        result = await self.client.submit_customer_identity(customer_id, identity)
+        return self._store_kyc(uid, customer_id, result)
 
     async def create_card_request(self, uid, client_ref, *, kind="virtual",
                                   idempotency_key, shipping_address=None):
@@ -1506,6 +1696,26 @@ class AuraService:
             "address_id": selected.get("id") or selected.get("address_id"),
             "customer_id": customer_id,
         }
+
+    def _store_deposit_address(self, uid, customer_id, item):
+        item = _deposit_address_result(
+            item, expected_customer_id=customer_id, environment=self.environment
+        )
+        stamp = time.time()
+        self.ledger.db.execute(
+            "INSERT INTO aura_deposit_addresses VALUES (?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(address_id) DO UPDATE SET label=excluded.label,"
+            "is_default=excluded.is_default,body=excluded.body,updated_at=excluded.updated_at",
+            (item["id"], uid, customer_id, self.environment, item["network"],
+             item["address"], item["label"], int(item["is_default"]),
+             json.dumps(item, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
+        )
+        return item
+
+    async def create_additional_deposit_address(self, uid, client_ref, *, label=None):
+        customer_id = await self.ensure_customer(uid, client_ref)
+        item = await self.client.create_deposit_address(customer_id, label=label)
+        return self._store_deposit_address(uid, customer_id, item)
 
 
 def verify_signature(secret, raw, header, now_seconds=None, tolerance=300):

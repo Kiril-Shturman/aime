@@ -548,6 +548,15 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report["state"], "ok")
         fees = await self.client.get_deposit_fees()
         self.assertEqual(fees["fee_min"], "0.5")
+        created = await self.client.create_deposit_address(
+            result["customer_id"], label="invoice-1042"
+        )
+        self.assertFalse(created["is_default"])
+        self.assertEqual(created["label"], "invoice-1042")
+        fetched = await self.client.get_deposit_address(created["id"])
+        self.assertEqual(fetched, created)
+        listed = await self.client.deposit_addresses(result["customer_id"])
+        self.assertEqual(len(listed["data"]), 2)
 
     async def test_customer_and_widget_kyc_contract(self):
         uid = "tg:778"
@@ -568,6 +577,30 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("session", stored)
         status = await self.service.get_kyc(uid, ref)
         self.assertFalse(status["verified"])
+
+    async def test_imported_identity_is_validated_and_never_persisted(self):
+        uid = "tg:identity-import"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(
+            uid, ref, email="ivan@example.com", phone="+79991234567"
+        )
+        state = await self.service.submit_identity(uid, customer_id, {
+            "first_name": "Иван", "last_name": "Петров",
+            "birth_date": "1990-05-20", "passport": "4510 123456",
+            "passport_issue_date": "2010-06-01", "inn": "123456789012",
+        })
+        self.assertTrue(state["verified"])
+        persisted = "\n".join(self.ledger.db.iterdump())
+        self.assertNotIn("4510123456", persisted)
+        self.assertNotIn("123456789012", persisted)
+        self.assertNotIn("Иван", persisted)
+        self.assertNotIn("4510123456", json.dumps(self.mock.app["state"].kyc))
+        with self.assertRaises(ValueError):
+            await self.client.submit_customer_identity(customer_id, {
+                "first_name": "Ivan", "last_name": "Петров",
+                "birth_date": "1990-05-20", "passport": "4510123456",
+                "passport_issue_date": "2010-06-01",
+            })
 
     async def test_customer_input_validation(self):
         with self.assertRaises(ValueError):
@@ -1069,6 +1102,56 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             str(self.app["wpay_ledger"].balance("owner", "USDT")[0]), "9"
         )
+
+    async def test_additional_deposit_address_is_owner_scoped(self):
+        await self.wpay.post(
+            "/api/wallet/admin-provider-route", headers=self.owner,
+            json={"product": "crypto_deposit", "asset": "USDT", "network": "TRON",
+                  "environment": "test", "provider": "aura", "enabled": True},
+        )
+        default = await self.wpay.post(
+            "/api/wallet/aura-deposit-address", headers=self.owner
+        )
+        self.assertEqual(default.status, 200, await default.text())
+        created = await self.wpay.post(
+            "/api/wallet/aura-deposit-address-create", headers=self.owner,
+            json={"label": "invoice-1042"},
+        )
+        self.assertEqual(created.status, 200, await created.text())
+        item = await created.json()
+        self.assertEqual(item["label"], "invoice-1042")
+        fetched = await self.wpay.get(
+            "/api/wallet/aura-deposit-address?address_id=" + item["id"],
+            headers=self.owner,
+        )
+        self.assertEqual(await fetched.json(), item)
+        foreign = await self.wpay.get(
+            "/api/wallet/aura-deposit-address?address_id=" + item["id"],
+            headers={"X-Telegram-Init-Data": init_data(323)},
+        )
+        self.assertEqual(foreign.status, 404)
+
+    async def test_admin_identity_import_is_secret_free(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner,
+            json={"email": "ivan@example.com", "phone": "+79991234567"},
+        )
+        customer_id = (await registered.json())["customer_id"]
+        imported = await self.wpay.post(
+            "/api/wallet/admin-aura-kyc-identity", headers=self.owner,
+            json={
+                "customer_id": customer_id,
+                "first_name": "Иван", "last_name": "Петров",
+                "birth_date": "1990-05-20", "passport": "4510 123456",
+                "passport_issue_date": "2010-06-01", "inn": "123456789012",
+            },
+        )
+        self.assertEqual(imported.status, 200, await imported.text())
+        self.assertEqual(imported.headers.get("Cache-Control"), "no-store")
+        self.assertTrue((await imported.json())["verified"])
+        persisted = "\n".join(self.app["wpay_ledger"].db.iterdump())
+        for secret in ("4510123456", "123456789012", "Иван", "Петров"):
+            self.assertNotIn(secret, persisted)
 
     async def test_customer_kyc_session_status_and_webhook(self):
         registered = await self.wpay.post(
