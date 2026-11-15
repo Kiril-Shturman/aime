@@ -2142,24 +2142,6 @@ function BankCardArtwork({ card }: { card: BankCard }) {
   );
 }
 
-function CardAvatar({ card }: { card: BankCard }) {
-  return (
-    <span
-      className="wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
-      style={assetIconStyle({
-        color:
-          card.id === "rub"
-            ? "#3275e9"
-            : card.id === "amex"
-              ? "#42765b"
-              : "#7c3aed",
-        iconColor: "#fff",
-      })}
-    >
-      <CreditcardFill className="text-[23px]" />
-    </span>
-  );
-}
 function CardsPaymentsList({
   card,
   showNotice,
@@ -2599,15 +2581,14 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
                     setActiveCardIndex(index);
                     setSettingsCardId(card.id);
                   }}
-                  media={<CardAvatar card={card} />}
                   innerChildren={
                     <span className="flex h-full min-w-0 items-center justify-between gap-3">
                       <span className="min-w-0">
                         <span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">
-                          {card.name}
+                          {card.network} · •••• {card.last4}
                         </span>
                         <span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">
-                          {card.network} · •••• {card.last4}
+                          {card.name}
                         </span>
                       </span>
                       <span className="shrink-0 text-right">
