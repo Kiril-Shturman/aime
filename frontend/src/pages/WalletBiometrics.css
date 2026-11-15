@@ -1,0 +1,105 @@
+.wpay-biometric-content {
+  height: 100%;
+  width: 100%;
+}
+.wpay-face-id-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: linear-gradient(155deg, #69b7ff, #007aff 65%, #0665d4);
+  color: white;
+  box-shadow: inset 0 1px 0 #ffffff59;
+}
+.wpay-face-id-icon svg {
+  width: 29px;
+  height: 29px;
+}
+.wpay-biometric-row .item-inner {
+  padding-right: 18px !important;
+}
+.wpay-biometric-row .toggle.disabled {
+  opacity: 0.4;
+}
+.wpay-lock-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: max(28px, env(safe-area-inset-top)) 28px
+    max(28px, env(safe-area-inset-bottom));
+  background: #efeff4;
+  color: #111;
+  text-align: center;
+}
+.dark .wpay-lock-screen {
+  background: #000;
+  color: #fff;
+}
+.wpay-lock-mark {
+  display: grid;
+  place-items: center;
+  width: 84px;
+  height: 84px;
+  margin-bottom: 14px;
+  border-radius: 28px;
+  background: linear-gradient(145deg, #66b3ff, #007aff);
+  color: #fff;
+  box-shadow: inset 0 1px 0 #ffffff4d;
+}
+.wpay-lock-mark svg {
+  width: 58px;
+  height: 58px;
+}
+.wpay-lock-screen h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+}
+.wpay-lock-screen > p {
+  max-width: 320px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #747986;
+}
+.dark .wpay-lock-screen > p {
+  color: #a2a7b3;
+}
+.wpay-lock-screen > button {
+  max-width: 340px;
+}
+.wpay-lock-screen > p.wpay-lock-error {
+  color: #c13434;
+}
+.dark .wpay-lock-screen > p.wpay-lock-error {
+  color: #ff8b86;
+}
+.wpay-lock-settings {
+  min-height: 44px;
+  padding: 8px 16px;
+  color: #007aff;
+  font-size: 15px;
+}
+.dark .wpay-lock-settings {
+  color: #6eacff;
+}
+.wpay-biometric-obscured .wpay-biometric-content,
+.wpay-biometric-obscured .wpay-viewport,
+.wpay-biometric-obscured .wpay-profile-popup,
+.wpay-biometric-obscured .wpay-exchange-sheet,
+.wpay-biometric-obscured .wpay-create-address-sheet,
+.wpay-biometric-obscured .dialog {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+.wpay-biometric-row .item-inner { position: relative; }
+.wpay-biometric-row .item-after { position: absolute; top: 50%; right: 18px; transform: translateY(-50%); }
+.wpay-biometric-row .item-title, .wpay-biometric-row .item-subtitle { padding-right: 66px; }

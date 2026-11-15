@@ -8,7 +8,27 @@ export interface TgUser {
   is_premium?: boolean
 }
 
+export interface TgBiometricManager {
+  isInited: boolean
+  isBiometricAvailable: boolean
+  biometricType: 'face' | 'finger' | 'unknown'
+  isAccessRequested: boolean
+  isAccessGranted: boolean
+  isBiometricTokenSaved: boolean
+  deviceId: string
+  init: (callback?: () => void) => TgBiometricManager
+  requestAccess: (params: { reason: string }, callback?: (granted: boolean) => void) => TgBiometricManager
+  authenticate: (params: { reason: string }, callback?: (authenticated: boolean, token?: string) => void) => TgBiometricManager
+  updateBiometricToken: (token: string, callback?: (updated: boolean) => void) => TgBiometricManager
+  openSettings: () => TgBiometricManager
+}
+
 interface TG {
+  BiometricManager?: TgBiometricManager
+  platform?: string
+  isActive?: boolean
+  onEvent?: (event: string, callback: () => void) => void
+  offEvent?: (event: string, callback: () => void) => void
   isVersionAtLeast?: (version: string) => boolean
   ready?: () => void
   expand?: () => void

@@ -1,3 +1,4 @@
+import { WalletBiometricGate, WalletBiometricRow } from "./WalletBiometrics";
 import { walletRequest } from "../lib/wallet-api";
 import WalletNetworkExchange from "./WalletNetworkExchange";
 import { resolveDeposit } from "../wallet/deposit";
@@ -330,9 +331,11 @@ export default function WalletPage() {
       }
     >
       <div className="view wpay-main-view">
-        <WalletLiveProvider>
-          <WalletScreen />
-        </WalletLiveProvider>
+        <WalletBiometricGate>
+          <WalletLiveProvider>
+            <WalletScreen />
+          </WalletLiveProvider>
+        </WalletBiometricGate>
       </div>
     </F7App>
   );
@@ -2876,10 +2879,12 @@ function ProfileSection({
           />
           <ProfileListItem
             link
-            title="Безопасность"
-            subtitle="Код доступа и устройства"
-            onClick={() => setProfilePage("security")}
+            title="Верификация"
+            subtitle="Подтверждение личности"
+            after="Скоро"
+            onClick={() => setProfilePage("verification")}
           />
+          <WalletBiometricRow showNotice={showNotice} />
           <ProfileListItem
             link
             title="Уведомления"
@@ -2891,16 +2896,6 @@ function ProfileSection({
             title="Реферальная программа"
             subtitle="Приглашайте друзей"
             onClick={() => setProfilePage("referral")}
-          />
-        </F7List>
-
-        <F7List strong inset dividers className="profile-settings-list">
-          <ProfileListItem
-            link
-            title="Верификация"
-            subtitle="Подтверждение личности"
-            after="Скоро"
-            onClick={() => setProfilePage("verification")}
           />
         </F7List>
 
