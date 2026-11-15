@@ -1,14 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
-async function setup(page: Page, enabled = true) {
+async function setup(page: Page, enabled = true, theme = "light") {
   const state = {
     contact: null as null | { phone: string; email: string },
     verified: false,
     posts: [] as { action: string; body: unknown }[],
   };
-  await page.addInitScript(() => {
-    localStorage.setItem("ui-theme", "light");
+  await page.addInitScript((theme) => {
+    localStorage.setItem("ui-theme", theme);
     localStorage.setItem("wpay:intro:v1", "seen");
-  });
+  }, theme);
   await page.route("**/api/**", (route) => {
     const action = new URL(route.request().url()).pathname.split("/").pop()!;
     if (route.request().method() === "POST")
@@ -93,9 +93,7 @@ test("contacts persist through server, hosted KYC updates from pending to verifi
   await page
     .getByRole("link", { name: "Верификация Подтверждение личности" })
     .click();
-  await page
-    .getByRole("button", { name: "Пройти проверку", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Пройти", exact: true }).click();
   await expect(
     page.getByRole("link", { name: "Продолжить проверку" }),
   ).toHaveAttribute("href", "https://verify.example/session-private");
@@ -108,9 +106,7 @@ test("contacts persist through server, hosted KYC updates from pending to verifi
   await expect(
     page.getByRole("heading", { name: "Личность подтверждена" }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Пройти проверку" }),
-  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Пройти" })).toHaveCount(0);
 });
 test("invalid contacts never post; viewing KYC never registers a customer", async ({
   page,
@@ -119,9 +115,7 @@ test("invalid contacts never post; viewing KYC never registers a customer", asyn
   await page
     .getByRole("link", { name: "Верификация Подтверждение личности" })
     .click();
-  await page
-    .getByRole("button", { name: "Пройти проверку", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Пройти", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("Сначала заполните");
   expect(state.posts).toHaveLength(0);
   await page
@@ -145,3 +139,38 @@ test("provider unavailable cannot fake a saved profile", async ({ page }) => {
   ).toBeDisabled();
   expect(state.posts).toHaveLength(0);
 });
+
+for (const theme of ["light", "dark"]) {
+  test(`verification composition: ${theme}, pinned action and layered artwork`, async ({
+    page,
+  }, info) => {
+    await setup(page, true, theme);
+    await page
+      .getByRole("link", { name: "Верификация Подтверждение личности" })
+      .click();
+    const screen = page.getByRole("region", {
+      name: "Проверка личности",
+      exact: true,
+    });
+    await expect(screen).toBeVisible();
+    const images = screen.locator("img");
+    await expect(images).toHaveCount(2);
+    for (const size of [
+      { width: 375, height: 667 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+    ]) {
+      await page.setViewportSize(size);
+      const button = page.getByRole("button", { name: "Пройти", exact: true });
+      await expect(button).toBeVisible();
+      const rect = await button.boundingBox();
+      expect(rect!.y + rect!.height).toBeGreaterThan(size.height - 40);
+      expect(rect!.y + rect!.height).toBeLessThanOrEqual(size.height);
+    }
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.screenshot({
+      path: info.outputPath(`verification-${theme}.png`),
+      animations: "disabled",
+    });
+  });
+}
