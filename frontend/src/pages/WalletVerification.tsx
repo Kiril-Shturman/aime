@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { tg } from "../lib/telegram";
 import telephoneArtwork from "../assets/verification/telephone.webp";
 import mailboxArtwork from "../assets/verification/mailbox-envelope.webp";
@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Mail,
   AtSign,
+  Camera,
 } from "lucide-react";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
 import "./WalletVerification.css";
@@ -42,6 +43,49 @@ function EmbeddedVerification({
   aura: ReturnType<typeof useAuraProfile>;
 }) {
   const [loaded, setLoaded] = useState(false);
+  const [camera, setCamera] = useState<
+    "idle" | "requesting" | "ready" | "denied"
+  >("idle");
+  const [cameraError, setCameraError] = useState("");
+  const active = useRef(true),
+    requesting = useRef(false);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  async function allowCamera() {
+    if (requesting.current) return;
+    requesting.current = true;
+    setCamera("requesting");
+    setCameraError("");
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw Error("unsupported");
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: false,
+      });
+      // Check permission only. No frames are read, stored or sent by wPay.
+      stream.getTracks().forEach((track) => track.stop());
+      if (active.current) setCamera("ready");
+    } catch (error) {
+      if (active.current) {
+        setCamera("denied");
+        setCameraError(
+          error instanceof DOMException && error.name === "NotAllowedError"
+            ? "Доступ к камере не разрешён. Проверьте разрешение камеры для Telegram в настройках телефона или продолжите проверку в браузере."
+            : "Камеру не удалось открыть в этом окне. Попробуйте ещё раз или продолжите проверку в браузере.",
+        );
+      }
+    } finally {
+      requesting.current = false;
+    }
+  }
+  function openBrowser() {
+    if (tg()?.openLink) tg()?.openLink?.(aura.sessionUrl);
+    else window.open(aura.sessionUrl, "_blank", "noopener,noreferrer");
+  }
   return (
     <section
       className="wpay-verification wpay-verification-embedded"
@@ -51,30 +95,66 @@ function EmbeddedVerification({
         <span>
           <LockKeyhole size={15} /> Проверка личности
         </span>
-        <button
-          type="button"
-          onClick={() =>
-            tg()?.openLink
-              ? tg()?.openLink?.(aura.sessionUrl)
-              : window.open(aura.sessionUrl, "_blank", "noopener,noreferrer")
-          }
-        >
+        <button type="button" onClick={openBrowser}>
           В браузере <ArrowUpRight size={14} />
         </button>
       </header>
       <div className="wpay-verification-frame-body">
-        {!loaded && (
-          <p className="wpay-verification-frame-loading" role="status">
-            Загружаем защищённую форму…
-          </p>
+        {camera !== "ready" ? (
+          <div className="wpay-verification-camera">
+            <span className="wpay-verification-camera-icon">
+              <Camera size={32} />
+            </span>
+            <h2>Для проверки нужна камера</h2>
+            <p>
+              Разрешите доступ к фронтальной камере, чтобы сделать селфи в
+              защищённой форме.
+            </p>
+            {cameraError && (
+              <p role="alert" className="wpay-verification-error">
+                {cameraError}
+              </p>
+            )}
+            <Button
+              data-wpay-primary=""
+              rounded
+              disabled={camera === "requesting"}
+              onClick={() => void allowCamera()}
+            >
+              {camera === "requesting"
+                ? "Ожидаем разрешение…"
+                : camera === "denied"
+                  ? "Повторить запрос камеры"
+                  : "Разрешить камеру"}
+            </Button>
+            <button
+              type="button"
+              className="wpay-verification-text-action"
+              onClick={openBrowser}
+            >
+              Продолжить в браузере <ArrowUpRight size={16} />
+            </button>
+            <span className="wpay-verification-camera-note">
+              Если камера не заработает внутри формы, используйте кнопку «В
+              браузере» сверху.
+            </span>
+          </div>
+        ) : (
+          <>
+            {!loaded && (
+              <p className="wpay-verification-frame-loading" role="status">
+                Загружаем защищённую форму…
+              </p>
+            )}
+            <iframe
+              title="Проверка личности Aura"
+              src={aura.sessionUrl}
+              allow="camera; microphone; fullscreen"
+              referrerPolicy="no-referrer"
+              onLoad={() => setLoaded(true)}
+            />
+          </>
         )}
-        <iframe
-          title="Проверка личности Aura"
-          src={aura.sessionUrl}
-          allow="camera; microphone; fullscreen"
-          referrerPolicy="no-referrer"
-          onLoad={() => setLoaded(true)}
-        />
       </div>
     </section>
   );

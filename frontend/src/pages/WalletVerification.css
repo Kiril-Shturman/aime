@@ -764,3 +764,70 @@
 .dark .wpay-verification-frame-loading {
   background: #20242d;
 }
+
+.wpay-verification-camera {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+  text-align: center;
+  background: #efeff4;
+}
+.dark .wpay-verification-camera {
+  background: #171b24;
+}
+.wpay-verification-camera-icon {
+  display: grid;
+  place-items: center;
+  width: 74px;
+  height: 74px;
+  margin-bottom: 22px;
+  border-radius: 24px;
+  background: #2878ff12;
+  color: #2878ff;
+}
+.dark .wpay-verification-camera-icon {
+  color: #85b4ff;
+  background: #85b4ff18;
+}
+.wpay-verification-camera h2 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -0.6px;
+}
+.wpay-verification-camera > p {
+  max-width: 340px;
+  margin: 14px 0 24px;
+  color: var(--verify-muted);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.wpay-verification-camera > .wpay-verification-error {
+  font-size: 13px;
+  color: #dc2626;
+}
+.dark .wpay-verification-camera > .wpay-verification-error {
+  color: #fca5a5;
+}
+.wpay-verification-camera .k-button {
+  width: 100%;
+  max-width: 360px;
+}
+.wpay-verification-camera .wpay-verification-text-action {
+  margin-top: 16px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.wpay-verification-camera-note {
+  margin-top: 20px;
+  max-width: 300px;
+  color: var(--verify-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}

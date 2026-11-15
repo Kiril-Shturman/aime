@@ -13,6 +13,29 @@ async function setup(
   await page.addInitScript((theme) => {
     localStorage.setItem("ui-theme", theme);
     localStorage.setItem("wpay:intro:v1", "seen");
+    const w = window as any;
+    w.cameraCalls = 0;
+    w.cameraStops = 0;
+    w.cameraDenied = false;
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => {
+          w.cameraCalls++;
+          if (w.cameraDenied)
+            throw new DOMException("Denied", "NotAllowedError");
+          return {
+            getTracks: () => [
+              {
+                stop: () => {
+                  w.cameraStops++;
+                },
+              },
+            ],
+          };
+        },
+      },
+    });
   }, theme);
   await page.route("https://verify.example/**", (route) =>
     route.fulfill({
@@ -115,6 +138,9 @@ test("contacts persist through server, hosted KYC updates from pending to verifi
   await expect(page.locator(".wpay-contact-mailbox")).toBeVisible();
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
 
+  await page
+    .getByRole("button", { name: "Разрешить камеру", exact: true })
+    .click();
   await expect(page.getByTitle("Проверка личности Aura")).toHaveAttribute(
     "src",
     "https://verify.example/session-private",
@@ -164,6 +190,9 @@ test("invalid contacts never post; viewing KYC never registers a customer", asyn
   expect(state.posts).toHaveLength(0);
   await page.locator("#verification-phone").fill("8 (999) 123-45-67");
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Разрешить камеру", exact: true })
+    .click();
   await expect(page.getByTitle("Проверка личности Aura")).toHaveAttribute(
     "src",
     "https://verify.example/session-private",
@@ -307,6 +336,11 @@ test("embedded verification stays inside app, back resumes contacts, and polling
   await page.locator("#verification-phone").fill("+79991234567");
   await page.locator("#verification-email").fill("hello@example.com");
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  expect(await page.evaluate(() => (window as any).cameraCalls)).toBe(0);
+  await page
+    .getByRole("button", { name: "Разрешить камеру", exact: true })
+    .click();
+  expect(await page.evaluate(() => (window as any).cameraStops)).toBe(1);
   const frame = page.getByTitle("Проверка личности Aura");
   await expect(frame).toBeVisible();
 
@@ -335,6 +369,9 @@ test("embedded verification stays inside app, back resumes contacts, and polling
   await page
     .getByRole("button", { name: "Продолжить проверку", exact: true })
     .click();
+  await page
+    .getByRole("button", { name: "Разрешить камеру", exact: true })
+    .click();
   await expect(frame).toBeVisible();
   expect(state.posts.length).toBe(posts);
   state.verified = true;
@@ -345,4 +382,38 @@ test("embedded verification stays inside app, back resumes contacts, and polling
   expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
     "session-private",
   );
+});
+
+test("camera denial stays readable and retry stops the permission-check stream", async ({
+  page,
+}) => {
+  await setup(page);
+  await page
+    .getByRole("link", { name: "Верификация Подтверждение личности" })
+    .click();
+  await page.getByRole("button", { name: "Начать", exact: true }).click();
+  await page.locator("#verification-phone").fill("+79991234567");
+  await page.locator("#verification-email").fill("hello@example.com");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await page.evaluate(() => {
+    (window as any).cameraDenied = true;
+  });
+  await page
+    .getByRole("button", { name: "Разрешить камеру", exact: true })
+    .click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Доступ к камере не разрешён",
+  );
+  await expect(page.getByTitle("Проверка личности Aura")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Продолжить в браузере", exact: true }),
+  ).toBeVisible();
+  await page.evaluate(() => {
+    (window as any).cameraDenied = false;
+  });
+  await page
+    .getByRole("button", { name: "Повторить запрос камеры", exact: true })
+    .click();
+  await expect(page.getByTitle("Проверка личности Aura")).toBeVisible();
+  expect(await page.evaluate(() => (window as any).cameraStops)).toBe(1);
 });
