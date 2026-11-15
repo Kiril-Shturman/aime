@@ -31,6 +31,7 @@ class State:
         self.addresses = {}
         self.deposits = []
         self.balance = Decimal("0")
+        self.idempotency = {}
 
 
 def envelope(code, message, status=400, error_type="invalid_request_error", **details):
@@ -197,6 +198,71 @@ def make_app():
         limit = min(max(int(request.query.get("limit", "100")), 1), 100)
         return web.json_response({"data": items[:limit], "next_cursor": None})
 
+    def idempotent(request, body, create):
+        key = request.headers.get("Idempotency-Key")
+        if not key:
+            return envelope("idempotency_key_required", "Idempotency-Key is required", 400)
+        fingerprint = json.dumps(body, sort_keys=True, separators=(",", ":"))
+        slot = (request.method, request.path, key)
+        previous = state.idempotency.get(slot)
+        if previous:
+            if previous[0] != fingerprint:
+                return envelope("idempotency_key_reused", "Idempotency-Key was reused", 409)
+            return web.json_response(previous[1])
+        result = create()
+        state.idempotency[slot] = (fingerprint, result)
+        return web.json_response(result)
+
+    async def open_card(request):
+        body = await request.json()
+        owner_id = str(body.get("owner_id") or "")
+        kind = str(body.get("kind") or "")
+        if owner_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        if kind not in {"virtual", "physical"}:
+            return envelope("invalid_argument", "kind is invalid", 400)
+        if kind == "physical" and not isinstance(body.get("shipping_address"), dict):
+            return envelope("invalid_argument", "shipping_address is required", 400)
+
+        def create():
+            card_id = str(uuid.uuid4())
+            item = {
+                "id": card_id, "owner_id": owner_id, "customer_id": owner_id,
+                "kind": kind, "status": "processing", "frozen": False,
+                "masked_pan": None, "delivery_status": "issuing" if kind == "physical" else None,
+                "tracking": None, "updated_at": "2026-01-01T00:03:00Z",
+            }
+            state.cards[card_id] = item
+            state.balance -= Decimal("15")
+            return item
+
+        return idempotent(request, body, create)
+
+    async def recharge_card(request):
+        card_id = request.match_info["card_id"]
+        card_item = state.cards.get(card_id)
+        if not card_item:
+            return envelope("card_not_found", "Card not found", 404)
+        body = await request.json()
+        if ("amount" in body) == ("amount_spend" in body):
+            return envelope("invalid_argument", "Provide amount or amount_spend", 400)
+        requested = Decimal(str(body.get("amount", body.get("amount_spend"))))
+        if requested <= 0:
+            return envelope("amount_out_of_range", "amount is invalid", 400)
+
+        def create():
+            result = {
+                "id": "recharge_" + uuid.uuid4().hex,
+                "card_id": card_id, "status": "completed", "currency": "USDT",
+                "charged_amount": str(requested), "recharge_amount": str(requested),
+                "fee": "0", "failure_reason": None,
+                "updated_at": "2026-01-01T00:05:00Z",
+            }
+            state.balance -= requested
+            return result
+
+        return idempotent(request, body, create)
+
     async def create_card(request):
         body = await request.json()
         customer_id = str(body.get("customer_id") or "")
@@ -341,10 +407,12 @@ def make_app():
     app.router.add_get("/v1/partner/deposits/{deposit_id}", deposit)
     app.router.add_get("/v1/partner/balance", balance)
     app.router.add_get("/v1/partner/cards-fees", card_fees)
+    app.router.add_post("/v1/partner/cards", open_card)
     app.router.add_get("/v1/partner/cards", cards)
     app.router.add_get("/v1/partner/cards/operations", card_operations)
     app.router.add_get("/v1/partner/cards/{card_id}/operations", card_operations)
     app.router.add_get("/v1/partner/cards/{card_id}", card)
+    app.router.add_post("/v1/partner/cards/{card_id}/recharge", recharge_card)
     app.router.add_get("/v1/partner/rate", sbp_rate)
     app.router.add_get("/v1/partner/orders", orders)
     app.router.add_get("/v1/partner/orders/{order_id}", order)

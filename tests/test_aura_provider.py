@@ -5,6 +5,7 @@ import tempfile
 import time
 import unittest
 import os
+from decimal import Decimal
 from unittest.mock import patch
 
 from aiohttp import web
@@ -351,6 +352,45 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         card_operations = await self.client.list_card_operations(card["id"])
         self.assertEqual(len(all_operations["data"]), 1)
         self.assertEqual(len(card_operations["data"]), 1)
+
+    async def test_card_create_and_recharge_contracts_are_idempotent(self):
+        uid = "tg:card-money"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(uid, ref)
+        self.mock.app["state"].balance = Decimal("100")
+        card = await self.client.create_card(
+            customer_id, kind="virtual", idempotency_key="open-card-one"
+        )
+        replay = await self.client.create_card(
+            customer_id, kind="virtual", idempotency_key="open-card-one"
+        )
+        self.assertEqual(card["id"], replay["id"])
+        self.assertEqual(self.mock.app["state"].balance, Decimal("85"))
+        recharge = await self.client.recharge_card(
+            card["id"], amount="25", idempotency_key="recharge-one"
+        )
+        recharge_replay = await self.client.recharge_card(
+            card["id"], amount="25", idempotency_key="recharge-one"
+        )
+        self.assertEqual(recharge["id"], recharge_replay["id"])
+        self.assertEqual(recharge["charged_amount"], "25")
+        self.assertEqual(self.mock.app["state"].balance, Decimal("60"))
+
+        with self.assertRaises(ApiError) as reused:
+            await self.client.recharge_card(
+                card["id"], amount="26", idempotency_key="recharge-one"
+            )
+        self.assertEqual(reused.exception.name, "idempotency_key_reused")
+
+    async def test_card_money_input_validation(self):
+        with self.assertRaises(ValueError):
+            await self.client.create_card(
+                "owner", kind="plastic", idempotency_key="bad-kind"
+            )
+        with self.assertRaises(ValueError):
+            await self.client.recharge_card(
+                "card-id", amount="1", amount_spend="1", idempotency_key="bad-amount"
+            )
 
     async def test_sbp_read_contracts(self):
         uid = "tg:780"

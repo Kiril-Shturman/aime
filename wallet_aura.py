@@ -378,6 +378,40 @@ class AuraClient:
     async def get_card_fees(self):
         return await self.request("GET", "/cards-fees")
 
+    async def create_card(self, owner_id, *, kind="virtual", idempotency_key,
+                          shipping_address=None):
+        owner_id = _safe_identifier(owner_id, "card owner id")
+        kind = str(kind)
+        if kind not in {"virtual", "physical"}:
+            raise ValueError("Invalid Aura card kind")
+        body = {"owner_id": owner_id, "kind": kind}
+        if shipping_address is not None:
+            if kind != "physical" or not isinstance(shipping_address, dict):
+                raise ValueError("Aura shipping address is valid only for a physical card")
+            required = {"full_name", "phone", "country", "city", "postal_code", "address_line"}
+            if set(shipping_address) != required:
+                raise ValueError("Invalid Aura shipping address fields")
+            body["shipping_address"] = {
+                key: str(shipping_address[key]).strip() for key in sorted(required)
+            }
+        elif kind == "physical":
+            raise ValueError("Aura physical card requires a shipping address")
+        return await self.request(
+            "POST", "/cards", body=body, idempotency_key=idempotency_key
+        )
+
+    async def recharge_card(self, card_id, *, idempotency_key, amount=None,
+                            amount_spend=None):
+        card_id = quote(_safe_identifier(card_id, "card id"), safe="")
+        if (amount is None) == (amount_spend is None):
+            raise ValueError("Provide exactly one of amount or amount_spend")
+        key, value = ("amount", amount) if amount is not None else ("amount_spend", amount_spend)
+        body = {key: str(_decimal(value))}
+        return await self.request(
+            "POST", "/cards/" + card_id + "/recharge",
+            body=body, idempotency_key=idempotency_key,
+        )
+
     async def list_cards(self, *, cursor=None, limit=100):
         params = {"limit": min(max(int(limit), 1), 100)}
         if cursor:
