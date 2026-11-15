@@ -21,6 +21,8 @@ class State:
     def __init__(self):
         self.customers = {}
         self.kyc = {}
+        self.cards = {}
+        self.card_operations = []
         self.addresses = {}
         self.deposits = []
         self.balance = Decimal("0")
@@ -157,6 +159,72 @@ def make_app():
             "deposit_address": "TLOCALMOCKBALANCEADDRESS",
         })
 
+    async def card_fees(_):
+        return web.json_response({
+            "currency": "USDT", "issue_fee": "15", "recharge_fee": "0",
+            "minimum_recharge": "1", "updated_at": "2026-01-01T00:00:00Z",
+        })
+
+    async def cards(request):
+        items = list(reversed(list(state.cards.values())))
+        limit = min(max(int(request.query.get("limit", "100")), 1), 100)
+        return web.json_response({"data": items[:limit], "next_cursor": None})
+
+    async def card(request):
+        card_id = request.match_info["card_id"]
+        if card_id not in state.cards:
+            return envelope("card_not_found", "Card not found", 404)
+        return web.json_response(state.cards[card_id])
+
+    async def card_operations(request):
+        card_id = request.match_info.get("card_id")
+        items = [item for item in reversed(state.card_operations)
+                 if not card_id or item["card_id"] == card_id]
+        limit = min(max(int(request.query.get("limit", "100")), 1), 100)
+        return web.json_response({"data": items[:limit], "next_cursor": None})
+
+    async def create_card(request):
+        body = await request.json()
+        customer_id = str(body.get("customer_id") or "")
+        if customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        card_id = "card_" + uuid.uuid4().hex
+        item = {
+            "id": card_id, "customer_id": customer_id,
+            "kind": str(body.get("kind") or "virtual"), "status": "opened",
+            "frozen": False, "masked_pan": "**** 4242",
+            "updated_at": "2026-01-01T00:03:00Z",
+        }
+        state.cards[card_id] = item
+        event = {
+            "event": "card.opened", "event_id": "evt_" + uuid.uuid4().hex,
+            "occurred_at": item["updated_at"], "partner_id": MOCK_PARTNER,
+            "data": item,
+        }
+        return web.json_response({"card": item, "webhook": event})
+
+    async def create_card_operation(request):
+        body = await request.json()
+        card_id = str(body.get("card_id") or "")
+        if card_id not in state.cards:
+            return envelope("card_not_found", "Card not found", 404)
+        item = {
+            "id": "op_" + uuid.uuid4().hex, "card_id": card_id,
+            "type": str(body.get("type") or "purchase"),
+            "status": str(body.get("status") or "completed"),
+            "asset": "USDT", "amount": str(body.get("amount") or "1"),
+            "fee": str(body.get("fee") or "0"),
+            "merchant": body.get("merchant") or "Local Store",
+            "updated_at": "2026-01-01T00:04:00Z",
+        }
+        state.card_operations.append(item)
+        event = {
+            "event": "card.operation", "event_id": "evt_" + uuid.uuid4().hex,
+            "occurred_at": item["updated_at"], "partner_id": MOCK_PARTNER,
+            "data": item,
+        }
+        return web.json_response({"operation": item, "webhook": event})
+
     async def create_deposit(request):
         body = await request.json()
         customer_id = str(body.get("customer_id") or "")
@@ -200,8 +268,15 @@ def make_app():
     app.router.add_get("/v1/partner/customers/{customer_id}/deposit-addresses", addresses)
     app.router.add_get("/v1/partner/deposits", deposits)
     app.router.add_get("/v1/partner/balance", balance)
+    app.router.add_get("/v1/partner/cards-fees", card_fees)
+    app.router.add_get("/v1/partner/cards", cards)
+    app.router.add_get("/v1/partner/cards/operations", card_operations)
+    app.router.add_get("/v1/partner/cards/{card_id}/operations", card_operations)
+    app.router.add_get("/v1/partner/cards/{card_id}", card)
     app.router.add_post("/mock/deposits", create_deposit)
     app.router.add_post("/mock/kyc", set_kyc)
+    app.router.add_post("/mock/cards", create_card)
+    app.router.add_post("/mock/card-operations", create_card_operation)
     return app
 
 

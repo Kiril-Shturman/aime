@@ -157,6 +157,54 @@ class AuraUnitTests(unittest.TestCase):
         self.assertEqual(state["verified"], 1)
         self.assertEqual(state["terminal"], 1)
 
+    def test_card_lifecycle_operation_and_otp_redaction(self):
+        opened = {
+            "event": "card.opened", "event_id": "evt_card",
+            "occurred_at": "2026-01-01T00:03:00Z", "partner_id": MOCK_PARTNER,
+            "data": {
+                "id": "card_one", "customer_id": self.customer,
+                "kind": "virtual", "status": "opened", "masked_pan": "**** 4242",
+                "updated_at": "2026-01-01T00:03:00Z",
+            },
+        }
+        raw, signature = signed(opened)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        operation = {
+            "event": "card.operation", "event_id": "evt_operation",
+            "occurred_at": "2026-01-01T00:04:00Z", "partner_id": MOCK_PARTNER,
+            "data": {
+                "id": "op_one", "card_id": "card_one", "type": "purchase",
+                "status": "completed", "asset": "USDT", "amount": "-2.5",
+                "fee": "0", "merchant": "Store",
+                "updated_at": "2026-01-01T00:04:00Z",
+            },
+        }
+        raw, signature = signed(operation)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 2)
+        card = self.ledger.db.execute("SELECT * FROM aura_cards").fetchone()
+        self.assertEqual(card["status"], "opened")
+        self.assertNotIn("4242424242424242", card["body"])
+        stored_operation = self.ledger.db.execute(
+            "SELECT * FROM aura_card_operations"
+        ).fetchone()
+        self.assertEqual(stored_operation["amount"], "-2.5")
+
+        otp = {
+            "event": "card.otp", "event_id": "evt_otp",
+            "occurred_at": "2026-01-01T00:05:00Z", "partner_id": MOCK_PARTNER,
+            "data": {"card_id": "card_one", "code": "123456",
+                     "expires_at": "2026-01-01T00:06:00Z"},
+        }
+        raw, signature = signed(otp)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        inbox = self.ledger.db.execute(
+            "SELECT raw_body FROM wallet_webhook_inbox WHERE provider_event_id='evt_otp'"
+        ).fetchone()[0]
+        self.assertNotIn(b"123456", bytes(inbox))
+        self.assertIn(b"sensitive_payload_sha256", bytes(inbox))
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+
 
 class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -215,6 +263,27 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             await self.client.upsert_customer("customer", email="not-an-email")
         with self.assertRaises(ValueError):
             await self.client.upsert_customer("customer", phone="89991234567")
+
+    async def test_card_read_contracts_and_fees(self):
+        uid = "tg:779"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(uid, ref)
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id, "kind": "virtual"}
+        )
+        card = (await created.json())["card"]
+        fees = await self.client.get_card_fees()
+        self.assertEqual(fees["currency"], "USDT")
+        self.assertEqual((await self.client.list_cards())["data"][0]["id"], card["id"])
+        self.assertEqual((await self.client.get_card(card["id"]))["status"], "opened")
+        operation = await self.mock.post(
+            "/mock/card-operations", json={"card_id": card["id"], "amount": "3"}
+        )
+        self.assertEqual(operation.status, 200)
+        all_operations = await self.client.list_card_operations()
+        card_operations = await self.client.list_card_operations(card["id"])
+        self.assertEqual(len(all_operations["data"]), 1)
+        self.assertEqual(len(card_operations["data"]), 1)
 
     async def test_environment_key_guard(self):
         with self.assertRaises(ValueError):
@@ -326,6 +395,45 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         body = await status.json()
         self.assertTrue(body["verified"])
         self.assertTrue(body["terminal"])
+
+    async def test_card_webhooks_feed_owner_scoped_views(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner, json={}
+        )
+        customer_id = (await registered.json())["customer_id"]
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id}
+        )
+        card_result = await created.json()
+        raw, signature = signed(card_result["webhook"])
+        self.assertEqual((await self.wpay.post(
+            "/api/wallet/aura-webhook", data=raw,
+            headers={"X-Aura-Signature-V2": signature},
+        )).status, 200)
+        card_id = card_result["card"]["id"]
+        operation = await self.mock.post(
+            "/mock/card-operations", json={"card_id": card_id, "amount": "-4.5"}
+        )
+        operation_event = (await operation.json())["webhook"]
+        raw, signature = signed(operation_event)
+        self.assertEqual((await self.wpay.post(
+            "/api/wallet/aura-webhook", data=raw,
+            headers={"X-Aura-Signature-V2": signature},
+        )).status, 200)
+        processed = await self.wpay.post(
+            "/api/wallet/admin-aura-process", headers=self.owner
+        )
+        self.assertEqual((await processed.json())["processed"], 2)
+        cards = await self.wpay.get("/api/wallet/aura-cards", headers=self.owner)
+        self.assertEqual((await cards.json())["data"][0]["card_id"], card_id)
+        operations = await self.wpay.get(
+            "/api/wallet/aura-card-operations?card_id=" + card_id,
+            headers=self.owner,
+        )
+        self.assertEqual((await operations.json())["data"][0]["amount"], "-4.5")
+        fees = await self.wpay.get("/api/wallet/aura-card-fees", headers=self.owner)
+        self.assertEqual(fees.status, 200)
+        self.assertEqual(fees.headers["Cache-Control"], "no-store")
 
 
 if __name__ == "__main__":

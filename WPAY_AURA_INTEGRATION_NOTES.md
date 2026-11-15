@@ -698,20 +698,28 @@ Implemented:
   validation, short-lived hosted KYC sessions, current KYC status and
   idempotent `customer.kyc.updated` processing. Session URLs are never persisted;
   only minimal status/verified/terminal/reason metadata is retained.
+- Card fee/list/detail/operation read transport; owner-scoped local card and
+  operation views; lifecycle processing for `card.opened`, `card.failed`,
+  `card.cancelled`, `card.status_changed` and `card.operation`. Stored card data
+  is recursively redacted. `card.otp` is signature-checked and deduplicated but
+  its code is replaced by a payload hash before the durable inbox write.
 
 Verification on this branch:
 
-- 87 backend unit/integration tests passed, including duplicate delivery,
+- 90 backend unit/integration tests passed, including duplicate delivery,
   pending-to-confirmed transition, invalid-signature recovery, event-ID reuse,
   environment guards and the complete mock deposit route.
 - Frontend tests passed (3/3), production build passed and lint completed with
   pre-existing warnings only.
 - Python compilation and `git diff --check` passed.
 
-Still not implemented: KYC identity import, cards, SBP purchase, outgoing QR
-payment and withdrawals. Identity import remains intentionally blocked until the
-exact passport request schema and retention requirements are available; hosted
-KYC is the safe default. The remaining products require their exact
-request/response schemas and real Aura testnet or a tightly controlled
-production pilot. A newly issued live key may later be installed only in server
-secret storage; the key previously pasted in chat must remain revoked.
+Still not implemented: KYC identity import; card issue/recharge/cancel/freeze/
+unfreeze/PIN request contracts; ephemeral credential/OTP delivery to the owner;
+SBP purchase; outgoing QR payment; and withdrawals. Identity import remains
+intentionally blocked until the exact passport request schema and retention
+requirements are available; hosted KYC is the safe default. Card mutation and
+sensitive-response routes remain blocked until their exact JSON schemas are
+available. The remaining products require their exact request/response schemas
+and real Aura testnet or a tightly controlled production pilot. A newly issued
+live key may later be installed only in server secret storage; the key previously
+pasted in chat must remain revoked.

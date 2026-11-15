@@ -71,6 +71,20 @@ def prepare(ledger):
         reason TEXT, provider_updated_at TEXT, body TEXT NOT NULL,
         created_at REAL NOT NULL, updated_at REAL NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS aura_cards (
+        card_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, customer_id TEXT NOT NULL,
+        environment TEXT NOT NULL, kind TEXT, status TEXT NOT NULL,
+        frozen INTEGER NOT NULL DEFAULT 0, masked_pan TEXT,
+        provider_updated_at TEXT, body TEXT NOT NULL,
+        created_at REAL NOT NULL, updated_at REAL NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS aura_card_operations (
+        operation_id TEXT PRIMARY KEY, card_id TEXT NOT NULL, user_id TEXT NOT NULL,
+        environment TEXT NOT NULL, operation_type TEXT, status TEXT NOT NULL,
+        asset TEXT, amount TEXT, fee TEXT, merchant TEXT,
+        provider_updated_at TEXT, body TEXT NOT NULL,
+        created_at REAL NOT NULL, updated_at REAL NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS aura_deposit_addresses (
         address_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, customer_id TEXT NOT NULL,
         environment TEXT NOT NULL, network TEXT NOT NULL, address TEXT NOT NULL,
@@ -131,6 +145,34 @@ def _decimal(value, *, allow_zero=False):
     if result.as_tuple().exponent < -18:
         raise ValueError("Aura decimal has too many places")
     return result
+
+
+def _signed_decimal(value):
+    try:
+        result = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError("Invalid Aura decimal")
+    if not result.is_finite() or result.as_tuple().exponent < -18:
+        raise ValueError("Invalid Aura decimal")
+    return result
+
+
+SENSITIVE_CARD_KEYS = {
+    "pan", "card_number", "number", "cvv", "cvc", "pin", "otp", "code",
+    "credentials", "activation_code",
+}
+
+
+def _redact_card_data(value):
+    if isinstance(value, dict):
+        return {
+            str(key): ("[REDACTED]" if str(key).lower() in SENSITIVE_CARD_KEYS
+                       else _redact_card_data(item))
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_redact_card_data(item) for item in value]
+    return value
 
 
 def _safe_identifier(value, label):
@@ -285,6 +327,29 @@ class AuraClient:
     async def start_kyc(self, customer_id):
         customer_id = quote(_safe_identifier(customer_id, "customer id"), safe="")
         return await self.request("POST", "/customers/" + customer_id + "/kyc")
+
+    async def get_card_fees(self):
+        return await self.request("GET", "/cards-fees")
+
+    async def list_cards(self, *, cursor=None, limit=100):
+        params = {"limit": min(max(int(limit), 1), 100)}
+        if cursor:
+            params["cursor"] = str(cursor)
+        return await self.request("GET", "/cards", params=params)
+
+    async def get_card(self, card_id):
+        card_id = quote(_safe_identifier(card_id, "card id"), safe="")
+        return await self.request("GET", "/cards/" + card_id)
+
+    async def list_card_operations(self, card_id=None, *, cursor=None, limit=100):
+        params = {"limit": min(max(int(limit), 1), 100)}
+        if cursor:
+            params["cursor"] = str(cursor)
+        path = "/cards/operations"
+        if card_id is not None:
+            card_id = quote(_safe_identifier(card_id, "card id"), safe="")
+            path = "/cards/" + card_id + "/operations"
+        return await self.request("GET", path, params=params)
 
     async def deposit_addresses(self, customer_id):
         return await self.request("GET", "/customers/" + quote(_safe_identifier(customer_id, "customer id"), safe="") + "/deposit-addresses")
@@ -476,8 +541,24 @@ def store_webhook(ledger, raw, signature, headers, secret, partner_id=None):
             valid = False
         if partner_id and str(event.get("partner_id")) != partner_id:
             valid = False
+        stored_event = event
+        if kind == "card.otp":
+            data = event.get("data") or {}
+            stored_event = {
+                **event,
+                "data": {
+                    "card_id": data.get("card_id"),
+                    "expires_at": data.get("expires_at"),
+                    "redacted": True,
+                    "sensitive_payload_sha256": hashlib.sha256(raw).hexdigest(),
+                },
+            }
+        stored_raw = json.dumps(
+            stored_event, separators=(",", ":"), ensure_ascii=False
+        ).encode()
     except (ValueError, TypeError, json.JSONDecodeError):
         event, event_id, kind, valid = {}, hashlib.sha256(raw).hexdigest(), "invalid", False
+        stored_raw = raw
     key = "aura:" + event_id if valid else "aura:invalid:" + hashlib.sha256(raw + signature.encode()).hexdigest()
     ledger.begin("aura_webhook_receive", "aura", key)
     try:
@@ -485,11 +566,11 @@ def store_webhook(ledger, raw, signature, headers, secret, partner_id=None):
             "INSERT OR IGNORE INTO wallet_webhook_inbox "
             "(event_key,raw_body,signature,signature_valid,origin,update_type,entity_id,"
             "received_at,error,provider,provider_event_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-            (key, raw, signature, int(valid), "webhook", kind, event_id, time.time(),
+            (key, stored_raw, signature, int(valid), "webhook", kind, event_id, time.time(),
              None if valid else "BAD_AURA_SIGNATURE", "aura", event_id),
         )
         row = ledger.db.execute("SELECT * FROM wallet_webhook_inbox WHERE event_key=?", (key,)).fetchone()
-        if valid and row and bytes(row["raw_body"]) != raw:
+        if valid and row and bytes(row["raw_body"]) != stored_raw:
             valid = False
             ledger.db.execute(
                 "UPDATE wallet_webhook_inbox SET signature_valid=0,error='AURA_EVENT_ID_REUSED' WHERE id=?",
@@ -529,6 +610,93 @@ def _position_add(ledger, environment, uid, asset, amount):
     )
 
 
+def _store_card_event(ledger, environment, kind, data):
+    card_id = _safe_identifier(data.get("card_id") or data.get("id"), "card id")
+    existing = ledger.db.execute(
+        "SELECT * FROM aura_cards WHERE card_id=? AND environment=?",
+        (card_id, environment),
+    ).fetchone()
+    customer_id = data.get("customer_id") or (existing["customer_id"] if existing else None)
+    customer_id = _safe_identifier(customer_id, "customer id")
+    owner = ledger.db.execute(
+        "SELECT user_id FROM aura_customers WHERE customer_id=? AND environment=?",
+        (customer_id, environment),
+    ).fetchone()
+    if not owner or (existing and existing["user_id"] != owner[0]):
+        raise ValueError("Unknown Aura card owner")
+    incoming_updated = str(data.get("updated_at") or "")
+    if (existing and incoming_updated and existing["provider_updated_at"]
+            and incoming_updated <= existing["provider_updated_at"]):
+        return
+    event_status = {
+        "card.opened": "opened", "card.failed": "failed",
+        "card.cancelled": "cancelled",
+    }.get(kind)
+    status = str(data.get("status") or event_status or "unknown")[:100]
+    frozen = data.get("frozen") is True or status == "frozen"
+    kind_value = data.get("kind") or data.get("card_type") or data.get("type")
+    kind_value = str(kind_value)[:100] if kind_value is not None else None
+    masked_pan = data.get("masked_pan") or data.get("last4")
+    masked_pan = str(masked_pan)[:32] if masked_pan is not None else None
+    safe = _redact_card_data(data)
+    stamp = time.time()
+    ledger.db.execute(
+        "INSERT INTO aura_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(card_id) DO UPDATE SET kind=COALESCE(excluded.kind,aura_cards.kind),"
+        "status=excluded.status,frozen=excluded.frozen,"
+        "masked_pan=COALESCE(excluded.masked_pan,aura_cards.masked_pan),"
+        "provider_updated_at=excluded.provider_updated_at,body=excluded.body,"
+        "updated_at=excluded.updated_at",
+        (card_id, owner[0], customer_id, environment, kind_value, status, int(frozen),
+         masked_pan, incoming_updated or None,
+         json.dumps(safe, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
+    )
+
+
+def _store_card_operation(ledger, environment, data):
+    operation_id = _safe_identifier(
+        data.get("operation_id") or data.get("id"), "card operation id"
+    )
+    card_id = _safe_identifier(data.get("card_id"), "card id")
+    card = ledger.db.execute(
+        "SELECT user_id FROM aura_cards WHERE card_id=? AND environment=?",
+        (card_id, environment),
+    ).fetchone()
+    if not card:
+        raise ValueError("Unknown Aura card operation owner")
+    existing = ledger.db.execute(
+        "SELECT provider_updated_at FROM aura_card_operations WHERE operation_id=?",
+        (operation_id,),
+    ).fetchone()
+    incoming_updated = str(data.get("updated_at") or "")
+    if (existing and incoming_updated and existing[0]
+            and incoming_updated <= existing[0]):
+        return
+    amount = None if data.get("amount") is None else str(_signed_decimal(data["amount"]))
+    fee = None if data.get("fee") is None else str(_signed_decimal(data["fee"]))
+    asset = data.get("currency") or data.get("asset")
+    asset = str(asset).upper()[:20] if asset is not None else None
+    merchant = data.get("merchant")
+    if isinstance(merchant, dict):
+        merchant = merchant.get("name") or merchant.get("descriptor")
+    merchant = str(merchant)[:300] if merchant is not None else None
+    operation_type = data.get("type") or data.get("operation_type")
+    operation_type = str(operation_type)[:100] if operation_type is not None else None
+    status = str(data.get("status") or "unknown")[:100]
+    stamp = time.time()
+    ledger.db.execute(
+        "INSERT INTO aura_card_operations VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "ON CONFLICT(operation_id) DO UPDATE SET operation_type=excluded.operation_type,"
+        "status=excluded.status,asset=excluded.asset,amount=excluded.amount,fee=excluded.fee,"
+        "merchant=excluded.merchant,provider_updated_at=excluded.provider_updated_at,"
+        "body=excluded.body,updated_at=excluded.updated_at",
+        (operation_id, card_id, card[0], environment, operation_type, status, asset,
+         amount, fee, merchant, incoming_updated or None,
+         json.dumps(_redact_card_data(data), separators=(",", ":"), ensure_ascii=False),
+         stamp, stamp),
+    )
+
+
 def process_inbox(ledger, environment, limit=20):
     rows = ledger.db.execute(
         "SELECT * FROM wallet_webhook_inbox WHERE provider='aura' AND signature_valid=1 "
@@ -547,7 +715,15 @@ def process_inbox(ledger, environment, limit=20):
             if current[0] is not None:
                 ledger.commit()
                 continue
-            if kind == "customer.kyc.updated":
+            if kind in {"card.opened", "card.failed", "card.cancelled", "card.status_changed"}:
+                _store_card_event(ledger, environment, kind, data)
+            elif kind == "card.operation":
+                _store_card_operation(ledger, environment, data)
+            elif kind == "card.otp":
+                # OTP is deliberately discarded. The authenticated owner can fetch
+                # the current code directly from Aura while it is still valid.
+                pass
+            elif kind == "customer.kyc.updated":
                 customer_id = _safe_identifier(
                     data.get("customer_id") or data.get("id"), "customer id"
                 )

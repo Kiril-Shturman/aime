@@ -829,6 +829,37 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(await aura_service.start_kyc(
                     uid, client_ref, email=body.get('email'), phone=body.get('phone')
                 ))
+            if action == 'aura-card-fees' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                response = web.json_response(await aura_client.get_card_fees())
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-cards' and request.method == 'GET':
+                cards = [dict(row) for row in ledger.db.execute(
+                    'SELECT card_id,kind,status,frozen,masked_pan,provider_updated_at '
+                    'FROM aura_cards WHERE user_id=? AND environment=? ORDER BY updated_at DESC',
+                    (uid, aura_environment),
+                )]
+                for item in cards:
+                    item['frozen'] = bool(item['frozen'])
+                return web.json_response({'data': cards})
+            if action == 'aura-card-operations' and request.method == 'GET':
+                card_id = str(request.query.get('card_id') or '')
+                if not card_id:
+                    raise ValueError('card_id is required')
+                owned = ledger.db.execute(
+                    'SELECT 1 FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?',
+                    (card_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
+                operations = [dict(row) for row in ledger.db.execute(
+                    'SELECT operation_id,operation_type,status,asset,amount,fee,merchant,provider_updated_at '
+                    'FROM aura_card_operations WHERE card_id=? AND user_id=? '
+                    'ORDER BY updated_at DESC LIMIT 200', (card_id, uid),
+                )]
+                return web.json_response({'data': operations})
             if action == 'aura-deposit-address' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
