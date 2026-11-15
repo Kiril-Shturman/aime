@@ -29,6 +29,19 @@ async function setup(
           transactions: [],
         },
       });
+    if (path.endsWith("/withdrawal-estimate"))
+      return route.fulfill({
+        json: {
+          intent_id: "estimate-one",
+          fee: "1",
+          total: "26.5",
+          expires_at: Date.now() / 1000 + 120,
+        },
+      });
+    if (path.endsWith("/withdrawal-create"))
+      return route.fulfill({
+        json: { status: "processing", spend_id: "payout-one" },
+      });
     if (path.endsWith("/addresses"))
       return route.fulfill({
         json: { items: [{ asset: "USDT", network: "TON", address }] },
@@ -135,14 +148,139 @@ test("live deposit requests the chosen asset and never shows sample QR data", as
     .click();
   const flow = page.locator('[aria-hidden="false"]').last();
   await flow.getByText("Ethereum", { exact: true }).last().click();
-  await flow
-    .getByRole("button", { name: "Получить реквизиты", exact: true })
-    .click();
   await expect(
-    flow.getByLabel("Реквизиты пополнения", { exact: true }),
+    flow.getByLabel("QR-код пополнения", { exact: true }),
   ).toBeVisible();
   expect(requested).toEqual({ asset: "ETH", network: "ETH" });
   await expect(page.getByText("Пример QR-кода", { exact: true })).toHaveCount(
     0,
   );
+});
+
+test("opening a portfolio does not allocate addresses; selected network shows its minimum", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  let issued = 0;
+  await page.route("**/api/wallet/address", (route) => {
+    issued++;
+    return route.fulfill({
+      json: {
+        asset: "USDT",
+        assets: ["USDT"],
+        address: "0x" + "b".repeat(40),
+        network: "BSC",
+        min_deposit: "5",
+      },
+    });
+  });
+  await page
+    .locator(".wpay-wallet-home span.font-semibold")
+    .filter({ hasText: /^Tether$/ })
+    .first()
+    .click();
+  expect(issued).toBe(0);
+  await page
+    .locator('[data-wallet-surface="asset"]')
+    .getByRole("button", { name: "Пополнить", exact: true })
+    .click();
+  await page
+    .locator(".wpay-deposit-method-sheet.modal-in")
+    .getByText("USDT · BEP20", { exact: true })
+    .click();
+  await expect(
+    page.getByLabel("QR-код пополнения", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "Минимум пополнения: 5 USDT. Переводы меньше минимума не зачисляются.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  expect(issued).toBe(1);
+});
+
+test("withdrawal is sent only after accepting the server fee", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  let sent = 0;
+  await page.route("**/api/wallet/withdrawal-create", (route) => {
+    sent++;
+    expect(route.request().postDataJSON()).toEqual({
+      intent_id: "estimate-one",
+    });
+    return route.fulfill({
+      json: { spend_id: "payout-one", status: "processing" },
+    });
+  });
+  await page
+    .locator(".wpay-wallet-home span.font-semibold")
+    .filter({ hasText: /^Tether$/ })
+    .first()
+    .click();
+  await page
+    .locator('[data-wallet-surface="asset"]')
+    .getByRole("button", { name: "Вывести", exact: true })
+    .click();
+  await page
+    .locator('[aria-hidden="false"]')
+    .last()
+    .getByText("Tether", { exact: true })
+    .last()
+    .click();
+  await page
+    .getByRole("group", { name: "Адрес списания" })
+    .getByRole("radio", { name: "USDT TON", exact: true })
+    .check();
+  await page.getByLabel("Сумма вывода USDT", { exact: true }).fill("25.5");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await page.getByLabel("Адрес кошелька", { exact: true }).fill(address);
+  await page
+    .getByRole("button", { name: "Проверить реквизиты", exact: true })
+    .click();
+  await expect(page.getByText("26.5 USDT", { exact: true })).toBeVisible();
+  expect(sent).toBe(0);
+  await page
+    .getByRole("button", { name: "Подтвердить вывод", exact: true })
+    .click();
+  await expect(
+    page.getByText("Вывод принят. Ожидаем отправку в сеть.", { exact: true }),
+  ).toBeVisible();
+  expect(sent).toBe(1);
+});
+
+test("TRON displays the exact amount returned by the provider", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  await page.route("**/api/wallet/deposit", (route) => {
+    expect(route.request().postDataJSON()).toEqual({
+      asset: "USDT",
+      network: "TRON",
+      amount: "10",
+    });
+    return route.fulfill({
+      json: {
+        network: "TRON",
+        address: "T" + "a".repeat(33),
+        amount: "10.3725",
+        requested: "10",
+        claim_id: 5123,
+        expires_at: new Date(Date.now() + 1500000).toISOString(),
+      },
+    });
+  });
+  await page
+    .locator(".wpay-wallet-home")
+    .getByRole("button", { name: "Пополнить", exact: true })
+    .click();
+  const flow = page.locator('[aria-hidden="false"]').last();
+  await flow.locator("li").filter({ hasText: "USDT" }).first().click();
+  await flow.getByText("USDT · TRC20", { exact: true }).click();
+  await flow.getByLabel("Сумма пополнения USDT", { exact: true }).fill("10");
+  await flow
+    .getByRole("button", { name: "Получить реквизиты", exact: true })
+    .click();
+  await expect(flow.getByText("10.3725 USDT", { exact: true })).toBeVisible();
 });

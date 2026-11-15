@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import QRCode from "react-qr-code";
 import { useLiveWallet } from "./WalletLive";
-import { walletRequest, type Deposit } from "../lib/wallet-api";
+import { walletRequest, WalletApiError, type Deposit } from "../lib/wallet-api";
 import { tg } from "../lib/telegram";
 import "./WalletDeposit.css";
 
@@ -47,6 +47,15 @@ export default function WalletDeposit({
     asset = defaultAsset;
   const meta = options.find((item) => item.code === asset);
   const supported = networks[asset] ?? [];
+  const [retryAt, setRetryAt] = useState(0);
+  useEffect(() => {
+    if (!retryAt) return;
+    const timer = window.setTimeout(
+      () => setRetryAt(0),
+      Math.max(0, retryAt - Date.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [retryAt]);
   const [network, setNetwork] = useState(supported[0] ?? ""),
     [picker, setPicker] = useState<"asset" | "network" | null>(null),
     [amount, setAmount] = useState(""),
@@ -87,7 +96,8 @@ export default function WalletDeposit({
   const exact = network === "TRON";
   const numeric = Number(amount.replace(",", "."));
   async function create() {
-    if (busy || !available || !wallet.configured) return;
+    if (busy || !available || !wallet.configured || Date.now() < retryAt)
+      return;
     const version = ++generation.current;
     setBusy(true);
     setError("");
@@ -100,6 +110,14 @@ export default function WalletDeposit({
       });
       if (mounted.current && version === generation.current) setDeposit(result);
     } catch (e) {
+      if (e instanceof WalletApiError && e.retryAfter) {
+        const seconds = Number(e.retryAfter);
+        setRetryAt(
+          Number.isFinite(seconds)
+            ? Date.now() + seconds * 1000
+            : Date.parse(e.retryAfter),
+        );
+      }
       if (mounted.current && version === generation.current)
         setError(
           e instanceof Error ? e.message : "Не удалось получить реквизиты",
@@ -287,6 +305,7 @@ export default function WalletDeposit({
           rounded
           large
           disabled={
+            Date.now() < retryAt ||
             !wallet.configured ||
             busy ||
             (exact && (!Number.isFinite(numeric) || numeric <= 0))
@@ -311,6 +330,15 @@ export default function WalletDeposit({
           className="mt-4 rounded-2xl bg-red-500/10 p-4 text-[14px] text-red-600 dark:bg-red-400/10 dark:text-red-400"
         >
           {error}
+        </p>
+      )}
+      {retryAt > Date.now() && (
+        <p
+          role="status"
+          className="mt-3 text-center text-[14px] text-black/45 dark:text-white/45"
+        >
+          Сеть готовит адрес. Повторите после{" "}
+          {new Date(retryAt).toLocaleTimeString("ru-RU")}.
         </p>
       )}
       {deposit && (
@@ -350,6 +378,12 @@ export default function WalletDeposit({
               {expired
                 ? "Срок действия этих реквизитов истёк. Не отправляйте на них средства."
                 : "Откройте платёжное окно, чтобы увидеть реквизиты выбранной сети."}
+            </p>
+          )}
+          {deposit.min_deposit && asset === "USDT" && (
+            <p className="mt-3 text-[14px] text-black/45 dark:text-white/45">
+              Минимум пополнения: {deposit.min_deposit} USDT. Переводы меньше
+              минимума не зачисляются.
             </p>
           )}
           {deposit.amount && (

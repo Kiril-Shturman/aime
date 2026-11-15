@@ -1,84 +1,991 @@
-import { useEffect, useRef, useState } from 'react'
-import { List, ListItem, Button } from 'konsta/react'
-import { Popup, Page, Navbar, NavRight, Link } from 'framework7-react'
-import { ArrowDownLeft, ArrowUpRight, FileText, ArrowLeftRight, Wallet, ChevronRight, ExternalLink, Copy, Check, Settings2 } from 'lucide-react'
-import { walletRequest } from '../lib/wallet-api'
-import { useLiveWallet } from './WalletLive'
+import { useEffect, useRef, useState } from "react";
+import { List, ListItem, Button } from "konsta/react";
+import { Popup, Page, Navbar, NavRight, Link } from "framework7-react";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  FileText,
+  ArrowLeftRight,
+  Wallet,
+  ChevronRight,
+  ExternalLink,
+  Copy,
+  Check,
+  Settings2,
+} from "lucide-react";
+import { walletRequest } from "../lib/wallet-api";
+import { useLiveWallet } from "./WalletLive";
 
-type Entry = Record<string,unknown>
-type Tab = 'invoices'|'transfers'|'withdrawals'|'deposits'|'addresses'|'reconciliation'|'account'
-type Audit = {items:{asset:string;balance:string;net:string;difference:string|null}[];complete:boolean;stable:boolean;entries:number}
-type HistoryResponse = {items:Entry[];has_more?:boolean;cursor?:number;scope?:string;notice?:string}
-const tabs = {invoices:'Счета',transfers:'Переводы',withdrawals:'Выводы',deposits:'Пополнения',addresses:'Мои реквизиты',reconciliation:'Сверка',account:'Аккаунт GoSwap'}
-const operationNames:Record<string,string>={invoice_payment:'Оплата счёта',transfer:'Перевод',transfer_revoked:'Отзыв перевода',deposit:'Пополнение',deposit_return:'Возврат пополнения',owner_withdrawal:'Вывод владельца',hold_release:'Снятие удержания',invoice_refund:'Возврат по счёту',check:'Создание чека',check_cancelled:'Отмена чека',qr_payment:'Оплата QR',qr_refund:'Возврат QR',adjustment:'Корректировка',other:'Прочее',withdrawal:'Вывод в сеть',withdrawal_refund:'Возврат вывода'}
-const labels:Record<string,string>={active:'Активен',paid:'Оплачен',expired:'Истёк',pending:'Ждёт получателя',completed:'Выполнено',processing:'В обработке',failed:'Не выполнено',reverted:'Отозван',refunded:'Возвращено'}
-const text=(value:unknown)=>value===null||value===undefined||value===''?'—':String(value)
-const amount=(value:unknown)=>value!==null&&value!==undefined&&value!==''&&Number.isFinite(Number(value))?Number(value).toLocaleString('en-US',{maximumFractionDigits:8}):'—'
-const date=(value:unknown)=>{const d=new Date(String(value??''));return Number.isNaN(d.getTime())?'—':d.toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
-const iconFor=(tab:Tab)=>tab==='invoices'?FileText:tab==='transfers'?ArrowLeftRight:tab==='withdrawals'?ArrowUpRight:tab==='deposits'?ArrowDownLeft:Wallet
-const idFor=(item:Entry)=>String(item.invoice_id??item.transfer_id??item.withdrawal_id??item.deposit_id??item.id??item.network??'')
-function safePaymentLink(value:unknown){try{const u=new URL(String(value));return u.protocol==='https:'&&['t.me','goswap.site'].includes(u.hostname)&&!u.username&&!u.password?u.href:null}catch{return null}}
-function explorer(item:Entry){
- const hash=String(item.tx_hash??'');if(!/^[A-Za-z0-9_:-]{16,160}$/.test(hash))return null
- const base:Record<string,string>={BSC:'https://bscscan.com/tx/',ETH:'https://etherscan.io/tx/',TRON:'https://tronscan.org/#/transaction/',SOL:'https://solscan.io/tx/',TON:'https://tonviewer.com/transaction/'}
- return base[String(item.network)]?base[String(item.network)]+encodeURIComponent(hash):null
+type Entry = Record<string, unknown>;
+type Tab =
+  | "invoices"
+  | "transfers"
+  | "withdrawals"
+  | "deposits"
+  | "addresses"
+  | "reconciliation"
+  | "account";
+type Audit = {
+  items: {
+    asset: string;
+    balance: string;
+    net: string;
+    difference: string | null;
+  }[];
+  complete: boolean;
+  stable: boolean;
+  entries: number;
+};
+type HistoryResponse = {
+  items: Entry[];
+  has_more?: boolean;
+  cursor?: number;
+  scope?: string;
+  notice?: string;
+};
+const tabs = {
+  invoices: "Счета",
+  transfers: "Переводы",
+  withdrawals: "Выводы",
+  deposits: "Пополнения",
+  addresses: "Мои реквизиты",
+  reconciliation: "Сверка",
+  account: "Аккаунт GoSwap",
+};
+const operationNames: Record<string, string> = {
+  invoice_payment: "Оплата счёта",
+  transfer: "Перевод",
+  transfer_revoked: "Отзыв перевода",
+  deposit: "Пополнение",
+  deposit_return: "Возврат пополнения",
+  owner_withdrawal: "Вывод владельца",
+  hold_release: "Снятие удержания",
+  invoice_refund: "Возврат по счёту",
+  check: "Создание чека",
+  check_cancelled: "Отмена чека",
+  qr_payment: "Оплата QR",
+  qr_refund: "Возврат QR",
+  adjustment: "Корректировка",
+  other: "Прочее",
+  withdrawal: "Вывод в сеть",
+  withdrawal_refund: "Возврат вывода",
+};
+const labels: Record<string, string> = {
+  active: "Активен",
+  paid: "Оплачен",
+  expired: "Истёк",
+  pending: "Ждёт получателя",
+  completed: "Выполнено",
+  processing: "В обработке",
+  failed: "Не выполнено",
+  reverted: "Отозван",
+  refunded: "Возвращено",
+};
+const text = (value: unknown) =>
+  value === null || value === undefined || value === "" ? "—" : String(value);
+const amount = (value: unknown) =>
+  value !== null &&
+  value !== undefined &&
+  value !== "" &&
+  Number.isFinite(Number(value))
+    ? Number(value).toLocaleString("en-US", { maximumFractionDigits: 8 })
+    : "—";
+const date = (value: unknown) => {
+  const d = new Date(String(value ?? ""));
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleString("ru-RU", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+};
+const iconFor = (tab: Tab) =>
+  tab === "invoices"
+    ? FileText
+    : tab === "transfers"
+      ? ArrowLeftRight
+      : tab === "withdrawals"
+        ? ArrowUpRight
+        : tab === "deposits"
+          ? ArrowDownLeft
+          : Wallet;
+const idFor = (item: Entry) =>
+  String(
+    item.invoice_id ??
+      item.transfer_id ??
+      item.withdrawal_id ??
+      item.deposit_id ??
+      item.id ??
+      item.network ??
+      "",
+  );
+function safePaymentLink(value: unknown) {
+  try {
+    const u = new URL(String(value));
+    return u.protocol === "https:" &&
+      ["t.me", "goswap.site"].includes(u.hostname) &&
+      !u.username &&
+      !u.password
+      ? u.href
+      : null;
+  } catch {
+    return null;
+  }
 }
-function statusClass(status:string){return ['paid','completed','refunded'].includes(status)?'text-green-600 dark:text-green-400':['failed','expired','reverted'].includes(status)?'text-orange-600 dark:text-orange-400':'text-blue-600 dark:text-blue-400'}
-const rowLabels:Record<string,string>={invoice_id:'Номер счёта',transfer_id:'Номер перевода',withdrawal_id:'Номер вывода',deposit_id:'Номер поступления',id:'ID проводки',type:'Тип проводки',operation_id:'ID операции',spend_id:'Ваш номер операции',status:'Статус',asset:'Валюта',amount:'Сумма',target:'Выставлено',received:'Получено',credited:'Зачислено',fee:'Комиссия',fee_amount:'Комиссия',net:'Изменение баланса',network:'Сеть',address:'Адрес',tx_hash:'Хеш транзакции',client_ref:'Номер клиента',user_id:'Telegram ID получателя',memo:'Memo',description:'Описание',comment:'Комментарий',payload:'Номер заказа',version:'Версия статуса',created_at:'Создано',paid_at:'Оплачено',completed_at:'Завершено',failed_at:'Отказ',reverted_at:'Отозвано',credited_at:'Зачислено',expires_at:'Действует до',min_deposit:'Минимум пополнения USDT'}
-function RecordRows({item}:{item:Entry}){return <dl className="overflow-hidden rounded-[28px] bg-white px-4 dark:bg-[#1c1c1e]">{Object.entries(rowLabels).filter(([key])=>item[key]!==undefined&&item[key]!==null).map(([key,label])=><div key={key} className="flex min-h-14 justify-between gap-4 border-b border-black/[.06] py-4 last:border-0 dark:border-white/[.08]"><dt className="max-w-[44%] shrink-0 text-[14px] text-black/45 dark:text-white/45">{label}</dt><dd className="min-w-0 text-right text-[15px] font-medium [overflow-wrap:anywhere]">{key==='type'?(operationNames[String(item[key])]??text(item[key])):key==='status'?(labels[String(item[key])]??text(item[key])):key.endsWith('_at')?date(item[key]):text(item[key])}</dd></div>)}</dl>}
+function explorer(item: Entry) {
+  const hash = String(item.tx_hash ?? "");
+  if (!/^[A-Za-z0-9_:-]{16,160}$/.test(hash)) return null;
+  const base: Record<string, string> = {
+    BSC: "https://bscscan.com/tx/",
+    ETH: "https://etherscan.io/tx/",
+    TRON: "https://tronscan.org/#/transaction/",
+    SOL: "https://solscan.io/tx/",
+    TON: "https://tonviewer.com/transaction/",
+  };
+  return base[String(item.network)]
+    ? base[String(item.network)] + encodeURIComponent(hash)
+    : null;
+}
+function statusClass(status: string) {
+  return ["paid", "completed", "refunded"].includes(status)
+    ? "text-green-600 dark:text-green-400"
+    : ["failed", "expired", "reverted"].includes(status)
+      ? "text-orange-600 dark:text-orange-400"
+      : "text-blue-600 dark:text-blue-400";
+}
+const rowLabels: Record<string, string> = {
+  invoice_id: "Номер счёта",
+  transfer_id: "Номер перевода",
+  withdrawal_id: "Номер вывода",
+  deposit_id: "Номер поступления",
+  id: "ID проводки",
+  type: "Тип проводки",
+  operation_id: "ID операции",
+  spend_id: "Ваш номер операции",
+  status: "Статус",
+  asset: "Валюта",
+  amount: "Сумма",
+  target: "Выставлено",
+  received: "Получено",
+  credited: "Зачислено",
+  fee: "Комиссия",
+  fee_amount: "Комиссия",
+  net: "Изменение баланса",
+  network: "Сеть",
+  address: "Адрес",
+  tx_hash: "Хеш транзакции",
+  client_ref: "Номер клиента",
+  user_id: "Telegram ID получателя",
+  memo: "Memo",
+  description: "Описание",
+  comment: "Комментарий",
+  payload: "Номер заказа",
+  version: "Версия статуса",
+  created_at: "Создано",
+  paid_at: "Оплачено",
+  completed_at: "Завершено",
+  failed_at: "Отказ",
+  reverted_at: "Отозвано",
+  credited_at: "Зачислено",
+  expires_at: "Действует до",
+  min_deposit: "Минимум пополнения USDT",
+};
+function RecordRows({ item }: { item: Entry }) {
+  return (
+    <dl className="overflow-hidden rounded-[28px] bg-white px-4 dark:bg-[#1c1c1e]">
+      {Object.entries(rowLabels)
+        .filter(([key]) => item[key] !== undefined && item[key] !== null)
+        .map(([key, label]) => (
+          <div
+            key={key}
+            className="flex min-h-14 justify-between gap-4 border-b border-black/[.06] py-4 last:border-0 dark:border-white/[.08]"
+          >
+            <dt className="max-w-[44%] shrink-0 text-[14px] text-black/45 dark:text-white/45">
+              {label}
+            </dt>
+            <dd className="min-w-0 text-right text-[15px] font-medium [overflow-wrap:anywhere]">
+              {key === "type"
+                ? (operationNames[String(item[key])] ?? text(item[key]))
+                : key === "status"
+                  ? (labels[String(item[key])] ?? text(item[key]))
+                  : key.endsWith("_at")
+                    ? date(item[key])
+                    : text(item[key])}
+            </dd>
+          </div>
+        ))}
+    </dl>
+  );
+}
 
-export default function WalletOperations({initialTab='invoices',mode='history'}:{initialTab?:Tab;mode?:'history'|'addresses'}){
- const wallet=useLiveWallet()
- const [tab,setTab]=useState<Tab>(mode==='addresses'?'addresses':initialTab),[owner,setOwner]=useState(false),[items,setItems]=useState<Entry[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[hasMore,setHasMore]=useState(false),[offset,setOffset]=useState(0),[cursor,setCursor]=useState<number|undefined>(),[scope,setScope]=useState('personal'),[selected,setSelected]=useState<Entry|null>(null),[account,setAccount]=useState<Entry|null>(null),[admin,setAdmin]=useState(false),[confirmRevoke,setConfirmRevoke]=useState(false),[revoking,setRevoking]=useState(false),[actionError,setActionError]=useState(''),[copied,setCopied]=useState(false),[network,setNetwork]=useState('BSC'),[audit,setAudit]=useState<Audit|null>(null),[auditing,setAuditing]=useState(false)
- const generation=useRef(0),lock=useRef(false)
- useEffect(()=>{let active=true;walletRequest<{owner:boolean}>('access').then(r=>{if(active)setOwner(r.owner)}).catch(()=>{});return()=>{active=false}},[])
- async function load(more=false){
-  if(lock.current)return
-  const run=++generation.current;lock.current=true;setBusy(true);setError('')
-  try{
-   if(!wallet.configured){setItems([]);setAccount(null);setHasMore(false);return}
-   if(tab==='account'){const result=await walletRequest<Entry>('provider');if(run===generation.current)setAccount(result);return}
-   const query=new URLSearchParams({count:'50',offset:String(more?offset:0)})
-   if(tab==='reconciliation'&&more&&cursor!==undefined)query.set('before',String(cursor))
-   const r=await walletRequest<HistoryResponse>(tab==='addresses'?'addresses':`operations-${tab}?${query}`)
-   if(run!==generation.current)return
-   const rows=r.items??[]
-   setItems(previous=>{const result=more?[...previous,...rows]:rows;return [...new Map(result.map(item=>[idFor(item),item])).values()]})
-   setOffset((more?offset:0)+50);setCursor(r.cursor);setHasMore(Boolean(r.has_more));setScope(r.scope??'personal');setNotice(r.notice??'')
-  }catch(e){if(run===generation.current){if(!more)setItems([]);setError(e instanceof Error?e.message:'Не удалось загрузить операции')}}
-  finally{if(run===generation.current){lock.current=false;setBusy(false)}}
- }
- useEffect(()=>{generation.current++;lock.current=false;setItems([]);setAccount(null);setSelected(null);setHasMore(false);setNotice('');void load();return()=>{generation.current++;lock.current=false}},[tab,wallet.configured]) // Requests belong to the selected tab; stale responses are ignored.
- async function revoke(){if(!selected||revoking)return;setRevoking(true);setActionError('');try{const result=await walletRequest<Entry>('revoke-transfer',{spend_id:selected.spend_id});setSelected(result);setItems(rows=>rows.map(row=>row.spend_id===result.spend_id?result:row));setConfirmRevoke(false)}catch(e){setActionError(e instanceof Error?e.message:'Не удалось отозвать перевод')}finally{setRevoking(false)}}
- async function getAddress(){if(busy)return;const run=generation.current;setBusy(true);setError('');try{await walletRequest('address',{network});if(run===generation.current){setBusy(false);await load()}}catch(e){if(run===generation.current){setError(e instanceof Error?e.message:'Не удалось получить адрес');setBusy(false)}}}
- async function copyAddress(){try{await navigator.clipboard.writeText(text(selected?.address));setCopied(true)}catch{setActionError('Не удалось скопировать адрес. Выделите его вручную.')}}
- async function reconcile(){if(auditing)return;setAuditing(true);setError('');try{setAudit(await walletRequest<Audit>('provider-audit'))}catch(e){setError(e instanceof Error?e.message:'Не удалось выполнить сверку')}finally{setAuditing(false)}}
- const entries=(admin?['reconciliation','account']:['invoices','transfers','withdrawals','deposits','addresses']) as Tab[]
- const asset=String(selected?.asset??''),status=String(selected?.status??(tab==='deposits'?'completed':'')),Icon=iconFor(tab)
- const balances=Array.isArray(account?.organization_balance)?account.organization_balance as Entry[]:[]
- const currencies=Array.isArray(account?.currencies)?account.currencies as Entry[]:[]
- const app=(account?.app??{}) as Entry
- return <div className="mx-auto w-full max-w-[560px] pb-6 pt-5 text-black dark:text-white">
-  <div className="px-4"><div className="mb-4 flex items-center justify-between gap-3">{admin&&<h2 className="text-[25px] font-semibold tracking-tight">GoSwap</h2>}{owner&&mode!=='addresses'&&<button type="button" className="flex min-h-11 items-center gap-2 text-[15px] font-medium text-blue-600 dark:text-blue-400" onClick={()=>{setAdmin(!admin);setTab(admin?'invoices':'reconciliation')}}><Settings2 size={18}/>{admin?'К истории':'GoSwap'}</button>}</div>
-   {admin&&<div role="tablist" aria-label="Раздел владельца" className="flex gap-1 overflow-x-auto rounded-[22px] bg-black/5 p-1 dark:bg-white/10">{entries.map(key=><button type="button" role="tab" id={`operations-tab-${key}`} aria-controls="operations-panel" aria-selected={tab===key} key={key} onClick={()=>setTab(key)} className={`min-h-11 shrink-0 rounded-[18px] px-4 text-[15px] font-medium ${tab===key?'bg-white shadow-sm dark:bg-[#2c2c2e]':'text-black/50 dark:text-white/50'}`}>{tabs[key]}</button>)}</div>}
-   {(admin||scope==='organization')&&<p className="mt-3 text-[13px] leading-5 text-black/45 dark:text-white/45">Данные организации · доступ владельца</p>}
-  </div>
-  <section id="operations-panel" aria-label={tabs[tab]} aria-busy={busy}>
-  {!wallet.configured&&<p role="status" className="mx-4 mt-5 rounded-[28px] bg-white p-5 text-[15px] leading-6 text-black/50 dark:bg-[#1c1c1e] dark:text-white/50">{wallet.loading?'Проверяем подключение…':'Этот раздел пока недоступен. Попробуйте позже.'}</p>}
-  {tab==='addresses'&&<div className="mx-4 mt-5 rounded-[28px] bg-white p-4 dark:bg-[#1c1c1e]"><label className="text-[14px] text-black/50 dark:text-white/50">Постоянный адрес в сети<select value={network} onChange={e=>setNetwork(e.target.value)} className="my-3 block min-h-12 w-full rounded-2xl bg-black/5 px-3 text-[17px] text-black dark:bg-white/10 dark:text-white">{['BSC','ETH','TON','SOL'].map(n=><option key={n}>{n}</option>)}</select></label><Button data-wpay-primary="" rounded disabled={busy||!wallet.configured} onClick={()=>void getAddress()} className="!m-0 !w-full">Получить реквизиты</Button><p className="mt-3 text-[13px] leading-5 text-black/45 dark:text-white/45">Адрес сохраняется для выбранной сети. Для TRON используйте пополнение с точной суммой: постоянного адреса в этой сети нет.</p></div>}
-  {error&&<p role="alert" className="mx-4 mt-4 rounded-2xl bg-red-500/10 p-4 text-[14px] text-red-600 dark:bg-red-400/10 dark:text-red-400">{error}</p>}
-  {tab==='reconciliation'&&<div className="mx-4 mt-5 rounded-[28px] bg-white p-4 dark:bg-[#1c1c1e]"><h2 className="mb-3 text-[20px] font-semibold">Сверка с балансом</h2><p className="mb-4 text-[13px] leading-5 text-black/45 dark:text-white/45">Суммируем net проводок отдельно по валютам и сравниваем с getBalance. До 20 000 проводок за проверку.</p><Button data-wpay-primary="" rounded disabled={auditing||!wallet.configured} onClick={()=>void reconcile()} className="!m-0 !w-full">{auditing?'Сверяем…':'Проверить баланс'}</Button>{audit&&<div role="status" className="mt-4 text-[14px]"><p className="mb-3 text-black/50 dark:text-white/50">{audit.complete?`Проверено проводок: ${audit.entries}`:'История больше 20 000 проводок. Полная сверка не завершена.'}{!audit.stable?' Баланс менялся во время проверки. Повторите сверку.':''}</p>{audit.items.map(row=><div key={row.asset} className="border-t border-black/[.06] py-3 dark:border-white/[.08]"><div className="flex justify-between gap-3 font-medium"><span>{row.asset}</span><span>{row.difference===null?'Неполная проверка':Number(row.difference)===0?'Совпадает':`Расхождение: ${row.difference}`}</span></div><p className="mt-1 text-[12px] text-black/45 dark:text-white/45">Баланс: {row.balance} · Сумма net: {row.net}</p></div>)}</div>}</div>}
-  {tab==='account'&&account&&<div className="mx-4 mt-6 space-y-5"><h2 className="text-[21px] font-semibold">Баланс организации</h2><div className="rounded-[28px] bg-white px-4 dark:bg-[#1c1c1e]">{balances.map((b,i)=><div key={i} className="flex min-h-16 items-center justify-between border-b border-black/[.06] last:border-0 dark:border-white/[.08]"><b>{text(b.currency_code)}</b><span className="text-[21px] font-semibold tabular-nums">{amount(b.available)}</span></div>)}</div>{!balances.length&&<p className="text-[14px] text-black/45 dark:text-white/45">Провайдер вернул пустой список балансов.</p>}<h2 className="text-[21px] font-semibold">Права и лимиты</h2><dl className="rounded-[28px] bg-white px-4 dark:bg-[#1c1c1e]">{[['Название',text(app.name)],['ID приложения',text(app.app_id)],['Переводы',app.can_transfer===undefined?'Не сообщено':app.can_transfer?'Разрешены':'Отключены'],['Лимит переводов за сутки, USD',text(app.daily_limit_usd)],['Вывод в сеть',app.can_withdraw===undefined?'Не сообщено':app.can_withdraw?'Разрешён':'Отключён'],['Лимит вывода за сутки, USD',text(app.withdraw_limit_usd)],['Комиссия, bps',text(app.fee_bps)]].map(([name,value])=><div key={name} className="flex justify-between gap-5 border-b border-black/[.06] py-4 last:border-0 dark:border-white/[.08]"><dt className="text-[14px] text-black/45 dark:text-white/45">{name}</dt><dd className="text-right text-[15px] font-medium">{value}</dd></div>)}</dl><h2 className="text-[21px] font-semibold">Доступные валюты</h2><div className="rounded-[28px] bg-white px-4 dark:bg-[#1c1c1e]">{currencies.map((c,i)=><div key={i} className="flex min-h-14 items-center justify-between gap-3 border-b border-black/[.06] last:border-0 dark:border-white/[.08]"><b>{text(c.code??c.currency_code)}</b><span className="text-[13px] text-black/45 dark:text-white/45">{c.can_withdraw===undefined?'Вывод: не сообщено':c.can_withdraw?'Вывод доступен':'Вывод недоступен'}</span></div>)}</div></div>}
-  {tab!=='account'&&!!items.length&&<><List strong inset dividers className="!mt-5 overflow-hidden !rounded-[32px] [&>ul]:!rounded-[32px]">{items.map(item=>{const positive=tab==='deposits'||tab==='invoices'||Number(item.net)>0;const RowIcon=iconFor(tab);const state=String(item.status??(tab==='deposits'?'completed':''));const title=tab==='invoices'?`Счёт № ${text(item.invoice_id)}`:tab==='transfers'?`Telegram · ${text(item.user_id)}`:tab==='withdrawals'?`Вывод ${text(item.asset)}`:tab==='deposits'?`Пополнение ${text(item.asset)}`:tab==='addresses'?text(item.network):(operationNames[String(item.type)]??text(item.type));return <ListItem key={idFor(item)} link chevron={false} onClick={()=>{setSelected(item);setActionError('');setCopied(false);setConfirmRevoke(false)}} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 items-center justify-center rounded-full text-white ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><RowIcon size={22}/></span>} innerChildren={<span className="flex min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold">{title}</span><span className={`mt-0.5 block truncate text-[13px] ${statusClass(state)}`}>{labels[state]??(tab==='addresses'?'Постоянный адрес':date(item.created_at??item.credited_at))}{item.network&&tab!=='addresses'?` · ${item.network}`:''}</span></span>{tab==='addresses'?<ChevronRight size={20} className="shrink-0 text-black/30 dark:text-white/30"/>:<span className={`shrink-0 text-right text-[15px] font-medium tabular-nums ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{amount(tab==='invoices'?item.received??'0':tab==='deposits'?item.credited:item.net??item.amount)}<span className="mt-0.5 block text-[12px] text-black/40 dark:text-white/40">{text(item.asset)}</span></span>}</span>}/>})}</List>{tab==='reconciliation'&&<p className="mx-5 text-[13px] leading-5 text-black/45 dark:text-white/45">Проводки GoSwap: сумма, комиссия и изменение баланса доступны внутри. Лента загружается страницами; показанный фрагмент не является полной сверкой остатка.</p>}</>}
-  {!busy&&wallet.configured&&!error&&tab!=='account'&&!items.length&&<div className="mx-4 mt-5 px-5 py-9 text-center"><p className="text-[20px] font-semibold">{tab==='addresses'?'Реквизитов пока нет':'Операций пока нет'}</p><p className="mt-2 text-[14px] leading-5 text-black/45 dark:text-white/45">{notice||'Здесь появится история после первой операции.'}</p></div>}
-  {busy&&<p role="status" className="py-5 text-center text-[14px] text-black/45 dark:text-white/45">Загружаем…</p>}
-  <div className="mx-4 mt-5 flex gap-3"><Button data-wpay-primary="" rounded tonal disabled={busy||!wallet.configured} onClick={()=>void load()} className="!m-0 !h-12 !flex-1">Обновить</Button>{hasMore&&<Button data-wpay-primary="" rounded disabled={busy} onClick={()=>void load(true)} className="!m-0 !h-12 !flex-1">Показать ещё</Button>}</div>
-  </section>
-  <Popup push opened={!!selected} className="wpay-profile-popup wpay-card-popup" closeByBackdropClick={!revoking} closeOnEscape={!revoking} swipeToClose={revoking?false:'to-bottom'} swipeHandler=".navbar" onPopupClosed={()=>{setSelected(null);setConfirmRevoke(false)}}><div className="view"><Page><Navbar transparent><NavRight><Link popupClose aria-label="Закрыть операцию"><i className="icon icon-close"/></Link></NavRight></Navbar><div className="mx-auto max-w-[560px] px-4 pb-10 pt-6 text-black dark:text-white"><span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-b from-blue-300 to-blue-500 text-white dark:from-blue-400 dark:to-blue-600"><Icon size={34}/></span><h2 className="mt-5 text-center text-[23px] font-semibold">{tabs[tab]}</h2>{tab!=='addresses'&&<p className="mt-2 text-center text-[36px] font-semibold tabular-nums">{amount(tab==='deposits'?selected?.credited:selected?.net??selected?.amount)} <span className="text-[21px] text-black/40 dark:text-white/40">{asset}</span></p>}{status&&<p className={`mt-2 text-center text-[15px] font-medium ${statusClass(status)}`}>{labels[status]??status}</p>}<div className="mt-7"><RecordRows item={selected??{}}/></div>{selected?.details&&typeof selected.details==='object'?<div className="mt-4"><RecordRows item={selected.details as Entry}/></div>:null}
-  {selected&&[['Открыть чек',safePaymentLink(selected.receipt_url)],['Открыть счёт',safePaymentLink(selected.bot_invoice_url??selected.mini_app_invoice_url??selected.pay_url)],['Ссылка для получателя',safePaymentLink(selected.claim_url)],['Транзакция в сети',explorer({...selected,...(typeof selected.details==='object'?selected.details as Entry:{})})]].map(([label,url])=>url?<a data-wpay-primary="" key={label} href={url} target="_blank" rel="noopener noreferrer" className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-[22px] bg-blue-500/10 px-4 text-[16px] font-medium text-blue-600 dark:bg-blue-400/15 dark:text-blue-400">{label}<ExternalLink size={17}/></a>:null)}
-  {Boolean(selected?.address)&&<button data-wpay-primary="" type="button" onClick={()=>void copyAddress()} className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-[22px] bg-blue-500/10 text-blue-600 dark:bg-blue-400/15 dark:text-blue-400">{copied?<Check size={18}/>:<Copy size={18}/>} {copied?'Адрес скопирован':'Скопировать адрес'}</button>}
-  {tab==='transfers'&&owner&&selected?.status==='pending'&&<div className="mt-5 rounded-[28px] bg-white p-4 dark:bg-[#1c1c1e]">{confirmRevoke?<><p className="mb-4 text-[15px] leading-6">Отозвать перевод? Средства вернутся на баланс организации. Если получатель уже забрал перевод, отзыв будет недоступен.</p><Button data-wpay-primary="" rounded disabled={revoking} onClick={()=>void revoke()} className="!m-0 !w-full">{revoking?'Отзываем…':'Подтвердить отзыв'}</Button><button type="button" disabled={revoking} onClick={()=>setConfirmRevoke(false)} className="mt-2 min-h-11 w-full text-[15px] text-black/50 dark:text-white/50">Отмена</button></>:<Button data-wpay-primary="" rounded tonal onClick={()=>setConfirmRevoke(true)} className="!m-0 !w-full">Отозвать перевод</Button>}</div>}
-  {actionError&&<p role="alert" className="mt-4 text-[14px] text-red-600 dark:text-red-400">{actionError}</p>}
-  </div></Page></div></Popup>
- </div>
+export default function WalletOperations({
+  initialTab = "invoices",
+  mode = "history",
+}: {
+  initialTab?: Tab;
+  mode?: "history" | "addresses";
+}) {
+  const wallet = useLiveWallet();
+  const [tab, setTab] = useState<Tab>(
+      mode === "addresses" ? "addresses" : initialTab,
+    ),
+    [owner, setOwner] = useState(false),
+    [items, setItems] = useState<Entry[]>([]),
+    [busy, setBusy] = useState(false),
+    [error, setError] = useState(""),
+    [notice, setNotice] = useState(""),
+    [hasMore, setHasMore] = useState(false),
+    [offset, setOffset] = useState(0),
+    [cursor, setCursor] = useState<number | undefined>(),
+    [scope, setScope] = useState("personal"),
+    [selected, setSelected] = useState<Entry | null>(null),
+    [account, setAccount] = useState<Entry | null>(null),
+    [admin, setAdmin] = useState(false),
+    [confirmRevoke, setConfirmRevoke] = useState(false),
+    [revoking, setRevoking] = useState(false),
+    [actionError, setActionError] = useState(""),
+    [copied, setCopied] = useState(false),
+    [network, setNetwork] = useState("BSC"),
+    [audit, setAudit] = useState<Audit | null>(null),
+    [auditing, setAuditing] = useState(false);
+  const generation = useRef(0),
+    lock = useRef(false);
+  useEffect(() => {
+    let active = true;
+    walletRequest<{ owner: boolean }>("access")
+      .then((r) => {
+        if (active) setOwner(r.owner);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []);
+  async function load(more = false) {
+    if (lock.current) return;
+    const run = ++generation.current;
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      if (!wallet.configured) {
+        setItems([]);
+        setAccount(null);
+        setHasMore(false);
+        return;
+      }
+      if (tab === "account") {
+        const result = await walletRequest<Entry>("provider");
+        if (run === generation.current) setAccount(result);
+        return;
+      }
+      const query = new URLSearchParams({
+        count: "50",
+        offset: String(more ? offset : 0),
+      });
+      if (tab === "reconciliation" && more && cursor !== undefined)
+        query.set("before", String(cursor));
+      const r = await walletRequest<HistoryResponse>(
+        tab === "addresses" ? "addresses" : `operations-${tab}?${query}`,
+      );
+      if (run !== generation.current) return;
+      const rows = r.items ?? [];
+      setItems((previous) => {
+        const result = more ? [...previous, ...rows] : rows;
+        return [...new Map(result.map((item) => [idFor(item), item])).values()];
+      });
+      setOffset((more ? offset : 0) + 50);
+      setCursor(r.cursor);
+      setHasMore(Boolean(r.has_more));
+      setScope(r.scope ?? "personal");
+      setNotice(r.notice ?? "");
+    } catch (e) {
+      if (run === generation.current) {
+        if (!more) setItems([]);
+        setError(
+          e instanceof Error ? e.message : "Не удалось загрузить операции",
+        );
+      }
+    } finally {
+      if (run === generation.current) {
+        lock.current = false;
+        setBusy(false);
+      }
+    }
+  }
+  useEffect(() => {
+    generation.current++;
+    lock.current = false;
+    setItems([]);
+    setAccount(null);
+    setSelected(null);
+    setHasMore(false);
+    setNotice("");
+    void load();
+    return () => {
+      generation.current++;
+      lock.current = false;
+    };
+  }, [tab, wallet.configured]); // Requests belong to the selected tab; stale responses are ignored.
+  async function revoke() {
+    if (!selected || revoking) return;
+    setRevoking(true);
+    setActionError("");
+    try {
+      const result = await walletRequest<Entry>("revoke-transfer", {
+        spend_id: selected.spend_id,
+      });
+      setSelected(result);
+      setItems((rows) =>
+        rows.map((row) => (row.spend_id === result.spend_id ? result : row)),
+      );
+      setConfirmRevoke(false);
+    } catch (e) {
+      setActionError(
+        e instanceof Error ? e.message : "Не удалось отозвать перевод",
+      );
+    } finally {
+      setRevoking(false);
+    }
+  }
+  async function getAddress() {
+    if (busy) return;
+    const run = generation.current;
+    setBusy(true);
+    setError("");
+    try {
+      await walletRequest("address", { network });
+      if (run === generation.current) {
+        setBusy(false);
+        await load();
+      }
+    } catch (e) {
+      if (run === generation.current) {
+        setError(e instanceof Error ? e.message : "Не удалось получить адрес");
+        setBusy(false);
+      }
+    }
+  }
+  async function copyAddress() {
+    try {
+      await navigator.clipboard.writeText(text(selected?.address));
+      setCopied(true);
+    } catch {
+      setActionError("Не удалось скопировать адрес. Выделите его вручную.");
+    }
+  }
+  async function reconcile() {
+    if (auditing) return;
+    setAuditing(true);
+    setError("");
+    try {
+      setAudit(await walletRequest<Audit>("provider-audit"));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось выполнить сверку");
+    } finally {
+      setAuditing(false);
+    }
+  }
+  const entries = (
+    admin
+      ? ["reconciliation", "account"]
+      : ["invoices", "transfers", "withdrawals", "deposits", "addresses"]
+  ) as Tab[];
+  const asset = String(selected?.asset ?? ""),
+    status = String(
+      selected?.status ?? (tab === "deposits" ? "completed" : ""),
+    ),
+    Icon = iconFor(tab);
+  const balances = Array.isArray(account?.organization_balance)
+    ? (account.organization_balance as Entry[])
+    : [];
+  const currencies = Array.isArray(account?.currencies)
+    ? (account.currencies as Entry[])
+    : [];
+  const app = (account?.app ?? {}) as Entry;
+  return (
+    <div className="mx-auto w-full max-w-[560px] pb-6 pt-5 text-black dark:text-white">
+      <div className="px-4">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          {admin && (
+            <h2 className="text-[25px] font-semibold tracking-tight">GoSwap</h2>
+          )}
+          {owner && mode !== "addresses" && (
+            <button
+              type="button"
+              className="flex min-h-11 items-center gap-2 text-[15px] font-medium text-blue-600 dark:text-blue-400"
+              onClick={() => {
+                setAdmin(!admin);
+                setTab(admin ? "invoices" : "reconciliation");
+              }}
+            >
+              <Settings2 size={18} />
+              {admin ? "К истории" : "GoSwap"}
+            </button>
+          )}
+        </div>
+        {admin && (
+          <div
+            role="tablist"
+            aria-label="Раздел владельца"
+            className="flex gap-1 overflow-x-auto rounded-[22px] bg-black/5 p-1 dark:bg-white/10"
+          >
+            {entries.map((key) => (
+              <button
+                type="button"
+                role="tab"
+                id={`operations-tab-${key}`}
+                aria-controls="operations-panel"
+                aria-selected={tab === key}
+                key={key}
+                onClick={() => setTab(key)}
+                className={`min-h-11 shrink-0 rounded-[18px] px-4 text-[15px] font-medium ${tab === key ? "bg-white shadow-sm dark:bg-[#2c2c2e]" : "text-black/50 dark:text-white/50"}`}
+              >
+                {tabs[key]}
+              </button>
+            ))}
+          </div>
+        )}
+        {(admin || scope === "organization") && (
+          <p className="mt-3 text-[13px] leading-5 text-black/45 dark:text-white/45">
+            Данные организации · доступ владельца
+          </p>
+        )}
+      </div>
+      <section id="operations-panel" aria-label={tabs[tab]} aria-busy={busy}>
+        {!wallet.configured && (
+          <p
+            role="status"
+            className="mx-4 mt-5 rounded-[28px] bg-white p-5 text-[15px] leading-6 text-black/50 dark:bg-[#1c1c1e] dark:text-white/50"
+          >
+            {wallet.loading
+              ? "Проверяем подключение…"
+              : "Этот раздел пока недоступен. Попробуйте позже."}
+          </p>
+        )}
+        {tab === "addresses" && (
+          <div className="mx-4 mt-5 rounded-[28px] bg-white p-4 dark:bg-[#1c1c1e]">
+            <label className="text-[14px] text-black/50 dark:text-white/50">
+              Постоянный адрес в сети
+              <select
+                value={network}
+                onChange={(e) => setNetwork(e.target.value)}
+                className="my-3 block min-h-12 w-full rounded-2xl bg-black/5 px-3 text-[17px] text-black dark:bg-white/10 dark:text-white"
+              >
+                {["BSC", "ETH", "TON", "SOL"].map((n) => (
+                  <option key={n}>{n}</option>
+                ))}
+              </select>
+            </label>
+            <Button
+              data-wpay-primary=""
+              rounded
+              disabled={busy || !wallet.configured}
+              onClick={() => void getAddress()}
+              className="!m-0 !w-full"
+            >
+              Получить реквизиты
+            </Button>
+            <p className="mt-3 text-[13px] leading-5 text-black/45 dark:text-white/45">
+              Адрес сохраняется для выбранной сети. Для TRON используйте
+              пополнение с точной суммой: постоянного адреса в этой сети нет.
+            </p>
+          </div>
+        )}
+        {error && (
+          <p
+            role="alert"
+            className="mx-4 mt-4 rounded-2xl bg-red-500/10 p-4 text-[14px] text-red-600 dark:bg-red-400/10 dark:text-red-400"
+          >
+            {error}
+          </p>
+        )}
+        {tab === "reconciliation" && (
+          <div className="mx-4 mt-5 rounded-[28px] bg-white p-4 dark:bg-[#1c1c1e]">
+            <h2 className="mb-3 text-[20px] font-semibold">
+              Сверка с балансом
+            </h2>
+            <p className="mb-4 text-[13px] leading-5 text-black/45 dark:text-white/45">
+              Суммируем net проводок отдельно по валютам и сравниваем с
+              getBalance. До 20 000 проводок за проверку.
+            </p>
+            <Button
+              data-wpay-primary=""
+              rounded
+              disabled={auditing || !wallet.configured}
+              onClick={() => void reconcile()}
+              className="!m-0 !w-full"
+            >
+              {auditing ? "Сверяем…" : "Проверить баланс"}
+            </Button>
+            {audit && (
+              <div role="status" className="mt-4 text-[14px]">
+                <p className="mb-3 text-black/50 dark:text-white/50">
+                  {audit.complete
+                    ? `Проверено проводок: ${audit.entries}`
+                    : "История больше 20 000 проводок. Полная сверка не завершена."}
+                  {!audit.stable
+                    ? " Баланс менялся во время проверки. Повторите сверку."
+                    : ""}
+                </p>
+                {audit.items.map((row) => (
+                  <div
+                    key={row.asset}
+                    className="border-t border-black/[.06] py-3 dark:border-white/[.08]"
+                  >
+                    <div className="flex justify-between gap-3 font-medium">
+                      <span>{row.asset}</span>
+                      <span>
+                        {row.difference === null
+                          ? "Неполная проверка"
+                          : Number(row.difference) === 0
+                            ? "Совпадает"
+                            : `Расхождение: ${row.difference}`}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[12px] text-black/45 dark:text-white/45">
+                      Баланс: {row.balance} · Сумма net: {row.net}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {tab === "account" && account && (
+          <div className="mx-4 mt-6 space-y-5">
+            <h2 className="text-[21px] font-semibold">Баланс организации</h2>
+            <div className="rounded-[28px] bg-white px-4 dark:bg-[#1c1c1e]">
+              {balances.map((b, i) => (
+                <div
+                  key={i}
+                  className="flex min-h-16 items-center justify-between border-b border-black/[.06] last:border-0 dark:border-white/[.08]"
+                >
+                  <b>{text(b.currency_code)}</b>
+                  <span className="text-[21px] font-semibold tabular-nums">
+                    {amount(b.available)}
+                  </span>
+                </div>
+              ))}
+            </div>
+            {!balances.length && (
+              <p className="text-[14px] text-black/45 dark:text-white/45">
+                Провайдер вернул пустой список балансов.
+              </p>
+            )}
+            <h2 className="text-[21px] font-semibold">Права и лимиты</h2>
+            <dl className="rounded-[28px] bg-white px-4 dark:bg-[#1c1c1e]">
+              {[
+                ["Название", text(app.name)],
+                ["ID приложения", text(app.app_id)],
+                [
+                  "Переводы",
+                  app.can_transfer === undefined
+                    ? "Не сообщено"
+                    : app.can_transfer
+                      ? "Разрешены"
+                      : "Отключены",
+                ],
+                ["Лимит переводов за сутки, USD", text(app.daily_limit_usd)],
+                [
+                  "Вывод в сеть",
+                  app.can_withdraw === undefined
+                    ? "Не сообщено"
+                    : app.can_withdraw
+                      ? "Разрешён"
+                      : "Отключён",
+                ],
+                ["Лимит вывода за сутки, USD", text(app.withdraw_limit_usd)],
+                ["Комиссия, bps", text(app.fee_bps)],
+              ].map(([name, value]) => (
+                <div
+                  key={name}
+                  className="flex justify-between gap-5 border-b border-black/[.06] py-4 last:border-0 dark:border-white/[.08]"
+                >
+                  <dt className="text-[14px] text-black/45 dark:text-white/45">
+                    {name}
+                  </dt>
+                  <dd className="text-right text-[15px] font-medium">
+                    {value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <h2 className="text-[21px] font-semibold">Доступные валюты</h2>
+            <div className="rounded-[28px] bg-white px-4 dark:bg-[#1c1c1e]">
+              {currencies.map((c, i) => (
+                <div
+                  key={i}
+                  className="flex min-h-14 items-center justify-between gap-3 border-b border-black/[.06] last:border-0 dark:border-white/[.08]"
+                >
+                  <b>{text(c.code ?? c.currency_code)}</b>
+                  <span className="text-[13px] text-black/45 dark:text-white/45">
+                    {c.can_withdraw === undefined
+                      ? "Вывод: не сообщено"
+                      : c.can_withdraw
+                        ? "Вывод доступен"
+                        : "Вывод недоступен"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {tab !== "account" && !!items.length && (
+          <>
+            <List
+              strong
+              inset
+              dividers
+              className="!mt-5 overflow-hidden !rounded-[32px] [&>ul]:!rounded-[32px]"
+            >
+              {items.map((item) => {
+                const positive =
+                  tab === "deposits" ||
+                  tab === "invoices" ||
+                  Number(item.net) > 0;
+                const RowIcon = iconFor(tab);
+                const state = String(
+                  item.status ?? (tab === "deposits" ? "completed" : ""),
+                );
+                const title =
+                  tab === "invoices"
+                    ? `Счёт № ${text(item.invoice_id)}`
+                    : tab === "transfers"
+                      ? `Telegram · ${text(item.user_id)}`
+                      : tab === "withdrawals"
+                        ? `Вывод ${text(item.asset)}`
+                        : tab === "deposits"
+                          ? `Пополнение ${text(item.asset)}`
+                          : tab === "addresses"
+                            ? text(item.network)
+                            : (operationNames[String(item.type)] ??
+                              text(item.type));
+                return (
+                  <ListItem
+                    key={idFor(item)}
+                    link
+                    chevron={false}
+                    onClick={() => {
+                      setSelected(item);
+                      setActionError("");
+                      setCopied(false);
+                      setConfirmRevoke(false);
+                    }}
+                    contentClassName="!h-16"
+                    innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30"
+                    media={
+                      <span
+                        className={`wpay-currency-icon flex h-11 w-11 items-center justify-center rounded-full text-white ${positive ? "bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600" : "bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600"}`}
+                      >
+                        <RowIcon size={22} />
+                      </span>
+                    }
+                    innerChildren={
+                      <span className="flex min-w-0 items-center justify-between gap-3">
+                        <span className="min-w-0">
+                          <span className="block truncate text-[17px] font-semibold">
+                            {title}
+                          </span>
+                          <span
+                            className={`mt-0.5 block truncate text-[13px] ${statusClass(state)}`}
+                          >
+                            {labels[state] ??
+                              (tab === "addresses"
+                                ? "Постоянный адрес"
+                                : date(item.created_at ?? item.credited_at))}
+                            {item.network && tab !== "addresses"
+                              ? ` · ${item.network}`
+                              : ""}
+                          </span>
+                        </span>
+                        {tab === "addresses" ? (
+                          <ChevronRight
+                            size={20}
+                            className="shrink-0 text-black/30 dark:text-white/30"
+                          />
+                        ) : (
+                          <span
+                            className={`shrink-0 text-right text-[15px] font-medium tabular-nums ${positive ? "text-green-600 dark:text-green-400" : "text-black dark:text-white"}`}
+                          >
+                            {amount(
+                              tab === "invoices"
+                                ? (item.received ?? "0")
+                                : tab === "deposits"
+                                  ? item.credited
+                                  : (item.net ?? item.amount),
+                            )}
+                            <span className="mt-0.5 block text-[12px] text-black/40 dark:text-white/40">
+                              {text(item.asset)}
+                            </span>
+                          </span>
+                        )}
+                      </span>
+                    }
+                  />
+                );
+              })}
+            </List>
+            {tab === "reconciliation" && (
+              <p className="mx-5 text-[13px] leading-5 text-black/45 dark:text-white/45">
+                Проводки GoSwap: сумма, комиссия и изменение баланса доступны
+                внутри. Лента загружается страницами; показанный фрагмент не
+                является полной сверкой остатка.
+              </p>
+            )}
+          </>
+        )}
+        {!busy &&
+          wallet.configured &&
+          !error &&
+          tab !== "account" &&
+          !items.length && (
+            <div className="mx-4 mt-5 px-5 py-9 text-center">
+              <p className="text-[20px] font-semibold">
+                {tab === "addresses"
+                  ? "Реквизитов пока нет"
+                  : "Операций пока нет"}
+              </p>
+              <p className="mt-2 text-[14px] leading-5 text-black/45 dark:text-white/45">
+                {notice || "Здесь появится история после первой операции."}
+              </p>
+            </div>
+          )}
+        {busy && (
+          <p
+            role="status"
+            className="py-5 text-center text-[14px] text-black/45 dark:text-white/45"
+          >
+            Загружаем…
+          </p>
+        )}
+        <div className="mx-4 mt-5 flex gap-3">
+          <Button
+            data-wpay-primary=""
+            rounded
+            tonal
+            disabled={busy || !wallet.configured}
+            onClick={() => void load()}
+            className="!m-0 !h-12 !flex-1"
+          >
+            Обновить
+          </Button>
+          {hasMore && (
+            <Button
+              data-wpay-primary=""
+              rounded
+              disabled={busy}
+              onClick={() => void load(true)}
+              className="!m-0 !h-12 !flex-1"
+            >
+              Показать ещё
+            </Button>
+          )}
+        </div>
+      </section>
+      <Popup
+        push
+        opened={!!selected}
+        className="wpay-profile-popup wpay-card-popup"
+        closeByBackdropClick={!revoking}
+        closeOnEscape={!revoking}
+        swipeToClose={revoking ? false : "to-bottom"}
+        swipeHandler=".navbar"
+        onPopupClosed={() => {
+          setSelected(null);
+          setConfirmRevoke(false);
+        }}
+      >
+        <div className="view">
+          <Page>
+            <Navbar transparent>
+              <NavRight>
+                <Link popupClose aria-label="Закрыть операцию">
+                  <i className="icon icon-close" />
+                </Link>
+              </NavRight>
+            </Navbar>
+            <div className="mx-auto max-w-[560px] px-4 pb-10 pt-6 text-black dark:text-white">
+              <span className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-b from-blue-300 to-blue-500 text-white dark:from-blue-400 dark:to-blue-600">
+                <Icon size={34} />
+              </span>
+              <h2 className="mt-5 text-center text-[23px] font-semibold">
+                {tabs[tab]}
+              </h2>
+              {tab !== "addresses" && (
+                <p className="mt-2 text-center text-[36px] font-semibold tabular-nums">
+                  {amount(
+                    tab === "deposits"
+                      ? selected?.credited
+                      : (selected?.net ?? selected?.amount),
+                  )}{" "}
+                  <span className="text-[21px] text-black/40 dark:text-white/40">
+                    {asset}
+                  </span>
+                </p>
+              )}
+              {status && (
+                <p
+                  className={`mt-2 text-center text-[15px] font-medium ${statusClass(status)}`}
+                >
+                  {labels[status] ?? status}
+                </p>
+              )}
+              <div className="mt-7">
+                <RecordRows item={selected ?? {}} />
+              </div>
+              {selected?.details && typeof selected.details === "object" ? (
+                <div className="mt-4">
+                  <RecordRows item={selected.details as Entry} />
+                </div>
+              ) : null}
+              {selected &&
+                [
+                  ["Открыть чек", safePaymentLink(selected.receipt_url)],
+                  [
+                    "Открыть счёт",
+                    safePaymentLink(
+                      selected.bot_invoice_url ??
+                        selected.mini_app_invoice_url ??
+                        selected.pay_url,
+                    ),
+                  ],
+                  [
+                    "Ссылка для получателя",
+                    safePaymentLink(selected.claim_url),
+                  ],
+                  [
+                    "Транзакция в сети",
+                    explorer({
+                      ...selected,
+                      ...(typeof selected.details === "object"
+                        ? (selected.details as Entry)
+                        : {}),
+                    }),
+                  ],
+                ].map(([label, url]) =>
+                  url ? (
+                    <a
+                      data-wpay-primary=""
+                      key={label}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-4 flex min-h-12 items-center justify-center gap-2 rounded-[22px] bg-blue-500/10 px-4 text-[16px] font-medium text-blue-600 dark:bg-blue-400/15 dark:text-blue-400"
+                    >
+                      {label}
+                      <ExternalLink size={17} />
+                    </a>
+                  ) : null,
+                )}
+              {Boolean(selected?.address) && (
+                <button
+                  data-wpay-primary=""
+                  type="button"
+                  onClick={() => void copyAddress()}
+                  className="mt-4 flex min-h-12 w-full items-center justify-center gap-2 rounded-[22px] bg-blue-500/10 text-blue-600 dark:bg-blue-400/15 dark:text-blue-400"
+                >
+                  {copied ? <Check size={18} /> : <Copy size={18} />}{" "}
+                  {copied ? "Адрес скопирован" : "Скопировать адрес"}
+                </button>
+              )}
+              {tab === "withdrawals" &&
+                selected?.submission_unknown === true &&
+                typeof selected.intent_id === "string" && (
+                  <div className="mt-5">
+                    <p className="mb-3 text-[14px] text-black/50 dark:text-white/50">
+                      Ответ на отправку не получен. Повторный запрос не создаст
+                      второй вывод.
+                    </p>
+                    <Button
+                      data-wpay-primary=""
+                      rounded
+                      disabled={revoking}
+                      onClick={async () => {
+                        setRevoking(true);
+                        setActionError("");
+                        try {
+                          const result = await walletRequest<Entry>(
+                            "withdrawal-create",
+                            { intent_id: selected.intent_id },
+                          );
+                          setSelected({
+                            ...selected,
+                            ...result,
+                            submission_unknown: false,
+                          });
+                          void wallet.refresh();
+                        } catch (error) {
+                          setActionError(
+                            error instanceof Error
+                              ? error.message
+                              : "Не удалось уточнить вывод",
+                          );
+                        } finally {
+                          setRevoking(false);
+                        }
+                      }}
+                    >
+                      Повторить запрос отправки
+                    </Button>
+                  </div>
+                )}
+              {tab === "transfers" &&
+                owner &&
+                selected?.status === "pending" && (
+                  <div className="mt-5 rounded-[28px] bg-white p-4 dark:bg-[#1c1c1e]">
+                    {confirmRevoke ? (
+                      <>
+                        <p className="mb-4 text-[15px] leading-6">
+                          Отозвать перевод? Средства вернутся на баланс
+                          организации. Если получатель уже забрал перевод, отзыв
+                          будет недоступен.
+                        </p>
+                        <Button
+                          data-wpay-primary=""
+                          rounded
+                          disabled={revoking}
+                          onClick={() => void revoke()}
+                          className="!m-0 !w-full"
+                        >
+                          {revoking ? "Отзываем…" : "Подтвердить отзыв"}
+                        </Button>
+                        <button
+                          type="button"
+                          disabled={revoking}
+                          onClick={() => setConfirmRevoke(false)}
+                          className="mt-2 min-h-11 w-full text-[15px] text-black/50 dark:text-white/50"
+                        >
+                          Отмена
+                        </button>
+                      </>
+                    ) : (
+                      <Button
+                        data-wpay-primary=""
+                        rounded
+                        tonal
+                        onClick={() => setConfirmRevoke(true)}
+                        className="!m-0 !w-full"
+                      >
+                        Отозвать перевод
+                      </Button>
+                    )}
+                  </div>
+                )}
+              {actionError && (
+                <p
+                  role="alert"
+                  className="mt-4 text-[14px] text-red-600 dark:text-red-400"
+                >
+                  {actionError}
+                </p>
+              )}
+            </div>
+          </Page>
+        </div>
+      </Popup>
+    </div>
+  );
 }

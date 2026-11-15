@@ -103,17 +103,18 @@ class AuthenticationTests(unittest.TestCase):
             self.assertEqual(str(ledger.balance('one', 'ETH')[0]), '123456789012.123456789012345679')
             ledger.db.close()
 
-    def test_address_migration_preserves_legacy_usdt_and_separates_assets(self):
+    def test_address_migration_preserves_network_identity_and_asset_support(self):
         with tempfile.TemporaryDirectory() as path:
             ledger = Ledger(path + '/db')
-            ledger.db.execute('CREATE TABLE wallet_addresses (user_id TEXT, network TEXT, body TEXT, PRIMARY KEY(user_id,network))')
-            ledger.db.execute('INSERT INTO wallet_addresses VALUES (?,?,?)', ('tg:1', 'ETH', json.dumps({'network': 'ETH', 'address': 'legacy'})))
+            ledger.db.execute('CREATE TABLE wallet_addresses (user_id TEXT, asset TEXT, network TEXT, body TEXT, PRIMARY KEY(user_id,asset,network))')
+            for asset in ['ETH', 'USDT']:
+                ledger.db.execute('INSERT INTO wallet_addresses VALUES (?,?,?,?)', ('tg:1', asset, 'ETH', json.dumps({'network': 'ETH', 'address': 'shared', 'asset': asset})))
             prepare_operations(ledger)
-            save_address(ledger, 'tg:1', {'network': 'ETH', 'address': 'ether'}, 'ETH')
-            rows = ledger.db.execute('SELECT asset,body FROM wallet_addresses WHERE user_id=? ORDER BY asset', ('tg:1',)).fetchall()
-            self.assertEqual([(row['asset'], json.loads(row['body'])['address']) for row in rows], [('ETH', 'ether'), ('USDT', 'legacy')])
-            prepare_operations(ledger)  # Restart is idempotent.
-            self.assertEqual(ledger.db.execute('SELECT COUNT(*) FROM wallet_addresses').fetchone()[0], 2)
+            rows = ledger.db.execute('SELECT body FROM wallet_addresses WHERE user_id=?', ('tg:1',)).fetchall()
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(json.loads(rows[0]['body'])['assets'], ['ETH', 'USDT'])
+            prepare_operations(ledger)
+            self.assertEqual(ledger.db.execute('SELECT COUNT(*) FROM wallet_addresses').fetchone()[0], 1)
             ledger.db.close()
 
     def test_legacy_accounts_are_migrated_and_rich_profiles_are_kept(self):
@@ -357,10 +358,10 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
                 balance_calls += 1
                 return [{'currency_code': 'USDT', 'available': '30' if balance_calls == 1 else '31'}]
             if method == 'getTransactions':
-                if not data.get('before'):
-                    return {'items': [{'id': 2, 'asset': 'USDT', 'net': '20'}], 'has_more': True, 'cursor': 2}
-                self.assertEqual(data['before'], 2)
-                return {'items': [{'id': 2, 'asset': 'USDT', 'net': '20'}, {'id': 1, 'asset': 'USDT', 'net': '10'}], 'has_more': False}
+                if data['after'] == 0:
+                    return {'items': [{'id': 1, 'asset': 'USDT', 'net': '10'}], 'has_more': True, 'cursor': 1}
+                self.assertEqual(data['after'], 1)
+                return {'items': [{'id': 1, 'asset': 'USDT', 'net': '10'}, {'id': 2, 'asset': 'USDT', 'net': '20'}], 'has_more': False, 'cursor': 2}
             return await original(method, data, post)
         self.provider.call = scripted
         result = await (await self.client.get('/api/wallet/provider-audit', headers=OWNER)).json()
@@ -379,6 +380,153 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.provider.call = scripted
         response = await self.client.get('/api/wallet/operations-deposits?client_ref=other', headers={'X-Telegram-Init-Data': init_data(123)})
         self.assertEqual([row['deposit_id'] for row in (await response.json())['items']], ['mine'])
+
+    async def withdrawal_fixture(self):
+        original = self.provider.call
+        self.withdrawal_rows = {}
+        self.withdrawal_timeout = False
+        self.withdrawal_create_calls = []
+        async def scripted(method, data=None, post=False):
+            if method == 'getMe': return {'can_withdraw': True}
+            if method == 'getCurrencies': return [{'code': 'USDT', 'can_withdraw': True}]
+            if method == 'estimateWithdrawal': return {**data, 'fee': '1', 'total': str(Decimal(data['amount'])+1)}
+            if method == 'createWithdrawal':
+                self.withdrawal_create_calls.append(data)
+                row = self.withdrawal_rows.setdefault(data['spend_id'], {**data, 'fee': '1', 'withdrawal_id': 'withdrawal-one', 'version': 0, 'status': 'processing'})
+                if self.withdrawal_timeout:
+                    self.withdrawal_timeout = False
+                    raise ApiError('PROVIDER_TIMEOUT', 'timeout', 504)
+                return row
+            if method == 'getWithdrawals':
+                ids = data.get('spend_id', '').split(',')
+                return {'items': [row for key,row in self.withdrawal_rows.items() if key in ids]}
+            return await original(method, data, post)
+        self.provider.call = scripted
+        user = {'X-Telegram-Init-Data': init_data(123)}
+        await self.client.post('/api/wallet/address', json={'network': 'BSC'}, headers=user)
+        self.ledger.deposit({'client_ref': self.ledger.account('tg:123'), 'deposit_id': 'funds', 'asset': 'USDT', 'credited': '100'})
+        response = await self.client.post('/api/wallet/withdrawal-estimate', json={'asset':'USDT', 'network':'BSC', 'address':'0x'+'a'*40, 'source_address':'test-address', 'amount':'10'}, headers=user)
+        self.assertEqual(response.status, 200, await response.text())
+        return user, await response.json()
+
+    async def test_withdrawal_retry_reserves_once_and_refund_is_verified(self):
+        user, quote = await self.withdrawal_fixture()
+        self.withdrawal_timeout = True
+        response = await self.client.post('/api/wallet/withdrawal-create', json={'intent_id':quote['intent_id']}, headers=user)
+        self.assertEqual(response.status, 504)
+        self.assertEqual(self.ledger.balance('tg:123','USDT'), (Decimal('89'),Decimal('11')))
+        response = await self.client.post('/api/wallet/withdrawal-create', json={'intent_id':quote['intent_id']}, headers=user)
+        result = await response.json()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(self.withdrawal_create_calls[0]['spend_id'],self.withdrawal_create_calls[1]['spend_id'])
+        self.assertEqual(self.withdrawal_create_calls[1]['max_fee'],'1')
+        self.withdrawal_rows[result['spend_id']].update(status='completed',version=2)
+        raw=json.dumps({'update_type':'withdrawal_failed','payload':{**result,'status':'failed','version':1}}).encode()
+        signature=hmac.new(hashlib.sha256(TOKEN.encode()).digest(),raw,hashlib.sha256).hexdigest()
+        self.assertEqual((await self.client.post('/api/wallet/webhook',data=raw,headers={'crypto-pay-api-signature':signature})).status,200)
+        self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('89'),Decimal('0')))
+        await self.client.post('/api/wallet/webhook',data=raw,headers={'crypto-pay-api-signature':signature})
+        self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('89'),Decimal('0')))
+
+    async def test_corrected_withdrawal_cannot_create_spendable_refund(self):
+        from wallet_withdrawals import debt
+        user, quote = await self.withdrawal_fixture()
+        response=await self.client.post('/api/wallet/withdrawal-create',json={'intent_id':quote['intent_id']},headers=user)
+        result=await response.json()
+        self.withdrawal_rows[result['spend_id']].update(status='failed',version=1)
+        await self.client.get('/api/wallet/withdrawal-history',headers=user)
+        self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('100'),Decimal('0')))
+        self.ledger.put_balance('tg:123','USDT',Decimal('2'),Decimal('0'))
+        self.withdrawal_rows[result['spend_id']].update(status='completed',version=2)
+        await self.client.get('/api/wallet/withdrawal-history',headers=user)
+        self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('0'),Decimal('0')))
+        self.assertEqual(debt(self.ledger,'tg:123','USDT'),Decimal('9'))
+        self.ledger.deposit({'client_ref':self.ledger.account('tg:123'),'deposit_id':'repay','asset':'USDT','credited':'5'})
+        self.assertEqual(debt(self.ledger,'tg:123','USDT'),Decimal('4'))
+        self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('0'),Decimal('0')))
+
+    async def test_withdrawal_intents_are_owned_and_reject_source_spoofing(self):
+        user, quote=await self.withdrawal_fixture()
+        foreign={'X-Telegram-Init-Data':init_data(999)}
+        response=await self.client.post('/api/wallet/withdrawal-create',json={'intent_id':quote['intent_id']},headers=foreign)
+        self.assertEqual(response.status,404)
+        response=await self.client.post('/api/wallet/withdrawal-estimate',json={'asset':'USDT','network':'BSC','source_address':'foreign','address':'0x'+'a'*40,'amount':'10'},headers=user)
+        self.assertEqual(response.status,400)
+        self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('100'),Decimal('0')))
+
+    async def test_retry_after_reaches_client(self):
+        async def unavailable(*args,**kwargs): raise ApiError('UNAVAILABLE','Адрес готовится',503,retry_after='17')
+        self.provider.call=unavailable
+        response=await self.client.post('/api/wallet/address',json={'network':'TON'},headers={'X-Telegram-Init-Data':init_data(123)})
+        self.assertEqual(response.status,503)
+        self.assertEqual(response.headers['Retry-After'],'17')
+
+    async def test_audit_follows_empty_pages_and_resumes_saved_cursor(self):
+        original=self.provider.call
+        seen=[]
+        async def scripted(method,data=None,post=False):
+            if method=='getTransactions':
+                seen.append(data['after'])
+                if data['after']==0:return {'items':[],'cursor':5,'has_more':True}
+                if data['after']==5:return {'items':[{'id':9,'asset':'USDT','net':'10'}],'cursor':9,'has_more':False}
+                return {'items':[],'cursor':9,'has_more':False}
+            return await original(method,data,post)
+        self.provider.call=scripted
+        for _ in range(2):
+            response=await self.client.get('/api/wallet/provider-audit',headers=OWNER)
+            result=await response.json()
+            self.assertEqual(response.status,200,result)
+            self.assertEqual(result['entries'],1)
+            self.assertEqual(result['items'][0]['difference'],'0')
+        self.assertEqual(seen,[0,5,9])
+
+    async def test_fee_rejection_releases_reserve_and_cannot_reuse_rejected_intent(self):
+        user,quote=await self.withdrawal_fixture()
+        original=self.provider.call
+        async def scripted(method,data=None,post=False):
+            if method=='createWithdrawal':raise ApiError('FEE_CHANGED','Комиссия изменилась',409)
+            return await original(method,data,post)
+        self.provider.call=scripted
+        for _ in range(2):
+            response=await self.client.post('/api/wallet/withdrawal-create',json={'intent_id':quote['intent_id']},headers=user)
+            self.assertEqual(response.status,409)
+            self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('100'),Decimal('0')))
+
+    async def test_withdrawal_reservation_includes_fee_and_parallel_retries_do_not_duplicate(self):
+        import asyncio
+        user,quote=await self.withdrawal_fixture()
+        self.ledger.put_balance('tg:123','USDT',Decimal('10'),Decimal('0'))
+        response=await self.client.post('/api/wallet/withdrawal-create',json={'intent_id':quote['intent_id']},headers=user)
+        self.assertEqual(response.status,409)
+        self.assertEqual(len(self.withdrawal_create_calls),0)
+        self.ledger.put_balance('tg:123','USDT',Decimal('100'),Decimal('0'))
+        responses=await asyncio.gather(*[self.client.post('/api/wallet/withdrawal-create',json={'intent_id':quote['intent_id']},headers=user) for _ in range(2)])
+        self.assertEqual([row.status for row in responses],[200,200])
+        self.assertEqual(len(self.withdrawal_create_calls),1)
+        self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('89'),Decimal('11')))
+
+    async def test_exact_tron_rejects_invalid_precision_before_provider(self):
+        user={'X-Telegram-Init-Data':init_data(123)}
+        for amount in ['0.9','1.0000001']:
+            response=await self.client.post('/api/wallet/deposit',json={'asset':'USDT','network':'TRON','amount':amount},headers=user)
+            self.assertEqual(response.status,400)
+        self.assertFalse(any(call[0]=='createExactDeposit' for call in self.provider.calls))
+
+    async def test_deposit_sync_continues_after_short_page_and_deduplicates(self):
+        original=self.provider.call
+        seen=[]
+        async def scripted(method,data=None,post=False):
+            if method=='getDeposits':
+                seen.append(data['offset'])
+                item={'deposit_id':'single','asset':'USDT','credited':'7','client_ref':data['client_ref']}
+                return {'items':[item] if data['offset'] in [0,1000] else []}
+            return await original(method,data,post)
+        self.provider.call=scripted
+        response=await self.client.post('/api/wallet/sync',json={},headers={'X-Telegram-Init-Data':init_data(123)})
+        self.assertEqual(response.status,200)
+        self.assertTrue((await response.json())['sync_complete'])
+        self.assertEqual(seen,[0,1000,2000])
+        self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('7'),Decimal('0')))
 
 
 if __name__ == '__main__':

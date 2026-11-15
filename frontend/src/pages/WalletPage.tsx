@@ -1,3 +1,4 @@
+import { resolveDeposit } from "../wallet/deposit";
 import WalletAssetAvatar from "./WalletAssetAvatar";
 import { type PointerEvent as ReactPointerEvent } from "react";
 import SunMax from "framework7-icons/react/esm/SunMax.js";
@@ -119,13 +120,7 @@ type Action = {
 };
 
 import WalletAssetPanel from "./WalletAssetPanel";
-import { portfolioExamples } from "../wallet/demo";
-import {
-  assetNetworks as previewNetworks,
-  addressesForAsset,
-  type WalletAddress,
-} from "../wallet/catalog";
-import { walletRequest } from "../lib/wallet-api";
+import { assetNetworks as previewNetworks } from "../wallet/catalog";
 import {
   WalletLiveProvider,
   useLiveWallet,
@@ -783,40 +778,20 @@ function AssetPushView({
     const run = ++depositRequest.current;
     let selected = code === "RUB" ? undefined : (addressEntry ?? undefined);
     if (code !== "RUB" && network && !selected) {
-      if (live.demo && !live.loading) {
-        const sample = portfolioExamples[network];
-        selected = {
-          network,
-          address: sample.address,
-          demo: true,
-          amount: sample.amount,
-          rate: 1,
-        };
-      } else if (live.configured && code === "USDT" && network !== "TRON") {
-        setChoosingDeposit(true);
-        try {
-          const result = await walletRequest<{ items?: WalletAddress[] }>(
-            "addresses",
+      setChoosingDeposit(true);
+      try {
+        selected =
+          (await resolveDeposit(code, network, live.demo)) ?? undefined;
+      } catch (error) {
+        if (run === depositRequest.current)
+          showNotice(
+            error instanceof Error
+              ? error.message
+              : "Не удалось получить реквизиты",
           );
-          if (run !== depositRequest.current) return;
-          const saved = addressesForAsset(result.items ?? [], code).find(
-            (item) => item.network === network,
-          );
-          if (saved)
-            selected = {
-              ...saved,
-              demo: false,
-              amount: null,
-              rate: live.rate(code),
-            };
-        } catch {
-          if (run === depositRequest.current)
-            showNotice(
-              "Не удалось загрузить адрес. Откроем получение реквизитов.",
-            );
-        } finally {
-          setChoosingDeposit(false);
-        }
+        return;
+      } finally {
+        if (run === depositRequest.current) setChoosingDeposit(false);
       }
     }
     if (run !== depositRequest.current) return;
@@ -1144,6 +1119,10 @@ function DepositMethodsView({
   showNotice: NoticeHandler;
 }) {
   const live = useLiveWallet();
+  const controller = useRef<AbortController | null>(null);
+  const [resolving, setResolving] = useState(false),
+    [depositError, setDepositError] = useState("");
+
   const [entry, setEntry] = useState<WalletAddressSelection | null>(null);
   const [network, setNetwork] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -1152,21 +1131,37 @@ function DepositMethodsView({
     setEntry(flow?.depositAddress ?? null);
     setNetwork(flow?.network ?? null);
   }, [flow]);
-  function chooseNetwork(code: string, network: string) {
+  async function chooseNetwork(code: string, network: string) {
+    if (resolving) return;
+    controller.current?.abort();
+    const request = new AbortController();
+    controller.current = request;
     setSelected(code);
-    setNetwork(network);
-    if (live.demo) {
-      const sample = portfolioExamples[network];
-      if (sample)
-        setEntry({
-          network,
-          address: sample.address,
-          demo: true,
-          amount: null,
-          rate: null,
-        });
+    setEntry(null);
+    setResolving(true);
+    setDepositError("");
+    try {
+      const resolved = await resolveDeposit(
+        code,
+        network,
+        live.demo,
+        request.signal,
+      );
+      if (request.signal.aborted) return;
+      setNetwork(network);
+      setEntry(resolved);
+    } catch (error) {
+      if (!request.signal.aborted)
+        setDepositError(
+          error instanceof Error
+            ? error.message
+            : "Не удалось получить реквизиты",
+        );
+    } finally {
+      if (!request.signal.aborted) setResolving(false);
     }
   }
+  useEffect(() => () => controller.current?.abort(), [flow]);
   function chooseAsset(code: string) {
     setSelected(code);
     setEntry(null);
@@ -1175,6 +1170,9 @@ function DepositMethodsView({
       chooseNetwork(code, previewNetworks[code][0]);
   }
   function back() {
+    controller.current?.abort();
+    setResolving(false);
+    setDepositError("");
     if (entry) {
       setEntry(null);
       if (selected !== "USDT") {
@@ -1212,6 +1210,23 @@ function DepositMethodsView({
       title={selected ? `Пополнить ${selected}` : "Пополнить"}
       onClose={back}
     >
+      {resolving && (
+        <p
+          role="status"
+          className="px-5 py-4 text-center text-black/45 dark:text-white/45"
+        >
+          Получаем реквизиты выбранной сети…
+        </p>
+      )}
+      {depositError && (
+        <p
+          role="alert"
+          className="mx-4 rounded-2xl bg-red-500/10 p-4 text-red-600 dark:text-red-400"
+        >
+          {depositError}
+        </p>
+      )}
+
       {selected === "USDT" && !network ? (
         <main className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
           <p className="mb-4 text-center text-[14px] text-black/45 dark:text-white/45">

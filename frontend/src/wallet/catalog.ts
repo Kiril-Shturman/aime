@@ -49,6 +49,8 @@ export interface WalletAddress {
   network: string;
   address: string;
   asset?: string;
+  assets?: string[];
+  min_deposit?: string;
   amount?: number | null;
 }
 export function addressesForAsset<T extends WalletAddress>(
@@ -56,7 +58,9 @@ export function addressesForAsset<T extends WalletAddress>(
   asset: string,
 ): T[] {
   return rows.filter(
-    (row) => row.asset === asset && assetNetworks[asset]?.includes(row.network),
+    (row) =>
+      (row.assets?.includes(asset) || row.asset === asset) &&
+      assetNetworks[asset]?.includes(row.network),
   );
 }
 export function isRecipientAddress(network: string, raw: string): boolean {
