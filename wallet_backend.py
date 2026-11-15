@@ -1672,7 +1672,12 @@ def install_wallet(app, root, owner_check):
                     'FROM aura_sbp_orders WHERE user_id=? AND environment=? '
                     'ORDER BY updated_at DESC LIMIT 200', (uid, aura_environment),
                 )]
-                return web.json_response({'data': orders})
+                pending = ledger.db.execute(
+                    "SELECT 1 FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+                    "AND entity_type='sbp_order' AND user_id=? AND status='submitting' LIMIT 1",
+                    (aura_environment, uid),
+                ).fetchone()
+                return web.json_response({'data': orders, 'pending_creation': bool(pending)}, headers={'Cache-Control': 'no-store'})
             if action == 'aura-qr-quote' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)

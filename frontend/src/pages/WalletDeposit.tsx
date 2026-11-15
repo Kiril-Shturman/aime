@@ -1,3 +1,4 @@
+import WalletSbpDeposit from "./WalletSbpDeposit";
 import { depositNetworks as networks, networkNames } from "../wallet/catalog";
 import WalletNetworkIcon from "./WalletNetworkIcon";
 import WalletSheetClose from "./WalletSheetClose";
@@ -166,6 +167,7 @@ export default function WalletDeposit({
   const expired = deposit?.expires_at
     ? Date.parse(deposit.expires_at) <= clock
     : false;
+  if (asset === "RUB") return <WalletSbpDeposit />;
   return (
     <main className="wpay-deposit-page mx-auto w-full max-w-[560px] px-4 pb-8 pt-5 text-black dark:text-white">
       <div className="mb-6 text-center">

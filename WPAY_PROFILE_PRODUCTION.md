@@ -23,3 +23,9 @@ succeed before local data changes; customer mapping and contacts commit together
 The profile GET returns these contacts with `private, no-store`, independent of
 Aura's minimal customer response. Browser storage is not used. Legacy hashes
 cannot restore previously entered contacts; existing users must save them once.
+
+RUB deposits now use the Aura SBP flow instead of the generic crypto-address
+placeholder: rate/limits and KYC, explicit quote review, idempotent order creation,
+QR payment, owner-scoped recovery and status polling. Unknown creation outcomes
+retain their original key and block replacement until reconciliation. Production
+validation only reads rate/KYC; no live payment order is created by deployment.

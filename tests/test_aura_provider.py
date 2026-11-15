@@ -1480,6 +1480,17 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(foreign.status, 404)
 
+    async def test_pending_sbp_creation_is_owner_scoped(self):
+        ledger = self.app['wpay_ledger']
+        stamp = time.time()
+        ledger.db.execute("INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ('aura','test','sbp_order','pending-intent',None,'tg:123','submitting','pending-intent','{}',None,stamp,stamp))
+        for user_id, expected in [(123,True),(456,False)]:
+            response = await self.wpay.get('/api/wallet/aura-sbp-orders', headers={'X-Telegram-Init-Data':init_data(user_id)})
+            self.assertEqual(response.status,200)
+            self.assertEqual((await response.json())['pending_creation'],expected)
+            self.assertEqual(response.headers['Cache-Control'],'no-store')
+
     async def test_profile_contacts_are_owner_scoped_when_provider_omits_them(self):
         headers = {"X-Telegram-Init-Data": init_data(123)}
         saved = await self.wpay.post("/api/wallet/aura-customer", headers=headers,
