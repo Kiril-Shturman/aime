@@ -158,6 +158,10 @@ export interface WalletStatus {
   capabilities: WalletCapabilities;
   routes: { qr_pay: "aura" | "goswap" | null };
   asset_routes: Record<string, string[]>;
+  deposit_modes?: Record<
+    string,
+    Record<string, "address" | "exact" | "disabled">
+  >;
 }
 export interface QrQuote {
   quote_id: string;

@@ -22,7 +22,21 @@ async function setup(
         json: { can_withdraw: true, can_transfer: true, currencies: [] },
       });
     if (path.endsWith("/status"))
-      return route.fulfill({ json: { configured: true, asset_routes: { USDT: ["BSC", "ETH", "TON", "SOL", "TRON"], TRX: ["TRON"], BNB: ["BSC"], ETH: ["ETH"], GRAM: ["TON"], SOL: ["SOL"], BTC: ["BTC"], XAUT: ["ETH"] } } });
+      return route.fulfill({
+        json: {
+          configured: true,
+          asset_routes: {
+            USDT: ["BSC", "ETH", "TON", "SOL", "TRON"],
+            TRX: ["TRON"],
+            BNB: ["BSC"],
+            ETH: ["ETH"],
+            GRAM: ["TON"],
+            SOL: ["SOL"],
+            BTC: ["BTC"],
+            XAUT: ["ETH"],
+          },
+        },
+      });
     if (path.endsWith("/overview"))
       return route.fulfill({
         json: {
@@ -118,8 +132,14 @@ test("provider failure does not create demo balances or addresses", async ({
 }) => {
   await setup(page, "light", true);
   // Without a trusted asset-route response no actionable assets are shown.
-  await expect(page.locator(".wpay-wallet-home span.font-semibold").filter({ hasText: /^Tether$/ })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Открыть адрес BSC", exact: true })).toHaveCount(0);
+  await expect(
+    page
+      .locator(".wpay-wallet-home span.font-semibold")
+      .filter({ hasText: /^Tether$/ }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Открыть адрес BSC", exact: true }),
+  ).toHaveCount(0);
   await expect(page.getByText("1,234.56 USDT", { exact: true })).toHaveCount(0);
   await expect(page.getByText("0x8e908…0a268", { exact: true })).toHaveCount(0);
 });
@@ -543,4 +563,62 @@ test("definitive invoice rejection unlocks a new intent", async ({ page }) => {
     page.getByText("Счёт № 1001 · active", { exact: true }),
   ).toBeVisible();
   expect(prepares).toBe(2);
+});
+
+test("Aura TRON deposit opens permanent QR without requesting an exact amount", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  await page.route("**/api/wallet/status", (route) =>
+    route.fulfill({
+      json: {
+        configured: true,
+        asset_routes: { USDT: ["TRON"] },
+        deposit_modes: { USDT: { TRON: "address" } },
+        capabilities: {
+          cards: false,
+          sbp_buy: true,
+          crypto_processing: true,
+          qr_pay: false,
+        },
+      },
+    }),
+  );
+  let calls = 0;
+  await page.route("**/api/wallet/deposit", (route) => {
+    calls++;
+    expect(route.request().postDataJSON()).toEqual({
+      asset: "USDT",
+      network: "TRON",
+    });
+    return route.fulfill({
+      json: {
+        provider: "aura",
+        network: "TRON",
+        chain: "mainnet",
+        address: "T" + "a".repeat(33),
+      },
+    });
+  });
+  await page.reload();
+  await page
+    .locator(".wpay-wallet-home")
+    .getByRole("button", { name: "Пополнить", exact: true })
+    .click();
+  const flow = page.locator('[aria-hidden="false"]').last();
+  await flow.locator("li").filter({ hasText: "USDT" }).first().click();
+  await flow.getByText("USDT · TRC20", { exact: true }).click();
+  await expect(
+    flow.getByLabel("QR-код пополнения", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    flow.getByLabel("Сумма пополнения USDT", { exact: true }),
+  ).toHaveCount(0);
+  await expect(flow.getByText("Отправьте ровно", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    flow.getByRole("button", { name: "Скопировать адрес", exact: true }),
+  ).toBeVisible();
+  expect(calls).toBe(1);
 });

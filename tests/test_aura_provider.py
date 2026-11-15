@@ -1378,12 +1378,16 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_disabled_route_then_complete_mock_deposit(self):
         disabled = await self.wpay.post("/api/wallet/aura-deposit-address", headers=self.owner)
         self.assertEqual(disabled.status, 503)
+        before = await self.wpay.get('/api/wallet/status')
+        self.assertEqual((await before.json())['deposit_modes']['USDT']['TRON'], 'disabled')
         enabled = await self.wpay.post(
             "/api/wallet/admin-provider-route", headers=self.owner,
             json={"product": "crypto_deposit", "asset": "USDT", "network": "TRON",
                   "environment": "test", "provider": "aura", "enabled": True},
         )
         self.assertEqual(enabled.status, 200, await enabled.text())
+        status = await self.wpay.get('/api/wallet/status')
+        self.assertEqual((await status.json())['deposit_modes']['USDT']['TRON'], 'address')
         address_response = await self.wpay.post(
             "/api/wallet/aura-deposit-address", headers=self.owner
         )

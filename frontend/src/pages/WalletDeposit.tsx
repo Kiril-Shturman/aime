@@ -1,3 +1,4 @@
+import WalletCryptoDeposit from "./WalletCryptoDeposit";
 import WalletSbpDeposit from "./WalletSbpDeposit";
 import { depositNetworks as networks, networkNames } from "../wallet/catalog";
 import WalletNetworkIcon from "./WalletNetworkIcon";
@@ -79,24 +80,25 @@ export default function WalletDeposit({
   useEffect(() => {
     generation.current++;
     setNetwork(
-      defaultNetwork && (networks[asset] ?? []).includes(defaultNetwork)
+      defaultNetwork && supported.includes(defaultNetwork)
         ? defaultNetwork
-        : (networks[asset]?.[0] ?? ""),
+        : (supported[0] ?? ""),
     );
     setDeposit(null);
     setAmount("");
     setError("");
     setCopied(false);
     setBusy(false);
-  }, [asset, defaultNetwork]);
+  }, [asset, defaultNetwork, supported.join(",")]);
   useEffect(() => {
     if (!deposit?.expires_at) return;
     setClock(Date.now());
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [deposit?.expires_at]);
-  const available = supported.length > 0;
-  const exact = network === "TRON";
+  const mode = wallet.depositModes[asset]?.[network];
+  const available = supported.includes(network) && mode !== "disabled";
+  const exact = mode ? mode === "exact" : network === "TRON";
   const numeric = Number(amount.replace(",", "."));
   async function create() {
     if (busy || !available || !wallet.configured || Date.now() < retryAt)
@@ -129,6 +131,37 @@ export default function WalletDeposit({
       if (mounted.current && version === generation.current) setBusy(false);
     }
   }
+  useEffect(() => {
+    if (mode !== "address" || !available || !wallet.configured || !wallet.ready)
+      return;
+    const controller = new AbortController();
+    const version = ++generation.current;
+    setBusy(true);
+    setError("");
+    setDeposit(null);
+    void walletRequest<Deposit>(
+      "deposit",
+      { asset, network },
+      controller.signal,
+    )
+      .then((result) => {
+        if (!controller.signal.aborted && version === generation.current)
+          setDeposit(result);
+      })
+      .catch((reason) => {
+        if (!controller.signal.aborted && version === generation.current)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Не удалось получить адрес",
+          );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted && version === generation.current)
+          setBusy(false);
+      });
+    return () => controller.abort();
+  }, [asset, network, mode, available, wallet.configured, wallet.ready]);
   function changeNetwork(code: string) {
     generation.current++;
     setNetwork(code);
@@ -168,6 +201,30 @@ export default function WalletDeposit({
     ? Date.parse(deposit.expires_at) <= clock
     : false;
   if (asset === "RUB") return <WalletSbpDeposit />;
+  if (mode === "address" && deposit?.address)
+    return (
+      <WalletCryptoDeposit
+        code={asset}
+        entry={{
+          network,
+          address: deposit.address,
+          demo: false,
+          amount: null,
+          rate: null,
+          min_deposit: deposit.min_deposit,
+        }}
+        icon={meta?.icon ?? <Wallet size={25} />}
+        color={
+          typeof meta?.style.backgroundColor === "string"
+            ? meta.style.backgroundColor
+            : "#26a17b"
+        }
+        iconColor={
+          typeof meta?.style.color === "string" ? meta.style.color : "#fff"
+        }
+      />
+    );
+
   return (
     <main className="wpay-deposit-page mx-auto w-full max-w-[560px] px-4 pb-8 pt-5 text-black dark:text-white">
       <div className="mb-6 text-center">

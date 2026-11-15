@@ -64,6 +64,10 @@ interface WalletContextValue {
   capabilities: WalletCapabilities;
   qrProvider: "aura" | "goswap" | null;
   assetRoutes: Record<string, string[]>;
+  depositModes: Record<
+    string,
+    Record<string, "address" | "exact" | "disabled">
+  >;
   loading: boolean;
   error: string;
   refresh: (sync?: boolean) => Promise<void>;
@@ -90,7 +94,9 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
     [ready, setReady] = useState(false),
     [configured, setConfigured] = useState(false),
     [capabilities, setCapabilities] = useState<WalletCapabilities>(
-      demo ? { cards: true, sbp_buy: true, crypto_processing: true, qr_pay: true } : noCapabilities,
+      demo
+        ? { cards: true, sbp_buy: true, crypto_processing: true, qr_pay: true }
+        : noCapabilities,
     ),
     [qrProvider, setQrProvider] = useState<"aura" | "goswap" | null>(
       demo ? "goswap" : null,
@@ -98,6 +104,9 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
     [assetRoutes, setAssetRoutes] = useState<Record<string, string[]>>(
       demo ? assetNetworks : {},
     ),
+    [depositModes, setDepositModes] = useState<
+      Record<string, Record<string, "address" | "exact" | "disabled">>
+    >({}),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
   const [marketRates, setMarketRates] = useState<Record<string, number>>({});
@@ -153,6 +162,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         setCapabilities(status.capabilities ?? noCapabilities);
         setQrProvider(status.routes?.qr_pay ?? null);
         setAssetRoutes(status.asset_routes ?? {});
+        setDepositModes(status.deposit_modes ?? {});
         if (!status.configured) {
           setData(empty);
           setReady(false);
@@ -221,6 +231,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         capabilities,
         qrProvider,
         assetRoutes,
+        depositModes,
         loading,
         error,
         refresh,
@@ -240,7 +251,8 @@ export function WalletConnectionNote() {
       role="status"
       className="mx-auto my-5 max-w-[420px] px-5 text-center text-[13px] leading-relaxed text-black/45 dark:text-white/45"
     >
-      {wallet.error || "Баланс и операции обновляются через платёжного провайдера."}
+      {wallet.error ||
+        "Баланс и операции обновляются через платёжного провайдера."}
     </p>
   );
 }
@@ -455,7 +467,9 @@ export function LiveQrPanel({
 }) {
   const wallet = useLiveWallet(),
     [qr, setQr] = useState(initialQr),
-    [quote, setQuote] = useState<(QrQuote & { quoteToken?: string }) | null>(null),
+    [quote, setQuote] = useState<(QrQuote & { quoteToken?: string }) | null>(
+      null,
+    ),
     [paymentId, setPaymentId] = useState(""),
     [status, setStatus] = useState(""),
     [error, setError] = useState(""),
@@ -548,9 +562,12 @@ export function LiveQrPanel({
               { quote_token: quote.quoteToken, qr_payload: qr },
               idempotencyKey.current,
             )
-          : await walletRequest<{ payment_id?: string; status: string }>("pay", {
-              quote_id: quote.quote_id,
-            });
+          : await walletRequest<{ payment_id?: string; status: string }>(
+              "pay",
+              {
+                quote_id: quote.quote_id,
+              },
+            );
       setPaymentId("id" in payment ? payment.id : payment.payment_id || "");
       setStatus(payment.status);
       await wallet.refresh();
@@ -609,7 +626,13 @@ export function LiveQrPanel({
           data-wpay-primary=""
           rounded
           large
-          disabled={!wallet.configured || !wallet.capabilities.qr_pay || busy || !qr || !!status}
+          disabled={
+            !wallet.configured ||
+            !wallet.capabilities.qr_pay ||
+            busy ||
+            !qr ||
+            !!status
+          }
           onClick={() => void getQuote()}
           className="!w-full"
         >

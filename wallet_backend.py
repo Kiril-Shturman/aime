@@ -1073,10 +1073,17 @@ def install_wallet(app, root, owner_check):
                     'aura' if aura_available and aura_products['qr_pay']
                     else 'goswap' if bool(token) else None
                 )
+                deposit_route = ledger.db.execute(
+                    "SELECT enabled FROM wallet_provider_routes WHERE product='crypto_deposit' "
+                    "AND asset='USDT' AND network='TRON' AND environment=? AND provider='aura'",
+                    (aura_environment,),
+                ).fetchone()
+                aura_address = bool(aura_enabled and aura_client.configured and deposit_route and deposit_route['enabled'])
                 return web.json_response({
                     'configured': bool(token) or bool(aura_enabled and aura_client.configured),
                     'telegram_auth': bool(bot_token),
                     'asset_routes': enabled_asset_routes(),
+                    'deposit_modes': {'USDT': {'TRON': 'address' if aura_address else 'exact' if token else 'disabled'}},
                     'capabilities': {
                         'cards': aura_available and aura_products['cards'],
                         'sbp_buy': aura_available and aura_products['sbp_buy'],
