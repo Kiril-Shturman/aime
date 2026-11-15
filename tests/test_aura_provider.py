@@ -12,7 +12,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 
 from wallet_aura import (
-    AuraClient, AuraService, prepare, process_inbox, reconcile,
+    AuraClient, AuraService, prepare, process_inbox, reconcile, reconcile_pending,
     store_webhook, verify_signature,
 )
 from wallet_backend import ApiError, Ledger
@@ -663,6 +663,30 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((row["user_id"], row["customer_id"]), (uid, customer_id))
         self.assertNotIn(qr_payload, row["body"])
 
+    async def test_pending_recovery_polls_qr_terminal_state_without_replaying_post(self):
+        uid = "tg:qr-recovery"
+        ref = self.ledger.account(uid)
+        await self.service.ensure_customer(uid, ref)
+        self.mock.app["state"].balance = Decimal("100")
+        qr_payload = "https://qr.nspk.ru/AS2A000000000002"
+        quote = await self.service.create_qr_quote(uid, ref, qr_payload)
+        payment = await self.service.create_qr_payment(
+            uid, ref, quote["quote_token"], qr_payload,
+            idempotency_key="qr-recovery-one",
+        )
+        provider = self.mock.app["state"].qr_payments[payment["id"]]
+        provider.update({
+            "status": "completed", "completed_at": "2026-12-01T00:01:00Z",
+        })
+        recovered = await reconcile_pending(self.ledger, self.client, "test")
+        self.assertEqual(recovered["qr_payments"], 1)
+        self.assertEqual(recovered["errors"], [])
+        local = self.ledger.db.execute(
+            "SELECT status FROM aura_qr_payments WHERE payment_id=?", (payment["id"],)
+        ).fetchone()
+        self.assertEqual(local["status"], "completed")
+        self.assertEqual(len(self.mock.app["state"].qr_payments), 1)
+
     async def test_customer_input_validation(self):
         with self.assertRaises(ValueError):
             await self.client.upsert_customer("customer", email="not-an-email")
@@ -1177,6 +1201,27 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             str(self.app["wpay_ledger"].balance("owner", "USDT")[0]), "9"
         )
 
+    async def test_aura_only_wallet_status_overview_sync_and_generic_deposit(self):
+        status = await self.wpay.get("/api/wallet/status", headers=self.owner)
+        self.assertTrue((await status.json())["configured"])
+        await self.wpay.post(
+            "/api/wallet/admin-provider-route", headers=self.owner,
+            json={"product": "crypto_deposit", "asset": "USDT", "network": "TRON",
+                  "environment": "test", "provider": "aura", "enabled": True},
+        )
+        deposit = await self.wpay.post(
+            "/api/wallet/deposit", headers=self.owner,
+            json={"asset": "USDT", "network": "TRON", "amount": "25"},
+        )
+        self.assertEqual(deposit.status, 200, await deposit.text())
+        self.assertEqual((await deposit.json())["provider"], "aura")
+        overview = await self.wpay.get("/api/wallet/overview", headers=self.owner)
+        self.assertEqual(overview.status, 200, await overview.text())
+        self.assertEqual((await overview.json())["rates"], [])
+        synced = await self.wpay.post("/api/wallet/sync", headers=self.owner, json={})
+        self.assertEqual(synced.status, 200, await synced.text())
+        self.assertTrue((await synced.json())["ok"])
+
     async def test_additional_deposit_address_is_owner_scoped(self):
         await self.wpay.post(
             "/api/wallet/admin-provider-route", headers=self.owner,
@@ -1668,7 +1713,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "/api/wallet/aura-sbp-order?order_id=" + order["id"],
             headers={"X-Telegram-Init-Data": init_data(323)},
         )
-        self.assertEqual(foreign.status, 404)
+        self.assertEqual(foreign.status, 403)
         cancelled = await self.wpay.post(
             "/api/wallet/aura-sbp-order-cancel", headers=self.owner,
             json={"order_id": order["id"]},
@@ -1707,7 +1752,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "/api/wallet/aura-qr-payment?payment_id=" + payment["id"],
             headers={"X-Telegram-Init-Data": init_data(323)},
         )
-        self.assertEqual(foreign.status, 404)
+        self.assertEqual(foreign.status, 403)
         fetched = await self.wpay.get(
             "/api/wallet/aura-qr-payment?payment_id=" + payment["id"],
             headers=self.owner,

@@ -128,7 +128,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         if (!status.configured) {
           setData(empty);
           setReady(false);
-          setError("Пополнения ещё не подключены. Ожидается настройка GoSwap.");
+          setError("Кошелёк ещё не подключён. Ожидается настройка провайдера.");
           return;
         }
         if (sync) await walletRequest("sync", {}, controller.signal);
@@ -209,7 +209,7 @@ export function WalletConnectionNote() {
       role="status"
       className="mx-auto my-5 max-w-[420px] px-5 text-center text-[13px] leading-relaxed text-black/45 dark:text-white/45"
     >
-      {wallet.error || "Баланс и операции обновляются через GoSwap."}
+      {wallet.error || "Баланс и операции обновляются через платёжного провайдера."}
     </p>
   );
 }

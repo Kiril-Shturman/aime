@@ -2906,11 +2906,59 @@ async def reconcile(ledger, client, environment):
     return detail
 
 
+async def reconcile_pending(ledger, client, environment, limit=20):
+    """Recover terminal state with read-only GETs; never replay monetary POSTs."""
+    result = {"qr_payments": 0, "sbp_orders": 0, "withdrawals": 0, "errors": []}
+    for row in ledger.db.execute(
+        "SELECT payment_id FROM aura_qr_payments WHERE environment=? "
+        "AND status IN ('processing','unspecified') ORDER BY updated_at LIMIT ?",
+        (environment, limit),
+    ).fetchall():
+        try:
+            item = await client.get_qr_payment(row["payment_id"])
+            _store_qr_payment(ledger, environment, "qr_payment." + item["status"], item)
+            result["qr_payments"] += 1
+        except Exception as error:
+            result["errors"].append("qr:" + row["payment_id"] + ":" + str(error)[:200])
+    for row in ledger.db.execute(
+        "SELECT order_id FROM aura_sbp_orders WHERE environment=? "
+        "AND status IN ('awaiting_payment','unspecified') ORDER BY updated_at LIMIT ?",
+        (environment, limit),
+    ).fetchall():
+        try:
+            item = await client.get_sbp_order(row["order_id"])
+            _store_sbp_order(ledger, environment, "order." + item["status"], item)
+            result["sbp_orders"] += 1
+        except Exception as error:
+            result["errors"].append("order:" + row["order_id"] + ":" + str(error)[:200])
+    for row in ledger.db.execute(
+        "SELECT withdrawal_id FROM aura_withdrawals WHERE environment=? "
+        "AND status IN ('processing','broadcast') ORDER BY updated_at LIMIT ?",
+        (environment, limit),
+    ).fetchall():
+        try:
+            store_withdrawal_snapshot(
+                ledger, environment, await client.get_withdrawal(row["withdrawal_id"])
+            )
+            result["withdrawals"] += 1
+        except Exception as error:
+            result["errors"].append(
+                "withdrawal:" + row["withdrawal_id"] + ":" + str(error)[:200]
+            )
+    return result
+
+
 async def run_worker(ledger, client, environment, interval=10):
     last_reconcile = 0.0
     while True:
         try:
             process_inbox(ledger, environment)
+            if client.configured:
+                pending = await reconcile_pending(ledger, client, environment)
+                ledger.db.execute(
+                    "INSERT OR REPLACE INTO aura_runtime_state VALUES (?,?,?)",
+                    ("pending_recovery", json.dumps(pending, separators=(",", ":")), time.time()),
+                )
             if client.configured and time.time() - last_reconcile >= 60:
                 result = await reconcile(ledger, client, environment)
                 ledger.db.execute(

@@ -716,34 +716,40 @@ Implemented:
   `card.cancelled`, `card.status_changed` and `card.operation`. Stored card data
   is recursively redacted. `card.otp` is signature-checked and deduplicated but
   its code is replaced by a payload hash before the durable inbox write.
-- SBP rate/order read transport, minimal owner-scoped order state, and
-  idempotent terminal lifecycle handling for `order.completed`, `order.failed`,
-  `order.expired` and `order.cancelled`. QR payloads are not retained. A
-  completed order is deliberately not credited to the WPay ledger until the
-  authoritative REST contract identifies the exact net-USDT field and Aura
-  confirms that REST order creation is available for the partner key.
+- Full SBP rate/quote/order/cancel and merchant QR quote/pay transports with
+  strict schemas, idempotency, owner association and terminal lifecycle
+  handling. QR payloads, quote tokens and QR images are not retained. Because
+  both products move the partner's pooled balance, their mutation routes are
+  operator-only pilot flows until per-user settlement is connected.
 - Physical-card delivery updates and sanitized tracking metadata; expanded
   stable card-operation state for original/refunded amounts, balance after,
   country/MCC/category; deposit-fee reads including `fee_min`; and restart-safe
   read/event foundations for merchant QR payments and current TRON withdrawals.
   QR payloads and removed pre-3.6 fee-breakdown fields are not persisted.
 
+Additional completed areas:
+
+- Card issue/recharge/cancel/freeze/unfreeze/activate/PIN, ephemeral credentials
+  and OTP, delivery tracking and all documented card webhooks.
+- Event feed/get/redelivery, balance history, withdrawals, additional deposit
+  addresses and one-shot KYC identity import without retaining identity data.
+- Read-only worker recovery polls non-terminal QR payments, SBP orders and
+  withdrawals, so a missed webhook does not leave them stuck. Monetary POSTs
+  are never replayed by the worker.
+- Aura-only deployments now report the wallet as configured, serve overview and
+  sync without GoSwap, and route the generic USDT/TRON deposit screen through
+  Aura when the explicit provider route is enabled.
+
 Verification on this branch:
 
-- 97 backend unit/integration tests passed, including duplicate delivery,
+- 128 backend unit/integration tests passed, including duplicate delivery,
   pending-to-confirmed transition, invalid-signature recovery, event-ID reuse,
-  environment guards and the complete mock deposit route.
-- Frontend tests passed (3/3), production build passed and lint completed with
-  pre-existing warnings only.
+  environment guards, idempotent money mutations and read-only recovery.
+- Frontend production build passed.
 - Python compilation and `git diff --check` passed.
 
-Still not implemented: KYC identity import; card issue/recharge/cancel/freeze/
-unfreeze/PIN request contracts; ephemeral credential/OTP delivery to the owner;
-SBP purchase; outgoing QR payment mutation; and withdrawal mutation. Identity import remains
-intentionally blocked until the exact passport request schema and retention
-requirements are available; hosted KYC is the safe default. Card mutation and
-sensitive-response routes remain blocked until their exact JSON schemas are
-available. The remaining products require their exact request/response schemas
-and real Aura testnet or a tightly controlled production pilot. A newly issued
-live key may later be installed only in server secret storage; the key previously
-pasted in chat must remain revoked.
+Remaining before general user rollout: connect SBP/QR pooled-balance movements
+to per-user immutable settlement, expose only enabled Aura capabilities in the
+UI, and run a controlled testnet pilot with server-installed secrets. A live key
+may be installed only in server secret storage; credentials pasted in chat must
+remain revoked.

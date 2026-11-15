@@ -699,7 +699,8 @@ def install_wallet(app, root, owner_check):
             action = request.match_info['action']
             if action == 'status' and request.method == 'GET':
                 return web.json_response({
-                    'configured': bool(token), 'telegram_auth': bool(bot_token),
+                    'configured': bool(token) or bool(aura_enabled and aura_client.configured),
+                    'telegram_auth': bool(bot_token),
                     'providers': {
                         'goswap': {'configured': bool(token)},
                         'aura': {'enabled': aura_enabled, 'configured': aura_client.configured,
@@ -728,6 +729,13 @@ def install_wallet(app, root, owner_check):
                 return web.json_response({'owner': admin})
             if action.startswith('admin-') and not admin:
                 raise ApiError('FORBIDDEN', 'Админка доступна только администраторам WPay', 403)
+            if action in {
+                'aura-sbp-quote', 'aura-sbp-order', 'aura-sbp-order-cancel',
+                'aura-qr-quote', 'aura-qr-payment',
+            } and not admin:
+                # These flows move the partner's pooled balance. Keep them in a
+                # controlled pilot until per-user settlement is connected.
+                raise ApiError('AURA_PILOT_ONLY', 'Операция пока доступна только оператору', 403)
             if action == 'admin-overview' and request.method == 'GET':
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
@@ -1316,6 +1324,50 @@ def install_wallet(app, root, owner_check):
                 response = web.json_response(await aura_client.get_deposit_fees())
                 response.headers['Cache-Control'] = 'no-store'
                 return response
+            if action == 'deposit' and request.method == 'POST' \
+                    and aura_enabled and aura_client.configured:
+                body = await request.json()
+                asset = str(body.get('asset', 'USDT')).upper()
+                network = str(body.get('network') or '').upper()
+                route = ledger.db.execute(
+                    "SELECT enabled FROM wallet_provider_routes WHERE product='crypto_deposit' "
+                    "AND asset='USDT' AND network='TRON' AND environment=? AND provider='aura'",
+                    (aura_environment,),
+                ).fetchone()
+                if asset == 'USDT' and network == 'TRON' and route and route['enabled']:
+                    if not await aura_client.product_enabled('crypto_processing'):
+                        raise ApiError(
+                            'crypto_processing_not_enabled',
+                            'Aura crypto processing is not enabled', 403,
+                        )
+                    return web.json_response(
+                        await aura_service.get_or_create_deposit_address(uid, client_ref)
+                    )
+            if action == 'overview' and request.method == 'GET' and not token:
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Платёжный провайдер не подключён', 503)
+                process_aura_inbox(ledger, aura_environment)
+                balances = [dict(row) for row in ledger.db.execute(
+                    'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=?',
+                    (uid,),
+                )]
+                items = [dict(row) for row in ledger.db.execute(
+                    'SELECT event_id,asset,amount,type,created_at,detail FROM wallet_events '
+                    'WHERE user_id=? ORDER BY rowid DESC LIMIT 100', (uid,),
+                )]
+                for item in items:
+                    item['detail'] = json.loads(item['detail'])
+                return web.json_response({
+                    'balances': balances, 'rates': [], 'transactions': items,
+                    'debts': [dict(row) for row in ledger.db.execute(
+                        'SELECT asset,amount FROM wallet_debts WHERE user_id=?', (uid,)
+                    )],
+                })
+            if action == 'sync' and request.method == 'POST' and not token:
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Платёжный провайдер не подключён', 503)
+                processed = process_aura_inbox(ledger, aura_environment)
+                return web.json_response({'ok': True, 'processed': processed})
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
             financial = await finance_route(request,action,uid,admin,ledger,provider,money,ApiError)
@@ -1451,7 +1503,7 @@ def install_wallet(app, root, owner_check):
             task = asyncio.create_task(sync_telegram_users(only_missing=True))
             app['wpay_broadcast_tasks'].add(task)
             task.add_done_callback(app['wpay_broadcast_tasks'].discard)
-        if aura_enabled and aura_secret:
+        if aura_enabled and (aura_client.configured or aura_secret):
             app['wpay_aura_task'] = asyncio.create_task(
                 run_aura_worker(ledger, aura_client, aura_environment)
             )
