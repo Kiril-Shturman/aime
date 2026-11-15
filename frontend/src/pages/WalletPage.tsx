@@ -1,3 +1,4 @@
+import WalletNetworkExchange from "./WalletNetworkExchange";
 import { resolveDeposit } from "../wallet/deposit";
 import WalletAssetAvatar from "./WalletAssetAvatar";
 import { type PointerEvent as ReactPointerEvent } from "react";
@@ -1354,6 +1355,7 @@ function CryptoFlowPushView({
   const [displayFlow, setDisplayFlow] = useState<CryptoFlow>({
     kind: "withdraw",
   });
+  const [networkExchange, setNetworkExchange] = useState(true);
   const [fromCode, setFromCode] = useState("USDT");
   const [toCode, setToCode] = useState("GRAM");
   const [amount, setAmount] = useState("");
@@ -1363,6 +1365,8 @@ function CryptoFlowPushView({
   useEffect(() => {
     if (!flow) return;
     setDisplayFlow(flow);
+    if (flow.kind === "exchange")
+      setNetworkExchange(!flow.assetCode || flow.assetCode === "USDT");
     setAssetPicker(null);
     setPickerQuery("");
     if (flow.assetCode) {
@@ -1417,6 +1421,37 @@ function CryptoFlowPushView({
     haptic("light");
   };
 
+  const exchangeTabs = (
+    <div
+      className="mx-auto mt-3 flex w-full max-w-[560px] gap-2 px-4"
+      aria-label="Режим обмена"
+    >
+      <button
+        type="button"
+        aria-pressed={networkExchange}
+        onClick={() => setNetworkExchange(true)}
+        className={`min-h-11 flex-1 rounded-full px-3 text-[14px] font-medium ${networkExchange ? "bg-primary text-white" : "bg-black/5 text-black dark:bg-white/10 dark:text-white"}`}
+      >
+        Между сетями USDT
+      </button>
+      <button
+        type="button"
+        aria-pressed={!networkExchange}
+        onClick={() => setNetworkExchange(false)}
+        className={`min-h-11 flex-1 rounded-full px-3 text-[14px] font-medium ${!networkExchange ? "bg-primary text-white" : "bg-black/5 text-black dark:bg-white/10 dark:text-white"}`}
+      >
+        Другие валюты
+      </button>
+    </div>
+  );
+  if (!isDeposit && !isWithdraw && networkExchange)
+    return (
+      <PushViewShell open={flow !== null} title="Обмен" onClose={onClose}>
+        {exchangeTabs}
+        <WalletNetworkExchange active={flow !== null} />
+      </PushViewShell>
+    );
+
   if (isDeposit) {
     return (
       <DepositMethodsView
@@ -1461,6 +1496,7 @@ function CryptoFlowPushView({
         onClose={onClose}
         onRefreshed={() => void live.refresh()}
       >
+        {exchangeTabs}
         <main className="wpay-exchange-desktop relative mx-auto w-full max-w-[560px] px-4 pb-6 pt-3">
           <div className="relative space-y-1">
             {(["from", "to"] as const).map((side) => {

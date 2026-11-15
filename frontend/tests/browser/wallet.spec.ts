@@ -549,3 +549,204 @@ test("definitive invoice rejection unlocks a new intent", async ({ page }) => {
   ).toBeVisible();
   expect(prepares).toBe(2);
 });
+
+const exchangeNetworks = [
+  {
+    network: "TRON",
+    name: "Tron",
+    standard: "TRC20",
+    can_send: true,
+    can_receive: true,
+  },
+  {
+    network: "BSC",
+    name: "BNB Smart Chain",
+    standard: "BEP20",
+    can_send: true,
+    can_receive: true,
+  },
+  {
+    network: "ETH",
+    name: "Ethereum",
+    standard: "ERC20",
+    can_send: true,
+    can_receive: true,
+  },
+  {
+    network: "SOL",
+    name: "Solana",
+    standard: "SPL",
+    can_send: true,
+    can_receive: true,
+  },
+  {
+    network: "TON",
+    name: "TON",
+    standard: "Jetton",
+    can_send: false,
+    can_receive: false,
+  },
+];
+const exchangeQuote = (amount = "99.192") => ({
+  provider: "fixedfloat",
+  available: true,
+  to_amount: amount,
+  difference: "0.808",
+  reasons: [],
+  quoted_at: Date.now() / 1000,
+  refresh_after_seconds: 20,
+  execution_enabled: false,
+});
+async function openNetworkExchange(
+  page: import("@playwright/test").Page,
+  theme = "light",
+) {
+  await setup(page, theme);
+  await page.route("**/api/wallet/exchange-status", (route) =>
+    route.fulfill({ json: { configured: true, networks: exchangeNetworks } }),
+  );
+  await page
+    .locator(".wpay-wallet-home")
+    .getByRole("button", { name: "Обменять", exact: true })
+    .click();
+  return page.getByRole("main", { name: "Межсетевой обмен USDT" });
+}
+for (const theme of ["light", "dark"])
+  test(`${theme}: real exchange quote shows payout and no money action`, async ({
+    page,
+  }) => {
+    const panel = await openNetworkExchange(page, theme);
+    let calls = 0;
+    await page.route("**/api/wallet/exchange-quote", (route) => {
+      calls++;
+      expect(route.request().postDataJSON()).toEqual({
+        from_network: "TRON",
+        to_network: "BSC",
+        amount: "100",
+        rate_type: "float",
+      });
+      expect(route.request().headers()["x-api-key"]).toBeUndefined();
+      return route.fulfill({ json: exchangeQuote() });
+    });
+    await panel
+      .getByRole("button", { name: "Рассчитать", exact: true })
+      .click();
+    await expect(
+      panel.getByLabel("Сумма получения USDT", { exact: true }),
+    ).toHaveText("99.192 USDT");
+    await expect(
+      panel.getByText("Разница: 0.808 USDT", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("button", { name: "Продолжить", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      panel.getByText(/Обмен и списание средств пока недоступны/),
+    ).toBeVisible();
+    await expect(
+      panel.getByLabel("Сеть получения USDT").locator('option[value="TON"]'),
+    ).toBeDisabled();
+    expect(calls).toBe(1);
+  });
+
+test("exchange maintenance response never displays a payout", async ({
+  page,
+}) => {
+  const panel = await openNetworkExchange(page);
+  await page.route("**/api/wallet/exchange-quote", (route) =>
+    route.fulfill({
+      json: {
+        ...exchangeQuote("99.182"),
+        available: false,
+        reasons: ["MAINTENANCE_TO"],
+      },
+    }),
+  );
+  await panel.getByRole("button", { name: "Рассчитать", exact: true }).click();
+  await expect(
+    panel.getByText("Сеть получения на обслуживании", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    panel.getByLabel("Сумма получения USDT", { exact: true }),
+  ).toHaveCount(0);
+});
+
+test("changing amount invalidates exchange payout and ignores stale response", async ({
+  page,
+}) => {
+  const panel = await openNetworkExchange(page);
+  let release: () => void = () => {};
+  await page.route("**/api/wallet/exchange-quote", async (route) => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await route.fulfill({ json: exchangeQuote() }).catch(() => {});
+  });
+  await panel.getByRole("button", { name: "Рассчитать", exact: true }).click();
+  await expect(
+    panel.getByRole("button", { name: "Рассчитываем…", exact: true }),
+  ).toBeVisible();
+  await panel
+    .getByLabel("Сумма межсетевого обмена USDT", { exact: true })
+    .fill("200");
+  release();
+  await expect(
+    panel.getByRole("button", { name: "Рассчитать", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    panel.getByLabel("Сумма получения USDT", { exact: true }),
+  ).toHaveCount(0);
+});
+
+test("exchange error does not fall back to reference or demo prices", async ({
+  page,
+}) => {
+  const panel = await openNetworkExchange(page);
+  await page.route("**/api/wallet/exchange-quote", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { detail: "Сервис обмена недоступен" },
+    }),
+  );
+  await panel.getByRole("button", { name: "Рассчитать", exact: true }).click();
+  await expect(panel.getByRole("alert")).toHaveText("Сервис обмена недоступен");
+  await expect(
+    panel.getByLabel("Сумма получения USDT", { exact: true }),
+  ).toHaveCount(0);
+});
+
+test("closing an in-flight exchange calculation allows a fresh quote on reopen", async ({
+  page,
+}) => {
+  const panel = await openNetworkExchange(page);
+  let release: () => void = () => {};
+  await page.route("**/api/wallet/exchange-quote", async (route) => {
+    await new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await route.fulfill({ json: exchangeQuote() }).catch(() => {});
+  });
+  await panel.getByRole("button", { name: "Рассчитать", exact: true }).click();
+  await expect(
+    panel.getByRole("button", { name: "Рассчитываем…", exact: true }),
+  ).toBeVisible();
+  await panel
+    .locator("xpath=ancestor::section[1]")
+    .getByLabel("Назад", { exact: true })
+    .click();
+  release();
+  await page.route("**/api/wallet/exchange-quote", (route) =>
+    route.fulfill({ json: exchangeQuote() }),
+  );
+  await page
+    .locator(".wpay-wallet-home")
+    .getByRole("button", { name: "Обменять", exact: true })
+    .click();
+  await expect(
+    panel.getByRole("button", { name: "Рассчитать", exact: true }),
+  ).toBeEnabled();
+  await panel.getByRole("button", { name: "Рассчитать", exact: true }).click();
+  await expect(
+    panel.getByLabel("Сумма получения USDT", { exact: true }),
+  ).toBeVisible();
+});

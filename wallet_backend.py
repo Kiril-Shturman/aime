@@ -20,6 +20,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, web
 
+from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
 from wallet_book import Book
 from wallet_user_ops import prepare as prepare_user_ops, route as user_ops_route
 from wallet_inbox import prepare as prepare_inbox, receive as receive_webhook
@@ -386,7 +387,7 @@ def install_wallet(app, root, owner_check):
         with open(secrets_file, encoding='utf-8') as config:
             for line in config:
                 key, sep, value = line.strip().partition('=')
-                if sep and key in {'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS'}:
+                if sep and key in {'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS', 'FIXEDFLOAT_API_KEY', 'FIXEDFLOAT_API_SECRET'}:
                     os.environ.setdefault(key, value.strip().strip('\"\''))
     token = os.environ.get('GOSWAP_API_TOKEN', '')
     bot_token = os.environ.get('WPAY_BOT_TOKEN') or os.environ.get('BOARD_BOT_TOKEN', '')
@@ -398,6 +399,10 @@ def install_wallet(app, root, owner_check):
     prepare_inbox(ledger)
     prepare_finance_worker(ledger)
     provider = GoSwap(token)
+    exchange = FixedFloat(os.environ.get('FIXEDFLOAT_API_KEY',''),os.environ.get('FIXEDFLOAT_API_SECRET',''),ApiError)
+    prepare_exchange_limits(ledger)
+    exchange.ledger=ledger
+    app['wpay_exchange'] = exchange
     app['wpay_provider'] = provider
     app['wpay_ledger'] = ledger
     app['wpay_broadcast_tasks'] = set()
@@ -667,6 +672,8 @@ def install_wallet(app, root, owner_check):
             if action == 'webhook' and request.method == 'POST':
                 return await receive_webhook(request,ledger,provider,token,money,ApiError)
             uid = identity(request)
+            exchange_response=await exchange_route(request,action,uid,exchange)
+            if exchange_response is not None:return exchange_response
             admin = is_admin(uid)
             client_ref = ledger.account(
                 uid,
@@ -826,6 +833,7 @@ def install_wallet(app, root, owner_check):
         if app['wpay_broadcast_tasks']:
             await asyncio.gather(*app['wpay_broadcast_tasks'], return_exceptions=True)
         await provider.close()
+        await exchange.close()
         ledger.db.close()
 
     async def startup(_):
