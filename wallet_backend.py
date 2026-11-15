@@ -21,6 +21,7 @@ from urllib.parse import parse_qsl, urlsplit
 from aiohttp import ClientSession, ClientTimeout, web
 
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
+from wallet_custody import Custody, custody_route, prepare as prepare_custody
 from wallet_book import Book
 from wallet_user_ops import prepare as prepare_user_ops, route as user_ops_route
 from wallet_inbox import prepare as prepare_inbox, receive as receive_webhook
@@ -387,7 +388,7 @@ def install_wallet(app, root, owner_check):
         with open(secrets_file, encoding='utf-8') as config:
             for line in config:
                 key, sep, value = line.strip().partition('=')
-                if sep and key in {'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS', 'FIXEDFLOAT_API_KEY', 'FIXEDFLOAT_API_SECRET'}:
+                if sep and key in {'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS', 'FIXEDFLOAT_API_KEY', 'FIXEDFLOAT_API_SECRET', 'WPAY_CUSTODY_ENABLED', 'WPAY_CUSTODY_PUBLIC_KEY_FILE', 'WPAY_CUSTODY_CHAIN_ENV'}:
                     os.environ.setdefault(key, value.strip().strip('\"\''))
     token = os.environ.get('GOSWAP_API_TOKEN', '')
     bot_token = os.environ.get('WPAY_BOT_TOKEN') or os.environ.get('BOARD_BOT_TOKEN', '')
@@ -402,6 +403,9 @@ def install_wallet(app, root, owner_check):
     exchange = FixedFloat(os.environ.get('FIXEDFLOAT_API_KEY',''),os.environ.get('FIXEDFLOAT_API_SECRET',''),ApiError)
     prepare_exchange_limits(ledger)
     exchange.ledger=ledger
+    prepare_custody(ledger)
+    custody=Custody(ledger,ApiError,os.environ.get('WPAY_CUSTODY_ENABLED')=='1',os.environ.get('WPAY_CUSTODY_PUBLIC_KEY_FILE',''),os.environ.get('WPAY_CUSTODY_CHAIN_ENV','testnet'))
+    app['wpay_custody'] = custody
     app['wpay_exchange'] = exchange
     app['wpay_provider'] = provider
     app['wpay_ledger'] = ledger
@@ -681,6 +685,8 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            custody_response=await custody_route(request,action,uid,custody)
+            if custody_response is not None:return custody_response
             if admin and uid.startswith('tg:'):
                 ledger.db.execute("UPDATE wallet_accounts SET role='admin' WHERE user_id=?", (uid,))
             if action == 'access' and request.method == 'GET':

@@ -750,3 +750,179 @@ test("closing an in-flight exchange calculation allows a fresh quote on reopen",
     panel.getByLabel("Сумма получения USDT", { exact: true }),
   ).toBeVisible();
 });
+
+const custodyNetworks = [
+  { network: "BTC", name: "Bitcoin", asset: "BTC" },
+  { network: "ETH", name: "Ethereum", asset: "ETH" },
+  { network: "BSC", name: "BNB Smart Chain", asset: "BNB" },
+  { network: "TON", name: "TON", asset: "TON" },
+];
+const custodyStatus = {
+  configured: true,
+  generation_enabled: true,
+  chain_env: "testnet",
+  creation_fee: "0",
+  deposit_enabled: false,
+  withdraw_enabled: false,
+  networks: custodyNetworks,
+};
+const publicCustodyWallet = (network = "BTC") => ({
+  id: "wallet-" + network,
+  network,
+  chain_env: "testnet",
+  asset: custodyNetworks.find((item) => item.network === network)?.asset,
+  address:
+    network === "BTC"
+      ? "tb1q05fktjrqrr5ze7ntzukj0g0wrj5he0xmdk7a5j"
+      : network === "TON"
+        ? "0QDTcUOcJvwtMx4R6Vbb-uYCtJELCzAAvdD439fc2Y0UNiNG"
+        : "0x919538116b4F25f1CE01429fd9Ed7964556bf565",
+  provider: "wpay",
+  deposit_enabled: false,
+  withdraw_enabled: false,
+});
+async function openCustody(page: import("@playwright/test").Page) {
+  await page.getByRole("button", { name: "Профиль", exact: true }).click();
+  await page.getByRole("link", { name: /Мои кошельки/ }).click();
+  return page.getByRole("region", { name: "Собственные кошельки WPay" });
+}
+for (const theme of ["light", "dark"])
+  test(`${theme}: create an owned wallet for free and keep it on reopen`, async ({
+    page,
+  }) => {
+    await setup(page, theme);
+    let creates = 0;
+    const wallets: ReturnType<typeof publicCustodyWallet>[] = [];
+    await page.route("**/api/wallet/custody-status", (route) =>
+      route.fulfill({ json: custodyStatus }),
+    );
+    await page.route("**/api/wallet/custody-wallets", (route) =>
+      route.fulfill({ json: { items: wallets } }),
+    );
+    await page.route("**/api/wallet/custody-wallet", (route) => {
+      creates++;
+      expect(route.request().postDataJSON()).toEqual({ network: "BTC" });
+      wallets.push(publicCustodyWallet());
+      return route.fulfill({ json: wallets[0] });
+    });
+    const panel = await openCustody(page);
+    await expect(
+      panel.getByText("Тестовые сети. Не отправляйте реальные средства.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await panel
+      .getByRole("button", { name: "Создать кошелёк Bitcoin", exact: true })
+      .click();
+    await expect(panel.getByLabel("Адрес Bitcoin", { exact: true })).toHaveText(
+      publicCustodyWallet().address,
+    );
+    await expect(
+      panel.getByRole("button", {
+        name: "Создать кошелёк Bitcoin",
+        exact: true,
+      }),
+    ).toHaveCount(0);
+    await expect(
+      panel.getByRole("button", {
+        name: "Скопировать адрес Bitcoin",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(panel.getByText("$2.00", { exact: true })).toHaveCount(0);
+    await panel
+      .locator("xpath=ancestor::section[1]")
+      .getByLabel("Назад", { exact: true })
+      .click();
+    await page.getByRole("link", { name: /Мои кошельки/ }).click();
+    await expect(panel.getByLabel("Адрес Bitcoin", { exact: true })).toHaveText(
+      publicCustodyWallet().address,
+    );
+    expect(creates).toBe(1);
+  });
+
+test("wallet creation supports all four networks without secret parameters", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  const requested: string[] = [];
+  await page.route("**/api/wallet/custody-status", (route) =>
+    route.fulfill({ json: custodyStatus }),
+  );
+  await page.route("**/api/wallet/custody-wallets", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/wallet/custody-wallet", (route) => {
+    const body = route.request().postDataJSON();
+    expect(Object.keys(body)).toEqual(["network"]);
+    requested.push(body.network);
+    return route.fulfill({ json: publicCustodyWallet(body.network) });
+  });
+  const panel = await openCustody(page);
+  for (const network of custodyNetworks) {
+    await panel
+      .getByRole("button", {
+        name: "Создать кошелёк " + network.name,
+        exact: true,
+      })
+      .click();
+    await expect(
+      panel.getByLabel("Адрес " + network.name, { exact: true }),
+    ).toBeVisible();
+  }
+  expect(requested).toEqual(["BTC", "ETH", "BSC", "TON"]);
+});
+
+test("wallet generation failure never displays a fake address", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  await page.route("**/api/wallet/custody-status", (route) =>
+    route.fulfill({ json: custodyStatus }),
+  );
+  await page.route("**/api/wallet/custody-wallets", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  await page.route("**/api/wallet/custody-wallet", (route) =>
+    route.fulfill({
+      status: 503,
+      json: { detail: "Создание кошелька недоступно" },
+    }),
+  );
+  const panel = await openCustody(page);
+  await panel
+    .getByRole("button", { name: "Создать кошелёк Bitcoin", exact: true })
+    .click();
+  await expect(panel.getByRole("alert")).toHaveText(
+    "Создание кошелька недоступно",
+  );
+  await expect(panel.getByLabel("Адрес Bitcoin", { exact: true })).toHaveCount(
+    0,
+  );
+  await expect(
+    panel.getByRole("button", { name: "Создать кошелёк Bitcoin", exact: true }),
+  ).toBeEnabled();
+});
+
+test("unconfigured custody disables generation", async ({ page }) => {
+  await setup(page, "dark");
+  await page.route("**/api/wallet/custody-status", (route) =>
+    route.fulfill({
+      json: { ...custodyStatus, configured: false, generation_enabled: false },
+    }),
+  );
+  await page.route("**/api/wallet/custody-wallets", (route) =>
+    route.fulfill({ json: { items: [] } }),
+  );
+  const panel = await openCustody(page);
+  await expect(
+    panel.getByText("Создание кошельков пока недоступно", { exact: true }),
+  ).toBeVisible();
+  for (const network of custodyNetworks)
+    await expect(
+      panel.getByRole("button", {
+        name: "Создать кошелёк " + network.name,
+        exact: true,
+      }),
+    ).toBeDisabled();
+});

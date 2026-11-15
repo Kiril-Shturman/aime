@@ -1,3 +1,4 @@
+import WalletCustody from "./WalletCustody";
 import WalletNetworkExchange from "./WalletNetworkExchange";
 import { resolveDeposit } from "../wallet/deposit";
 import WalletAssetAvatar from "./WalletAssetAvatar";
@@ -2667,19 +2668,21 @@ function ProfileListItem(props: ComponentProps<typeof F7ListItem>) {
     title,
   );
   const personal = /Имя|данные|проверки|Документы/.test(title);
-  const Icon = /Реферальная/.test(title)
-    ? PersonCropCircleFill
-    : security
-      ? LockShieldFill
-      : notification
-        ? BellFill
-        : personal
-          ? PersonCropCircleFill
-          : /валюта|RUB|USD|EUR/.test(title)
-            ? Globe
-            : /провайдер/.test(title)
-              ? BuildingColumnsFill
-              : QuestionCircleFill;
+  const Icon = /кошельк/i.test(title)
+    ? WalletFill
+    : /Реферальная/.test(title)
+      ? PersonCropCircleFill
+      : security
+        ? LockShieldFill
+        : notification
+          ? BellFill
+          : personal
+            ? PersonCropCircleFill
+            : /валюта|RUB|USD|EUR/.test(title)
+              ? Globe
+              : /провайдер/.test(title)
+                ? BuildingColumnsFill
+                : QuestionCircleFill;
   const color = /Реферальная/.test(title)
     ? "#FF9500"
     : security
@@ -2788,6 +2791,12 @@ function ProfileSection({
           />
           <ProfileListItem
             link
+            title="Мои кошельки"
+            subtitle="Адреса BTC, ETH, BNB и TON"
+            onClick={() => setProfilePage("wallets")}
+          />
+          <ProfileListItem
+            link
             title="Реферальная программа"
             subtitle="Приглашайте друзей"
             onClick={() => setProfilePage("referral")}
@@ -2865,6 +2874,7 @@ function ProfileSection({
 }
 
 const profilePageTitles = {
+  wallets: "Мои кошельки",
   personal: "Личные данные",
   security: "Безопасность",
   notifications: "Уведомления",
@@ -3209,6 +3219,12 @@ function ProfileSettingsPushView({
             </>
           )}
 
+          {displayPage === "wallets" && (
+            <WalletCustody
+              active={page === "wallets"}
+              showNotice={showNotice}
+            />
+          )}
           {displayPage === "referral" && <ReferralProgram />}
           {(displayPage === "terms" || displayPage === "privacy") && (
             <Card className="!mx-4 !rounded-[28px]" contentWrapPadding="p-6">
