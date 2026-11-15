@@ -449,10 +449,10 @@ export function WalletBiometricRow({
   const subtitle = state.busy
     ? "Подтверждение в Telegram…"
     : !state.available
-      ? "Недоступно на этом устройстве"
+      ? "Недоступно"
       : state.enabled
         ? "Включён для входа в WPay"
-        : "Подтверждение входа на устройстве";
+        : "Подтверждение входа";
   return (
     <ListItem
       title={state.label}

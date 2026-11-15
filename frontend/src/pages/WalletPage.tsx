@@ -2881,7 +2881,6 @@ function ProfileSection({
             link
             title="Верификация"
             subtitle="Подтверждение личности"
-            after="Скоро"
             onClick={() => setProfilePage("verification")}
           />
           <WalletBiometricRow showNotice={showNotice} />
