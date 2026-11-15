@@ -785,6 +785,11 @@ def install_wallet(app, root, owner_check):
                     'enabled': aura_enabled,
                     'configured': aura_client.configured,
                     'environment': aura_environment,
+                    'health': {
+                        'available': False,
+                        'error': None,
+                        'request_id': None,
+                    },
                     'routes': [dict(row) for row in ledger.db.execute(
                         "SELECT * FROM wallet_provider_routes ORDER BY product,asset,network,environment"
                     )],
@@ -793,7 +798,16 @@ def install_wallet(app, root, owner_check):
                     )],
                 }
                 if aura_enabled and aura_client.configured:
-                    aura_state['capabilities'] = await aura_client.get_me()
+                    try:
+                        aura_state['capabilities'] = await aura_client.get_me()
+                        aura_state['health']['available'] = True
+                    except (ApiError, asyncio.TimeoutError, OSError, ValueError) as error:
+                        aura_state['health']['error'] = getattr(
+                            error, 'name', type(error).__name__
+                        )
+                        aura_state['health']['request_id'] = getattr(
+                            error, 'request_id', None
+                        )
                 return web.json_response({
                     'goswap': {'enabled': bool(token), 'configured': bool(token)},
                     'aura': aura_state,

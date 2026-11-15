@@ -1999,6 +1999,20 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         delivery = (await redelivered.json())["delivery"]
         self.assertEqual((delivery["status"], delivery["attempts"]), ("pending", 0))
 
+    async def test_admin_provider_diagnostics_survive_aura_outage(self):
+        error = ApiError("unavailable", "provider unavailable", 503, "5")
+        error.request_id = "req_aura_health_1"
+        client = self.app["wpay_aura_provider"]
+        with patch.object(client, "get_me", AsyncMock(side_effect=error)):
+            response = await self.wpay.get(
+                "/api/wallet/admin-providers", headers=self.owner,
+            )
+        self.assertEqual(response.status, 200, await response.text())
+        aura = (await response.json())["aura"]
+        self.assertFalse(aura["health"]["available"])
+        self.assertEqual(aura["health"]["error"], "unavailable")
+        self.assertEqual(aura["health"]["request_id"], "req_aura_health_1")
+
     async def test_admin_balance_history_and_withdrawal_are_idempotent(self):
         self.mock.app["state"].balance = Decimal("100")
         address = "TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9"

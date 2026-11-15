@@ -30,7 +30,7 @@ import Framework7React, {
   Button as F7Button,
   Preloader as F7Preloader,
 } from "framework7-react";
-import { walletRequest } from "../lib/wallet-api";
+import { walletIdempotentRequest, walletRequest } from "../lib/wallet-api";
 import { useTheme } from "../store/ThemeStore";
 import "./WalletFramework7.css";
 import "./WalletAdmin.css";
@@ -40,7 +40,13 @@ Framework7.use(Framework7React);
 
 type Json = Record<string, unknown>;
 type Tab =
-  "overview" | "data" | "payments" | "crypto" | "goswap" | "broadcasts";
+  | "overview"
+  | "data"
+  | "payments"
+  | "crypto"
+  | "aura"
+  | "goswap"
+  | "broadcasts";
 type AdminOverview = {
   users: number;
   events: number;
@@ -83,6 +89,20 @@ type GoSwapData = {
   methods: GoSwapMethod[];
 };
 type BroadcastData = { items: Json[] };
+type AuraData = {
+  provider: {
+    enabled: boolean;
+    configured: boolean;
+    environment: string;
+    health: { available: boolean; error: string | null; request_id: string | null };
+    capabilities?: Json;
+    routes: Json[];
+    reconciliation: Json[];
+  };
+  events: { data: Json[]; next_cursor: string | null };
+  qrPayments: { data: Json[] };
+  withdrawals: { data: Json[] };
+};
 type AdminColumn = {
   key: string;
   label: string;
@@ -134,6 +154,7 @@ const tabs: { id: Tab; label: string; icon: typeof Database }[] = [
   { id: "data", label: "БД", icon: Database },
   { id: "payments", label: "Оплаты", icon: Activity },
   { id: "crypto", label: "Крипта", icon: Coins },
+  { id: "aura", label: "Aura", icon: ShieldCheck },
   { id: "goswap", label: "GoSwap", icon: Server },
   { id: "broadcasts", label: "Рассылки", icon: Megaphone },
 ];
@@ -177,6 +198,35 @@ export default function WalletAdminPage() {
       }
       if (tab === "goswap") {
         setPayload(await walletRequest<GoSwapData>("admin-goswap"));
+        setPayloadTab(tab);
+      }
+      if (tab === "aura") {
+        const providers = await walletRequest<{
+          aura: AuraData["provider"];
+        }>("admin-providers");
+        const [events, qrPayments, withdrawals] = providers.aura.health.available
+          ? await Promise.all([
+              walletRequest<AuraData["events"]>(
+                "admin-aura-events?limit=50",
+              ),
+              walletRequest<AuraData["qrPayments"]>(
+                "admin-aura-qr-payments",
+              ),
+              walletRequest<AuraData["withdrawals"]>(
+                "admin-aura-withdrawals",
+              ),
+            ])
+          : [
+              { data: [], next_cursor: null },
+              { data: [] },
+              { data: [] },
+            ];
+        setPayload({
+          provider: providers.aura,
+          events,
+          qrPayments,
+          withdrawals,
+        } satisfies AuraData);
         setPayloadTab(tab);
       }
       if (tab === "broadcasts") {
@@ -364,7 +414,133 @@ function TabContent({
         <GoSwap data={payload as GoSwapData} />
       </>
     );
+  if (tab === "aura")
+    return <Aura data={payload as AuraData} reload={reload} />;
   return <Broadcasts data={payload as BroadcastData} reload={reload} />;
+}
+
+function Aura({ data, reload }: { data: AuraData; reload: () => Promise<void> }) {
+  const [working, setWorking] = useState("");
+  const [notice, setNotice] = useState("");
+  const products = (data.provider.capabilities?.products || {}) as Json;
+  const depositRoute = data.provider.routes.find(
+    (route) =>
+      route.product === "crypto_deposit" &&
+      route.asset === "USDT" &&
+      route.network === "TRON" &&
+      route.environment === data.provider.environment &&
+      route.provider === "aura",
+  );
+  async function run(name: string, task: () => Promise<unknown>, text: string) {
+    if (working) return;
+    setWorking(name);
+    setNotice("");
+    try {
+      await task();
+      setNotice(text);
+      await reload();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Операция не выполнена");
+    } finally {
+      setWorking("");
+    }
+  }
+  return (
+    <div className="space-y-4">
+      {notice && <div className="wpay-admin-error">{notice}</div>}
+      <section className="wpay-admin-metrics">
+        <article className="wpay-admin-metric">
+          <span className="wpay-admin-metric-icon"><Server size={19} /></span>
+          <div><strong>{data.provider.health.available ? "Готов" : data.provider.configured ? "Ошибка" : "Нет ключа"}</strong><small>Подключение Aura</small></div>
+        </article>
+        <article className="wpay-admin-metric">
+          <span className="wpay-admin-metric-icon"><ShieldCheck size={19} /></span>
+          <div><strong>{data.provider.environment}</strong><small>Окружение</small></div>
+        </article>
+        <article className="wpay-admin-metric">
+          <span className="wpay-admin-metric-icon"><Activity size={19} /></span>
+          <div><strong>{data.events.data.length}</strong><small>Последние события</small></div>
+        </article>
+        <article className="wpay-admin-metric">
+          <span className="wpay-admin-metric-icon"><Coins size={19} /></span>
+          <div><strong>{data.provider.reconciliation.length}</strong><small>Сверяемые активы</small></div>
+        </article>
+      </section>
+
+      <div className="wpay-admin-dashboard-grid">
+        <section className={card}>
+          <div className="wpay-admin-section-title">
+            <div><span>GET /me</span><h2>Продукты ключа</h2></div>
+            <i className={data.provider.health.available ? "is-online" : ""}>{data.provider.health.available ? "Online" : "Offline"}</i>
+          </div>
+          {!data.provider.health.available && data.provider.health.error && <Row title={data.provider.health.error} subtitle={data.provider.health.request_id ? `Request ID: ${data.provider.health.request_id}` : "Aura API недоступен"} right="Ошибка" />}
+          {Object.keys(products).length ? Object.entries(products).map(([key, value]) => (
+            <Row key={key} title={key} right={value === true ? "Включён" : "Выключен"} />
+          )) : <Empty />}
+        </section>
+        <section className={card}>
+          <div className="wpay-admin-section-title">
+            <div><span>Маршрутизация</span><h2>USDT / TRON deposits</h2></div>
+          </div>
+          <Row title="Провайдер Aura" subtitle={`Среда: ${data.provider.environment}`} right={depositRoute?.enabled ? "Включён" : "Выключен"} />
+          <button
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            disabled={Boolean(working) || !data.provider.configured}
+            onClick={() => void run("route", () => walletRequest("admin-provider-route", {
+              product: "crypto_deposit",
+              asset: "USDT",
+              network: "TRON",
+              environment: data.provider.environment,
+              provider: "aura",
+              enabled: !Boolean(depositRoute?.enabled),
+            }), depositRoute?.enabled ? "Маршрут Aura выключен" : "Маршрут Aura включён")}
+          >
+            {depositRoute?.enabled ? "Выключить маршрут" : "Включить маршрут"}
+          </button>
+        </section>
+      </div>
+
+      <section className={card}>
+        <div className="wpay-admin-section-title">
+          <div><span>Ledger vs provider</span><h2>Сверка Aura</h2></div>
+          <button
+            className="inline-flex items-center gap-2 rounded-xl bg-blue-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+            disabled={Boolean(working) || !data.provider.enabled}
+            onClick={() => void run("process", () => walletRequest("admin-aura-process", {}), "Inbox обработан, сверка обновлена")}
+          ><RefreshCw size={14} className={working === "process" ? "animate-spin" : ""} />Обработать и сверить</button>
+        </div>
+        {data.provider.reconciliation.length ? data.provider.reconciliation.map((row, index) => (
+          <Row key={index} title={`${text(row.asset)} · ${text(row.status)}`} subtitle={`provider ${amount(row.provider_available)} · liabilities ${amount(row.liability_total)}`} right={amount(row.difference)} />
+        )) : <Empty />}
+      </section>
+
+      <section className={card}>
+        <div className="wpay-admin-section-title"><div><span>Events API</span><h2>Последние события Aura</h2></div></div>
+        {data.events.data.length ? data.events.data.map((event, index) => {
+          const delivery = (event.delivery || {}) as Json;
+          return (
+            <div key={text(event.id || index)} className="border-b border-[var(--admin-border)] py-3 last:border-0">
+              <div className="flex items-center justify-between gap-3"><div><b className="text-sm">{text(event.type)}</b><div className="mt-1 text-xs text-[var(--admin-muted)]">{date(event.created_at)} · {text(delivery.status)}</div></div>
+                {delivery.status !== "delivered" && <button className="rounded-lg border border-[var(--admin-border)] px-3 py-2 text-xs font-semibold disabled:opacity-50" disabled={Boolean(working)} onClick={() => void run(`event-${text(event.id)}`, () => walletIdempotentRequest("admin-aura-event-redeliver", { event_id: event.id }, globalThis.crypto?.randomUUID?.() || `redeliver-${Date.now()}`), "Событие поставлено на повторную доставку")}>Повторить</button>}
+              </div>
+              {details(event, "Безопасные данные события")}
+            </div>
+          );
+        }) : <Empty />}
+      </section>
+
+      <div className="wpay-admin-dashboard-grid">
+        <section className={card}>
+          <div className="wpay-admin-section-title"><div><span>Локальные состояния</span><h2>QR-платежи</h2></div></div>
+          {data.qrPayments.data.length ? data.qrPayments.data.slice(0, 20).map((row, index) => <Row key={index} title={text(row.merchant || row.payment_id)} subtitle={text(row.status)} right={`${amount(row.total_usdt)} USDT`} />) : <Empty />}
+        </section>
+        <section className={card}>
+          <div className="wpay-admin-section-title"><div><span>TRC-20</span><h2>Выводы</h2></div></div>
+          {data.withdrawals.data.length ? data.withdrawals.data.slice(0, 20).map((row, index) => <Row key={index} title={text(row.status)} subtitle={text(row.recipient)} right={`${amount(row.amount)} USDT`} />) : <Empty />}
+        </section>
+      </div>
+    </div>
+  );
 }
 
 function Overview({ data }: { data: AdminOverview }) {

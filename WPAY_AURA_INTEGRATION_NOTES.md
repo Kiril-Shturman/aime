@@ -745,6 +745,15 @@ Additional completed areas:
   SBP and QR entry points. When Aura QR is enabled, the QR sheet uses Aura
   quote/pay directly with one stable idempotency key and authenticated status
   polling; Aura-only sync also performs read-only pending recovery.
+- The production card tab now uses owner-scoped Aura data instead of the
+  illustrative catalog. It covers virtual/physical issue, cancellation,
+  recharge, freeze/unfreeze, physical activation, PIN, operation history and
+  explicit ephemeral credential/3DS reveal. Sensitive values are never placed
+  in browser persistence and are cleared on navigation or expiry.
+- The admin console has an Aura operations tab for key health/capabilities,
+  environment, deposit routing, reconciliation, safe event inspection and
+  redelivery, local QR states and withdrawals. Provider health failures retain
+  their support request ID without taking the diagnostics page down.
 
 Verification on this branch:
 
@@ -757,7 +766,6 @@ Verification on this branch:
 - Python compilation and `git diff --check` passed.
 
 Remaining before broad production rollout: run a controlled real Aura testnet
-pilot with server-installed secrets, then replace the illustrative card catalog
-with owner-scoped Aura card data before enabling the card UI. A live key may be
-installed only in server secret storage; credentials pasted in chat must remain
-revoked.
+pilot with server-installed secrets and verify reconciliation after each money
+flow. A live key may be installed only in server secret storage; credentials
+pasted in chat must remain revoked.
