@@ -88,6 +88,23 @@ type GoSwapData = {
   snapshot: Record<string, GoSwapStatus>;
   methods: GoSwapMethod[];
 };
+type AuraMethod = {
+  method: string;
+  title: string;
+  verb: "GET" | "POST";
+  path: string;
+  params: string[];
+  required: string[];
+  example: Json;
+  dangerous: boolean;
+  idempotent: boolean;
+  blocked_reason: string | null;
+};
+type AuraConsoleData = {
+  environment: string;
+  configured: boolean;
+  methods: AuraMethod[];
+};
 type BroadcastData = { items: Json[] };
 type AuraData = {
   provider: {
@@ -102,6 +119,7 @@ type AuraData = {
   events: { data: Json[]; next_cursor: string | null };
   qrPayments: { data: Json[] };
   withdrawals: { data: Json[] };
+  console: AuraConsoleData;
 };
 type AdminColumn = {
   key: string;
@@ -201,9 +219,10 @@ export default function WalletAdminPage() {
         setPayloadTab(tab);
       }
       if (tab === "aura") {
-        const providers = await walletRequest<{
-          aura: AuraData["provider"];
-        }>("admin-providers");
+        const [providers, consoleData] = await Promise.all([
+          walletRequest<{ aura: AuraData["provider"] }>("admin-providers"),
+          walletRequest<AuraConsoleData>("admin-aura-console"),
+        ]);
         const [events, qrPayments, withdrawals] = providers.aura.health.available
           ? await Promise.all([
               walletRequest<AuraData["events"]>(
@@ -226,6 +245,7 @@ export default function WalletAdminPage() {
           events,
           qrPayments,
           withdrawals,
+          console: consoleData,
         } satisfies AuraData);
         setPayloadTab(tab);
       }
@@ -539,7 +559,120 @@ function Aura({ data, reload }: { data: AuraData; reload: () => Promise<void> })
           {data.withdrawals.data.length ? data.withdrawals.data.slice(0, 20).map((row, index) => <Row key={index} title={text(row.status)} subtitle={text(row.recipient)} right={`${amount(row.amount)} USDT`} />) : <Empty />}
         </section>
       </div>
+
+      <AuraConsole data={data.console} />
     </div>
+  );
+}
+
+function AuraConsole({ data }: { data: AuraConsoleData }) {
+  const [selected, setSelected] = useState(data.methods[0]?.method ?? "");
+  const [draft, setDraft] = useState(() => json(data.methods[0]?.example ?? {}));
+  const [confirmation, setConfirmation] = useState("");
+  const [idempotencyKey, setIdempotencyKey] = useState(() =>
+    globalThis.crypto?.randomUUID?.() || "",
+  );
+  const [filter, setFilter] = useState("");
+  const [running, setRunning] = useState(false);
+  const [result, setResult] = useState<unknown>(null);
+  const [actionError, setActionError] = useState("");
+  const method = data.methods.find((item) => item.method === selected) ?? data.methods[0];
+  const visible = data.methods.filter((item) =>
+    `${item.method} ${item.verb} ${item.path} ${item.title}`
+      .toLowerCase()
+      .includes(filter.toLowerCase()),
+  );
+
+  function choose(item: AuraMethod) {
+    setSelected(item.method);
+    setDraft(json(item.example));
+    setConfirmation("");
+    setIdempotencyKey(globalThis.crypto?.randomUUID?.() || "");
+    setResult(null);
+    setActionError("");
+  }
+
+  async function run() {
+    if (!method || running || method.blocked_reason) return;
+    let params: unknown;
+    try {
+      params = JSON.parse(draft || "{}");
+      if (!params || Array.isArray(params) || typeof params !== "object") throw Error();
+    } catch {
+      setActionError("Параметры должны быть корректным JSON-объектом");
+      return;
+    }
+    if (method.dangerous && confirmation !== method.method) {
+      setActionError(`Введите ${method.method} для подтверждения`);
+      return;
+    }
+    setRunning(true);
+    setActionError("");
+    setResult(null);
+    try {
+      const response = await walletRequest("admin-aura-action", {
+        method: method.method,
+        params,
+        confirm: method.dangerous ? method.method : undefined,
+        idempotency_key: method.idempotent ? idempotencyKey : undefined,
+      });
+      setResult(response);
+    } catch (reason) {
+      setActionError(reason instanceof Error ? reason.message : "Aura вернула ошибку");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <section className={`${card} !p-0 overflow-hidden`}>
+      <div className="border-b border-[var(--admin-border)] p-5">
+        <div className="wpay-admin-section-title !mb-0">
+          <div><span>Partner API 3.17</span><h2>Полная Aura API-консоль · {data.methods.length} методов</h2></div>
+          <i className={data.configured ? "is-online" : ""}>{data.environment}</i>
+        </div>
+      </div>
+      <div className="grid min-h-[680px] lg:grid-cols-[330px_minmax(0,1fr)]">
+        <aside className="border-b border-[var(--admin-border)] p-4 lg:border-b-0 lg:border-r">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 opacity-35" size={17} />
+            <input value={filter} onChange={(event) => setFilter(event.target.value)} className={`${input} !pl-10`} placeholder="Метод или путь" />
+          </div>
+          <div className="mt-3 max-h-[600px] space-y-1 overflow-y-auto">
+            {visible.map((item) => (
+              <button key={item.method} onClick={() => choose(item)} className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-left ${selected === item.method ? "bg-blue-500 text-white" : "hover:bg-black/[.04] dark:hover:bg-white/[.06]"}`}>
+                <span className="min-w-0"><b className="block truncate text-xs">{item.method}</b><small className={`mt-0.5 block truncate text-[10px] ${selected === item.method ? "text-white/70" : "opacity-45"}`}>{item.path}</small></span>
+                <span className={`shrink-0 rounded-md px-1.5 py-1 text-[9px] font-bold ${selected === item.method ? "bg-white/15" : item.verb === "POST" ? "bg-orange-500/10 text-orange-600" : "bg-blue-500/10 text-blue-600"}`}>{item.verb}</span>
+              </button>
+            ))}
+          </div>
+        </aside>
+        {method ? (
+          <div className="min-w-0 p-5 lg:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div><div className="flex items-center gap-2"><span className={`rounded-md px-2 py-1 text-[10px] font-bold ${method.verb === "POST" ? "bg-orange-500/10 text-orange-600" : "bg-blue-500/10 text-blue-600"}`}>{method.verb}</span><h2 className="!text-xl">{method.path}</h2></div><p className="mt-2 text-sm opacity-50">{method.title} · {method.method}</p></div>
+              {method.dangerous && <span className="flex items-center gap-2 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500"><AlertTriangle size={16} />Изменяет данные или деньги</span>}
+            </div>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl bg-black/[.035] p-3 text-xs dark:bg-white/[.05]"><span className="opacity-45">Параметры</span><b className="mt-1 block break-words">{method.params.join(", ") || "нет"}</b></div>
+              <div className="rounded-xl bg-black/[.035] p-3 text-xs dark:bg-white/[.05]"><span className="opacity-45">Обязательные</span><b className="mt-1 block break-words">{method.required.join(", ") || "нет"}</b></div>
+            </div>
+            {method.blocked_reason ? (
+              <p className="mt-5 rounded-xl bg-amber-500/10 p-4 text-sm text-amber-600">{method.blocked_reason}. Метод показан для полноты контракта, но выполнение здесь заблокировано.</p>
+            ) : (
+              <>
+                <label className="mt-5 block"><span className="text-xs font-semibold">JSON-параметры</span><textarea value={draft} onChange={(event) => setDraft(event.target.value)} spellCheck={false} className={`${input} mt-2 min-h-52 resize-y font-mono !text-xs`} /></label>
+                {method.idempotent && <label className="mt-4 block"><span className="text-xs font-semibold">Idempotency-Key</span><input value={idempotencyKey} onChange={(event) => setIdempotencyKey(event.target.value)} className={`${input} mt-2 font-mono !text-xs`} /></label>}
+                {method.dangerous && <label className="mt-4 block"><span className="text-xs font-semibold text-red-500">Для выполнения введите {method.method}</span><input value={confirmation} onChange={(event) => setConfirmation(event.target.value)} className={`${input} mt-2`} placeholder={method.method} /></label>}
+                <button onClick={() => void run()} disabled={running || Boolean(method.dangerous && confirmation !== method.method)} className={`mt-5 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-5 font-semibold text-white disabled:opacity-40 ${method.dangerous ? "bg-red-500" : "bg-blue-500"}`}><Play size={17} />{running ? "Выполняю…" : `Выполнить ${method.verb} ${method.path}`}</button>
+              </>
+            )}
+            {actionError && <p className="mt-4 rounded-xl bg-red-500/10 p-3 text-sm text-red-500">{actionError}</p>}
+            {result !== null && <div className="mt-5"><div className="text-xs font-semibold text-emerald-600">HTTP-запрос и полный безопасный ответ Aura</div><pre className="mt-2 max-h-[480px] overflow-auto whitespace-pre-wrap break-all rounded-xl bg-black/[.04] p-4 text-xs dark:bg-black/30">{json(result)}</pre></div>}
+          </div>
+        ) : <Empty />}
+      </div>
+    </section>
   );
 }
 

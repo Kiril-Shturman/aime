@@ -2050,6 +2050,49 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(aura["health"]["error"], "unavailable")
         self.assertEqual(aura["health"]["request_id"], "req_aura_health_1")
 
+    async def test_admin_api_console_is_complete_allowlisted_and_safe(self):
+        denied = await self.wpay.get(
+            "/api/wallet/admin-aura-console",
+            headers={"X-Telegram-Init-Data": init_data(323)},
+        )
+        self.assertEqual(denied.status, 403)
+        catalog_response = await self.wpay.get(
+            "/api/wallet/admin-aura-console", headers=self.owner,
+        )
+        self.assertEqual(catalog_response.status, 200, await catalog_response.text())
+        catalog = await catalog_response.json()
+        methods = {item["method"]: item for item in catalog["methods"]}
+        self.assertGreaterEqual(len(methods), 40)
+        self.assertEqual(methods["getMe"]["path"], "/me")
+        self.assertTrue(methods["createWithdrawal"]["dangerous"])
+        self.assertIsNotNone(methods["getCardCredentials"]["blocked_reason"])
+
+        unknown = await self.wpay.post(
+            "/api/wallet/admin-aura-action", headers=self.owner,
+            json={"method": "deleteEverything", "params": {}},
+        )
+        self.assertEqual(unknown.status, 400)
+        sensitive = await self.wpay.post(
+            "/api/wallet/admin-aura-action", headers=self.owner,
+            json={"method": "getCardCredentials", "params": {"card_id": "x"}},
+        )
+        self.assertEqual(sensitive.status, 403)
+        unconfirmed = await self.wpay.post(
+            "/api/wallet/admin-aura-action", headers=self.owner,
+            json={"method": "createWithdrawal", "params": {
+                "amount": "1", "address": "TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9",
+            }, "idempotency_key": "console-withdrawal-one"},
+        )
+        self.assertEqual(unconfirmed.status, 409)
+        live = await self.wpay.post(
+            "/api/wallet/admin-aura-action", headers=self.owner,
+            json={"method": "getMe", "params": {}},
+        )
+        self.assertEqual(live.status, 200, await live.text())
+        transcript = await live.json()
+        self.assertEqual(transcript["response"]["http_status"], 200)
+        self.assertTrue(transcript["response"]["body"]["products"]["cards"])
+
     async def test_admin_balance_history_and_withdrawal_are_idempotent(self):
         self.mock.app["state"].balance = Decimal("100")
         address = "TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9"

@@ -16,7 +16,7 @@ import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, localcontext
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, quote, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, web
 
@@ -59,6 +59,227 @@ ADMIN_GOSWAP_METHODS = {
     'createExactDeposit': {'title': 'Точное пополнение TRON', 'post': True, 'params': ['client_ref', 'amount', 'network', 'asset'], 'required': ['client_ref', 'amount'], 'example': {'client_ref': '', 'amount': '1', 'network': 'TRON', 'asset': 'USDT'}},
     'createQrQuote': {'title': 'Котировка QR', 'post': True, 'params': ['qr'], 'required': ['qr'], 'example': {'qr': ''}},
     'payQr': {'title': 'Оплатить QR', 'post': True, 'dangerous': True, 'params': ['quote_id', 'spend_id'], 'required': ['quote_id', 'spend_id'], 'example': {'quote_id': '', 'spend_id': ''}},
+}
+
+
+def _aura_method(title, verb, path, *, params=(), required=(), example=None,
+                 path_params=(), query_params=(), dangerous=False,
+                 idempotent=False, blocked_reason=None):
+    return {
+        'title': title, 'verb': verb, 'path': path,
+        'params': list(params), 'required': list(required),
+        'example': example or {}, 'path_params': list(path_params),
+        'query_params': list(query_params), 'dangerous': dangerous,
+        'idempotent': idempotent, 'blocked_reason': blocked_reason,
+    }
+
+
+# Complete Aura Partner API 3.17 catalog. Calls are deliberately allowlisted:
+# secrets/requisites remain visible as catalog entries, but cannot be revealed
+# through the general-purpose admin console.
+ADMIN_AURA_METHODS = {
+    'getMe': _aura_method('Партнёр и подключённые продукты', 'GET', '/me'),
+    'getBalance': _aura_method('Баланс партнёра', 'GET', '/balance'),
+    'getBalanceHistory': _aura_method(
+        'История баланса', 'GET', '/balance/history',
+        params=('type', 'status', 'sort', 'order', 'from', 'to', 'cursor', 'limit'),
+        query_params=('type', 'status', 'sort', 'order', 'from', 'to', 'cursor', 'limit'),
+        example={'limit': 100, 'sort': 'created_at', 'order': 'desc'},
+    ),
+    'getBalanceOperation': _aura_method(
+        'Операция баланса', 'GET', '/balance/history/{operation_id}',
+        params=('operation_id',), required=('operation_id',), path_params=('operation_id',),
+        example={'operation_id': ''},
+    ),
+    'listEvents': _aura_method(
+        'События и доставки webhook', 'GET', '/events',
+        params=('type', 'created_after', 'created_before', 'cursor', 'limit'),
+        query_params=('type', 'created_after', 'created_before', 'cursor', 'limit'),
+        example={'limit': 25},
+    ),
+    'getEvent': _aura_method(
+        'Событие', 'GET', '/events/{event_id}', params=('event_id',),
+        required=('event_id',), path_params=('event_id',), example={'event_id': ''},
+    ),
+    'redeliverEvent': _aura_method(
+        'Повторить доставку события', 'POST', '/events/{event_id}/redeliver',
+        params=('event_id',), required=('event_id',), path_params=('event_id',),
+        example={'event_id': ''}, dangerous=True, idempotent=True,
+    ),
+    'listCustomers': _aura_method(
+        'Клиенты', 'GET', '/customers', params=('cursor', 'limit'),
+        query_params=('cursor', 'limit'), example={'limit': 100},
+    ),
+    'createCustomer': _aura_method(
+        'Создать или обновить клиента', 'POST', '/customers',
+        params=('id', 'email', 'phone'), required=('id',),
+        example={'id': '', 'email': '', 'phone': ''}, dangerous=True,
+    ),
+    'getCustomer': _aura_method(
+        'Клиент', 'GET', '/customers/{customer_id}', params=('customer_id',),
+        required=('customer_id',), path_params=('customer_id',), example={'customer_id': ''},
+    ),
+    'getCustomerKyc': _aura_method(
+        'Статус KYC', 'GET', '/customers/{customer_id}/kyc', params=('customer_id',),
+        required=('customer_id',), path_params=('customer_id',), example={'customer_id': ''},
+    ),
+    'startCustomerKyc': _aura_method(
+        'Запустить KYC', 'POST', '/customers/{customer_id}/kyc', params=('customer_id',),
+        required=('customer_id',), path_params=('customer_id',),
+        example={'customer_id': ''}, dangerous=True,
+    ),
+    'importCustomerIdentity': _aura_method(
+        'Импорт KYC-данных', 'POST', '/customers/{customer_id}/kyc/identity',
+        params=('customer_id',), required=('customer_id',), path_params=('customer_id',),
+        example={'customer_id': ''}, blocked_reason='Паспорт и ИНН доступны только в защищённом KYC-flow',
+    ),
+    'getCardFees': _aura_method('Тарифы выпуска карт', 'GET', '/cards-fees'),
+    'listCards': _aura_method(
+        'Карты', 'GET', '/cards', params=('cursor', 'limit'),
+        query_params=('cursor', 'limit'), example={'limit': 100},
+    ),
+    'createCard': _aura_method(
+        'Выпустить карту', 'POST', '/cards',
+        params=('owner_id', 'type', 'shipping_address'), required=('owner_id', 'type'),
+        example={'owner_id': '', 'type': 'virtual'}, dangerous=True, idempotent=True,
+    ),
+    'getCard': _aura_method(
+        'Карта', 'GET', '/cards/{card_id}', params=('card_id',),
+        required=('card_id',), path_params=('card_id',), example={'card_id': ''},
+    ),
+    'getCardCredentials': _aura_method(
+        'Реквизиты карты', 'GET', '/cards/{card_id}/credentials',
+        params=('card_id',), required=('card_id',), path_params=('card_id',),
+        example={'card_id': ''}, blocked_reason='PAN, CVV и срок карты нельзя выводить в общей API-консоли',
+    ),
+    'getLatestCardOtp': _aura_method(
+        'Последний 3DS-код', 'GET', '/cards/{card_id}/otp/latest',
+        params=('card_id',), required=('card_id',), path_params=('card_id',),
+        example={'card_id': ''}, blocked_reason='OTP доступен только владельцу карты в no-store flow',
+    ),
+    'listCardOperations': _aura_method(
+        'Все операции по картам', 'GET', '/cards/operations',
+        params=('cursor', 'limit'), query_params=('cursor', 'limit'), example={'limit': 100},
+    ),
+    'listCardOperationsByCard': _aura_method(
+        'Операции одной карты', 'GET', '/cards/{card_id}/operations',
+        params=('card_id', 'cursor', 'limit'), required=('card_id',),
+        path_params=('card_id',), query_params=('cursor', 'limit'),
+        example={'card_id': '', 'limit': 100},
+    ),
+    'rechargeCard': _aura_method(
+        'Пополнить карту', 'POST', '/cards/{card_id}/recharge',
+        params=('card_id', 'amount', 'amount_spend'), required=('card_id',),
+        path_params=('card_id',), example={'card_id': '', 'amount': '25'},
+        dangerous=True, idempotent=True,
+    ),
+    'freezeCard': _aura_method(
+        'Заморозить карту', 'POST', '/cards/{card_id}/freeze',
+        params=('card_id',), required=('card_id',), path_params=('card_id',),
+        example={'card_id': ''}, dangerous=True,
+    ),
+    'unfreezeCard': _aura_method(
+        'Разморозить карту', 'POST', '/cards/{card_id}/unfreeze',
+        params=('card_id',), required=('card_id',), path_params=('card_id',),
+        example={'card_id': ''}, dangerous=True,
+    ),
+    'cancelCard': _aura_method(
+        'Закрыть карту', 'POST', '/cards/{card_id}/cancel', params=('card_id',),
+        required=('card_id',), path_params=('card_id',), example={'card_id': ''}, dangerous=True,
+    ),
+    'activateCard': _aura_method(
+        'Активировать физическую карту', 'POST', '/cards/{card_id}/activate',
+        params=('card_id',), required=('card_id',), path_params=('card_id',),
+        example={'card_id': ''}, blocked_reason='Код активации нельзя вводить в общей API-консоли',
+    ),
+    'setCardPin': _aura_method(
+        'Установить PIN', 'POST', '/cards/{card_id}/pin', params=('card_id',),
+        required=('card_id',), path_params=('card_id',), example={'card_id': ''},
+        blocked_reason='PIN нельзя вводить или возвращать через общую API-консоль',
+    ),
+    'getSbpRate': _aura_method('Курс покупки через СБП', 'GET', '/rate'),
+    'createSbpQuote': _aura_method(
+        'Котировка СБП', 'POST', '/quotes', params=('customer_id', 'fiat_amount'),
+        required=('customer_id', 'fiat_amount'), example={'customer_id': '', 'fiat_amount': '1000'},
+    ),
+    'listSbpOrders': _aura_method(
+        'Заказы СБП', 'GET', '/orders',
+        params=('customer_id', 'status', 'created_from', 'created_to', 'cursor', 'limit'),
+        query_params=('customer_id', 'status', 'created_from', 'created_to', 'cursor', 'limit'),
+        example={'limit': 20},
+    ),
+    'createSbpOrder': _aura_method(
+        'Создать заказ СБП', 'POST', '/orders', params=('customer_id', 'quote_token'),
+        required=('customer_id', 'quote_token'), example={'customer_id': '', 'quote_token': ''},
+        dangerous=True, idempotent=True,
+    ),
+    'getSbpOrder': _aura_method(
+        'Заказ СБП', 'GET', '/orders/{order_id}', params=('order_id',),
+        required=('order_id',), path_params=('order_id',), example={'order_id': ''},
+    ),
+    'cancelSbpOrder': _aura_method(
+        'Отменить заказ СБП', 'POST', '/orders/{order_id}/cancel', params=('order_id',),
+        required=('order_id',), path_params=('order_id',), example={'order_id': ''}, dangerous=True,
+    ),
+    'listDepositAddresses': _aura_method(
+        'Депозитные адреса клиента', 'GET', '/customers/{customer_id}/deposit-addresses',
+        params=('customer_id', 'cursor', 'limit'), required=('customer_id',),
+        path_params=('customer_id',), query_params=('cursor', 'limit'),
+        example={'customer_id': '', 'limit': 100}, dangerous=True,
+    ),
+    'createDepositAddress': _aura_method(
+        'Создать дополнительный адрес', 'POST', '/customers/{customer_id}/deposit-addresses',
+        params=('customer_id', 'label'), required=('customer_id',), path_params=('customer_id',),
+        example={'customer_id': '', 'label': ''}, dangerous=True,
+    ),
+    'getDepositAddress': _aura_method(
+        'Депозитный адрес', 'GET', '/deposit-addresses/{address_id}', params=('address_id',),
+        required=('address_id',), path_params=('address_id',), example={'address_id': ''},
+    ),
+    'listDeposits': _aura_method(
+        'Пополнения', 'GET', '/deposits', params=('customer_id', 'cursor', 'limit'),
+        query_params=('customer_id', 'cursor', 'limit'), example={'limit': 100},
+    ),
+    'getDeposit': _aura_method(
+        'Пополнение', 'GET', '/deposits/{deposit_id}', params=('deposit_id',),
+        required=('deposit_id',), path_params=('deposit_id',), example={'deposit_id': ''},
+    ),
+    'getDepositFees': _aura_method('Комиссии пополнений', 'GET', '/deposits-fees'),
+    'createQrQuote': _aura_method(
+        'Распознать QR и получить котировку', 'POST', '/qr-payments/quotes',
+        params=('customer_id', 'qr_payload'), required=('qr_payload',),
+        example={'customer_id': '', 'qr_payload': ''},
+    ),
+    'listQrPayments': _aura_method(
+        'QR-платежи', 'GET', '/qr-payments',
+        params=('customer_id', 'status', 'created_from', 'created_to', 'cursor', 'limit'),
+        query_params=('customer_id', 'status', 'created_from', 'created_to', 'cursor', 'limit'),
+        example={'limit': 20},
+    ),
+    'createQrPayment': _aura_method(
+        'Оплатить QR', 'POST', '/qr-payments',
+        params=('customer_id', 'quote_token', 'qr_payload'),
+        required=('customer_id', 'quote_token', 'qr_payload'),
+        example={'customer_id': '', 'quote_token': '', 'qr_payload': ''},
+        dangerous=True, idempotent=True,
+    ),
+    'getQrPayment': _aura_method(
+        'QR-платёж', 'GET', '/qr-payments/{payment_id}', params=('payment_id',),
+        required=('payment_id',), path_params=('payment_id',), example={'payment_id': ''},
+    ),
+    'listWithdrawals': _aura_method(
+        'Выводы TRC-20', 'GET', '/withdrawals', params=('status', 'cursor', 'limit'),
+        query_params=('status', 'cursor', 'limit'), example={'limit': 100},
+    ),
+    'createWithdrawal': _aura_method(
+        'Создать вывод TRC-20', 'POST', '/withdrawals',
+        params=('amount', 'address', 'note'), required=('amount', 'address'),
+        example={'amount': '10', 'address': '', 'note': ''}, dangerous=True, idempotent=True,
+    ),
+    'getWithdrawal': _aura_method(
+        'Вывод TRC-20', 'GET', '/withdrawals/{withdrawal_id}', params=('withdrawal_id',),
+        required=('withdrawal_id',), path_params=('withdrawal_id',), example={'withdrawal_id': ''},
+    ),
 }
 
 
@@ -631,6 +852,88 @@ def install_wallet(app, root, owner_check):
         result = await provider.call(method, params, post=spec['post'])
         return {'ok': True, 'method': method, 'result': result}
 
+    def admin_aura_console():
+        return {
+            'environment': aura_environment,
+            'configured': aura_client.configured,
+            'methods': [
+                {'method': method, **{
+                    key: value for key, value in spec.items()
+                    if key not in {'path_params', 'query_params'}
+                }}
+                for method, spec in ADMIN_AURA_METHODS.items()
+            ],
+        }
+
+    async def admin_aura_action(request):
+        if not aura_enabled or not aura_client.configured:
+            raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+        payload = await request.json()
+        if not isinstance(payload, dict) or set(payload) - {
+            'method', 'params', 'confirm', 'idempotency_key'
+        }:
+            raise ValueError('Invalid Aura console request')
+        method = str(payload.get('method') or '')
+        spec = ADMIN_AURA_METHODS.get(method)
+        if not spec:
+            raise ApiError('METHOD_NOT_ALLOWED', 'Метод отсутствует в разрешённом списке Aura', 400)
+        if spec['blocked_reason']:
+            raise ApiError('SENSITIVE_METHOD_BLOCKED', spec['blocked_reason'], 403)
+        params = payload.get('params') or {}
+        if not isinstance(params, dict):
+            raise ValueError('Параметры должны быть JSON-объектом')
+        unknown = sorted(set(params) - set(spec['params']))
+        if unknown:
+            raise ApiError('INVALID_PARAMS', 'Недопустимые параметры: ' + ', '.join(unknown), 400)
+        params = {key: value for key, value in params.items() if value is not None and value != ''}
+        missing = [key for key in spec['required'] if key not in params]
+        if missing:
+            raise ApiError('MISSING_PARAMS', 'Обязательные параметры: ' + ', '.join(missing), 400)
+        try:
+            encoded_size = len(json.dumps(params, ensure_ascii=False).encode())
+        except (TypeError, ValueError):
+            raise ApiError('INVALID_PARAMS', 'Параметры должны быть корректным JSON', 400)
+        if encoded_size > 32768:
+            raise ApiError('INVALID_PARAMS', 'Слишком большой запрос', 413)
+        if spec['dangerous'] and payload.get('confirm') != method:
+            raise ApiError('CONFIRMATION_REQUIRED', f'Подтвердите вызов {method}', 409)
+        idempotency_key = None
+        if spec['idempotent']:
+            idempotency_key = str(payload.get('idempotency_key') or '')
+            if not 1 <= len(idempotency_key) <= 200:
+                raise ApiError('idempotency_key_required', 'Idempotency-Key is required', 400)
+        path = spec['path']
+        for key in spec['path_params']:
+            value = params.pop(key)
+            if isinstance(value, (dict, list)):
+                raise ApiError('INVALID_PARAMS', f'{key} должен быть строкой', 400)
+            path = path.replace('{' + key + '}', quote(str(value), safe=''))
+        query = {}
+        for key in spec['query_params']:
+            if key in params:
+                query[key] = params.pop(key)
+        body = params if spec['verb'] == 'POST' and params else None
+        result = await aura_client.diagnostic_request(
+            spec['verb'], path, params=query or None, body=body,
+            idempotency_key=idempotency_key,
+        )
+        safe_body = body
+        if isinstance(body, dict):
+            safe_body = dict(body)
+            for key in ('quote_token', 'qr_payload', 'pin', 'activation_code'):
+                if key in safe_body:
+                    safe_body[key] = '[REDACTED]'
+        return {
+            'ok': 200 <= result['http_status'] < 300,
+            'method': method,
+            'request': {
+                'verb': spec['verb'], 'path': path,
+                'query': query, 'body': safe_body,
+                'idempotency_key': idempotency_key,
+            },
+            'response': result,
+        }
+
     async def run_broadcast(broadcast_id, targets, text, button_text, button_url):
         ledger.db.execute("UPDATE admin_broadcasts SET status='sending',started_at=? WHERE broadcast_id=?", (now(), broadcast_id))
         sent = failed = 0
@@ -780,6 +1083,10 @@ def install_wallet(app, root, owner_check):
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
                 return web.json_response(await admin_goswap_action(request))
+            if action == 'admin-aura-console' and request.method == 'GET':
+                return web.json_response(admin_aura_console())
+            if action == 'admin-aura-action' and request.method == 'POST':
+                return web.json_response(await admin_aura_action(request))
             if action == 'admin-providers' and request.method == 'GET':
                 aura_state = {
                     'enabled': aura_enabled,

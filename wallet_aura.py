@@ -1042,6 +1042,69 @@ class AuraClient:
             error.retry_policy = "later"
             raise error
 
+    async def diagnostic_request(self, method, path, *, params=None, body=None,
+                                 idempotency_key=None):
+        """Return a safe HTTP transcript for the allowlisted admin console."""
+        if not self.api_key:
+            return {'http_status': 503, 'headers': {}, 'body': {
+                'error': {'code': 'aura_not_configured', 'message': 'Aura is not configured'}
+            }}
+        await self._throttle()
+        if self.session is None:
+            self.session = ClientSession(timeout=ClientTimeout(total=20))
+        headers = {'X-API-Key': self.api_key, 'Accept': 'application/json'}
+        if body is not None:
+            headers['Content-Type'] = 'application/json'
+        if idempotency_key:
+            key = str(idempotency_key)
+            if not 1 <= len(key) <= 200 or '\r' in key or '\n' in key:
+                raise ValueError('Invalid Aura idempotency key')
+            headers['Idempotency-Key'] = key
+        safe_headers = {
+            'x-request-id', 'retry-after', 'x-ratelimit-limit',
+            'x-ratelimit-remaining', 'x-ratelimit-reset', 'cache-control',
+            'deprecation', 'sunset', 'link',
+        }
+        try:
+            async with self.session.request(
+                method, self.base_url + path, headers=headers, params=params,
+                **({'json': body} if body is not None else {}),
+            ) as response:
+                self._observe_limits(response.headers)
+                raw = await response.text()
+                try:
+                    payload = json.loads(raw) if raw else None
+                except (ValueError, TypeError):
+                    payload = raw[:100000]
+                def redact(value):
+                    if isinstance(value, list):
+                        return [redact(item) for item in value]
+                    if not isinstance(value, dict):
+                        return value
+                    result = {key: redact(item) for key, item in value.items()}
+                    for key in ('pan', 'cvv', 'cvc', 'pin', 'otp', 'activation_code'):
+                        if key in result:
+                            result[key] = '[REDACTED]'
+                    if result.get('type') == 'card.otp' and isinstance(result.get('data'), dict):
+                        if 'code' in result['data']:
+                            result['data']['code'] = '[REDACTED]'
+                    return result
+                return {
+                    'http_status': response.status,
+                    'headers': {
+                        key: value for key, value in response.headers.items()
+                        if key.lower() in safe_headers
+                    },
+                    'body': redact(payload),
+                }
+        except (asyncio.TimeoutError, OSError):
+            return {'http_status': 504, 'headers': {}, 'body': {
+                'error': {
+                    'code': 'aura_timeout',
+                    'message': 'Aura outcome is unknown; reconcile before retrying',
+                }
+            }}
+
     async def get_me(self, *, refresh=False):
         if not refresh and self._me_cache is not None and time.monotonic() < self._me_cache_until:
             return self._me_cache
