@@ -53,6 +53,18 @@ ordinary support messages.
 - WPay must create and persist the key and canonical request body before the
   first provider call. Every retry after timeout/network failure reuses both.
 - Reusing a key with a different body is an error.
+- Keys are 1–200 characters, bind one operation forever, and must never be
+  recycled even months later.
+- The currently documented idempotent routes are `POST /cards`,
+  `POST /cards/{card_id}/recharge`, `POST /events/{event_id}/redeliver`,
+  `POST /orders`, `POST /qr-payments` and `POST /withdrawals`. The last three
+  still require product/route availability confirmation described below.
+- Same key + byte-equivalent canonical request returns the original result;
+  same key + a different request returns `idempotency_key_reused`; missing key
+  returns `idempotency_key_required` and executes nothing.
+- Timeout, connection loss and 5xx are retried with exponential backoff and the
+  same key/body. A non-retryable 4xx requires a corrected new operation and a
+  new key; never mutate the body behind an existing key.
 - Non-2xx errors have an object containing `type`, `code`, `message`, optional
   `param`/`details`, `request_id` and `doc_url`.
 - Retry behavior must branch on error type/status and honor rate-limit headers;
@@ -61,25 +73,53 @@ ordinary support messages.
   exactly for `Retry-After`; do not invent an immediate retry loop.
 - Log `X-Request-Id` for failed calls (without request secrets) so Aura support
   can locate the provider request.
-- List endpoints use cursor pagination; cursor names and termination semantics
-  still need to be recorded from the specification.
+- List endpoints use cursor pagination: `limit` 1–100 (default 25), optional
+  opaque `cursor`, response `data` and nullable `next_cursor`.
+- A cursor is valid only for one uninterrupted traversal with the same filters
+  and sort. Never parse it, mutate it, change filters mid-walk, or persist it as
+  the durable synchronization checkpoint. Durable sync must store the last
+  provider timestamp/ID and begin a new filtered traversal later.
+- Invalid filters/sorts produce `invalid_argument`, not an empty result.
 - Monetary values are decimal strings and must remain `Decimal`, never binary
   floating-point numbers.
 
 ## Webhooks
 
 - Dedicated future endpoint: `/api/wallet/webhook/aura` (not shared with GoSwap).
+- Common JSON envelope is `{event,event_id,occurred_at,partner_id,data}`.
+- Headers include `X-Aura-Event`, `X-Aura-Event-Id`, `X-Aura-Attempt`,
+  `X-Aura-Timestamp`, `X-Aura-Signature-V2` and legacy
+  `X-Aura-Signature`. Route/dedupe using headers before decoding event-specific
+  data, but verify V2 over the untouched raw body first.
 - Signature header: `X-Aura-Signature-V2`.
 - Signature input is `timestamp + "." + raw_body`, HMAC-SHA256 with the full
   `whsec_...` secret.
 - Reject signatures outside the documented 300-second window.
-- During secret rotation, accept any matching `v1` value in the signature.
+- Accept any matching valid `v1` value if the header ever contains several;
+  ignore unknown signature-header keys for forward compatibility.
+- Do not use legacy `X-Aura-Signature`: it signs only the body and lacks replay
+  protection.
 - Deduplicate deliveries by `X-Aura-Event-Id`.
+- After signature verification, require header event/event-ID to match the JSON
+  envelope and verify `partner_id` is ours. Store attempt number and both Aura
+  timestamps for audit; never trust routing headers without the verified body.
 - Store raw bytes and verified metadata durably, answer 2xx quickly, and process
   through the existing inbox/worker. Provider event application and ledger
   mutation must be atomic and idempotent.
 - Test signature failure, duplicate delivery, out-of-order delivery, 5xx retry,
   restart recovery and secret rotation.
+- Retry schedule after timeout/connection failure/5xx is 1 minute, 5 minutes,
+  15 minutes, 1 hour, 6 hours and 24 hours, then automatic attempts stop.
+- Any 4xx is final and is not redelivered. Return 4xx only for a delivery that
+  must be permanently rejected (for example an invalid signature); persist and
+  return 2xx for unknown but authentic event types.
+- Portal manual redelivery restarts the full retry cycle to the currently saved
+  endpoint. `POST /events/{event_id}/redeliver` is also documented as an
+  idempotent money-safe/admin operation.
+- Secret rotation has no overlap or dual-signing grace period. New deliveries
+  immediately use only the new secret. Deployment therefore needs a coordinated
+  secret update window; a parser accepting multiple `v1` values does not solve
+  old/new secret rotation by itself.
 
 ## Confirmed quick-start operations
 
@@ -111,8 +151,14 @@ ordinary support messages.
 - `GET /rate` — SBP on-ramp rate plus allowed minimum/maximum.
 - `POST /quotes` — calculate an SBP purchase quote.
 - `GET /orders`, `POST /orders`, `GET /orders/{order_id}`,
-  `POST /orders/{order_id}/cancel` — SBP purchase lifecycle; create is
-  idempotent.
+  `POST /orders/{order_id}/cancel` — generated REST surface for SBP purchase;
+  create is idempotent. However, the supplied event catalogue explicitly says
+  today's SBP integration uses gRPC `aura.api.SbpBuyService` and no current REST
+  route creates an order. Treat these REST routes as not production-ready until
+  Aura confirms activation for our key/version.
+- `POST /qr-payments` and `GET /qr-payments/{payment_id}` are referenced by the
+  idempotency/event documentation for outbound SBP QR payment, but the complete
+  route contract is still needed.
 - `GET /customers/{customer_id}/deposit-addresses`,
   `POST /customers/{customer_id}/deposit-addresses`,
   `GET /deposit-addresses/{address_id}` — default/additional persistent TRON
@@ -138,8 +184,40 @@ ordinary support messages.
   `customer.deposit.confirmed`, `customer.deposit.rejected`.
 - Platform balance/network events: `deposit.confirmed`, `withdraw.sent`,
   `withdraw.confirmed`, `withdraw.failed`.
+- QR payments: `qr_payment.completed`, `qr_payment.failed`,
+  `qr_payment.refunded`.
 - The complete event catalogue, event envelope, versions and correction rules
   are still required.
+
+### Event application rules confirmed so far
+
+- Deduplicate transport delivery by `event_id`, but do not confuse that with the
+  business entity ID.
+- `card.operation` uses stable `operation_id` across status changes. Upsert the
+  operation only when incoming `updated_at` is newer; manual retries and network
+  delivery can arrive out of order.
+- Card-operation transitions include `pending` → `completed` / `declined` /
+  `cancelled`, and `completed` → `partially_refunded` / `refunded`. The first
+  observed state may already be terminal with `previous_status = null`.
+- A refund is both its own `type=refund` operation with a new operation ID and a
+  later update of the original purchase's refund state. Account each provider
+  movement exactly once; do not credit both representations blindly.
+- Card-operation monetary/display fields include USDT amount, original amount
+  and currency, merchant/MCC, refunded amount, before/after card balance,
+  decline details and created/updated timestamps. Unknown future fields/statuses
+  remain forward-compatible.
+- `card.otp` expires after roughly two minutes. Production delivery is enabled
+  separately and may not yet be active for every partner/card contour; the GET
+  fallback remains required.
+- `customer.deposit.confirmed` credits `net_amount = amount - fee`; pending and
+  rejected events never credit.
+- `deposit.confirmed` is a platform-balance deposit and is distinct from
+  `customer.deposit.confirmed`; `source=sandbox` is test funding and
+  `source=chain` has a transaction hash.
+- `qr_payment.completed` debits `total_usdt`; `qr_payment.failed` releases the
+  full hold; `qr_payment.refunded` reverses a previously completed payment and
+  must create a compensating ledger entry.
+- `withdraw.sent` is non-terminal; only confirmed/failed settles the reserve.
 
 ## Customers and KYC details
 
@@ -228,6 +306,17 @@ ordinary support messages.
   documentation inconsistency: do not design or expose automated withdrawals
   until the actual OpenAPI and Aura support identify the authoritative contract.
 
+## SBP REST availability warning
+
+The documentation currently describes `GET /rate`, `POST /quotes` and REST
+`/orders`, yet its event catalogue says SBP purchases are integrated today over
+gRPC `aura.api.SbpBuyService` and no current Partner REST route creates an order.
+Therefore WPay must not expose RUB→USDT on the basis of the generated REST route
+list alone. Ask Aura whether REST has been deployed after the documentation was
+written, whether our key has it, and obtain a successful testnet `POST /orders`
+before building the user flow. If gRPC is the only live interface, obtain its
+protobuf/service contract and operational requirements first.
+
 ## API evolution and deprecation
 
 - OpenAPI document version is currently 3.17.0; `/v1/partner` changes only for a
@@ -312,6 +401,9 @@ WPay financial core / double-entry ledger
   recipient, fee quote, durable key and lifecycle.
 - Existing webhook inbox should gain a provider namespace and unique
   `(provider, event_id)` constraint.
+- Store provider business entities separately from delivery events: stable
+  `operation_id`/deposit/order/payment IDs plus provider `updated_at`, so
+  out-of-order deliveries cannot regress state.
 - Provider secrets remain environment files/secret storage, never database UI.
 
 ## Sensitive-card-data rule
@@ -337,8 +429,9 @@ card-details contract and PCI implications must be reviewed before implementatio
    versioning and privacy-safe retention.
 6. **TRON deposits and balance** — personal addresses, confirmed deposits,
    AML/review states, provider balance history and independent reconciliation.
-7. **SBP on-ramp** — rate/quote expiry, order/QR lifecycle, limits, cancellations,
-   KYC gate and exact ledger postings.
+7. **SBP on-ramp (blocked on transport confirmation)** — first resolve REST vs
+   gRPC availability; then implement rate/quote expiry, order/QR lifecycle,
+   limits, cancellations, KYC gate and exact ledger postings.
 8. **Cards** — issue/cancel/recharge/status/operations/3DS/card details with fee
    snapshots, reservations and strict sensitive-data handling.
 9. **TRON withdrawals (conditional)** — implement only after Aura confirms the
@@ -356,10 +449,11 @@ card-details contract and PCI implications must be reviewed before implementatio
 
 - Full OpenAPI JSON/YAML v3.17.0 and Postman collection if useful.
 - Remaining details: exact response schemas for every recorded route; SBP
-  quote/rate/order fields; card-operation types/status corrections; complete
-  webhook envelope/catalogue; cursor contract; rate-limit header semantics;
-  full error catalogue; AML review fields; and the authoritative withdrawal
-  contract resolving the v3.5-removal versus v3.17 route-list contradiction.
+  quote/rate/order fields and authoritative REST-versus-gRPC availability;
+  complete card-operation schemas/types; QR-payment route schemas; rate-limit
+  header semantics; full error catalogue; AML review fields; and the
+  authoritative withdrawal contract resolving the v3.5-removal versus v3.17
+  route-list contradiction.
 - Partner-specific fee/limit responses or redacted examples.
 - Written production-card availability and commercial/legal terms.
 - Test key and webhook secret must be installed directly on the server, never
