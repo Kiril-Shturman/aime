@@ -125,6 +125,9 @@ export default function WalletVerification({
                 value={aura.phone}
                 maxlength={32}
                 disabled={aura.busy}
+                onFocus={() => {
+                  if (!aura.phone.trim()) aura.setPhone("+7");
+                }}
                 onInput={(event) => aura.setPhone(event.target.value)}
               />
               <ListInput
