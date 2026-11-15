@@ -2563,13 +2563,13 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
                 },
                 {
                   label: "Реквизиты",
-                  icon: DocOnDoc,
+                  icon: Eye,
                   onClick: () => setSettingsCardId(activeCard.id),
                 },
                 {
-                  label: "Wallet",
-                  icon: WalletFill,
-                  onClick: () => setSettingsCardId(activeCard.id),
+                  label: "Вывести",
+                  icon: ArrowUpCircleFill,
+                  onClick: () => showNotice("Вывод с карты пока не подключён"),
                 },
                 {
                   label: "Ещё",
