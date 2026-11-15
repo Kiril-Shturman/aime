@@ -76,13 +76,6 @@ export default function WalletAssetPanel({ code, name, icon, color, iconColor, o
           const saved=(result.items??[]).filter(item=>item.address&&networks.includes(item.network))
           if(!current)return
           setAddresses(saved)
-          const missing=networks.filter(network=>!saved.some(item=>item.network===network))
-          const results=await Promise.allSettled(missing.map(async network=>{
-            const item=await walletRequest<{address?:string}>('address',{network})
-            if(!item.address)throw Error('Сервис не вернул адрес')
-            if(current)setAddresses(previous=>[...previous.filter(row=>row.network!==network),{network,address:item.address!}])
-          }))
-          if(current&&results.some(result=>result.status==='rejected'))setAddressError('Не все адреса удалось получить. Нажмите на нужную сеть, чтобы повторить.')
         }catch{if(current)setAddressError('Не удалось загрузить адреса. Нажмите на сеть, чтобы повторить.')}
         finally{if(current)setLoadingAddresses(false)}
       })()

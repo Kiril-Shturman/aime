@@ -88,8 +88,9 @@ def telegram_user(raw, token):
 
 
 class ApiError(Exception):
-    def __init__(self, name, detail, status=400):
+    def __init__(self, name, detail, status=400, retry_after=None):
         self.name, self.detail, self.status = name, detail, status
+        self.retry_after = retry_after
 
 
 class GoSwap:
@@ -114,7 +115,8 @@ class GoSwap:
                     raise ApiError('PROVIDER_UNAVAILABLE', 'Некорректный ответ провайдера', 502)
                 if response.status >= 400 or not body.get('ok'):
                     error = body.get('error') or {}
-                    raise ApiError(error.get('name', 'PROVIDER_ERROR'), str(body.get('detail') or 'Ошибка провайдера')[:300], response.status if response.status >= 400 else 502)
+                    retry_after = response.headers.get('Retry-After') if response.status == 503 else None
+                    raise ApiError(error.get('name', 'PROVIDER_ERROR'), str(body.get('detail') or 'Ошибка провайдера')[:300], response.status if response.status >= 400 else 502, retry_after)
                 return body.get('result')
         except (asyncio.TimeoutError, OSError):
             raise ApiError('PROVIDER_TIMEOUT', 'Ответ не получен. Проверьте статус операции перед повтором.', 504)
@@ -706,7 +708,8 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(result)
             raise ApiError('NOT_FOUND', 'Метод не найден', 404)
         except ApiError as error:
-            return web.json_response({'ok': False, 'error': {'name': error.name}, 'detail': error.detail}, status=error.status)
+            headers = {'Retry-After': error.retry_after} if error.retry_after else None
+            return web.json_response({'ok': False, 'error': {'name': error.name}, 'detail': error.detail}, status=error.status, headers=headers)
         except (ValueError, KeyError, TypeError):
             return web.json_response({'ok': False, 'error': {'name': 'INVALID_REQUEST'}, 'detail': 'Некорректные данные запроса или ответа провайдера'}, status=400)
 
