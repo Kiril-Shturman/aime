@@ -27,6 +27,8 @@ interface TG {
   BiometricManager?: TgBiometricManager
   platform?: string
   isActive?: boolean
+  isFullscreen?: boolean
+  requestFullscreen?: () => void
   onEvent?: (event: string, callback: () => void) => void
   offEvent?: (event: string, callback: () => void) => void
   isVersionAtLeast?: (version: string) => boolean
@@ -78,6 +80,8 @@ export function haptic(
   }
 }
 
+const fullscreenRequested = new WeakSet<object>()
+
 export function initTelegram() {
   const t = tg()
   try {
@@ -86,6 +90,13 @@ export function initTelegram() {
     t?.disableVerticalSwipes?.()
   } catch {
     /* обычный браузер */
+  }
+  if (t && location.pathname.startsWith('/wallet') &&
+      (t.platform === 'ios' || t.platform === 'android') &&
+      t.isVersionAtLeast?.('8.0') && t.requestFullscreen &&
+      !t.isFullscreen && !fullscreenRequested.has(t)) {
+    fullscreenRequested.add(t)
+    try { t.requestFullscreen() } catch { fullscreenRequested.delete(t) }
   }
 }
 

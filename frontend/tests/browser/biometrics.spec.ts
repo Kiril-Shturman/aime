@@ -108,6 +108,9 @@ test("saved native marker locks on reload even without local hint; cancellation 
   page,
 }) => {
   const vault = await setup(page, true);
+  await expect(page.getByRole("heading", { name: "Добро пожаловать", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Открыть", exact: true }).locator("svg")).toHaveCount(0);
+  await expect.poll(() => vault.posts.filter(type => type === "web_app_request_fullscreen").length).toBe(1);
   await page.getByRole("button", { name: "Открыть", exact: true }).click();
   await profile(page);
   vault.authorized = false;
