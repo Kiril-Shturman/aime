@@ -28,6 +28,7 @@ class State:
         self.orders = {}
         self.sbp_quotes = {}
         self.qr_payments = {}
+        self.qr_quotes = {}
         self.withdrawals = {}
         self.balance_history = {}
         self.events = {}
@@ -644,6 +645,61 @@ def make_app():
         items = list(reversed(list(state.qr_payments.values())))
         return web.json_response({"data": items[:int(request.query.get("limit", "100"))], "next_cursor": None})
 
+    async def create_qr_quote(request):
+        body = await request.json()
+        if not {"qr_payload"}.issubset(body) or set(body) - {"qr_payload", "customer_id"}:
+            return envelope("invalid_argument", "Invalid QR quote body", 400)
+        customer_id = body.get("customer_id")
+        if customer_id is not None and customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        qr_payload = str(body.get("qr_payload") or "")
+        if not (qr_payload.startswith("https://qr.nspk.ru/") or qr_payload.startswith("ST00012|")):
+            return envelope("qr_unresolvable", "QR cannot be resolved", 400)
+        token = "qr_quote_" + uuid.uuid4().hex
+        item = {
+            "quote_token": token, "merchant_name": "Mock Merchant",
+            "payment_type": "nspk" if qr_payload.startswith("https://") else "st00012",
+            "amount_rub": "925.00", "rate": "92.50", "total_usdt": "10.000000",
+            "expires_at": "2026-12-01T00:02:00Z",
+        }
+        state.qr_quotes[token] = {**item, "qr_payload": qr_payload,
+                                  "customer_id": customer_id}
+        return web.json_response(item)
+
+    async def create_qr_payment(request):
+        body = await request.json()
+        if set(body) != {"quote_token", "qr_payload", "customer_id"}:
+            return envelope("invalid_argument", "Invalid QR payment body", 400)
+        customer_id = str(body.get("customer_id") or "")
+        if customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        quote_item = state.qr_quotes.get(str(body.get("quote_token") or ""))
+        if not quote_item or quote_item["qr_payload"] != body.get("qr_payload"):
+            return envelope("quote_expired", "Quote is invalid or expired", 400)
+        key = request.headers.get("Idempotency-Key")
+        fingerprint = json.dumps(body, sort_keys=True, separators=(",", ":"))
+        previous = state.idempotency.get((request.method, request.path, key)) if key else None
+        if previous and previous[0] == fingerprint:
+            return idempotent(request, body, lambda: previous[1])
+        if state.balance < Decimal(quote_item["total_usdt"]):
+            return envelope("insufficient_funds", "Insufficient funds", 412)
+
+        def create():
+            item = {
+                "id": str(uuid.uuid4()), "customer_id": customer_id,
+                "status": "processing", "merchant_name": quote_item["merchant_name"],
+                "payment_type": quote_item["payment_type"],
+                "amount_rub": quote_item["amount_rub"], "rate": quote_item["rate"],
+                "total_usdt": quote_item["total_usdt"],
+                "created_at": "2026-12-01T00:00:00Z", "completed_at": None,
+                "failed_at": None, "refunded_at": None, "failure_reason": None,
+            }
+            state.balance -= Decimal(item["total_usdt"])
+            state.qr_payments[item["id"]] = item
+            return item
+
+        return idempotent(request, body, create)
+
     async def qr_payment(request):
         item = state.qr_payments.get(request.match_info["payment_id"])
         return web.json_response(item) if item else envelope("not_found", "Payment not found", 404)
@@ -883,6 +939,8 @@ def make_app():
     app.router.add_post("/v1/partner/orders/{order_id}/cancel", cancel_order)
     app.router.add_get("/v1/partner/orders/{order_id}", order)
     app.router.add_get("/v1/partner/qr-payments", list_qr_payments)
+    app.router.add_post("/v1/partner/qr-payments/quotes", create_qr_quote)
+    app.router.add_post("/v1/partner/qr-payments", create_qr_payment)
     app.router.add_get("/v1/partner/qr-payments/{payment_id}", qr_payment)
     app.router.add_get("/v1/partner/withdrawals", list_withdrawals)
     app.router.add_post("/v1/partner/withdrawals", create_withdrawal)

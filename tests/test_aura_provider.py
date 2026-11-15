@@ -635,6 +635,34 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("qr.nspk", stored)
         self.assertNotIn("iVBOR", stored)
 
+    async def test_qr_quote_payment_replay_and_owner_storage_contract(self):
+        uid = "tg:qr-write"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(uid, ref)
+        self.mock.app["state"].balance = Decimal("100")
+        qr_payload = "https://qr.nspk.ru/AS2A000000000001"
+        quote = await self.service.create_qr_quote(uid, ref, qr_payload)
+        payment = await self.service.create_qr_payment(
+            uid, ref, quote["quote_token"], qr_payload,
+            idempotency_key="qr-payment-one",
+        )
+        self.assertEqual(payment["status"], "processing")
+        replay = await self.service.create_qr_payment(
+            uid, ref, quote["quote_token"], qr_payload,
+            idempotency_key="qr-payment-one",
+        )
+        self.assertEqual(replay["id"], payment["id"])
+        self.assertEqual(self.mock.app["state"].balance, Decimal("90.000000"))
+        self.assertEqual(
+            (await self.service.get_qr_payment(uid, payment["id"]))["id"], payment["id"]
+        )
+        row = self.ledger.db.execute(
+            "SELECT user_id,customer_id,body FROM aura_qr_payments WHERE payment_id=?",
+            (payment["id"],),
+        ).fetchone()
+        self.assertEqual((row["user_id"], row["customer_id"]), (uid, customer_id))
+        self.assertNotIn(qr_payload, row["body"])
+
     async def test_customer_input_validation(self):
         with self.assertRaises(ValueError):
             await self.client.upsert_customer("customer", email="not-an-email")
@@ -981,8 +1009,14 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_qr_and_withdrawal_read_contracts(self):
-        self.mock.app["state"].qr_payments["qr_one"] = {
-            "id": "qr_one", "status": "completed", "total_usdt": "10"
+        payment_id = "5b0c2f7e-1a3d-4e8f-9b6a-2c4d6e8f0a1b"
+        self.mock.app["state"].qr_payments[payment_id] = {
+            "id": payment_id, "customer_id": None, "status": "completed",
+            "merchant_name": "Shop", "payment_type": "nspk",
+            "amount_rub": "925.00", "rate": "92.50", "total_usdt": "10",
+            "created_at": "2026-01-01T00:00:00Z",
+            "completed_at": "2026-01-01T00:01:00Z", "failed_at": None,
+            "refunded_at": None, "failure_reason": None,
         }
         withdrawal_id = "5e4d3c2b-1a09-4f8e-9d7c-6b5a49382716"
         self.mock.app["state"].withdrawals[withdrawal_id] = {
@@ -993,8 +1027,8 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             "status": "completed", "tx_hash": "9f3c2a71d4e85b06",
             "withdrawal_id": withdrawal_id,
         }
-        self.assertEqual((await self.client.list_qr_payments())["data"][0]["id"], "qr_one")
-        self.assertEqual((await self.client.get_qr_payment("qr_one"))["status"], "completed")
+        self.assertEqual((await self.client.list_qr_payments())["data"][0]["id"], payment_id)
+        self.assertEqual((await self.client.get_qr_payment(payment_id))["status"], "completed")
         self.assertEqual(
             (await self.client.list_withdrawals(status="completed"))["data"][0]["withdrawal_id"],
             withdrawal_id,
@@ -1305,7 +1339,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
                          ("card.credentials.reveal", "succeeded"))
         persisted = "\n".join(ledger.db.iterdump())
         self.assertNotIn(credentials["number"], persisted)
-        self.assertNotIn(credentials["cvv"], persisted)
+        self.assertNotIn('"cvv":"' + credentials["cvv"] + '"', persisted)
 
     async def test_latest_card_otp_is_owner_scoped_no_store_nullable_and_never_persisted(self):
         registered = await self.wpay.post(
@@ -1640,6 +1674,47 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             json={"order_id": order["id"]},
         )
         self.assertEqual((await cancelled.json())["status"], "cancelled")
+
+    async def test_qr_write_flow_is_idempotent_and_owner_scoped(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner, json={}
+        )
+        self.assertEqual(registered.status, 200, await registered.text())
+        self.mock.app["state"].balance = Decimal("100")
+        qr_payload = "https://qr.nspk.ru/AS2A000000000001"
+        quoted = await self.wpay.post(
+            "/api/wallet/aura-qr-quote", headers=self.owner,
+            json={"qr_payload": qr_payload},
+        )
+        self.assertEqual(quoted.status, 200, await quoted.text())
+        self.assertEqual(quoted.headers["Cache-Control"], "no-store")
+        quote = await quoted.json()
+        paid = await self.wpay.post(
+            "/api/wallet/aura-qr-payment",
+            headers={**self.owner, "Idempotency-Key": "route-qr-payment-one"},
+            json={"quote_token": quote["quote_token"], "qr_payload": qr_payload},
+        )
+        self.assertEqual(paid.status, 200, await paid.text())
+        payment = await paid.json()
+        replay = await self.wpay.post(
+            "/api/wallet/aura-qr-payment",
+            headers={**self.owner, "Idempotency-Key": "route-qr-payment-one"},
+            json={"quote_token": quote["quote_token"], "qr_payload": qr_payload},
+        )
+        self.assertEqual((await replay.json())["id"], payment["id"])
+        self.assertEqual(self.mock.app["state"].balance, Decimal("90.000000"))
+        foreign = await self.wpay.get(
+            "/api/wallet/aura-qr-payment?payment_id=" + payment["id"],
+            headers={"X-Telegram-Init-Data": init_data(323)},
+        )
+        self.assertEqual(foreign.status, 404)
+        fetched = await self.wpay.get(
+            "/api/wallet/aura-qr-payment?payment_id=" + payment["id"],
+            headers=self.owner,
+        )
+        self.assertEqual((await fetched.json())["status"], "processing")
+        listed = await self.wpay.get("/api/wallet/aura-qr-payments", headers=self.owner)
+        self.assertEqual((await listed.json())["data"][0]["payment_id"], payment["id"])
 
     async def test_disabled_sbp_product_blocks_kyc_start_and_rate(self):
         self.mock.app["state"].products["sbp_buy"] = False

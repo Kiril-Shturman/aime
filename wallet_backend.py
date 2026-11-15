@@ -1207,6 +1207,55 @@ def install_wallet(app, root, owner_check):
                     'ORDER BY updated_at DESC LIMIT 200', (uid, aura_environment),
                 )]
                 return web.json_response({'data': orders})
+            if action == 'aura-qr-quote' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('qr_pay'):
+                    raise ApiError('qr_pay_not_enabled', 'Aura QR payment is not enabled', 403)
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'qr_payload'}:
+                    raise ValueError('qr_payload is required')
+                response = web.json_response(
+                    await aura_service.create_qr_quote(uid, client_ref, body['qr_payload'])
+                )
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-qr-payment' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('qr_pay'):
+                    raise ApiError('qr_pay_not_enabled', 'Aura QR payment is not enabled', 403)
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'quote_token', 'qr_payload'}:
+                    raise ValueError('quote_token and qr_payload are required')
+                key = request.headers.get('Idempotency-Key', '')
+                if not 1 <= len(key) <= 200:
+                    raise ApiError('idempotency_key_required', 'Idempotency-Key is required', 400)
+                response = web.json_response(await aura_service.create_qr_payment(
+                    uid, client_ref, body['quote_token'], body['qr_payload'],
+                    idempotency_key=key,
+                ))
+                response.headers['Cache-Control'] = 'no-store'
+                return response
+            if action == 'aura-qr-payment' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('qr_pay'):
+                    raise ApiError('qr_pay_not_enabled', 'Aura QR payment is not enabled', 403)
+                payment_id = request.query.get('payment_id')
+                if not payment_id:
+                    raise ValueError('payment_id is required')
+                return web.json_response(
+                    await aura_service.get_qr_payment(uid, payment_id)
+                )
+            if action == 'aura-qr-payments' and request.method == 'GET':
+                rows = [dict(row) for row in ledger.db.execute(
+                    'SELECT payment_id,status,amount_rub,rate,total_usdt,merchant,payment_type,'
+                    'provider_updated_at FROM aura_qr_payments '
+                    'WHERE user_id=? AND environment=? ORDER BY updated_at DESC LIMIT 200',
+                    (uid, aura_environment),
+                )]
+                return web.json_response({'data': rows})
             if action == 'aura-deposit-address' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)

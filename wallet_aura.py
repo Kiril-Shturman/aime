@@ -56,6 +56,7 @@ BALANCE_OPERATION_TYPES = {
 }
 BALANCE_OPERATION_STATUSES = {"pending", "confirmed", "failed"}
 WITHDRAWAL_STATUSES = {"processing", "broadcast", "completed", "failed"}
+QR_PAYMENT_STATUSES = {"processing", "completed", "failed", "refunded", "unspecified"}
 SBP_ORDER_STATUSES = {
     "awaiting_payment", "completed", "expired", "failed", "cancelled", "unspecified",
 }
@@ -185,6 +186,10 @@ def prepare(ledger):
     ):
         if name not in operation_columns:
             ledger.db.execute("ALTER TABLE aura_card_operations ADD COLUMN " + name + " TEXT")
+    qr_columns = {row[1] for row in ledger.db.execute("PRAGMA table_info(aura_qr_payments)")}
+    for name in ("user_id", "customer_id", "payment_type"):
+        if name not in qr_columns:
+            ledger.db.execute("ALTER TABLE aura_qr_payments ADD COLUMN " + name + " TEXT")
     ledger.db.execute(
         "CREATE INDEX IF NOT EXISTS wallet_webhook_provider_pending "
         "ON wallet_webhook_inbox(provider,processed_at,next_attempt_at)"
@@ -713,6 +718,81 @@ def _sbp_order_result(payload, expected_order_id=None, expected_customer_id=None
         "payer_phone_masked": payload.get("payer_phone_masked"),
         "expires_at": payload["expires_at"], "created_at": payload["created_at"],
         "completed_at": completed_at, "failure_reason": payload.get("failure_reason"),
+    }
+
+
+def _qr_quote_result(payload):
+    required = {
+        "quote_token", "merchant_name", "payment_type", "amount_rub",
+        "rate", "total_usdt", "expires_at",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura QR quote response")
+    token = payload.get("quote_token")
+    if not isinstance(token, str) or not token or len(token) > 4096:
+        raise ValueError("Invalid Aura QR quote token")
+    merchant = payload.get("merchant_name")
+    payment_type = payload.get("payment_type")
+    if merchant is not None and (not isinstance(merchant, str) or len(merchant) > 500):
+        raise ValueError("Invalid Aura QR quote merchant")
+    if payment_type not in {None, "nspk", "st00012", "gibdd_uin"}:
+        raise ValueError("Invalid Aura QR quote payment type")
+    amount_rub = _decimal(payload.get("amount_rub"))
+    rate = _decimal(payload.get("rate"))
+    total_usdt = _decimal(payload.get("total_usdt"))
+    _aura_datetime(payload.get("expires_at"), "QR quote expires_at")
+    return {
+        "quote_token": token, "merchant_name": merchant, "payment_type": payment_type,
+        "amount_rub": str(amount_rub), "rate": str(rate),
+        "total_usdt": str(total_usdt), "expires_at": payload["expires_at"],
+    }
+
+
+def _qr_payment_result(payload, expected_payment_id=None, expected_customer_id=None):
+    required = {
+        "id", "customer_id", "status", "merchant_name", "payment_type",
+        "amount_rub", "rate", "total_usdt", "created_at", "completed_at",
+        "failed_at", "refunded_at", "failure_reason",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura QR payment response")
+    payment_id = _uuid(payload.get("id"), "QR payment id")
+    customer_id = payload.get("customer_id")
+    if customer_id is not None:
+        customer_id = _safe_identifier(customer_id, "customer id")
+    if expected_payment_id is not None and payment_id != expected_payment_id:
+        raise ValueError("Aura QR payment id mismatch")
+    if expected_customer_id is not None and customer_id != expected_customer_id:
+        raise ValueError("Aura QR payment customer mismatch")
+    status = payload.get("status")
+    if status not in QR_PAYMENT_STATUSES:
+        raise ValueError("Invalid Aura QR payment status")
+    merchant = payload.get("merchant_name")
+    payment_type = payload.get("payment_type")
+    if merchant is not None and (not isinstance(merchant, str) or len(merchant) > 500):
+        raise ValueError("Invalid Aura QR payment merchant")
+    if payment_type not in {None, "nspk", "st00012", "gibdd_uin"}:
+        raise ValueError("Invalid Aura QR payment type")
+    amount_rub = _decimal(payload.get("amount_rub"))
+    rate = _decimal(payload.get("rate"))
+    total_usdt = _decimal(payload.get("total_usdt"))
+    _aura_datetime(payload.get("created_at"), "QR payment created_at")
+    for key in ("completed_at", "failed_at", "refunded_at"):
+        if payload.get(key) is not None:
+            _aura_datetime(payload[key], "QR payment " + key)
+    reason = payload.get("failure_reason")
+    if status == "failed":
+        if reason not in {"expired", "cancelled", "failed"}:
+            raise ValueError("Invalid Aura QR payment failure reason")
+    elif reason is not None:
+        raise ValueError("Unexpected Aura QR payment failure reason")
+    return {
+        "id": payment_id, "customer_id": customer_id, "status": status,
+        "merchant_name": merchant, "payment_type": payment_type,
+        "amount_rub": str(amount_rub), "rate": str(rate),
+        "total_usdt": str(total_usdt), "created_at": payload["created_at"],
+        "completed_at": payload.get("completed_at"), "failed_at": payload.get("failed_at"),
+        "refunded_at": payload.get("refunded_at"), "failure_reason": reason,
     }
 
 
@@ -1257,15 +1337,73 @@ class AuraClient:
             expected_order_id=order_id,
         )
 
-    async def list_qr_payments(self, *, cursor=None, limit=100):
-        params = {"limit": min(max(int(limit), 1), 100)}
+    async def list_qr_payments(self, *, customer_id=None, statuses=None,
+                               created_from=None, created_to=None, cursor=None, limit=20):
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid Aura QR payment limit")
+        if not 1 <= limit <= 100:
+            raise ValueError("Invalid Aura QR payment limit")
+        params = [("limit", str(limit))]
+        if customer_id is not None:
+            params.append(("customer_id", _safe_identifier(customer_id, "customer id")))
+        if statuses is not None:
+            if isinstance(statuses, str):
+                statuses = [statuses]
+            if not isinstance(statuses, (list, tuple)) or not statuses:
+                raise ValueError("Invalid Aura QR payment statuses")
+            for status in statuses:
+                if status not in QR_PAYMENT_STATUSES:
+                    raise ValueError("Invalid Aura QR payment status")
+                params.append(("status", status))
+        for name, value in (("created_from", created_from), ("created_to", created_to)):
+            if value is not None:
+                _aura_datetime(value, "QR payment " + name)
+                params.append((name, value))
         if cursor:
-            params["cursor"] = str(cursor)
-        return await self.request("GET", "/qr-payments", params=params)
+            params.append(("cursor", str(cursor)))
+        payload = await self.request("GET", "/qr-payments", params=params)
+        if not isinstance(payload, dict) or set(payload) != {"data", "next_cursor"} \
+                or not isinstance(payload["data"], list):
+            raise ValueError("Invalid Aura QR payment list")
+        if payload["next_cursor"] is not None and not isinstance(payload["next_cursor"], str):
+            raise ValueError("Invalid Aura QR payment cursor")
+        return {
+            "data": [_qr_payment_result(item) for item in payload["data"]],
+            "next_cursor": payload["next_cursor"],
+        }
+
+    async def create_qr_quote(self, qr_payload, *, customer_id=None):
+        if not isinstance(qr_payload, str) or not qr_payload or len(qr_payload) > 8192:
+            raise ValueError("Invalid Aura QR payload")
+        body = {"qr_payload": qr_payload}
+        if customer_id is not None:
+            body["customer_id"] = _safe_identifier(customer_id, "customer id")
+        return _qr_quote_result(
+            await self.request("POST", "/qr-payments/quotes", body=body)
+        )
+
+    async def create_qr_payment(self, customer_id, quote_token, qr_payload, *, idempotency_key):
+        customer_id = _safe_identifier(customer_id, "customer id")
+        if not isinstance(quote_token, str) or not quote_token or len(quote_token) > 4096:
+            raise ValueError("Invalid Aura QR quote token")
+        if not isinstance(qr_payload, str) or not qr_payload or len(qr_payload) > 8192:
+            raise ValueError("Invalid Aura QR payload")
+        payload = await self.request(
+            "POST", "/qr-payments",
+            body={"customer_id": customer_id, "quote_token": quote_token,
+                  "qr_payload": qr_payload},
+            idempotency_key=idempotency_key,
+        )
+        return _qr_payment_result(payload, expected_customer_id=customer_id)
 
     async def get_qr_payment(self, payment_id):
-        payment_id = quote(_safe_identifier(payment_id, "QR payment id"), safe="")
-        return await self.request("GET", "/qr-payments/" + payment_id)
+        payment_id = _uuid(payment_id, "QR payment id")
+        return _qr_payment_result(
+            await self.request("GET", "/qr-payments/" + quote(payment_id, safe="")),
+            expected_payment_id=payment_id,
+        )
 
     async def list_withdrawals(self, *, status=None, cursor=None, limit=100):
         try:
@@ -1594,6 +1732,42 @@ class AuraService:
         if not row:
             raise self.client.error_cls("not_found", "Order not found", 404)
         return self._store_sbp_api_order(uid, await self.client.cancel_sbp_order(order_id))
+
+    def _store_qr_api_payment(self, uid, item):
+        customer = self.ledger.db.execute(
+            "SELECT customer_id FROM aura_customers WHERE user_id=? AND environment=?",
+            (uid, self.environment),
+        ).fetchone()
+        if not customer or item["customer_id"] != customer["customer_id"]:
+            raise ValueError("Aura QR payment owner mismatch")
+        _store_qr_payment(
+            self.ledger, self.environment, "qr_payment." + item["status"],
+            {**item, "payment_id": item["id"],
+             "updated_at": item.get("refunded_at") or item.get("failed_at")
+             or item.get("completed_at") or item["created_at"]},
+        )
+        return item
+
+    async def create_qr_quote(self, uid, client_ref, qr_payload):
+        customer_id = await self.ensure_customer(uid, client_ref)
+        return await self.client.create_qr_quote(qr_payload, customer_id=customer_id)
+
+    async def create_qr_payment(self, uid, client_ref, quote_token, qr_payload,
+                                *, idempotency_key):
+        customer_id = await self.ensure_customer(uid, client_ref)
+        item = await self.client.create_qr_payment(
+            customer_id, quote_token, qr_payload, idempotency_key=idempotency_key
+        )
+        return self._store_qr_api_payment(uid, item)
+
+    async def get_qr_payment(self, uid, payment_id):
+        row = self.ledger.db.execute(
+            "SELECT 1 FROM aura_qr_payments WHERE payment_id=? AND user_id=? AND environment=?",
+            (payment_id, uid, self.environment),
+        ).fetchone()
+        if not row:
+            raise self.client.error_cls("not_found", "QR payment not found", 404)
+        return self._store_qr_api_payment(uid, await self.client.get_qr_payment(payment_id))
 
     async def create_card_request(self, uid, client_ref, *, kind="virtual",
                                   idempotency_key, shipping_address=None):
@@ -2444,26 +2618,48 @@ def _store_qr_payment(ledger, environment, kind, data):
     if existing and updated and existing[0] and updated <= existing[0]:
         return
     status = str(data.get("status") or kind.removeprefix("qr_payment."))[:100]
+    if status not in QR_PAYMENT_STATUSES:
+        raise ValueError("Invalid Aura QR payment status")
     value = lambda key: (None if data.get(key) is None else str(_decimal(data[key], allow_zero=True)))
     amount_rub, rate, total_usdt = value("amount_rub"), value("rate"), value("total_usdt")
     merchant = data.get("merchant_name") or data.get("merchant")
     merchant = str(merchant)[:300] if merchant is not None else None
+    customer_id = data.get("customer_id")
+    user_id = None
+    if customer_id is not None:
+        customer_id = _safe_identifier(customer_id, "customer id")
+        owner = ledger.db.execute(
+            "SELECT user_id FROM aura_customers WHERE customer_id=? AND environment=?",
+            (customer_id, environment),
+        ).fetchone()
+        if not owner:
+            raise ValueError("Unknown Aura QR payment owner")
+        user_id = owner[0]
+    payment_type = data.get("payment_type")
     safe = {
         "payment_id": payment_id, "status": status, "amount_rub": amount_rub,
         "rate": rate, "total_usdt": total_usdt, "merchant": merchant,
-        "updated_at": updated or None,
+        "updated_at": updated or None, "customer_id": customer_id,
+        "payment_type": payment_type,
     }
     stamp = time.time()
     ledger.db.execute(
-        "INSERT INTO aura_qr_payments VALUES (?,?,?,?,?,?,?,?,?,?,?) "
+        "INSERT INTO aura_qr_payments "
+        "(payment_id,environment,status,amount_rub,rate,total_usdt,merchant,provider_updated_at,"
+        "body,created_at,updated_at,user_id,customer_id,payment_type) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(payment_id) DO UPDATE SET status=excluded.status,"
         "amount_rub=COALESCE(excluded.amount_rub,aura_qr_payments.amount_rub),"
         "rate=COALESCE(excluded.rate,aura_qr_payments.rate),"
         "total_usdt=COALESCE(excluded.total_usdt,aura_qr_payments.total_usdt),"
         "merchant=COALESCE(excluded.merchant,aura_qr_payments.merchant),"
-        "provider_updated_at=excluded.provider_updated_at,body=excluded.body,updated_at=excluded.updated_at",
+        "provider_updated_at=excluded.provider_updated_at,body=excluded.body,updated_at=excluded.updated_at,"
+        "user_id=COALESCE(excluded.user_id,aura_qr_payments.user_id),"
+        "customer_id=COALESCE(excluded.customer_id,aura_qr_payments.customer_id),"
+        "payment_type=COALESCE(excluded.payment_type,aura_qr_payments.payment_type)",
         (payment_id, environment, status, amount_rub, rate, total_usdt, merchant,
-         updated or None, json.dumps(safe, separators=(",", ":")), stamp, stamp),
+         updated or None, json.dumps(safe, separators=(",", ":")), stamp, stamp,
+         user_id, customer_id, payment_type),
     )
 
 
