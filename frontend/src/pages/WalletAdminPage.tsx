@@ -68,7 +68,18 @@ type PaymentsData = Record<
   "events" | "quotes" | "invoices" | "transfers" | "withdrawals",
   Json[]
 >;
-type CryptoData = { addresses: Json[]; deposits: Json[]; balances: Json[] };
+type CryptoData = {
+  addresses: Json[];
+  deposits: Json[];
+  balances: Json[];
+  asset_routes: {
+    asset: string;
+    network: string;
+    enabled: number;
+    updated_at: string;
+    updated_by: string;
+  }[];
+};
 type GoSwapStatus = {
   ok: boolean;
   result?: unknown;
@@ -426,7 +437,8 @@ function TabContent({
       />
     );
   if (tab === "payments") return <Payments data={payload as PaymentsData} />;
-  if (tab === "crypto") return <Crypto data={payload as CryptoData} />;
+  if (tab === "crypto")
+    return <Crypto data={payload as CryptoData} reload={reload} />;
   if (tab === "goswap")
     return (
       <>
@@ -1051,11 +1063,27 @@ function Payments({ data }: { data: PaymentsData }) {
   );
 }
 
-function Crypto({ data }: { data: CryptoData }) {
+function Crypto({ data, reload }: { data: CryptoData; reload: () => Promise<void> }) {
   const [kind, setKind] = useState<"addresses" | "deposits" | "balances">(
     "addresses",
   );
   const rows = data[kind];
+  const [workingRoute, setWorkingRoute] = useState("");
+  const [routeNotice, setRouteNotice] = useState("");
+  async function updateAssets(body: Json, key: string) {
+    if (workingRoute) return;
+    setWorkingRoute(key);
+    setRouteNotice("");
+    try {
+      await walletRequest("admin-assets", body);
+      setRouteNotice("Настройки валют применены");
+      await reload();
+    } catch (reason) {
+      setRouteNotice(reason instanceof Error ? reason.message : "Не удалось изменить валюты");
+    } finally {
+      setWorkingRoute("");
+    }
+  }
   const columns: AdminColumn[] = [
     { key: "rowid", label: "ID" },
     { key: "user_id", label: "Пользователь" },
@@ -1068,6 +1096,37 @@ function Crypto({ data }: { data: CryptoData }) {
   ];
   return (
     <div className="space-y-4">
+      <section className={card}>
+        <div className="wpay-admin-section-title">
+          <div><span>Доступность в кошельке</span><h2>Криптовалюты и сети</h2></div>
+          <button
+            disabled={Boolean(workingRoute)}
+            onClick={() => {
+              if (window.confirm("Отключить все валюты и сети, оставив только USDT TRC-20?"))
+                void updateAssets({ preset: "usdt_trc20_only" }, "preset");
+            }}
+            className="rounded-xl bg-red-500 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40"
+          >Отключить всё, кроме USDT TRC-20</button>
+        </div>
+        {routeNotice && <p className="mb-3 rounded-xl bg-blue-500/10 p-3 text-sm text-blue-600">{routeNotice}</p>}
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {(data.asset_routes ?? []).map((route) => {
+            const key = `${route.asset}:${route.network}`;
+            return (
+              <button
+                key={key}
+                disabled={Boolean(workingRoute)}
+                onClick={() => void updateAssets({ asset: route.asset, network: route.network, enabled: !Boolean(route.enabled) }, key)}
+                className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left disabled:opacity-40 ${route.enabled ? "border-emerald-500/40 bg-emerald-500/10" : "border-[var(--admin-border)] bg-[var(--admin-surface-muted)]"}`}
+              >
+                <span><b className="block text-sm">{route.asset}</b><small className="opacity-50">{route.network === "TRON" ? "TRC-20" : route.network}</small></span>
+                <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${route.enabled ? "bg-emerald-500 text-white" : "bg-black/10 opacity-50 dark:bg-white/10"}`}>{route.enabled ? "ON" : "OFF"}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-xs opacity-50">Отключение скрывает актив и запрещает новые депозиты, счета, переводы и выводы. Остатки и история не удаляются.</p>
+      </section>
       <div className="inline-grid grid-cols-3 gap-1 rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface-muted)] p-1">
         {(["addresses", "deposits", "balances"] as const).map((key) => (
           <button

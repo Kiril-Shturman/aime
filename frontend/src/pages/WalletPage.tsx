@@ -121,7 +121,6 @@ type Action = {
 };
 
 import WalletAssetPanel from "./WalletAssetPanel";
-import { assetNetworks as previewNetworks } from "../wallet/catalog";
 import {
   WalletLiveProvider,
   useLiveWallet,
@@ -339,6 +338,9 @@ export default function WalletPage() {
 
 function WalletScreen() {
   const live = useLiveWallet();
+  const enabledAssets = assets.filter(
+    (asset) => (live.assetRoutes[asset.code] ?? []).length > 0,
+  );
   const [qrValue, setQrValue] = useState<string | null>(null);
   const user = getUser();
   const { theme, toggle: toggleTheme } = useTheme();
@@ -656,7 +658,7 @@ function WalletScreen() {
                   dividers
                   className="!mt-0 overflow-hidden !rounded-[32px] [&>ul]:!rounded-[32px]"
                 >
-                  {assets.map((asset) => (
+                  {enabledAssets.map((asset) => (
                     <CurrencyRow
                       key={asset.code}
                       asset={asset}
@@ -701,7 +703,7 @@ function WalletScreen() {
 
       <AssetPushView
         onScan={scanPaymentQr}
-        asset={assets.find((item) => item.code === selectedAssetCode) ?? null}
+        asset={enabledAssets.find((item) => item.code === selectedAssetCode) ?? null}
         onClose={() => setSelectedAssetCode(null)}
         showNotice={showNotice}
         openFlow={(kind, assetCode, network, depositAddress) =>
@@ -998,10 +1000,10 @@ function AssetPushView({
               className={`!mx-0 !my-0 overflow-hidden ${allDepositNetworks ? "!rounded-[30px] [&>ul]:!rounded-[30px]" : "!rounded-full [&>ul]:!rounded-full"}`}
             >
               {(allDepositNetworks
-                ? ["BSC", "ETH", "TON", "SOL", "TRON"]
+                ? (live.assetRoutes[displayAsset.code] ?? [])
                 : [
                     addressEntry?.network ??
-                      previewNetworks[displayAsset.code]?.[0] ??
+                      live.assetRoutes[displayAsset.code]?.[0] ??
                       "",
                   ]
               ).map((network) => (
@@ -1187,8 +1189,10 @@ function DepositMethodsView({
     setSelected(code);
     setEntry(null);
     setNetwork(null);
-    if (code !== "RUB" && code !== "USDT")
-      chooseNetwork(code, previewNetworks[code][0]);
+    if (code !== "RUB" && code !== "USDT") {
+      const first = live.assetRoutes[code]?.[0];
+      if (first) chooseNetwork(code, first);
+    }
   }
   function back() {
     controller.current?.abort();
@@ -1206,8 +1210,10 @@ function DepositMethodsView({
     } else if (selected) setSelected(null);
     else onClose();
   }
-  const selectedAsset = assets.find((item) => item.code === selected);
-  const depositAssets = assets;
+  const depositAssets = assets.filter(
+    (item) => (live.assetRoutes[item.code] ?? []).length > 0,
+  );
+  const selectedAsset = depositAssets.find((item) => item.code === selected);
   if (entry && selected && selectedAsset)
     return (
       <PushViewShell
@@ -1259,7 +1265,7 @@ function DepositMethodsView({
             dividers
             className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]"
           >
-            {previewNetworks.USDT.map((net) => (
+            {(live.assetRoutes.USDT ?? []).map((net) => (
               <ListItem
                 key={net}
                 link
@@ -1269,9 +1275,9 @@ function DepositMethodsView({
                 innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30"
                 media={
                   <WalletAssetAvatar
-                    icon={assets[0].icon}
-                    color={assets[0].color}
-                    iconColor={assets[0].iconColor}
+                  icon={depositAssets.find((item) => item.code === "USDT")?.icon ?? assets[0].icon}
+                  color={depositAssets.find((item) => item.code === "USDT")?.color ?? assets[0].color}
+                  iconColor={depositAssets.find((item) => item.code === "USDT")?.iconColor ?? assets[0].iconColor}
                     network={net}
                   />
                 }
@@ -1300,7 +1306,7 @@ function DepositMethodsView({
           defaultNetwork={network ?? flow?.network}
           defaultAsset={selected}
           onAssetChange={chooseAsset}
-          options={[sbpDepositAsset, ...assets].map((item) => ({
+          options={[sbpDepositAsset, ...depositAssets].map((item) => ({
             code: item.code,
             name: item.name,
             icon: item.icon,
@@ -1372,6 +1378,9 @@ function CryptoFlowPushView({
   showNotice: NoticeHandler;
 }) {
   const live = useLiveWallet();
+  const availableAssets = assets.filter(
+    (item) => (live.assetRoutes[item.code] ?? []).length > 0,
+  );
   const [displayFlow, setDisplayFlow] = useState<CryptoFlow>({
     kind: "withdraw",
   });
@@ -1401,13 +1410,13 @@ function CryptoFlowPushView({
   const activeFlow = flow ?? displayFlow;
   const isDeposit = activeFlow.kind === "deposit";
   const isWithdraw = activeFlow.kind === "withdraw";
-  const fromAsset = assets.find((item) => item.code === fromCode) ?? assets[0];
-  const toAsset = assets.find((item) => item.code === toCode) ?? assets[1];
+  const fromAsset = availableAssets.find((item) => item.code === fromCode) ?? availableAssets[0] ?? assets[0];
+  const toAsset = availableAssets.find((item) => item.code === toCode) ?? availableAssets[1] ?? fromAsset;
   const usdRates: Record<string, number> = Object.fromEntries(
-    assets.map((item) => [item.code, live.rate(item.code) ?? 0]),
+    availableAssets.map((item) => [item.code, live.rate(item.code) ?? 0]),
   );
   const balances: Record<string, number> = Object.fromEntries(
-    assets.map((item) => [item.code, Number(live.balance(item.code))]),
+    availableAssets.map((item) => [item.code, Number(live.balance(item.code))]),
   );
   const parsedAmount = Number(amount.replace(",", ".")) || 0;
   const exchangeRate =
@@ -1449,7 +1458,14 @@ function CryptoFlowPushView({
   }
 
   if (!isWithdraw) {
-    const pickerAssets = assets.filter((item) =>
+    if (availableAssets.length < 2) {
+      return (
+        <PushViewShell open={flow !== null} title="Обмен" onClose={onClose}>
+          <p className="mx-4 rounded-2xl bg-black/[.04] p-5 text-center text-sm text-black/45 dark:bg-white/[.06] dark:text-white/45">Для обмена должны быть включены минимум две валюты.</p>
+        </PushViewShell>
+      );
+    }
+    const pickerAssets = availableAssets.filter((item) =>
       `${item.name} ${item.code}`
         .toLowerCase()
         .includes(pickerQuery.trim().toLowerCase()),

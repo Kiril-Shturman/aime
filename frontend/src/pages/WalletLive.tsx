@@ -39,6 +39,7 @@ import {
   type WalletOverview,
   type WalletStatus,
 } from "../lib/wallet-api";
+import { assetNetworks } from "../wallet/catalog";
 
 const empty: WalletOverview = { balances: [], rates: [], transactions: [] };
 const usd = (n: number) =>
@@ -62,6 +63,7 @@ interface WalletContextValue {
   configured: boolean;
   capabilities: WalletCapabilities;
   qrProvider: "aura" | "goswap" | null;
+  assetRoutes: Record<string, string[]>;
   loading: boolean;
   error: string;
   refresh: (sync?: boolean) => Promise<void>;
@@ -92,6 +94,9 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
     ),
     [qrProvider, setQrProvider] = useState<"aura" | "goswap" | null>(
       demo ? "goswap" : null,
+    ),
+    [assetRoutes, setAssetRoutes] = useState<Record<string, string[]>>(
+      demo ? assetNetworks : {},
     ),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
@@ -147,6 +152,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         setConfigured(status.configured);
         setCapabilities(status.capabilities ?? noCapabilities);
         setQrProvider(status.routes?.qr_pay ?? null);
+        setAssetRoutes(status.asset_routes ?? {});
         if (!status.configured) {
           setData(empty);
           setReady(false);
@@ -214,6 +220,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         configured,
         capabilities,
         qrProvider,
+        assetRoutes,
         loading,
         error,
         refresh,

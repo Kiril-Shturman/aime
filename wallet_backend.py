@@ -37,6 +37,11 @@ from wallet_aura import (
 BASE_URL = 'https://goswap.site/api/'
 NETWORKS = {'BSC', 'ETH', 'TON', 'SOL', 'TRON'}
 DEPOSIT_NETWORKS = {'USDT': NETWORKS, 'ETH': {'ETH'}, 'BNB': {'BSC'}, 'TON': {'TON'}, 'SOL': {'SOL'}}
+WALLET_ASSET_NETWORKS = {
+    'USDT': ('BSC', 'ETH', 'TON', 'SOL', 'TRON'),
+    'TRX': ('TRON',), 'BNB': ('BSC',), 'ETH': ('ETH',),
+    'GRAM': ('TON',), 'SOL': ('SOL',), 'BTC': ('BTC',), 'XAUT': ('ETH',),
+}
 
 ADMIN_GOSWAP_METHODS = {
     'getMe': {'title': 'Приложение', 'post': False, 'params': [], 'required': [], 'example': {}},
@@ -647,6 +652,20 @@ def install_wallet(app, root, owner_check):
     prepare_inbox(ledger)
     prepare_aura(ledger)
     prepare_finance_worker(ledger)
+    ledger.db.executescript('''
+      CREATE TABLE IF NOT EXISTS wallet_asset_routes (
+        asset TEXT NOT NULL, network TEXT NOT NULL, enabled INTEGER NOT NULL,
+        updated_at TEXT NOT NULL, updated_by TEXT NOT NULL,
+        PRIMARY KEY(asset,network)
+      );
+    ''')
+    if not ledger.db.execute('SELECT 1 FROM wallet_asset_routes LIMIT 1').fetchone():
+        stamp = now()
+        ledger.db.executemany(
+            'INSERT INTO wallet_asset_routes VALUES (?,?,?,?,?)',
+            [(asset, network, 1, stamp, 'system-default')
+             for asset, networks in WALLET_ASSET_NETWORKS.items() for network in networks],
+        )
     provider = GoSwap(token)
     aura_client = AuraClient(
         aura_token, aura_environment, ApiError,
@@ -671,6 +690,36 @@ def install_wallet(app, root, owner_check):
 
     def is_admin(uid):
         return uid == 'owner' or (uid.startswith('tg:') and uid[3:] in admin_ids)
+
+    def asset_route_rows():
+        return [dict(row) for row in ledger.db.execute(
+            'SELECT asset,network,enabled,updated_at,updated_by FROM wallet_asset_routes '
+            'ORDER BY CASE asset WHEN \'USDT\' THEN 0 ELSE 1 END,asset,network'
+        )]
+
+    def enabled_asset_routes():
+        result = {}
+        for row in asset_route_rows():
+            if row['enabled']:
+                result.setdefault(row['asset'], []).append(row['network'])
+        return result
+
+    def asset_enabled(asset, network=None):
+        asset = str(asset or '').upper()
+        if network is None:
+            return bool(enabled_asset_routes().get(asset))
+        row = ledger.db.execute(
+            'SELECT enabled FROM wallet_asset_routes WHERE asset=? AND network=?',
+            (asset, str(network or '').upper()),
+        ).fetchone()
+        return bool(row and row['enabled'])
+
+    def require_asset_enabled(asset, network=None):
+        if not asset_enabled(asset, network):
+            suffix = f' / {str(network).upper()}' if network else ''
+            raise ApiError(
+                'ASSET_DISABLED', f'{str(asset).upper()}{suffix} отключён администратором', 403
+            )
 
     for admin_id in admin_ids:
         ledger.db.execute("UPDATE wallet_accounts SET role='admin' WHERE user_id=?", (f'tg:{admin_id}',))
@@ -807,7 +856,10 @@ def install_wallet(app, root, owner_check):
         addresses = decoded_rows('SELECT rowid,* FROM wallet_addresses ORDER BY rowid DESC LIMIT 1000') if 'wallet_addresses' in tables() else []
         deposits = decoded_rows("SELECT rowid,* FROM wallet_events WHERE type='deposit' ORDER BY rowid DESC LIMIT 500")
         balances = decoded_rows('SELECT user_id,asset,available,reserved FROM wallet_balances ORDER BY user_id,asset')
-        return {'addresses': addresses, 'deposits': deposits, 'balances': balances}
+        return {
+            'addresses': addresses, 'deposits': deposits, 'balances': balances,
+            'asset_routes': asset_route_rows(),
+        }
 
     async def safe_provider(method, data=None):
         try:
@@ -1022,6 +1074,7 @@ def install_wallet(app, root, owner_check):
                 return web.json_response({
                     'configured': bool(token) or bool(aura_enabled and aura_client.configured),
                     'telegram_auth': bool(bot_token),
+                    'asset_routes': enabled_asset_routes(),
                     'capabilities': {
                         'cards': aura_available and aura_products['cards'],
                         'sbp_buy': aura_available and aura_products['sbp_buy'],
@@ -1075,6 +1128,44 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(admin_payments())
             if action == 'admin-crypto' and request.method == 'GET':
                 return web.json_response(admin_crypto())
+            if action == 'admin-assets' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict):
+                    raise ValueError('Invalid asset settings body')
+                stamp = now()
+                if body == {'preset': 'usdt_trc20_only'}:
+                    ledger.begin('admin_asset_routes', uid, 'Enable only USDT TRC20')
+                    try:
+                        ledger.db.execute(
+                            'UPDATE wallet_asset_routes SET enabled=0,updated_at=?,updated_by=?',
+                            (stamp, uid),
+                        )
+                        ledger.db.execute(
+                            "UPDATE wallet_asset_routes SET enabled=1,updated_at=?,updated_by=? "
+                            "WHERE asset='USDT' AND network='TRON'",
+                            (stamp, uid),
+                        )
+                        ledger.commit()
+                    except Exception:
+                        ledger.rollback()
+                        raise
+                elif set(body) == {'asset', 'network', 'enabled'} \
+                        and type(body['enabled']) is bool:
+                    asset = str(body['asset']).upper()
+                    network = str(body['network']).upper()
+                    if network not in WALLET_ASSET_NETWORKS.get(asset, ()):
+                        raise ApiError('INVALID_ASSET_ROUTE', 'Unsupported asset/network pair', 400)
+                    ledger.db.execute(
+                        'UPDATE wallet_asset_routes SET enabled=?,updated_at=?,updated_by=? '
+                        'WHERE asset=? AND network=?',
+                        (int(body['enabled']), stamp, uid, asset, network),
+                    )
+                else:
+                    raise ApiError('INVALID_ASSET_SETTINGS', 'Unsupported asset settings operation', 400)
+                return web.json_response({
+                    'ok': True, 'asset_routes': asset_route_rows(),
+                    'enabled': enabled_asset_routes(),
+                })
             if action == 'admin-goswap' and request.method == 'GET':
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
@@ -1617,6 +1708,7 @@ def install_wallet(app, root, owner_check):
                 ).fetchone()
                 if not active or not active['enabled']:
                     raise ApiError('ROUTE_DISABLED', 'Aura TRON deposits are disabled', 503)
+                require_asset_enabled('USDT', 'TRON')
                 result = await aura_service.get_or_create_deposit_address(uid, client_ref)
                 return web.json_response(result)
             if action == 'aura-deposit-address' and request.method == 'GET':
@@ -1646,6 +1738,7 @@ def install_wallet(app, root, owner_check):
                 ).fetchone()
                 if not active or not active['enabled']:
                     raise ApiError('ROUTE_DISABLED', 'Aura TRON deposits are disabled', 503)
+                require_asset_enabled('USDT', 'TRON')
                 if not await aura_client.product_enabled('crypto_processing'):
                     raise ApiError(
                         'crypto_processing_not_enabled',
@@ -1678,6 +1771,7 @@ def install_wallet(app, root, owner_check):
                     (aura_environment,),
                 ).fetchone()
                 if asset == 'USDT' and network == 'TRON' and route and route['enabled']:
+                    require_asset_enabled(asset, network)
                     if not await aura_client.product_enabled('crypto_processing'):
                         raise ApiError(
                             'crypto_processing_not_enabled',
@@ -1693,7 +1787,7 @@ def install_wallet(app, root, owner_check):
                 balances = [dict(row) for row in ledger.db.execute(
                     'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=?',
                     (uid,),
-                )]
+                ) if asset_enabled(row['asset'])]
                 items = [dict(row) for row in ledger.db.execute(
                     'SELECT event_id,asset,amount,type,created_at,detail FROM wallet_events '
                     'WHERE user_id=? ORDER BY rowid DESC LIMIT 100', (uid,),
@@ -1718,6 +1812,39 @@ def install_wallet(app, root, owner_check):
                 })
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
+            if request.method == 'POST' and action in {
+                'address', 'withdrawal-estimate', 'withdrawal-create',
+                'transfer-prepare', 'transfer-send', 'invoice-prepare', 'invoice-create',
+            }:
+                body = await request.json()
+                if action == 'address':
+                    require_asset_enabled(body.get('asset', 'USDT'), body.get('network'))
+                elif action == 'withdrawal-estimate':
+                    require_asset_enabled(body.get('asset'), body.get('network'))
+                elif action == 'withdrawal-create':
+                    row = ledger.db.execute(
+                        'SELECT body FROM wallet_withdrawal_intents WHERE intent_id=? AND user_id=?',
+                        (body.get('intent_id'), uid),
+                    ).fetchone()
+                    if row:
+                        intent = json.loads(row['body'])
+                        require_asset_enabled(intent.get('asset'), intent.get('network'))
+                elif action in {'transfer-prepare', 'invoice-prepare'}:
+                    require_asset_enabled(body.get('asset', 'USDT'))
+                elif action == 'transfer-send':
+                    row = ledger.db.execute(
+                        'SELECT body FROM wallet_user_transfers WHERE intent_id=? AND user_id=?',
+                        (body.get('intent_id'), uid),
+                    ).fetchone()
+                    if row:
+                        require_asset_enabled(json.loads(row['body']).get('asset'))
+                elif action == 'invoice-create':
+                    row = ledger.db.execute(
+                        'SELECT body FROM wallet_user_invoices WHERE intent_id=? AND user_id=?',
+                        (body.get('intent_id'), uid),
+                    ).fetchone()
+                    if row:
+                        require_asset_enabled(json.loads(row['body']).get('asset'))
             financial = await finance_route(request,action,uid,admin,ledger,provider,money,ApiError)
             if financial is not None:return financial
             aliases={'operations-transfers':'transfer-history','operations-invoices':'invoice-history'}
@@ -1735,17 +1862,23 @@ def install_wallet(app, root, owner_check):
                 await sync_payments(uid)
                 await reconcile_withdrawals(ledger, provider, money, ApiError, uid)
                 rates = await provider.call('getExchangeRates')
-                balances = [dict(r) for r in ledger.db.execute('SELECT asset,available,reserved FROM wallet_balances WHERE user_id=?', (uid,))]
+                balances = [dict(r) for r in ledger.db.execute('SELECT asset,available,reserved FROM wallet_balances WHERE user_id=?', (uid,)) if asset_enabled(r['asset'])]
                 items = [dict(r) for r in ledger.db.execute('SELECT event_id,asset,amount,type,created_at,detail FROM wallet_events WHERE user_id=? ORDER BY rowid DESC LIMIT 100', (uid,))]
                 for item in items:
                     item['detail'] = json.loads(item['detail'])
+                rates = [rate for rate in rates if asset_enabled(rate.get('source')) or asset_enabled(rate.get('target'))]
                 return web.json_response({'balances': balances, 'rates': rates, 'transactions': items, 'debts': [dict(row) for row in ledger.db.execute('SELECT asset,amount FROM wallet_debts WHERE user_id=?', (uid,))]})
             if action == 'provider' and request.method == 'GET':
                 if not admin:
                     raise ApiError('FORBIDDEN', 'Только владелец', 403)
                 return web.json_response({'app': await provider.call('getMe'), 'organization_balance': await provider.call('getBalance'), 'currencies': await provider.call('getCurrencies')})
             if action == 'currencies' and request.method == 'GET':
-                return web.json_response(await provider.call('getCurrencies'))
+                currencies = await provider.call('getCurrencies')
+                if isinstance(currencies, list):
+                    currencies = [row for row in currencies if asset_enabled(row.get('code') or row.get('currency_code'))]
+                elif isinstance(currencies, dict) and isinstance(currencies.get('items'), list):
+                    currencies = {**currencies, 'items': [row for row in currencies['items'] if asset_enabled(row.get('code') or row.get('currency_code'))]}
+                return web.json_response(currencies)
             if action == 'deposit' and request.method == 'POST':
                 body = await request.json()
                 network = body.get('network')
@@ -1756,6 +1889,7 @@ def install_wallet(app, root, owner_check):
                     raise ValueError('Некорректная валюта')
                 if network not in DEPOSIT_NETWORKS.get(asset, set()):
                     raise ValueError('Пополнение этой валюты в выбранной сети не поддерживается')
+                require_asset_enabled(asset, network)
                 if network == 'TRON':
                     exact_amount = money(body.get('amount'))
                     if exact_amount < 1 or exact_amount.as_tuple().exponent < -6:
