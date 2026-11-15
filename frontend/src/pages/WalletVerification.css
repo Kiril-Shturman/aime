@@ -371,3 +371,5 @@
       var(--tg-content-safe-area-inset-top, 0px) + 12px
   );
 }
+
+.wpay-verification-copy > .wpay-verification-guidance { font-size: 12px; margin-top: 8px; }
