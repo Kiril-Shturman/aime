@@ -31,6 +31,7 @@ from wallet_aura import (
     AuraClient, AuraService, prepare as prepare_aura,
     receive_webhook as receive_aura_webhook, process_inbox as process_aura_inbox,
     reconcile as reconcile_aura, run_worker as run_aura_worker,
+    store_withdrawal_snapshot,
 )
 
 BASE_URL = 'https://goswap.site/api/'
@@ -819,6 +820,46 @@ def install_wallet(app, root, owner_check):
                         str(body['event_id']), idempotency_key=key
                     )
                 ))
+            if action == 'admin-aura-balance-history' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                return web.json_response(await aura_client.list_balance_history(
+                    operation_type=request.query.get('type'),
+                    status=request.query.get('status'),
+                    sort=request.query.get('sort', 'created_at'),
+                    order=request.query.get('order', 'desc'),
+                    date_from=request.query.get('from'),
+                    date_to=request.query.get('to'),
+                    cursor=request.query.get('cursor'),
+                    limit=request.query.get('limit', '100'),
+                ))
+            if action == 'admin-aura-balance-operation' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                operation_id = request.query.get('operation_id')
+                if not operation_id:
+                    raise ValueError('operation_id is required')
+                return web.json_response(
+                    await aura_client.get_balance_operation(operation_id)
+                )
+            if action == 'admin-aura-withdrawal' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                body = await request.json()
+                if not isinstance(body, dict) or not {'amount', 'address'}.issubset(body) \
+                        or set(body) - {'amount', 'address', 'note'}:
+                    raise ValueError('Invalid Aura withdrawal body')
+                key = request.headers.get('Idempotency-Key', '')
+                if not 1 <= len(key) <= 200:
+                    raise ApiError(
+                        'idempotency_key_required', 'Idempotency-Key is required', 400
+                    )
+                result = await aura_client.create_withdrawal(
+                    body['amount'], body['address'], idempotency_key=key,
+                    note=body.get('note'),
+                )
+                store_withdrawal_snapshot(ledger, aura_environment, result)
+                return web.json_response(result)
             if action == 'admin-aura-qr-payments' and request.method == 'GET':
                 return web.json_response({'data': [dict(row) for row in ledger.db.execute(
                     'SELECT payment_id,status,amount_rub,rate,total_usdt,merchant,provider_updated_at '

@@ -28,6 +28,7 @@ class State:
         self.orders = {}
         self.qr_payments = {}
         self.withdrawals = {}
+        self.balance_history = {}
         self.events = {}
         self.event_redeliveries = {}
         self.products = {"crypto_processing": True, "cards": True,
@@ -499,11 +500,94 @@ def make_app():
 
     async def list_withdrawals(request):
         items = list(reversed(list(state.withdrawals.values())))
+        status = request.query.get("status")
+        if status:
+            items = [item for item in items if item["status"] == status]
         return web.json_response({"data": items[:int(request.query.get("limit", "100"))], "next_cursor": None})
 
     async def withdrawal(request):
         item = state.withdrawals.get(request.match_info["withdrawal_id"])
         return web.json_response(item) if item else envelope("not_found", "Withdrawal not found", 404)
+
+    async def create_withdrawal(request):
+        body = await request.json()
+        address = str(body.get("address") or "")
+        if not re.fullmatch(r"T[1-9A-HJ-NP-Za-km-z]{33}", address):
+            return envelope("address_invalid", "Invalid TRON address", 400)
+        try:
+            amount = Decimal(str(body.get("amount")))
+        except Exception:
+            return envelope("amount_out_of_range", "Invalid amount", 400)
+        if amount <= 0:
+            return envelope("amount_out_of_range", "Invalid amount", 400)
+        if set(body) - {"address", "amount", "note"}:
+            return envelope("invalid_argument", "Unknown withdrawal field", 400)
+
+        def create():
+            fee = Decimal("2")
+            if state.balance < amount + fee:
+                return None
+            withdrawal_id = str(uuid.uuid4())
+            item = {
+                "address": address, "amount": str(amount), "completed_at": None,
+                "created_at": "2026-11-15T15:00:00Z", "currency": "USDT",
+                "failure_reason": None, "fee": str(fee), "network": "TRC20",
+                "status": "processing", "tx_hash": None,
+                "withdrawal_id": withdrawal_id,
+            }
+            state.balance -= amount + fee
+            state.withdrawals[withdrawal_id] = item
+            operation_id = str(uuid.uuid4())
+            state.balance_history[operation_id] = {
+                "id": operation_id, "type": "cards_platform_withdrawal",
+                "status": "pending", "amount": str(amount + fee),
+                "currency": "USDT", "created_at": item["created_at"],
+                "recipient": address, "reference_operation_id": withdrawal_id,
+                "source": None, "transaction_hash": None,
+            }
+            return item
+
+        key = request.headers.get("Idempotency-Key")
+        if not key:
+            return envelope("idempotency_key_required", "Idempotency-Key is required", 400)
+        fingerprint = json.dumps(body, sort_keys=True, separators=(",", ":"))
+        slot = (request.method, request.path, key)
+        previous = state.idempotency.get(slot)
+        if previous:
+            if previous[0] != fingerprint:
+                return envelope("idempotency_key_reused", "Idempotency-Key was reused", 409)
+            return web.json_response(previous[1], headers={"Idempotency-Key": key})
+        result = create()
+        if result is None:
+            return envelope("insufficient_funds", "Insufficient funds", 412)
+        state.idempotency[slot] = (fingerprint, result)
+        return web.json_response(result, status=201, headers={"Idempotency-Key": key})
+
+    async def balance_history(request):
+        items = list(state.balance_history.values())
+        operation_type = request.query.get("type")
+        status = request.query.get("status")
+        if operation_type:
+            items = [item for item in items if item["type"] == operation_type]
+        if status:
+            items = [item for item in items if item["status"] == status]
+        reverse = request.query.get("order", "desc") == "desc"
+        sort_key = request.query.get("sort", "created_at")
+        items.sort(key=lambda item: item[sort_key], reverse=reverse)
+        date_from = request.query.get("from")
+        date_to = request.query.get("to")
+        if date_from:
+            items = [item for item in items if item["created_at"] >= date_from]
+        if date_to:
+            items = [item for item in items if item["created_at"] <= date_to]
+        limit = min(max(int(request.query.get("limit", "100")), 1), 100)
+        return web.json_response({"data": items[:limit], "next_cursor": None})
+
+    async def balance_operation(request):
+        item = state.balance_history.get(request.match_info["operation_id"])
+        return web.json_response(item) if item else envelope(
+            "not_found", "Balance operation not found", 404
+        )
 
     async def list_events(request):
         items = list(state.events.values())
@@ -621,6 +705,8 @@ def make_app():
     app.router.add_get("/v1/partner/deposits-fees", deposit_fees)
     app.router.add_get("/v1/partner/deposits/{deposit_id}", deposit)
     app.router.add_get("/v1/partner/balance", balance)
+    app.router.add_get("/v1/partner/balance/history", balance_history)
+    app.router.add_get("/v1/partner/balance/history/{operation_id}", balance_operation)
     app.router.add_get("/v1/partner/cards-fees", card_fees)
     app.router.add_post("/v1/partner/cards", open_card)
     app.router.add_get("/v1/partner/cards", cards)
@@ -641,6 +727,7 @@ def make_app():
     app.router.add_get("/v1/partner/qr-payments", list_qr_payments)
     app.router.add_get("/v1/partner/qr-payments/{payment_id}", qr_payment)
     app.router.add_get("/v1/partner/withdrawals", list_withdrawals)
+    app.router.add_post("/v1/partner/withdrawals", create_withdrawal)
     app.router.add_get("/v1/partner/withdrawals/{withdrawal_id}", withdrawal)
     app.router.add_get("/v1/partner/events", list_events)
     app.router.add_get("/v1/partner/events/{event_id}", get_event)

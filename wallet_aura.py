@@ -50,6 +50,12 @@ WEBHOOK_EVENT_TYPES = {
     "customer.deposit.confirmed", "customer.deposit.rejected",
     "qr_payment.completed", "qr_payment.failed", "qr_payment.refunded",
 }
+BALANCE_OPERATION_TYPES = {
+    "deposit", "sandbox_credit", "cards_platform_topup", "withdraw",
+    "cards_platform_withdrawal", "card_fee", "card_recharge", "qr_payment",
+}
+BALANCE_OPERATION_STATUSES = {"pending", "confirmed", "failed"}
+WITHDRAWAL_STATUSES = {"processing", "broadcast", "completed", "failed"}
 
 
 def prepare(ledger):
@@ -396,6 +402,90 @@ def _event_result(payload, expected_event_id=None):
         "api_version": api_version, "created_at": payload["created_at"],
         "data": payload["data"], "delivery": dict(delivery), "id": event_id,
         "occurred_at": occurred_at, "type": event_type,
+    }
+
+
+def _uuid(value, label):
+    value = str(value or "")
+    try:
+        uuid.UUID(value)
+    except (ValueError, TypeError, AttributeError):
+        raise ValueError("Invalid Aura " + label)
+    return value
+
+
+def _balance_history_entry(payload, expected_operation_id=None):
+    required = {"id", "type", "status", "amount", "currency", "created_at"}
+    optional = {"recipient", "reference_operation_id", "source", "transaction_hash"}
+    if not isinstance(payload, dict) or not required.issubset(payload) or set(payload) - required - optional:
+        raise ValueError("Invalid Aura balance history entry")
+    operation_id = _uuid(payload.get("id"), "balance operation id")
+    if expected_operation_id is not None and operation_id != expected_operation_id:
+        raise ValueError("Aura balance operation id mismatch")
+    operation_type = payload.get("type")
+    status = payload.get("status")
+    if operation_type not in BALANCE_OPERATION_TYPES or status not in BALANCE_OPERATION_STATUSES:
+        raise ValueError("Invalid Aura balance operation state")
+    if payload.get("currency") != "USDT":
+        raise ValueError("Invalid Aura balance operation currency")
+    amount = _decimal(payload.get("amount"), allow_zero=True)
+    _aura_datetime(payload.get("created_at"), "balance operation created_at")
+    result = {
+        "id": operation_id, "type": operation_type, "status": status,
+        "amount": str(amount), "currency": "USDT",
+        "created_at": payload["created_at"],
+    }
+    for key in optional:
+        value = payload.get(key)
+        if value is not None and (not isinstance(value, str) or len(value) > 500):
+            raise ValueError("Invalid Aura balance operation " + key)
+        result[key] = value
+    return result
+
+
+def _withdrawal_result(payload, expected_withdrawal_id=None):
+    required = {
+        "address", "amount", "completed_at", "created_at", "currency",
+        "failure_reason", "fee", "network", "status", "tx_hash",
+        "withdrawal_id",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura withdrawal response")
+    withdrawal_id = _uuid(payload.get("withdrawal_id"), "withdrawal id")
+    if expected_withdrawal_id is not None and withdrawal_id != expected_withdrawal_id:
+        raise ValueError("Aura withdrawal id mismatch")
+    address = payload.get("address")
+    if not isinstance(address, str) or not re.fullmatch(r"T[1-9A-HJ-NP-Za-km-z]{33}", address):
+        raise ValueError("Invalid Aura withdrawal address")
+    status = payload.get("status")
+    if status not in WITHDRAWAL_STATUSES or payload.get("network") != "TRC20":
+        raise ValueError("Invalid Aura withdrawal state")
+    if payload.get("currency") != "USDT":
+        raise ValueError("Invalid Aura withdrawal currency")
+    amount = _decimal(payload.get("amount"))
+    fee = _decimal(payload.get("fee"), allow_zero=True)
+    _aura_datetime(payload.get("created_at"), "withdrawal created_at")
+    completed_at = payload.get("completed_at")
+    if completed_at is not None:
+        _aura_datetime(completed_at, "withdrawal completed_at")
+    failure_reason = payload.get("failure_reason")
+    if status == "failed":
+        if failure_reason not in {"insufficient_funds", "reverted_on_chain", "rejected"}:
+            raise ValueError("Invalid Aura withdrawal failure reason")
+    elif failure_reason is not None:
+        raise ValueError("Unexpected Aura withdrawal failure reason")
+    tx_hash = payload.get("tx_hash")
+    if tx_hash is not None and (not isinstance(tx_hash, str) or not tx_hash or len(tx_hash) > 200):
+        raise ValueError("Invalid Aura withdrawal transaction hash")
+    if status in {"broadcast", "completed"} and tx_hash is None:
+        raise ValueError("Aura broadcast withdrawal has no transaction hash")
+    if status in {"processing", "broadcast"} and completed_at is not None:
+        raise ValueError("Pending Aura withdrawal has completed_at")
+    return {
+        "address": address, "amount": str(amount), "completed_at": completed_at,
+        "created_at": payload["created_at"], "currency": "USDT",
+        "failure_reason": failure_reason, "fee": str(fee), "network": "TRC20",
+        "status": status, "tx_hash": tx_hash, "withdrawal_id": withdrawal_id,
     }
 
 
@@ -883,15 +973,52 @@ class AuraClient:
         payment_id = quote(_safe_identifier(payment_id, "QR payment id"), safe="")
         return await self.request("GET", "/qr-payments/" + payment_id)
 
-    async def list_withdrawals(self, *, cursor=None, limit=100):
-        params = {"limit": min(max(int(limit), 1), 100)}
+    async def list_withdrawals(self, *, status=None, cursor=None, limit=100):
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid Aura withdrawals limit")
+        if not 1 <= limit <= 100:
+            raise ValueError("Invalid Aura withdrawals limit")
+        params = {"limit": limit}
+        if status is not None:
+            if status not in WITHDRAWAL_STATUSES:
+                raise ValueError("Invalid Aura withdrawal status")
+            params["status"] = status
         if cursor:
             params["cursor"] = str(cursor)
-        return await self.request("GET", "/withdrawals", params=params)
+        payload = await self.request("GET", "/withdrawals", params=params)
+        if not isinstance(payload, dict) or set(payload) != {"data", "next_cursor"}:
+            raise ValueError("Invalid Aura withdrawal list")
+        if not isinstance(payload["data"], list):
+            raise ValueError("Invalid Aura withdrawal list data")
+        if payload["next_cursor"] is not None and not isinstance(payload["next_cursor"], str):
+            raise ValueError("Invalid Aura withdrawal cursor")
+        return {
+            "data": [_withdrawal_result(item) for item in payload["data"]],
+            "next_cursor": payload["next_cursor"],
+        }
 
     async def get_withdrawal(self, withdrawal_id):
-        withdrawal_id = quote(_safe_identifier(withdrawal_id, "withdrawal id"), safe="")
-        return await self.request("GET", "/withdrawals/" + withdrawal_id)
+        withdrawal_id = _uuid(withdrawal_id, "withdrawal id")
+        payload = await self.request("GET", "/withdrawals/" + quote(withdrawal_id, safe=""))
+        return _withdrawal_result(payload, withdrawal_id)
+
+    async def create_withdrawal(self, amount, address, *, idempotency_key, note=None):
+        amount = str(_decimal(amount))
+        address = str(address)
+        if not re.fullmatch(r"T[1-9A-HJ-NP-Za-km-z]{33}", address):
+            raise ValueError("Invalid Aura withdrawal address")
+        body = {"amount": amount, "address": address}
+        if note is not None:
+            note = str(note)
+            if not 1 <= len(note) <= 140:
+                raise ValueError("Invalid Aura withdrawal note")
+            body["note"] = note
+        payload = await self.request(
+            "POST", "/withdrawals", body=body, idempotency_key=idempotency_key
+        )
+        return _withdrawal_result(payload)
 
     async def deposit_addresses(self, customer_id):
         return await self.request("GET", "/customers/" + quote(_safe_identifier(customer_id, "customer id"), safe="") + "/deposit-addresses")
@@ -913,6 +1040,53 @@ class AuraClient:
 
     async def get_balance(self):
         return await self.request("GET", "/balance")
+
+    async def list_balance_history(self, *, operation_type=None, status=None,
+                                   sort="created_at", order="desc", date_from=None,
+                                   date_to=None, cursor=None, limit=100):
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid Aura balance history limit")
+        if not 1 <= limit <= 100:
+            raise ValueError("Invalid Aura balance history limit")
+        if operation_type is not None and operation_type not in BALANCE_OPERATION_TYPES:
+            raise ValueError("Invalid Aura balance operation type")
+        if status is not None and status not in BALANCE_OPERATION_STATUSES:
+            raise ValueError("Invalid Aura balance operation status")
+        if sort not in {"created_at", "status"} or order not in {"asc", "desc"}:
+            raise ValueError("Invalid Aura balance history ordering")
+        params = {"limit": limit, "sort": sort, "order": order}
+        if operation_type is not None:
+            params["type"] = operation_type
+        if status is not None:
+            params["status"] = status
+        if date_from is not None:
+            _aura_datetime(date_from, "balance history from")
+            params["from"] = date_from
+        if date_to is not None:
+            _aura_datetime(date_to, "balance history to")
+            params["to"] = date_to
+        if cursor:
+            params["cursor"] = str(cursor)
+        payload = await self.request("GET", "/balance/history", params=params)
+        if not isinstance(payload, dict) or set(payload) != {"data", "next_cursor"}:
+            raise ValueError("Invalid Aura balance history")
+        if not isinstance(payload["data"], list):
+            raise ValueError("Invalid Aura balance history data")
+        if payload["next_cursor"] is not None and not isinstance(payload["next_cursor"], str):
+            raise ValueError("Invalid Aura balance history cursor")
+        return {
+            "data": [_balance_history_entry(item) for item in payload["data"]],
+            "next_cursor": payload["next_cursor"],
+        }
+
+    async def get_balance_operation(self, operation_id):
+        operation_id = _uuid(operation_id, "balance operation id")
+        payload = await self.request(
+            "GET", "/balance/history/" + quote(operation_id, safe="")
+        )
+        return _balance_history_entry(payload, operation_id)
 
     async def close(self):
         if self.session is not None and self._owns_session:
@@ -1906,6 +2080,13 @@ def _store_withdrawal(ledger, environment, kind, data):
         (withdrawal_id, environment, status, amount, fee, recipient, transaction_hash,
          updated or None, json.dumps(safe, separators=(",", ":")), stamp, stamp),
     )
+
+
+def store_withdrawal_snapshot(ledger, environment, data):
+    """Persist an authenticated read/create response using the webhook projection."""
+    result = _withdrawal_result(data)
+    _store_withdrawal(ledger, environment, "withdraw.snapshot", result)
+    return result
 
 
 def process_inbox(ledger, environment, limit=20):

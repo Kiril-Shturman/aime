@@ -911,13 +911,50 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.mock.app["state"].qr_payments["qr_one"] = {
             "id": "qr_one", "status": "completed", "total_usdt": "10"
         }
-        self.mock.app["state"].withdrawals["wd_one"] = {
-            "id": "wd_one", "status": "confirmed", "amount": "20", "fee": "2"
+        withdrawal_id = "5e4d3c2b-1a09-4f8e-9d7c-6b5a49382716"
+        self.mock.app["state"].withdrawals[withdrawal_id] = {
+            "address": "TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9",
+            "amount": "20", "completed_at": "2026-10-20T09:13:10Z",
+            "created_at": "2026-10-20T09:12:04Z", "currency": "USDT",
+            "failure_reason": None, "fee": "2", "network": "TRC20",
+            "status": "completed", "tx_hash": "9f3c2a71d4e85b06",
+            "withdrawal_id": withdrawal_id,
         }
         self.assertEqual((await self.client.list_qr_payments())["data"][0]["id"], "qr_one")
         self.assertEqual((await self.client.get_qr_payment("qr_one"))["status"], "completed")
-        self.assertEqual((await self.client.list_withdrawals())["data"][0]["id"], "wd_one")
-        self.assertEqual((await self.client.get_withdrawal("wd_one"))["status"], "confirmed")
+        self.assertEqual(
+            (await self.client.list_withdrawals(status="completed"))["data"][0]["withdrawal_id"],
+            withdrawal_id,
+        )
+        self.assertEqual(
+            (await self.client.get_withdrawal(withdrawal_id))["status"], "completed"
+        )
+
+    async def test_balance_history_and_idempotent_withdrawal_contract(self):
+        self.mock.app["state"].balance = Decimal("100")
+        address = "TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9"
+        created = await self.client.create_withdrawal(
+            "50", address, idempotency_key="withdrawal-one", note="payout #1042"
+        )
+        self.assertEqual(created["status"], "processing")
+        self.assertEqual(created["fee"], "2")
+        self.assertEqual(self.mock.app["state"].balance, Decimal("48"))
+        replay = await self.client.create_withdrawal(
+            "50", address, idempotency_key="withdrawal-one", note="payout #1042"
+        )
+        self.assertEqual(replay, created)
+        self.assertEqual(self.mock.app["state"].balance, Decimal("48"))
+        history = await self.client.list_balance_history(
+            operation_type="cards_platform_withdrawal", status="pending"
+        )
+        self.assertEqual(len(history["data"]), 1)
+        operation = await self.client.get_balance_operation(history["data"][0]["id"])
+        self.assertEqual(operation["reference_operation_id"], created["withdrawal_id"])
+        with self.assertRaises(ApiError) as reused:
+            await self.client.create_withdrawal(
+                "40", address, idempotency_key="withdrawal-one", note="payout #1042"
+            )
+        self.assertEqual(reused.exception.name, "idempotency_key_reused")
 
     async def test_event_feed_get_and_idempotent_redelivery(self):
         event_id = "c1f0a9b8-7d6e-4c5b-9a8f-0e1d2c3b4a59"
@@ -1486,6 +1523,53 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(redelivered.status, 200, await redelivered.text())
         delivery = (await redelivered.json())["delivery"]
         self.assertEqual((delivery["status"], delivery["attempts"]), ("pending", 0))
+
+    async def test_admin_balance_history_and_withdrawal_are_idempotent(self):
+        self.mock.app["state"].balance = Decimal("100")
+        address = "TN3W4H6rK2ce4vX9YnFQHwKENnHjoxb3m9"
+        missing_key = await self.wpay.post(
+            "/api/wallet/admin-aura-withdrawal", headers=self.owner,
+            json={"amount": "25", "address": address},
+        )
+        self.assertEqual(missing_key.status, 400)
+        created = await self.wpay.post(
+            "/api/wallet/admin-aura-withdrawal",
+            headers={**self.owner, "Idempotency-Key": "admin-withdrawal-one"},
+            json={"amount": "25", "address": address, "note": "private payout 778"},
+        )
+        self.assertEqual(created.status, 200, await created.text())
+        withdrawal = await created.json()
+        self.assertEqual(withdrawal["status"], "processing")
+        replay = await self.wpay.post(
+            "/api/wallet/admin-aura-withdrawal",
+            headers={**self.owner, "Idempotency-Key": "admin-withdrawal-one"},
+            json={"amount": "25", "address": address, "note": "private payout 778"},
+        )
+        self.assertEqual(await replay.json(), withdrawal)
+        self.assertEqual(self.mock.app["state"].balance, Decimal("73"))
+        stored = self.app["wpay_ledger"].db.execute(
+            "SELECT status,amount,fee FROM aura_withdrawals WHERE withdrawal_id=?",
+            (withdrawal["withdrawal_id"],),
+        ).fetchone()
+        self.assertEqual(tuple(stored), ("processing", "25", "2"))
+        self.assertNotIn(
+            "private payout 778", "\n".join(self.app["wpay_ledger"].db.iterdump())
+        )
+        history = await self.wpay.get(
+            "/api/wallet/admin-aura-balance-history?type=cards_platform_withdrawal&status=pending",
+            headers=self.owner,
+        )
+        self.assertEqual(history.status, 200, await history.text())
+        operation_id = (await history.json())["data"][0]["id"]
+        operation = await self.wpay.get(
+            "/api/wallet/admin-aura-balance-operation?operation_id=" + operation_id,
+            headers=self.owner,
+        )
+        self.assertEqual(operation.status, 200, await operation.text())
+        self.assertEqual(
+            (await operation.json())["reference_operation_id"],
+            withdrawal["withdrawal_id"],
+        )
 
 
 if __name__ == "__main__":
