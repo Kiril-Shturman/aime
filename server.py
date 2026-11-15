@@ -1997,17 +1997,67 @@ def _wpay_audit_response_detail(response):
     return " ".join(parts)[:300]
 
 
+def _wpay_presence_payload(profile, source, start_param=None):
+    """Build a safe Telegram profile card for an operator chat."""
+    telegram_id = profile.get("id")
+    if not isinstance(telegram_id, int) or telegram_id <= 0:
+        return None
+
+    def clean(value, limit=120):
+        if value is None or value == "":
+            return "—"
+        return re.sub(r"[\x00-\x1f\x7f]+", " ", str(value)).strip()[:limit] or "—"
+
+    username = clean(profile.get("username"))
+    lines = [
+        "👤 WPay: новый вход",
+        f"Источник: {clean(source, 30)}",
+        f"Telegram ID: {telegram_id}",
+        f"Username: {'@' + username if username != '—' else '—'}",
+        f"Имя: {clean(profile.get('first_name'))}",
+        f"Фамилия: {clean(profile.get('last_name'))}",
+        f"Язык: {clean(profile.get('language_code'), 16)}",
+        f"Premium: {'да' if profile.get('is_premium') else 'нет'}",
+        f"Разрешил ЛС: {'да' if profile.get('allows_write_to_pm') else 'нет/неизвестно'}",
+        f"Attachment menu: {'да' if profile.get('added_to_attachment_menu') else 'нет/неизвестно'}",
+        f"Фото профиля: {'есть' if profile.get('photo_url') else 'нет/не передано'}",
+        f"Start param: {clean(start_param, 128)}",
+        "Время: " + time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime()),
+    ]
+    return {
+        "chat_id": int(os.environ.get("WPAY_LOG_CHAT_ID", "0")),
+        "text": "\n".join(lines),
+        "disable_notification": True,
+        "reply_markup": {"inline_keyboard": [[{
+            "text": "Открыть чат",
+            "url": f"tg://user?id={telegram_id}",
+            "style": "primary",
+        }]]},
+    }
+
+
 async def _wpay_audit_worker(app):
     token = os.environ.get("WPAY_BOT_TOKEN", "")
     chat_id = os.environ.get("WPAY_LOG_CHAT_ID", "").strip()
     if not token or not re.fullmatch(r"-?\d+", chat_id):
         return
     queue = app["wpay_audit_queue"]
+
+    async def deliver(payload):
+        try:
+            await asyncio.to_thread(_telegram_bot_api, token, "sendMessage", payload)
+        except Exception as exc:
+            print(f"[wpay-audit] delivery failed: {exc}", flush=True)
+
     while True:
         first = await queue.get()
+        if isinstance(first, dict):
+            await deliver(first)
+            continue
         lines = [first]
         size = len(first)
         deadline = asyncio.get_running_loop().time() + 2
+        presence = None
         while len(lines) < 40 and size < 3500:
             timeout = deadline - asyncio.get_running_loop().time()
             if timeout <= 0:
@@ -2016,21 +2066,24 @@ async def _wpay_audit_worker(app):
                 line = await asyncio.wait_for(queue.get(), timeout=timeout)
             except asyncio.TimeoutError:
                 break
+            if isinstance(line, dict):
+                presence = line
+                break
             lines.append(line)
             size += len(line) + 1
         text = "WPay audit\n" + "\n".join(lines)
-        try:
-            await asyncio.to_thread(_telegram_bot_api, token, "sendMessage", {
-                "chat_id": int(chat_id),
-                "text": text[:4000],
-                "disable_notification": True,
-            })
-        except Exception as exc:
-            print(f"[wpay-audit] delivery failed: {exc}", flush=True)
+        await deliver({
+            "chat_id": int(chat_id),
+            "text": text[:4000],
+            "disable_notification": True,
+        })
+        if presence is not None:
+            await deliver(presence)
 
 
 async def _start_wpay_audit(app):
     app["wpay_audit_queue"] = asyncio.Queue(maxsize=1000)
+    app["wpay_presence_seen"] = {}
     app["wpay_audit_task"] = asyncio.create_task(_wpay_audit_worker(app))
     chat_id = os.environ.get("WPAY_LOG_CHAT_ID", "").strip()
     if re.fullmatch(r"-?\d+", chat_id):
@@ -2105,9 +2158,9 @@ async def wpay_telegram_webhook(request):
     text = message.get("text") or ""
     command = text.split(maxsplit=1)[0].split("@", 1)[0] if text else ""
     sender_id = sender.get("id")
+    start_param = None
     if isinstance(sender_id, int) and sender_id > 0:
         request["wpay_audit_actor"] = f"tg:{sender_id}"
-    if isinstance(sender_id, int) and sender_id > 0:
         start_param = text.split(maxsplit=1)[1].strip() if command == "/start" and len(text.split(maxsplit=1)) > 1 else None
         request.app["wpay_ledger"].account(
             f"tg:{sender_id}", sender, bot_started=True, source="bot",
@@ -2126,6 +2179,10 @@ async def wpay_telegram_webhook(request):
     }
     view = view_by_command.get(command) or view_by_callback.get(callback_data)
     request["wpay_audit_detail"] = "bot:" + str(view or "ignored")
+    if command == "/start" and isinstance(sender_id, int) and sender_id > 0:
+        request["wpay_presence_profile"] = dict(sender)
+        request["wpay_presence_source"] = "Telegram-бот"
+        request["wpay_presence_start_param"] = start_param
     if not view:
         return web.json_response({"ok": True})
     chat_id = (message.get("chat") or (callback.get("message") or {}).get("chat") or {}).get("id")
@@ -2194,6 +2251,27 @@ async def wpay_audit_middleware(request, handler):
         if queue is not None:
             elapsed_ms = max(0, round((time.monotonic() - started) * 1000))
             try:
+                presence_profile = request.get("wpay_presence_profile")
+                presence_source = request.get("wpay_presence_source")
+                presence_start = request.get("wpay_presence_start_param")
+                if not presence_profile and isinstance(request.get("wpay_profile"), dict):
+                    presence_profile = request["wpay_profile"]
+                    presence_source = "Mini App"
+                    presence_start = request.get("wpay_start_param")
+                    telegram_id = presence_profile.get("id")
+                    seen = request.app.get("wpay_presence_seen", {})
+                    last_seen = seen.get(telegram_id, 0)
+                    current_time = time.monotonic()
+                    if current_time - last_seen < 900:
+                        presence_profile = None
+                    elif isinstance(telegram_id, int):
+                        seen[telegram_id] = current_time
+                if presence_profile:
+                    presence = _wpay_presence_payload(
+                        presence_profile, presence_source, presence_start,
+                    )
+                    if presence:
+                        queue.put_nowait(presence)
                 queue.put_nowait(_wpay_audit_line(request, status, elapsed_ms))
             except asyncio.QueueFull:
                 print("[wpay-audit] queue full; event dropped", flush=True)

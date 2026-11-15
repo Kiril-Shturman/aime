@@ -1,7 +1,11 @@
 import json
 import unittest
+from unittest import mock
 
-from server import _wpay_amount, _wpay_audit_line, _wpay_audit_response_detail, _wpay_bot_view
+from server import (
+    _wpay_amount, _wpay_audit_line, _wpay_audit_response_detail,
+    _wpay_bot_view, _wpay_presence_payload,
+)
 
 
 class FakeRequest(dict):
@@ -70,6 +74,23 @@ class WPayRichBotTests(unittest.TestCase):
         self.assertIn("request_id=request-1", detail)
         self.assertNotIn("private@example.com", detail)
         self.assertNotIn("123", detail)
+
+    def test_presence_card_has_profile_and_open_chat_button(self):
+        with mock.patch.dict("os.environ", {"WPAY_LOG_CHAT_ID": "-5519457168"}):
+            payload = _wpay_presence_payload({
+                "id": 123, "username": "alice", "first_name": "Ali\nce",
+                "last_name": "Test", "language_code": "ru", "is_premium": True,
+                "allows_write_to_pm": True, "photo_url": "https://example.test/photo",
+            }, "Mini App", "campaign-one")
+        self.assertEqual(payload["chat_id"], -5519457168)
+        self.assertIn("Username: @alice", payload["text"])
+        self.assertIn("Имя: Ali ce", payload["text"])
+        self.assertIn("Premium: да", payload["text"])
+        self.assertIn("Start param: campaign-one", payload["text"])
+        self.assertEqual(
+            payload["reply_markup"]["inline_keyboard"][0][0]["url"],
+            "tg://user?id=123",
+        )
 
 
 if __name__ == "__main__":
