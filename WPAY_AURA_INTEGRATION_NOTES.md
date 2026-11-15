@@ -424,11 +424,11 @@ protobuf/service contract and operational requirements first.
 - Admin health should group failures by code/type and show request IDs so an
   operator can contact Aura without searching application logs.
 
-## Error catalogue received so far
+## Error catalogue (66/66 received)
 
-The supplied catalogue reports 66 total codes. The first received fragment
-contains 42; keep the generated OpenAPI catalogue authoritative and append the
-remaining 24 before implementation is considered contract-complete.
+All 66 codes from the supplied generated catalogue are now captured. The
+OpenAPI-generated catalogue remains authoritative if a later version changes a
+status, type or retry policy.
 
 - **Fix and retry (`after_fix`)**: `invalid_argument` (400), `amount_required`
   (400), `amount_out_of_range` (400; `details.min/max`), `insufficient_funds`
@@ -461,6 +461,28 @@ remaining 24 before implementation is considered contract-complete.
   `card_not_active` (409), `card_controls_unavailable` (409),
   `unauthenticated` (401) and `ip_not_allowed` (403).
 
+The second catalogue fragment adds:
+
+- **Fix and retry (`after_fix`)**: `sbp_buy_phone_required` (412),
+  `kyc_email_required` (412), `kyc_email_rejected` (412), `qr_unresolvable`
+  (400), `shipping_address_invalid` (400),
+  `card_activation_code_invalid` (400), and `insufficient_scope` (403;
+  `authentication_error`, create a key with `details.required_scope`).
+- **Retry later (`later`)**: `sbp_buy_daily_qr_limit` (429; next day),
+  `sbp_buy_daily_paid_qr_limit` (429; one hour),
+  `sbp_buy_fiat_daily_limit` (429; rolling day) and
+  `sbp_buy_fiat_monthly_limit` (429; rolling 31 days). Fiat-limit details carry
+  `limit`, `remaining` and `resets_at`; schedule from provider data rather than
+  local midnight assumptions.
+- **Do not retry (`no`)**: `sbp_buy_blocked` (412), `sbp_buy_bank_not_found`
+  (412), `sbp_buy_bank_unsupported` (412), `sbp_buy_pending_qr_limit` (429;
+  deliberately no Retry-After), `kyc_passport_already_used` (412 or 422
+  `kyc_error` on identity import), `qr_unsupported` (412),
+  `card_not_activatable` (412), `kyc_identity_locked` (422 `kyc_error`),
+  `kyc_session_unavailable` (409), `sbp_buy_not_enabled` (403),
+  `cards_not_enabled` (403), `crypto_processing_not_enabled` (403), and
+  `qr_pay_not_enabled` (403).
+
 Route-specific actions captured from this fragment:
 
 - `card_fee_changed` requires rereading `GET /cards-fees` and explicit user
@@ -479,6 +501,39 @@ Route-specific actions captured from this fragment:
   never silently substitute a new quote into an accepted intent.
 - `feature_not_enabled` applies to preview request fields, distinct from a
   product capability being unavailable for the partner key.
+- SBP access is gated by a usable Russian mobile number and email/KYC. A missing
+  phone/email is repairable through customer upsert; blocked customers and
+  unsupported/unidentified banks go to support, not a retry loop.
+- `sbp_buy_pending_qr_limit` is a hard stop without Retry-After. Do not create
+  more QR codes or infer that waiting alone will help. The daily created/paid
+  and rolling RUB limits have distinct reset behavior and separate UI messages.
+- If an SBP limit provides `details.code`, display the provider-prescribed safe
+  text through an allowlisted mapping/fallback; never render arbitrary provider
+  content as trusted HTML.
+- `kyc_passport_already_used` must not reveal which customer owns the passport.
+  `details.terminal=true` routes to support. WPay's initial implementation still
+  uses the hosted KYC widget and does not expose identity import.
+- `kyc_identity_locked` cannot be repaired by starting another KYC session;
+  only Aura support can change the identity. Preserve `customer_id` and
+  `request_id` for the support case, without storing passport data.
+- `kyc_session_unavailable` is catalogued as `no`, but its details determine UX:
+  `pending` waits for `customer.kyc.updated`; `rejected` follows reason/terminal
+  handling; no verdict is instead 503 `unavailable`. For
+  `access_locked_contact_manager`, update the phone and create a deliberate new
+  session attempt rather than replaying the rejected call unchanged.
+- `qr_unresolvable` permits a fresh scan; `qr_unsupported` is terminal for that
+  QR and exposes `details.cause`. QR input needs size/control-character checks
+  before it reaches logs or Aura.
+- Physical-card address validation is field-specific through `param` and must
+  enforce printable Latin/ASCII rules. Activation-code rejection permits
+  correction; `card_not_activatable` is terminal for the current card stage.
+- Product capability errors map directly to `GET /me` products: `sbp_buy`,
+  `cards`, `crypto_processing`, and `qr_pay`. WPay must hide/disable unavailable
+  products before a user reaches the provider call, while still handling these
+  403 codes as the authoritative race-safe check.
+- `insufficient_scope` is distinct from a disabled product. It requires key
+  rotation/provisioning in the portal and an admin alert naming only the
+  required scope, never exposing the key.
 
 ## Sandbox facts
 
@@ -599,8 +654,8 @@ card-details contract and PCI implications must be reviewed before implementatio
 - Remaining details: exact response schemas for every recorded route; SBP
   quote/rate/order fields and authoritative REST-versus-gRPC availability;
   complete card-operation schemas/types; QR-payment route schemas; rate-limit
-  semantics for route-specific scopes; the remaining 24 of 66 error codes; AML
-  review fields; the authoritative deposit-address cap; and the
+  semantics for route-specific scopes; AML review fields; the authoritative
+  deposit-address cap; and the
   authoritative withdrawal contract resolving the v3.5-removal versus v3.17
   route-list contradiction.
 - Partner-specific fee/limit responses or redacted examples.
