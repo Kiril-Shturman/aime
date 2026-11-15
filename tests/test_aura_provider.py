@@ -224,6 +224,46 @@ class AuraUnitTests(unittest.TestCase):
         self.assertEqual(card["delivery_status"], "out_for_delivery")
         self.assertEqual(json.loads(card["tracking"])["number"], "TRACK1")
 
+    def test_documented_card_opened_uses_owner_id_not_internal_customer_id(self):
+        event = {
+            "api_version": "2.5.0", "event": "card.opened",
+            "event_id": "c1f0a9b8-7d6e-4c5b-9a8f-0e1d2c3b4a59",
+            "occurred_at": "2026-09-11T10:00:00.000Z",
+            "partner_id": MOCK_PARTNER,
+            "data": {
+                "card_id": "9b5f3c2a-1d4e-4f60-8a7b-2c3d4e5f6a7b",
+                "card_number_masked": "411111••••••1234",
+                "customer_id": "7a1c9e42-5b3d-4f18-9c2a-6e7d8f9a0b1c",
+                "owner_id": self.customer, "status": "opened",
+            },
+        }
+        raw, signature = signed(event)
+        timestamp = signature.split(",", 1)[0].split("=", 1)[1]
+        headers = {
+            "X-Aura-Event": "card.opened",
+            "X-Aura-Event-Id": event["event_id"],
+            "X-Aura-Timestamp": timestamp,
+            "X-Aura-Attempt": "1",
+        }
+        _, valid = store_webhook(
+            self.ledger, raw, signature, headers, SECRET, MOCK_PARTNER
+        )
+        self.assertTrue(valid)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        card = self.ledger.db.execute(
+            "SELECT * FROM aura_cards WHERE card_id=?", (event["data"]["card_id"],)
+        ).fetchone()
+        self.assertEqual(card["user_id"], self.uid)
+        self.assertEqual(card["customer_id"], self.customer)
+        self.assertEqual(card["masked_pan"], "411111••••••1234")
+        self.assertEqual(card["provider_updated_at"], event["occurred_at"])
+
+        wrong_headers = {**headers, "X-Aura-Timestamp": str(int(timestamp) + 1)}
+        _, valid = store_webhook(
+            self.ledger, raw, signature, wrong_headers, SECRET, MOCK_PARTNER
+        )
+        self.assertFalse(valid)
+
     def test_sbp_terminal_webhook_records_without_crediting_unknown_contract(self):
         event = {
             "event": "order.completed", "event_id": "evt_order",

@@ -279,7 +279,12 @@ def make_app():
         event = {
             "event": "card.opened", "event_id": "evt_" + uuid.uuid4().hex,
             "occurred_at": item["updated_at"], "partner_id": MOCK_PARTNER,
-            "data": item,
+            "api_version": "3.17.0",
+            "data": {
+                "card_id": card_id, "card_number_masked": item["masked_pan"],
+                "customer_id": str(uuid.uuid4()), "owner_id": customer_id,
+                "status": "opened",
+            },
         }
         return web.json_response({"card": item, "webhook": event})
 

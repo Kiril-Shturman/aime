@@ -660,6 +660,16 @@ def store_webhook(ledger, raw, signature, headers, secret, partner_id=None):
             valid = False
         if headers.get("X-Aura-Event") not in {None, "", kind}:
             valid = False
+        signature_timestamp = next(
+            (part.strip().partition("=")[2] for part in signature.split(",")
+             if part.strip().startswith("t=")), None
+        )
+        header_timestamp = headers.get("X-Aura-Timestamp")
+        if header_timestamp not in {None, ""} and str(header_timestamp) != signature_timestamp:
+            valid = False
+        attempt = headers.get("X-Aura-Attempt")
+        if attempt not in {None, ""} and (not str(attempt).isdigit() or int(attempt) < 1):
+            valid = False
         if partner_id and str(event.get("partner_id")) != partner_id:
             valid = False
         stored_event = event
@@ -731,21 +741,26 @@ def _position_add(ledger, environment, uid, asset, amount):
     )
 
 
-def _store_card_event(ledger, environment, kind, data):
+def _store_card_event(ledger, environment, kind, data, occurred_at=None):
     card_id = _safe_identifier(data.get("card_id") or data.get("id"), "card id")
     existing = ledger.db.execute(
         "SELECT * FROM aura_cards WHERE card_id=? AND environment=?",
         (card_id, environment),
     ).fetchone()
-    customer_id = data.get("customer_id") or (existing["customer_id"] if existing else None)
-    customer_id = _safe_identifier(customer_id, "customer id")
+    # Webhook customer_id is Aura's internal UUID. Ownership is deliberately
+    # resolved through owner_id, which is the partner's own customer id.
+    customer_id = data.get("owner_id") or (existing["customer_id"] if existing else None)
+    if customer_id is None and data.get("customer_id") is not None:
+        # Compatibility with events emitted before owner_id was documented.
+        customer_id = data.get("customer_id")
+    customer_id = _safe_identifier(customer_id, "card owner id")
     owner = ledger.db.execute(
         "SELECT user_id FROM aura_customers WHERE customer_id=? AND environment=?",
         (customer_id, environment),
     ).fetchone()
     if not owner or (existing and existing["user_id"] != owner[0]):
         raise ValueError("Unknown Aura card owner")
-    incoming_updated = str(data.get("updated_at") or "")
+    incoming_updated = str(data.get("updated_at") or occurred_at or "")
     if (existing and incoming_updated and existing["provider_updated_at"]
             and incoming_updated <= existing["provider_updated_at"]):
         return
@@ -757,7 +772,7 @@ def _store_card_event(ledger, environment, kind, data):
     frozen = data.get("frozen") is True or status == "frozen"
     kind_value = data.get("kind") or data.get("card_type") or data.get("type")
     kind_value = str(kind_value)[:100] if kind_value is not None else None
-    masked_pan = data.get("masked_pan") or data.get("last4")
+    masked_pan = data.get("card_number_masked") or data.get("masked_pan") or data.get("last4")
     masked_pan = str(masked_pan)[:32] if masked_pan is not None else None
     delivery_status = data.get("delivery_status")
     if delivery_status is None and data.get("shipment_stage") is not None:
@@ -1006,7 +1021,9 @@ def process_inbox(ledger, environment, limit=20):
             elif kind in {"order.completed", "order.failed", "order.expired", "order.cancelled"}:
                 _store_sbp_order(ledger, environment, kind, data)
             elif kind in {"card.opened", "card.failed", "card.cancelled", "card.status_changed", "card.delivery_updated"}:
-                _store_card_event(ledger, environment, kind, data)
+                _store_card_event(
+                    ledger, environment, kind, data, event.get("occurred_at")
+                )
             elif kind == "card.operation":
                 _store_card_operation(ledger, environment, data)
             elif kind == "card.otp":
