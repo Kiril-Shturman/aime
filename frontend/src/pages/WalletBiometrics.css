@@ -324,3 +324,7 @@
 @keyframes wpay-badge-arrive { 0% { transform: translateY(-65%); opacity: 0; } 18% { opacity: 1; } 68% { transform: translateY(1.2%); } 86% { transform: translateY(-.5%); } 100% { transform: translateY(0); opacity: 1; } }
 @keyframes wpay-badge-fallback { 0%, 85% { opacity: 0; } 100% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .wpay-lock-badge:has(canvas), .wpay-lock-badge:not(:has(canvas)) .wpay-lock-badge-fallback { animation: none; } }
+
+.wpay-lock-screen h1 { font-size: clamp(30px, 8vw, 38px); font-weight: 650; }
+.wpay-lock-copy > p { font-size: 17px; line-height: 1.5; }
+@media (max-height: 650px) { .wpay-lock-screen h1 { font-size: 28px; } .wpay-lock-copy > p { font-size: 15px; } }

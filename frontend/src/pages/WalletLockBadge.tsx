@@ -17,36 +17,36 @@ function badgeFace(
   const ctx = canvas.getContext("2d");
   if (!ctx) return "";
   const gradient = ctx.createLinearGradient(0, 0, 1024, 1440);
-  gradient.addColorStop(0, "#ffffff");
-  gradient.addColorStop(0.58, "#f3f5f9");
-  gradient.addColorStop(1, "#e3e8f1");
+  gradient.addColorStop(0, "#9dd4ff");
+  gradient.addColorStop(0.58, "#929ce9");
+  gradient.addColorStop(1, "#a786de");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, 1024, 1440);
-  ctx.fillStyle = "#d4ddeb55";
+  ctx.fillStyle = "#5464ad22";
   ctx.beginPath();
   ctx.moveTo(0, 1110);
   ctx.bezierCurveTo(350, 820, 730, 900, 1024, 1030);
   ctx.lineTo(1024, 1440);
   ctx.lineTo(0, 1440);
   ctx.fill();
-  ctx.fillStyle = "#cbd6e244";
+  ctx.fillStyle = "#6c54a833";
   ctx.beginPath();
   ctx.moveTo(0, 1350);
   ctx.bezierCurveTo(330, 1080, 700, 1040, 1024, 1130);
   ctx.lineTo(1024, 1440);
   ctx.lineTo(0, 1440);
   ctx.fill();
-  ctx.strokeStyle = "#ffffffb3";
+  ctx.strokeStyle = "#ffffff66";
   ctx.lineWidth = 3;
   ctx.strokeRect(30, 30, 964, 1380);
-  if (logo) ctx.drawImage(logo, 90, 195, 370, 104);
+  if (logo) ctx.drawImage(logo, 90, 165, 400, 165);
   else {
     ctx.fillStyle = "#182135";
     ctx.font = "700 78px system-ui";
     ctx.fillText("wPay", 94, 280);
   }
-  ctx.fillStyle = "#8290a5";
-  ctx.font = "500 22px system-ui";
+  ctx.fillStyle = "#304366";
+  ctx.font = "500 28px system-ui";
   ctx.fillText("ЛИЧНЫЙ ДОСТУП", 96, 345);
   ctx.save();
   ctx.beginPath();
@@ -72,14 +72,14 @@ function badgeFace(
   ctx.restore();
   ctx.textAlign = "center";
   ctx.fillStyle = "#1b2538";
-  ctx.font = "600 62px system-ui";
+  ctx.font = "650 96px system-ui";
   ctx.fillText(name, 512, 1070, 830);
-  ctx.fillStyle = "#7b899e";
-  ctx.font = "400 30px system-ui";
+  ctx.fillStyle = "#344168";
+  ctx.font = "500 56px system-ui";
   ctx.fillText(
     user?.username ? `@${user.username}` : "Ваш личный кошелёк",
     512,
-    1130,
+    1150,
     830,
   );
   ctx.fillStyle = "#5597e5";
@@ -135,7 +135,7 @@ export default function WalletLockBadge() {
             frontImage={face}
             backImage={face}
             imageFit="cover"
-            cardColor="#f2f5fa"
+            cardColor="#9db9ef"
             strapColor="#233047"
             metal="silver"
             finish="glossy"

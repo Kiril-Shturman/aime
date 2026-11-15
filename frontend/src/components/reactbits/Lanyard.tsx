@@ -742,8 +742,8 @@ const placeHanging = (sim: Simulation, layout: CardLayout, intro: boolean | "dro
   for (let i = 1; i <= JOINTS; i++) {
     nodes[i].copy(nodes[i - 1]);
     if (intro === "drop") {
-      nodes[i].x += sim.rest * 0.32;
-      nodes[i].y -= sim.rest * Math.sqrt(1 - 0.32 ** 2);
+      nodes[i].x += sim.rest * 0.22;
+      nodes[i].y -= sim.rest * Math.sqrt(1 - 0.22 ** 2);
     } else if (intro) nodes[i].x += sim.rest;
     else nodes[i].y -= sim.rest;
   }
@@ -761,8 +761,8 @@ const placeHanging = (sim: Simulation, layout: CardLayout, intro: boolean | "dro
     velocities[i].set(0, 0, 0);
   }
   if (intro === "drop") {
-    body.velocity.set(-0.6, -0.3, 0);
-    body.angular.set(0.12, 0.18, -1.6);
+    body.velocity.set(-0.4, -0.3, 0);
+    body.angular.set(0.12, 0.18, -1.0);
     for (let i = 1; i <= JOINTS; i++) velocities[i].set(-0.4 * i / JOINTS, 0, 0);
   }
   sim.lengths.fill(sim.rest);
