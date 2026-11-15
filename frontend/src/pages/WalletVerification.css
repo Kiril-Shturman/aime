@@ -626,3 +626,46 @@
     animation: none !important;
   }
 }
+
+/* The two contact methods share one layered scene. */
+.wpay-contact-mailbox {
+  left: 38%;
+}
+.wpay-contact-telephone {
+  position: absolute;
+  width: 44%;
+  max-width: 200px;
+  height: auto;
+  right: 8%;
+  bottom: 4%;
+  z-index: 3;
+  filter: drop-shadow(0 10px 10px #6c20202b);
+  transform: rotate(8deg);
+  animation: wpay-telephone-drift 8s ease-in-out -2s infinite;
+}
+.wpay-contact-letter--one {
+  left: 10%;
+  top: 20%;
+}
+.wpay-contact-letter--two {
+  right: 10%;
+  top: 18%;
+  z-index: 1;
+}
+.wpay-contact-letter--three {
+  right: 28%;
+  top: 4%;
+}
+.wpay-contact-mail-at {
+  left: 15%;
+  bottom: 8%;
+}
+@keyframes wpay-telephone-drift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(8deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(4deg);
+  }
+}

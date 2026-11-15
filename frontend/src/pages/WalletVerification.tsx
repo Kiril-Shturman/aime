@@ -1,3 +1,4 @@
+import telephoneArtwork from "../assets/verification/telephone.webp";
 import mailboxArtwork from "../assets/verification/mailbox.webp";
 import passportArtwork from "../assets/verification/passport.webp";
 import cardArtwork from "../assets/verification/wpay-card.webp";
@@ -15,7 +16,12 @@ import type { useAuraProfile } from "../wallet/useAuraProfile";
 import "./WalletVerification.css";
 
 export function preloadVerificationArtwork() {
-  for (const src of [passportArtwork, cardArtwork, mailboxArtwork]) {
+  for (const src of [
+    passportArtwork,
+    cardArtwork,
+    mailboxArtwork,
+    telephoneArtwork,
+  ]) {
     const image = new Image();
     image.src = src;
     void image.decode().catch(() => {});
@@ -75,6 +81,15 @@ export default function WalletVerification({
                   alt=""
                 />
               </div>
+              <img
+                className="wpay-contact-telephone"
+                src={telephoneArtwork}
+                width={600}
+                height={510}
+                decoding="async"
+                fetchPriority="high"
+                alt=""
+              />
               <span className="wpay-contact-letter wpay-contact-letter--one">
                 <Mail />
               </span>
