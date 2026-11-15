@@ -101,6 +101,14 @@ test("contacts persist through server, hosted KYC updates from pending to verifi
     .getByRole("link", { name: "Верификация Подтверждение личности" })
     .click();
   await page.getByRole("button", { name: "Начать", exact: true }).click();
+  await expect(page.locator("#verification-phone")).toHaveValue("+79991234567");
+  await expect(page.locator("#verification-email")).toHaveValue(
+    "hello@example.com",
+  );
+  await expect(page.locator(".wpay-contact-telephone")).toBeVisible();
+  await expect(page.locator(".wpay-contact-mailbox")).toBeVisible();
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+
   await expect(
     page.getByRole("link", { name: "Продолжить проверку" }),
   ).toHaveAttribute("href", "https://verify.example/session-private");
@@ -109,7 +117,11 @@ test("contacts persist through server, hosted KYC updates from pending to verifi
     "session-private",
   );
   state.verified = true;
-  await page.getByRole("button", { name: "Обновить статус" }).click();
+  await page.reload();
+  await page.getByRole("button", { name: "Профиль", exact: true }).click();
+  await page
+    .getByRole("link", { name: "Верификация Подтверждение личности" })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Личность подтверждена" }),
   ).toBeVisible();

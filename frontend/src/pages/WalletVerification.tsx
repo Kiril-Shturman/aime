@@ -291,10 +291,7 @@ export default function WalletVerification({
               Boolean(aura.kyc?.terminal)
             }
             className="!m-0 !w-full"
-            onClick={() => {
-              if (!aura.email.trim() || !aura.phone.trim()) onContacts();
-              else void aura.start();
-            }}
+            onClick={onContacts}
           >
             <span className="wpay-verification-button-content">
               <span>{aura.busy ? "Подготавливаем…" : "Начать"}</span>
