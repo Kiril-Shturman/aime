@@ -1,13 +1,21 @@
+import mailboxArtwork from "../assets/verification/mailbox.webp";
 import passportArtwork from "../assets/verification/passport.webp";
 import cardArtwork from "../assets/verification/wpay-card.webp";
 import { List, ListInput } from "framework7-react";
 import { Button } from "konsta/react";
-import { Check, LockKeyhole, ArrowUpRight, RefreshCw } from "lucide-react";
+import {
+  Check,
+  LockKeyhole,
+  ArrowUpRight,
+  RefreshCw,
+  Mail,
+  AtSign,
+} from "lucide-react";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
 import "./WalletVerification.css";
 
 export function preloadVerificationArtwork() {
-  for (const src of [passportArtwork, cardArtwork]) {
+  for (const src of [passportArtwork, cardArtwork, mailboxArtwork]) {
     const image = new Image();
     image.src = src;
     void image.decode().catch(() => {});
@@ -49,6 +57,36 @@ export default function WalletVerification({
             >
               <span className="is-current">01 · Контакты</span>
               <span>02 · Документы</span>
+            </div>
+            <div className="wpay-contact-mail-scene" aria-hidden="true">
+              <span className="wpay-contact-mail-glow" />
+              <div className="wpay-contact-mailbox">
+                <img
+                  src={mailboxArtwork}
+                  width={520}
+                  height={620}
+                  decoding="async"
+                  fetchPriority="high"
+                  alt=""
+                />
+                <img
+                  className="wpay-contact-mailbox-logo"
+                  src="/brands/wpay-wordmark-light.svg"
+                  alt=""
+                />
+              </div>
+              <span className="wpay-contact-letter wpay-contact-letter--one">
+                <Mail />
+              </span>
+              <span className="wpay-contact-letter wpay-contact-letter--two">
+                <Mail />
+              </span>
+              <span className="wpay-contact-letter wpay-contact-letter--three">
+                <Mail />
+              </span>
+              <span className="wpay-contact-mail-at">
+                <AtSign />
+              </span>
             </div>
             <div className="wpay-verification-contact-copy">
               <h2>Ваши контакты</h2>

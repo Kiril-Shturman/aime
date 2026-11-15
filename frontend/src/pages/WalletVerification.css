@@ -458,3 +458,171 @@
 .wpay-verification-contact-note svg {
   flex-shrink: 0;
 }
+
+.wpay-verification-contacts .wpay-verification-contact-body {
+  padding-top: 16px;
+}
+.wpay-verification-contacts .wpay-verification-steps {
+  margin-bottom: 4px;
+}
+.wpay-verification-contacts .wpay-verification-contact-copy h2 {
+  font-size: 30px;
+}
+.wpay-verification-contacts .wpay-verification-contact-copy p {
+  margin: 10px 0 20px;
+  font-size: 15px;
+}
+.wpay-contact-mail-scene {
+  position: relative;
+  height: clamp(175px, 28svh, 245px);
+  isolation: isolate;
+  perspective: 900px;
+  pointer-events: none;
+  overflow: hidden;
+}
+.wpay-contact-mail-glow {
+  position: absolute;
+  inset: 20% 16% 0;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse,
+    #98beff65,
+    #aacbff18 55%,
+    transparent 75%
+  );
+  filter: blur(12px);
+}
+.dark .wpay-contact-mail-glow {
+  background: radial-gradient(ellipse, #4c8dff35, transparent 72%);
+}
+.wpay-contact-mailbox {
+  position: absolute;
+  height: 92%;
+  aspect-ratio: 520 / 620;
+  left: 50%;
+  bottom: 2%;
+  transform: translateX(-50%) rotate(-6deg);
+  animation: wpay-mailbox-drift 7s ease-in-out infinite;
+  z-index: 2;
+}
+.wpay-contact-mailbox > img:first-child {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 12px 10px #0c33732b);
+}
+.wpay-contact-mailbox .wpay-contact-mailbox-logo {
+  position: absolute;
+  width: 55%;
+  height: auto;
+  left: 19%;
+  top: 61%;
+  transform: rotate(-1deg) skewY(-1deg);
+}
+.wpay-contact-letter {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 57px;
+  height: 41px;
+  border: 1px solid #fff9;
+  border-radius: 9px;
+  background: linear-gradient(150deg, #ffffffc9, #b6d0ff80);
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 10px 20px #2468c51a;
+  backdrop-filter: blur(5px);
+  color: #5e91da;
+  z-index: 3;
+  animation: wpay-letter-drift 6s ease-in-out infinite;
+}
+.wpay-contact-letter svg {
+  width: 35px;
+  height: 30px;
+  stroke-width: 1.2;
+}
+.wpay-contact-letter--one {
+  left: 17%;
+  top: 23%;
+  --mail-angle: -22deg;
+}
+.wpay-contact-letter--two {
+  right: 13%;
+  top: 49%;
+  --mail-angle: 18deg;
+  animation-delay: -2s;
+  width: 49px;
+  height: 35px;
+}
+.wpay-contact-letter--three {
+  right: 23%;
+  top: 10%;
+  --mail-angle: 30deg;
+  animation-delay: -4s;
+  opacity: 0.55;
+  transform: scale(0.6);
+  z-index: 1;
+  width: 37px;
+  height: 28px;
+  filter: blur(0.4px);
+}
+.wpay-contact-mail-at {
+  position: absolute;
+  left: 24%;
+  bottom: 11%;
+  color: #7aa6eb99;
+  transform: rotate(-18deg);
+  animation: wpay-letter-drift 8s ease-in-out -3s infinite;
+  --mail-angle: -18deg;
+}
+.wpay-contact-mail-at svg {
+  width: 30px;
+  height: 30px;
+}
+.dark .wpay-contact-letter {
+  border-color: #b4d2ff5c;
+  background: linear-gradient(150deg, #93baff65, #3864a63d);
+  color: #c2dcff;
+  box-shadow:
+    inset 0 1px 1px #dbeaff50,
+    0 10px 20px #0002;
+}
+@keyframes wpay-mailbox-drift {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0) rotate(-6deg);
+  }
+  50% {
+    transform: translateX(-50%) translateY(-7px) rotate(-2deg);
+  }
+}
+@keyframes wpay-letter-drift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--mail-angle)) rotateY(-15deg);
+  }
+  50% {
+    transform: translateY(-13px) rotate(calc(var(--mail-angle) + 9deg))
+      rotateY(12deg);
+  }
+}
+@media (max-height: 700px) {
+  .wpay-contact-mail-scene {
+    height: 150px;
+  }
+  .wpay-verification-contacts .wpay-verification-contact-copy h2 {
+    font-size: 28px;
+  }
+  .wpay-verification-contacts .wpay-verification-contact-copy p {
+    margin-bottom: 16px;
+  }
+  .wpay-f7-profile .wpay-verification-contact-inputs .item-inner {
+    padding-top: 13px;
+    padding-bottom: 13px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpay-contact-mail-scene * {
+    animation: none !important;
+  }
+}
