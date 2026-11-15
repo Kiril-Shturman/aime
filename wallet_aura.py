@@ -382,8 +382,11 @@ def _card_control_result(payload, expected_card_id, expected_frozen):
     if card_id != expected_card_id:
         raise ValueError("Aura card control card_id mismatch")
     owner_id = _safe_identifier(payload.get("owner_id"), "card owner id")
-    if payload.get("currency") != "USDT" or payload.get("frozen") is not expected_frozen:
+    frozen = payload.get("frozen")
+    if payload.get("currency") != "USDT" or not isinstance(frozen, bool):
         raise ValueError("Invalid Aura card control state")
+    if expected_frozen is not None and frozen is not expected_frozen:
+        raise ValueError("Unexpected Aura card frozen state")
     status = str(payload.get("status") or "")
     if status != "opened":
         raise ValueError("Controlled Aura card must remain opened")
@@ -398,7 +401,7 @@ def _card_control_result(payload, expected_card_id, expected_frozen):
         raise ValueError("Invalid Aura masked card number")
     result = {
         "balance": balance, "card_id": card_id, "card_number_masked": masked,
-        "currency": "USDT", "frozen": expected_frozen,
+        "currency": "USDT", "frozen": frozen,
         "operations_count": operations_count, "operations_value": operations_value,
         "owner_id": owner_id, "status": status,
     }
@@ -652,6 +655,32 @@ class AuraClient:
         path_id = quote(card_id, safe="")
         payload = await self.request("POST", "/cards/" + path_id + "/unfreeze")
         return _card_control_result(payload, card_id, False)
+
+    async def activate_card(self, card_id, activation_code):
+        card_id = _safe_identifier(card_id, "card id")
+        activation_code = str(activation_code).strip()
+        if not re.fullmatch(r"[A-Za-z0-9]{4,16}", activation_code):
+            raise ValueError("Aura activation_code must be 4-16 letters or digits")
+        path_id = quote(card_id, safe="")
+        payload = await self.request(
+            "POST", "/cards/" + path_id + "/activate",
+            body={"activation_code": activation_code},
+        )
+        result = _card_control_result(payload, card_id, None)
+        if result.get("delivery_status") != "activated":
+            raise ValueError("Aura physical card was not activated")
+        return result
+
+    async def set_card_pin(self, card_id, pin):
+        card_id = _safe_identifier(card_id, "card id")
+        pin = str(pin)
+        if not re.fullmatch(r"[0-9]{6}", pin):
+            raise ValueError("Aura card account PIN must be exactly six digits")
+        path_id = quote(card_id, safe="")
+        payload = await self.request(
+            "POST", "/cards/" + path_id + "/pin", body={"pin": pin}
+        )
+        return _card_control_result(payload, card_id, None)
 
     async def list_cards(self, *, cursor=None, limit=100):
         params = {"limit": min(max(int(limit), 1), 100)}
@@ -1380,6 +1409,35 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
             raise ValueError("Invalid Aura card.status_changed data")
         if not existing:
             raise ValueError("Unknown Aura card for status change")
+    if kind == "card.delivery_updated":
+        required = {"card_id", "customer_id", "delivery_status", "owner_id", "tracking"}
+        if set(data) != required or not existing:
+            raise ValueError("Invalid Aura card.delivery_updated data")
+        if existing["kind"] != "physical":
+            raise ValueError("Aura delivery update belongs to a non-physical card")
+        _safe_identifier(data.get("customer_id"), "Aura internal customer id")
+        if data.get("delivery_status") not in {
+            "issuing", "issued", "out_for_delivery", "activated",
+        }:
+            raise ValueError("Invalid Aura card delivery_status")
+        tracking_value = data.get("tracking")
+        if tracking_value is not None:
+            if not isinstance(tracking_value, dict) or set(tracking_value) != {
+                "carrier", "number", "url",
+            }:
+                raise ValueError("Invalid Aura delivery tracking")
+            carrier = tracking_value["carrier"]
+            number = tracking_value["number"]
+            url = tracking_value["url"]
+            parsed = urlsplit(url) if isinstance(url, str) else None
+            if carrier is not None and (
+                not isinstance(carrier, str) or not carrier or len(carrier) > 100
+            ):
+                raise ValueError("Invalid Aura delivery carrier")
+            if not isinstance(number, str) or not number or len(number) > 200:
+                raise ValueError("Invalid Aura delivery tracking number")
+            if not parsed or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError("Invalid Aura delivery tracking URL")
     # Webhook customer_id is Aura's internal UUID. Ownership is deliberately
     # resolved through owner_id, which is the partner's own customer id.
     customer_id = data.get("owner_id") or (existing["customer_id"] if existing else None)
@@ -1397,15 +1455,23 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
     if (existing and incoming_updated and existing["provider_updated_at"]
             and incoming_updated <= existing["provider_updated_at"]):
         return
+    if kind == "card.delivery_updated" and existing["delivery_status"]:
+        stage_rank = {
+            "issuing": 0, "issued": 1, "out_for_delivery": 2, "activated": 3,
+        }
+        if stage_rank[data["delivery_status"]] < stage_rank.get(
+            existing["delivery_status"], -1
+        ):
+            return
     event_status = {
         "card.opened": "opened", "card.failed": "failed_to_open",
         "card.cancelled": "cancelled",
     }.get(kind)
-    if kind == "card.status_changed":
+    if kind in {"card.status_changed", "card.delivery_updated"}:
         # `frozen` is a control flag, not a lifecycle status. Aura explicitly
-        # says the card otherwise remains the same (normally status=opened).
+        # says partial card events leave the rest of the card unchanged.
         status = existing["status"]
-        frozen = True
+        frozen = True if kind == "card.status_changed" else bool(existing["frozen"])
     else:
         status = str(data.get("status") or event_status or "unknown")[:100]
         frozen = data.get("frozen") is True or status == "frozen"
@@ -1429,12 +1495,15 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
     else:
         tracking = None
     safe = _redact_card_data(data)
-    if kind == "card.status_changed":
+    if kind in {"card.status_changed", "card.delivery_updated"}:
         try:
             prior = json.loads(existing["body"])
         except (TypeError, ValueError, json.JSONDecodeError):
             prior = {}
-        safe = {**prior, "card_id": card_id, "status": status, "frozen": True}
+        safe = {
+            **prior, **safe, "card_id": card_id,
+            "status": status, "frozen": frozen,
+        }
     stamp = time.time()
     ledger.db.execute(
         "INSERT INTO aura_cards "
@@ -1736,11 +1805,11 @@ def process_inbox(ledger, environment, limit=20):
             elif kind in {"order.completed", "order.failed", "order.expired", "order.cancelled"}:
                 _store_sbp_order(ledger, environment, kind, data)
             elif kind in {"card.opened", "card.failed", "card.cancelled", "card.status_changed", "card.delivery_updated"}:
-                if kind == "card.status_changed":
+                if kind in {"card.status_changed", "card.delivery_updated"}:
                     if not isinstance(event.get("api_version"), str) or not event["api_version"]:
-                        raise ValueError("Invalid Aura card.status_changed api_version")
+                        raise ValueError("Invalid Aura partial card event api_version")
                     _aura_datetime(
-                        event.get("occurred_at"), "card.status_changed occurred_at"
+                        event.get("occurred_at"), kind + " occurred_at"
                     )
                 _store_card_event(
                     ledger, environment, kind, data, event.get("occurred_at")

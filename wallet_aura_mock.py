@@ -7,6 +7,7 @@ Run: ``python3 wallet_aura_mock.py``.  This process is test-only and binds to
 import argparse
 import hashlib
 import json
+import re
 import time
 import uuid
 from decimal import Decimal, ROUND_DOWN
@@ -317,6 +318,28 @@ def make_app():
         state.balance += Decimal("70" if item["kind"] == "physical" else "20")
         return web.json_response(item)
 
+    def card_control_payload(card_id, item):
+        operations = [row for row in state.card_operations if row["card_id"] == card_id]
+        delivery_status = item.get("delivery_status")
+        shipment_stage = {
+            "issuing": "issuing", "issued": "packing",
+            "out_for_delivery": "sent", "activated": "activated",
+        }.get(delivery_status)
+        return {
+            "balance": "25", "card_id": card_id,
+            "card_number_masked": item.get("masked_pan") or "", "currency": "USDT",
+            "frozen": bool(item.get("frozen")), "operations_count": len(operations),
+            "operations_value": str(sum(
+                (Decimal(row["amount"]) for row in operations), Decimal("0")
+            )),
+            "owner_id": item.get("owner_id") or item.get("customer_id"),
+            "status": item["status"], "activated_at": item.get("activated_at"),
+            "delivery_status": delivery_status, "shipment_stage": shipment_stage,
+            "shipped_at": item.get("shipped_at"),
+            "shipping_address": item.get("shipping_address"),
+            "tracking": item.get("tracking"),
+        }
+
     async def freeze_card(request):
         card_id = request.match_info["card_id"]
         item = state.cards.get(card_id)
@@ -325,19 +348,7 @@ def make_app():
         if item.get("status") != "opened":
             return envelope("card_not_active", "Card is not active", 409)
         item["frozen"] = True
-        operations = [row for row in state.card_operations if row["card_id"] == card_id]
-        return web.json_response({
-            "balance": "25", "card_id": card_id,
-            "card_number_masked": item.get("masked_pan"), "currency": "USDT",
-            "frozen": True, "operations_count": len(operations),
-            "operations_value": str(sum(
-                (Decimal(row["amount"]) for row in operations), Decimal("0")
-            )),
-            "owner_id": item.get("owner_id") or item.get("customer_id"),
-            "status": item["status"], "activated_at": None,
-            "delivery_status": None, "shipment_stage": None,
-            "shipped_at": None, "shipping_address": None, "tracking": None,
-        })
+        return web.json_response(card_control_payload(card_id, item))
 
     async def unfreeze_card(request):
         card_id = request.match_info["card_id"]
@@ -347,19 +358,35 @@ def make_app():
         if item.get("status") != "opened":
             return envelope("card_not_active", "Card is not active", 409)
         item["frozen"] = False
-        operations = [row for row in state.card_operations if row["card_id"] == card_id]
-        return web.json_response({
-            "balance": "25", "card_id": card_id,
-            "card_number_masked": item.get("masked_pan"), "currency": "USDT",
-            "frozen": False, "operations_count": len(operations),
-            "operations_value": str(sum(
-                (Decimal(row["amount"]) for row in operations), Decimal("0")
-            )),
-            "owner_id": item.get("owner_id") or item.get("customer_id"),
-            "status": item["status"], "activated_at": None,
-            "delivery_status": None, "shipment_stage": None,
-            "shipped_at": None, "shipping_address": None, "tracking": None,
-        })
+        return web.json_response(card_control_payload(card_id, item))
+
+    async def activate_card(request):
+        card_id = request.match_info["card_id"]
+        item = state.cards.get(card_id)
+        if not item:
+            return envelope("card_not_found", "Card not found", 404)
+        body = await request.json()
+        code = str(body.get("activation_code") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9]{4,16}", code):
+            return envelope("card_activation_code_invalid", "Invalid activation code", 400)
+        if (item.get("kind") != "physical" or item.get("status") != "opened"
+                or item.get("delivery_status") != "out_for_delivery"):
+            return envelope("card_not_activatable", "Card cannot be activated", 412)
+        item["delivery_status"] = "activated"
+        item["activated_at"] = "2026-11-02T14:30:00Z"
+        return web.json_response(card_control_payload(card_id, item))
+
+    async def set_card_pin(request):
+        card_id = request.match_info["card_id"]
+        item = state.cards.get(card_id)
+        if not item:
+            return envelope("card_not_found", "Card not found", 404)
+        body = await request.json()
+        if not re.fullmatch(r"[0-9]{6}", str(body.get("pin") or "")):
+            return envelope("invalid_argument", "PIN must be six digits", 400)
+        if item.get("status") != "opened":
+            return envelope("card_not_active", "Card is not active", 409)
+        return web.json_response(card_control_payload(card_id, item))
 
     async def create_card(request):
         body = await request.json()
@@ -533,6 +560,8 @@ def make_app():
     app.router.add_post("/v1/partner/cards/{card_id}/cancel", cancel_card)
     app.router.add_post("/v1/partner/cards/{card_id}/freeze", freeze_card)
     app.router.add_post("/v1/partner/cards/{card_id}/unfreeze", unfreeze_card)
+    app.router.add_post("/v1/partner/cards/{card_id}/activate", activate_card)
+    app.router.add_post("/v1/partner/cards/{card_id}/pin", set_card_pin)
     app.router.add_get("/v1/partner/rate", sbp_rate)
     app.router.add_get("/v1/partner/orders", orders)
     app.router.add_get("/v1/partner/orders/{order_id}", order)

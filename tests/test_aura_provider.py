@@ -164,7 +164,7 @@ class AuraUnitTests(unittest.TestCase):
             "occurred_at": "2026-01-01T00:03:00Z", "partner_id": MOCK_PARTNER,
             "data": {
                 "id": "card_one", "customer_id": self.customer,
-                "kind": "virtual", "status": "opened", "masked_pan": "**** 4242",
+                "kind": "physical", "status": "opened", "masked_pan": "**** 4242",
                 "shipment_stage": "packing",
                 "updated_at": "2026-01-01T00:03:00Z",
             },
@@ -215,18 +215,21 @@ class AuraUnitTests(unittest.TestCase):
         self.assertEqual(process_inbox(self.ledger, "test"), 1)
 
         delivery = {
-            "event": "card.delivery_updated", "event_id": "evt_delivery",
+            "api_version": "3.16.0", "event": "card.delivery_updated",
+            "event_id": "evt_delivery",
             "occurred_at": "2026-01-01T00:07:00Z", "partner_id": MOCK_PARTNER,
-            "data": {"card_id": "card_one", "customer_id": self.customer,
+            "data": {"card_id": "card_one", "customer_id": "internal-customer",
+                     "owner_id": self.customer,
                      "delivery_status": "out_for_delivery",
                      "tracking": {"carrier": "DHL", "number": "TRACK1",
-                                  "url": "https://tracking.invalid/TRACK1"},
-                     "updated_at": "2026-01-01T00:07:00Z"},
+                                  "url": "https://tracking.invalid/TRACK1"}},
         }
         raw, signature = signed(delivery)
         store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
         self.assertEqual(process_inbox(self.ledger, "test"), 1)
         card = self.ledger.db.execute("SELECT * FROM aura_cards").fetchone()
+        self.assertEqual(card["status"], "opened")
+        self.assertEqual(card["frozen"], 0)
         self.assertEqual(card["delivery_status"], "out_for_delivery")
         self.assertEqual(json.loads(card["tracking"])["number"], "TRACK1")
 
@@ -676,6 +679,39 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ApiError) as not_cancelable:
             await self.client.cancel_card(second["card_id"])
         self.assertEqual(not_cancelable.exception.name, "card_request_not_cancelable")
+
+    async def test_physical_card_activation_and_account_pin_are_ephemeral(self):
+        uid = "tg:physical-controls"
+        customer_id = await self.service.ensure_customer(uid, self.ledger.account(uid))
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id, "kind": "physical"}
+        )
+        card_id = (await created.json())["card"]["id"]
+        item = self.mock.app["state"].cards[card_id]
+        item.update({
+            "delivery_status": "out_for_delivery",
+            "shipped_at": "2026-10-30T09:00:00Z",
+            "shipping_address": {
+                "address_line": "Lenina St 1, apt 1", "city": "Moscow",
+                "country": "RU", "full_name": "Ivan Petrov",
+                "phone": "+15555550100", "postal_code": "101000",
+            },
+            "tracking": {
+                "carrier": "EMIRATES POST", "number": "EE617723698AE",
+                "url": "https://parcelsapp.com/en/tracking/EE617723698AE",
+            },
+        })
+        activated = await self.client.activate_card(card_id, " Ab12Cd ")
+        self.assertEqual(activated["delivery_status"], "activated")
+        self.assertEqual(activated["shipment_stage"], "activated")
+        self.assertEqual(activated["status"], "opened")
+        unchanged = await self.client.set_card_pin(card_id, "123456")
+        self.assertEqual(unchanged, activated)
+        self.assertNotIn("123456", json.dumps(self.mock.app["state"].cards))
+        with self.assertRaises(ValueError):
+            await self.client.set_card_pin(card_id, "12345")
+        with self.assertRaises(ValueError):
+            await self.client.activate_card(card_id, "bad code")
 
     async def test_card_request_response_is_linked_to_pending_owner(self):
         uid = "tg:card-request"
@@ -1199,6 +1235,65 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "SELECT frozen,status FROM aura_cards WHERE card_id=?", (card_id,)
         ).fetchone()
         self.assertEqual((local["frozen"], local["status"]), (0, "opened"))
+        pin = await self.wpay.post(
+            "/api/wallet/aura-card-pin", headers=self.owner,
+            json={"card_id": card_id, "pin": "123456"},
+        )
+        self.assertEqual(pin.status, 200, await pin.text())
+        self.assertNotIn(
+            "123456", "\n".join(self.app["wpay_ledger"].db.iterdump())
+        )
+
+    async def test_physical_activation_is_owner_scoped_and_secret_free(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner, json={}
+        )
+        customer_id = (await registered.json())["customer_id"]
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id, "kind": "physical"}
+        )
+        payload = await created.json()
+        card_id = payload["card"]["id"]
+        provider_card = self.mock.app["state"].cards[card_id]
+        provider_card.update({
+            "delivery_status": "out_for_delivery",
+            "shipped_at": "2026-10-30T09:00:00Z",
+            "shipping_address": {
+                "address_line": "Lenina St 1, apt 1", "city": "Moscow",
+                "country": "RU", "full_name": "Ivan Petrov",
+                "phone": "+15555550100", "postal_code": "101000",
+            },
+            "tracking": {
+                "carrier": "EMIRATES POST", "number": "EE617723698AE",
+                "url": "https://parcelsapp.com/en/tracking/EE617723698AE",
+            },
+        })
+        payload["webhook"]["data"]["kind"] = "physical"
+        raw, signature = signed(payload["webhook"])
+        await self.wpay.post(
+            "/api/wallet/aura-webhook", data=raw,
+            headers={"X-Aura-Signature-V2": signature},
+        )
+        await self.wpay.post("/api/wallet/admin-aura-process", headers=self.owner)
+        foreign = await self.wpay.post(
+            "/api/wallet/aura-card-activate",
+            headers={"X-Telegram-Init-Data": init_data(323)},
+            json={"card_id": card_id, "activation_code": "Ab12Cd"},
+        )
+        self.assertEqual(foreign.status, 404)
+        activated = await self.wpay.post(
+            "/api/wallet/aura-card-activate", headers=self.owner,
+            json={"card_id": card_id, "activation_code": "Ab12Cd"},
+        )
+        self.assertEqual(activated.status, 200, await activated.text())
+        result = await activated.json()
+        self.assertEqual(result["delivery_status"], "activated")
+        local = self.app["wpay_ledger"].db.execute(
+            "SELECT status,delivery_status FROM aura_cards WHERE card_id=?", (card_id,)
+        ).fetchone()
+        self.assertEqual((local["status"], local["delivery_status"]), ("opened", "activated"))
+        persisted = "\n".join(self.app["wpay_ledger"].db.iterdump())
+        self.assertNotIn("Ab12Cd", persisted)
 
     async def test_card_issue_route_reserves_spends_and_failed_event_refunds_once(self):
         ledger = self.app["wpay_ledger"]

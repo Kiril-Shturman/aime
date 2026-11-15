@@ -941,12 +941,20 @@ def install_wallet(app, root, owner_check):
                     raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
                 result = await aura_client.cancel_card(card_id)
                 return web.json_response({'card_id': card_id, 'status': result.get('status')})
-            if action in {'aura-card-freeze', 'aura-card-unfreeze'} and request.method == 'POST':
+            if action in {
+                'aura-card-freeze', 'aura-card-unfreeze',
+                'aura-card-activate', 'aura-card-pin',
+            } and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
                 body = await request.json()
-                if not isinstance(body, dict) or set(body) != {'card_id'}:
-                    raise ValueError('card_id is required')
+                expected = {'card_id'}
+                if action == 'aura-card-activate':
+                    expected.add('activation_code')
+                elif action == 'aura-card-pin':
+                    expected.add('pin')
+                if not isinstance(body, dict) or set(body) != expected:
+                    raise ValueError('Invalid Aura card control body')
                 card_id = str(body['card_id'])
                 owned = ledger.db.execute(
                     'SELECT customer_id FROM aura_cards '
@@ -955,18 +963,28 @@ def install_wallet(app, root, owner_check):
                 ).fetchone()
                 if not owned:
                     raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
-                freeze = action == 'aura-card-freeze'
-                result = await (
-                    aura_client.freeze_card(card_id) if freeze
-                    else aura_client.unfreeze_card(card_id)
-                )
+                if action == 'aura-card-freeze':
+                    result = await aura_client.freeze_card(card_id)
+                elif action == 'aura-card-unfreeze':
+                    result = await aura_client.unfreeze_card(card_id)
+                elif action == 'aura-card-activate':
+                    result = await aura_client.activate_card(
+                        card_id, body['activation_code']
+                    )
+                else:
+                    result = await aura_client.set_card_pin(card_id, body['pin'])
                 if result['owner_id'] != owned['customer_id']:
                     raise ValueError('Aura card owner mismatch')
+                tracking = result.get('tracking')
                 ledger.db.execute(
                     'UPDATE aura_cards SET frozen=?,status=?,masked_pan=COALESCE(?,masked_pan),'
-                    'provider_updated_at=?,updated_at=? '
+                    'delivery_status=COALESCE(?,delivery_status),'
+                    'tracking=COALESCE(?,tracking),provider_updated_at=?,body=?,updated_at=? '
                     'WHERE card_id=? AND user_id=? AND environment=?',
-                    (1 if freeze else 0, result['status'], result['card_number_masked'], now(), time.time(),
+                    (int(result['frozen']), result['status'], result['card_number_masked'],
+                     result.get('delivery_status'),
+                     json.dumps(tracking, separators=(',', ':')) if tracking else None,
+                     now(), json.dumps(result, separators=(',', ':'), ensure_ascii=False), time.time(),
                      card_id, uid, aura_environment),
                 )
                 return web.json_response(result)
