@@ -27,7 +27,7 @@ FINAL_ERROR_CODES = {
     "sbp_buy_pending_qr_limit", "kyc_passport_already_used",
     "qr_unsupported", "card_not_activatable", "kyc_identity_locked",
     "kyc_session_unavailable", "sbp_buy_not_enabled", "cards_not_enabled",
-    "crypto_processing_not_enabled", "qr_pay_not_enabled",
+    "crypto_processing_not_enabled", "qr_pay_not_enabled", "card_frozen",
 }
 WAIT_ERROR_CODES = {
     "kyc_pending", "card_paused", "pin_change_rate_limited",
@@ -385,8 +385,8 @@ def _card_control_result(payload, expected_card_id, expected_frozen):
     if payload.get("currency") != "USDT" or payload.get("frozen") is not expected_frozen:
         raise ValueError("Invalid Aura card control state")
     status = str(payload.get("status") or "")
-    if status not in {"processing", "opened", "failed_to_open", "cancelled"}:
-        raise ValueError("Invalid Aura card status")
+    if status != "opened":
+        raise ValueError("Controlled Aura card must remain opened")
     balance = str(_decimal(payload.get("balance"), allow_zero=True))
     operations_value = str(_decimal(payload.get("operations_value"), allow_zero=True))
     operations_count = payload.get("operations_count")
@@ -394,14 +394,64 @@ def _card_control_result(payload, expected_card_id, expected_frozen):
             or operations_count < 0):
         raise ValueError("Invalid Aura card operations_count")
     masked = payload.get("card_number_masked")
-    if masked is not None and (not isinstance(masked, str) or len(masked) > 64):
+    if not isinstance(masked, str) or len(masked) > 64:
         raise ValueError("Invalid Aura masked card number")
-    return {
+    result = {
         "balance": balance, "card_id": card_id, "card_number_masked": masked,
         "currency": "USDT", "frozen": expected_frozen,
         "operations_count": operations_count, "operations_value": operations_value,
         "owner_id": owner_id, "status": status,
     }
+    date_fields = ("activated_at", "shipped_at")
+    for key in date_fields:
+        if key in payload:
+            if payload[key] is not None:
+                _aura_datetime(payload[key], "card " + key)
+            result[key] = payload[key]
+    delivery_status = payload.get("delivery_status")
+    if delivery_status is not None and delivery_status not in {
+        "issuing", "issued", "out_for_delivery", "activated",
+    }:
+        raise ValueError("Invalid Aura card delivery_status")
+    shipment_stage = payload.get("shipment_stage")
+    if shipment_stage is not None and shipment_stage not in {
+        "issuing", "packing", "sent", "activated",
+    }:
+        raise ValueError("Invalid Aura card shipment_stage")
+    if delivery_status is not None and shipment_stage is not None:
+        legacy = {
+            "issuing": "issuing", "packing": "issued",
+            "sent": "out_for_delivery", "activated": "activated",
+        }
+        if legacy[shipment_stage] != delivery_status:
+            raise ValueError("Aura card delivery aliases disagree")
+    if "delivery_status" in payload:
+        result["delivery_status"] = delivery_status
+    if "shipment_stage" in payload:
+        result["shipment_stage"] = shipment_stage
+    if "shipping_address" in payload:
+        address = payload["shipping_address"]
+        if address is not None:
+            address = _card_request_body(owner_id, "physical", address)["shipping_address"]
+        result["shipping_address"] = address
+    if "tracking" in payload:
+        tracking = payload["tracking"]
+        if tracking is not None:
+            if not isinstance(tracking, dict) or set(tracking) != {"carrier", "number", "url"}:
+                raise ValueError("Invalid Aura card tracking")
+            carrier = tracking["carrier"]
+            number = tracking["number"]
+            url = tracking["url"]
+            parsed = urlsplit(url) if isinstance(url, str) else None
+            if (carrier is not None and (not isinstance(carrier, str) or len(carrier) > 100)):
+                raise ValueError("Invalid Aura card tracking carrier")
+            if not isinstance(number, str) or not number or len(number) > 200:
+                raise ValueError("Invalid Aura card tracking number")
+            if not parsed or parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError("Invalid Aura card tracking URL")
+            tracking = {"carrier": carrier, "number": number, "url": url}
+        result["tracking"] = tracking
+    return result
 
 
 def _retry_policy(code, status):
@@ -596,6 +646,12 @@ class AuraClient:
         path_id = quote(card_id, safe="")
         payload = await self.request("POST", "/cards/" + path_id + "/freeze")
         return _card_control_result(payload, card_id, True)
+
+    async def unfreeze_card(self, card_id):
+        card_id = _safe_identifier(card_id, "card id")
+        path_id = quote(card_id, safe="")
+        payload = await self.request("POST", "/cards/" + path_id + "/unfreeze")
+        return _card_control_result(payload, card_id, False)
 
     async def list_cards(self, *, cursor=None, limit=100):
         params = {"limit": min(max(int(limit), 1), 100)}
@@ -918,7 +974,7 @@ class AuraService:
         idempotency_key = str(idempotency_key)
         request_fields = _card_recharge_body(amount, amount_spend)
         card = self.ledger.db.execute(
-            "SELECT kind FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?",
+            "SELECT kind,frozen FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?",
             (card_id, uid, self.environment),
         ).fetchone()
         if not card:
@@ -945,6 +1001,10 @@ class AuraService:
                 )
             reserve_amount = _decimal(stored["reserve_amount"])
         else:
+            if bool(card["frozen"]):
+                raise self.client.error_cls(
+                    "card_frozen", "Frozen Aura card cannot be recharged", 409
+                )
             if "amount_spend" in request_fields:
                 reserve_amount = _decimal(request_fields["amount_spend"])
             else:

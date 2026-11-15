@@ -579,7 +579,23 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             "card_number_masked": "**** 4242", "currency": "USDT",
             "frozen": True, "operations_count": 1, "operations_value": "3",
             "owner_id": customer_id, "status": "opened",
+            "activated_at": None, "delivery_status": None,
+            "shipment_stage": None, "shipped_at": None,
+            "shipping_address": None, "tracking": None,
         })
+        self.assertEqual(await self.client.freeze_card(card["id"]), frozen)
+        with self.assertRaises(ApiError) as frozen_recharge:
+            await self.client.recharge_card(
+                card["id"], amount="25", idempotency_key="frozen-recharge"
+            )
+        self.assertEqual(frozen_recharge.exception.name, "card_frozen")
+        unfrozen = await self.client.unfreeze_card(card["id"])
+        self.assertFalse(unfrozen["frozen"])
+        self.assertEqual(await self.client.unfreeze_card(card["id"]), unfrozen)
+        restored = await self.client.recharge_card(
+            card["id"], amount="25", idempotency_key="unfrozen-recharge"
+        )
+        self.assertEqual(restored["status"], "completed")
 
     async def test_card_create_and_recharge_contracts_are_idempotent(self):
         uid = "tg:card-money"
@@ -1114,6 +1130,38 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "SELECT frozen,status FROM aura_cards WHERE card_id=?", (card_id,)
         ).fetchone()
         self.assertEqual((local["frozen"], local["status"]), (1, "opened"))
+        repeated = await self.wpay.post(
+            "/api/wallet/aura-card-freeze", headers=self.owner,
+            json={"card_id": card_id},
+        )
+        self.assertEqual(repeated.status, 200, await repeated.text())
+        self.assertTrue((await repeated.json())["frozen"])
+        rejected = await self.wpay.post(
+            "/api/wallet/aura-card-recharge",
+            headers={**self.owner, "Idempotency-Key": "frozen-route-recharge"},
+            json={"card_id": card_id, "amount": "25"},
+        )
+        self.assertEqual(rejected.status, 409, await rejected.text())
+        self.assertEqual((await rejected.json())["error"]["name"], "card_frozen")
+        self.assertIsNone(self.app["wpay_ledger"].db.execute(
+            "SELECT 1 FROM wallet_provider_entities WHERE local_id=?",
+            ("frozen-route-recharge",),
+        ).fetchone())
+        unfrozen = await self.wpay.post(
+            "/api/wallet/aura-card-unfreeze", headers=self.owner,
+            json={"card_id": card_id},
+        )
+        self.assertEqual(unfrozen.status, 200, await unfrozen.text())
+        self.assertFalse((await unfrozen.json())["frozen"])
+        repeated_unfreeze = await self.wpay.post(
+            "/api/wallet/aura-card-unfreeze", headers=self.owner,
+            json={"card_id": card_id},
+        )
+        self.assertEqual(repeated_unfreeze.status, 200, await repeated_unfreeze.text())
+        local = self.app["wpay_ledger"].db.execute(
+            "SELECT frozen,status FROM aura_cards WHERE card_id=?", (card_id,)
+        ).fetchone()
+        self.assertEqual((local["frozen"], local["status"]), (0, "opened"))
 
     async def test_card_issue_route_reserves_spends_and_failed_event_refunds_once(self):
         ledger = self.app["wpay_ledger"]

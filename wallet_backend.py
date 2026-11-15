@@ -941,7 +941,7 @@ def install_wallet(app, root, owner_check):
                     raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
                 result = await aura_client.cancel_card(card_id)
                 return web.json_response({'card_id': card_id, 'status': result.get('status')})
-            if action == 'aura-card-freeze' and request.method == 'POST':
+            if action in {'aura-card-freeze', 'aura-card-unfreeze'} and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
                 body = await request.json()
@@ -955,13 +955,17 @@ def install_wallet(app, root, owner_check):
                 ).fetchone()
                 if not owned:
                     raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
-                result = await aura_client.freeze_card(card_id)
+                freeze = action == 'aura-card-freeze'
+                result = await (
+                    aura_client.freeze_card(card_id) if freeze
+                    else aura_client.unfreeze_card(card_id)
+                )
                 if result['owner_id'] != owned['customer_id']:
                     raise ValueError('Aura card owner mismatch')
                 ledger.db.execute(
-                    'UPDATE aura_cards SET frozen=1,status=?,masked_pan=COALESCE(?,masked_pan),'
+                    'UPDATE aura_cards SET frozen=?,status=?,masked_pan=COALESCE(?,masked_pan),'
                     'updated_at=? WHERE card_id=? AND user_id=? AND environment=?',
-                    (result['status'], result['card_number_masked'], time.time(),
+                    (1 if freeze else 0, result['status'], result['card_number_masked'], time.time(),
                      card_id, uid, aura_environment),
                 )
                 return web.json_response(result)
