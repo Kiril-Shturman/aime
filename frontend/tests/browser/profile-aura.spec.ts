@@ -119,20 +119,46 @@ test("invalid contacts never post; viewing KYC never registers a customer", asyn
   await page
     .getByRole("link", { name: "Верификация Подтверждение личности" })
     .click();
-  await page
-    .getByRole("button", { name: "Пройти проверку", exact: true })
-    .click();
-  await expect(page.getByRole("alert")).toContainText("Сначала заполните");
+  await expect(
+    page.getByRole("heading", { name: "Куда отправлять важное?" }),
+  ).toBeVisible();
   expect(state.posts).toHaveLength(0);
+  await page.getByPlaceholder("name@example.com").fill("hello@example.com");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "На какой номер привязать СБП?" }),
+  ).toBeVisible();
+  await page.getByPlaceholder("+7 999 123-45-67").fill("123");
   await page
-    .getByRole("button", { name: "Личные данные", exact: true })
+    .getByRole("button", { name: "Сохранить и пройти проверку" })
     .click();
-  await page.locator("#profile-first-name").fill("Кирилл");
-  await page.locator("#profile-phone").fill("123");
-  await page.locator("#profile-email").fill("hello@example.com");
-  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("+7");
   expect(state.posts).toHaveLength(0);
+});
+
+test("two-step contact onboarding saves contacts and opens hosted KYC", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  await page
+    .getByRole("link", { name: "Верификация Подтверждение личности" })
+    .click();
+  await page.getByPlaceholder("name@example.com").fill("hello@example.com");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await page.getByPlaceholder("+7 999 123-45-67").fill("8 (999) 123-45-67");
+  await page
+    .getByRole("button", { name: "Сохранить и пройти проверку" })
+    .click();
+  await expect(
+    page.getByRole("link", { name: "Продолжить проверку" }),
+  ).toHaveAttribute("href", "https://verify.example/session-private");
+  expect(state.posts).toEqual([
+    {
+      action: "aura-customer",
+      body: { phone: "+79991234567", email: "hello@example.com" },
+    },
+    { action: "aura-kyc", body: {} },
+  ]);
 });
 test("provider unavailable cannot fake a saved profile", async ({ page }) => {
   const state = await setup(page, false);

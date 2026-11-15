@@ -20,6 +20,7 @@ import "./WalletInputTheme.css";
 import "./WalletButtons.css";
 import WalletSheetClose from "./WalletSheetClose";
 import WalletAuraCards from "./WalletAuraCards";
+import WalletContactOnboarding from "./WalletContactOnboarding";
 import { DesktopSidebar, DesktopOverview } from "./WalletDesktop";
 import "./WalletDesktop.css";
 import {
@@ -385,7 +386,8 @@ function WalletScreen() {
   }, []);
 
   useEffect(() => {
-    if (activeTab === "cards" && !live.capabilities.cards) setActiveTab("wallet");
+    if (activeTab === "cards" && !live.capabilities.cards)
+      setActiveTab("wallet");
     if (!live.capabilities.qr_pay) setQrValue(null);
   }, [activeTab, live.capabilities.cards, live.capabilities.qr_pay]);
 
@@ -616,20 +618,23 @@ function WalletScreen() {
               </section>
 
               <WalletActionGrid
-                items={actions.filter(
-                  (action) => action.label !== "QR-код" || live.capabilities.qr_pay,
-                ).map((action) => ({
-                  ...action,
-                  onClick: () => {
-                    if (action.label === "QR-код") scanPaymentQr();
-                    else if (action.label === "Пополнить")
-                      setCryptoFlow({ kind: "deposit" });
-                    else if (action.label === "Вывести")
-                      setCryptoFlow({ kind: "withdraw" });
-                    else if (action.label === "Обменять")
-                      setCryptoFlow({ kind: "exchange" });
-                  },
-                }))}
+                items={actions
+                  .filter(
+                    (action) =>
+                      action.label !== "QR-код" || live.capabilities.qr_pay,
+                  )
+                  .map((action) => ({
+                    ...action,
+                    onClick: () => {
+                      if (action.label === "QR-код") scanPaymentQr();
+                      else if (action.label === "Пополнить")
+                        setCryptoFlow({ kind: "deposit" });
+                      else if (action.label === "Вывести")
+                        setCryptoFlow({ kind: "withdraw" });
+                      else if (action.label === "Обменять")
+                        setCryptoFlow({ kind: "exchange" });
+                    },
+                  }))}
               />
             </div>
             <List
@@ -637,11 +642,15 @@ function WalletScreen() {
               inset
               className="!mb-0 !mt-6 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]"
             >
-              {live.capabilities.sbp_buy && (loading ? (
-                <CurrencySkeletonRow rubles />
-              ) : (
-                <CurrencyRow asset={rubleAsset} balanceHidden={balanceHidden} />
-              ))}
+              {live.capabilities.sbp_buy &&
+                (loading ? (
+                  <CurrencySkeletonRow rubles />
+                ) : (
+                  <CurrencyRow
+                    asset={rubleAsset}
+                    balanceHidden={balanceHidden}
+                  />
+                ))}
             </List>
 
             <section className="mt-8">
@@ -690,13 +699,13 @@ function WalletScreen() {
           />
         )}
         {activeTab === "history" && <LiveHistory />}
-        {activeTab === "cards" && live.capabilities.cards && (
-          live.demo ? (
+        {activeTab === "cards" &&
+          live.capabilities.cards &&
+          (live.demo ? (
             <CardsSection showNotice={showNotice} />
           ) : (
             <WalletAuraCards showNotice={showNotice} />
-          )
-        )}
+          ))}
         {activeTab === "profile" && (
           <ProfileSection
             user={user}
@@ -708,7 +717,9 @@ function WalletScreen() {
 
       <AssetPushView
         onScan={scanPaymentQr}
-        asset={enabledAssets.find((item) => item.code === selectedAssetCode) ?? null}
+        asset={
+          enabledAssets.find((item) => item.code === selectedAssetCode) ?? null
+        }
         onClose={() => setSelectedAssetCode(null)}
         showNotice={showNotice}
         openFlow={(kind, assetCode, network, depositAddress) =>
@@ -742,16 +753,17 @@ function WalletScreen() {
               label: "Профиль",
               icon: PersonCropCircleFill,
             },
-          ].filter((item) => item.id !== "cards" || live.capabilities.cards)
-          .map(({ id, label, icon: Icon }) => (
-            <TabbarLink
-              key={id}
-              active={activeTab === id}
-              onClick={() => selectTab(id)}
-              icon={<Icon className="w-6 h-6" />}
-              label={label}
-            />
-          ))}
+          ]
+            .filter((item) => item.id !== "cards" || live.capabilities.cards)
+            .map(({ id, label, icon: Icon }) => (
+              <TabbarLink
+                key={id}
+                active={activeTab === id}
+                onClick={() => selectTab(id)}
+                icon={<Icon className="w-6 h-6" />}
+                label={label}
+              />
+            ))}
         </ToolbarPane>
       </Tabbar>
 
@@ -1280,9 +1292,18 @@ function DepositMethodsView({
                 innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30"
                 media={
                   <WalletAssetAvatar
-                  icon={depositAssets.find((item) => item.code === "USDT")?.icon ?? assets[0].icon}
-                  color={depositAssets.find((item) => item.code === "USDT")?.color ?? assets[0].color}
-                  iconColor={depositAssets.find((item) => item.code === "USDT")?.iconColor ?? assets[0].iconColor}
+                    icon={
+                      depositAssets.find((item) => item.code === "USDT")
+                        ?.icon ?? assets[0].icon
+                    }
+                    color={
+                      depositAssets.find((item) => item.code === "USDT")
+                        ?.color ?? assets[0].color
+                    }
+                    iconColor={
+                      depositAssets.find((item) => item.code === "USDT")
+                        ?.iconColor ?? assets[0].iconColor
+                    }
                     network={net}
                   />
                 }
@@ -1415,8 +1436,14 @@ function CryptoFlowPushView({
   const activeFlow = flow ?? displayFlow;
   const isDeposit = activeFlow.kind === "deposit";
   const isWithdraw = activeFlow.kind === "withdraw";
-  const fromAsset = availableAssets.find((item) => item.code === fromCode) ?? availableAssets[0] ?? assets[0];
-  const toAsset = availableAssets.find((item) => item.code === toCode) ?? availableAssets[1] ?? fromAsset;
+  const fromAsset =
+    availableAssets.find((item) => item.code === fromCode) ??
+    availableAssets[0] ??
+    assets[0];
+  const toAsset =
+    availableAssets.find((item) => item.code === toCode) ??
+    availableAssets[1] ??
+    fromAsset;
   const usdRates: Record<string, number> = Object.fromEntries(
     availableAssets.map((item) => [item.code, live.rate(item.code) ?? 0]),
   );
@@ -1466,7 +1493,9 @@ function CryptoFlowPushView({
     if (availableAssets.length < 2) {
       return (
         <PushViewShell open={flow !== null} title="Обмен" onClose={onClose}>
-          <p className="mx-4 rounded-2xl bg-black/[.04] p-5 text-center text-sm text-black/45 dark:bg-white/[.06] dark:text-white/45">Для обмена должны быть включены минимум две валюты.</p>
+          <p className="mx-4 rounded-2xl bg-black/[.04] p-5 text-center text-sm text-black/45 dark:bg-white/[.06] dark:text-white/45">
+            Для обмена должны быть включены минимум две валюты.
+          </p>
         </PushViewShell>
       );
     }
@@ -3204,88 +3233,102 @@ function ProfileSettingsPushView({
             </>
           )}
 
-          {displayPage === "verification" && (
-            <Card
-              className="!mx-4 !rounded-[28px] text-center"
-              contentWrapPadding="p-6"
-            >
-              <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] bg-gradient-to-b from-green-400 to-green-600 text-white dark:from-green-400 dark:to-green-700">
-                <CheckmarkShieldFill className="text-[38px]" />
-              </span>
-              <h2 className="mt-5 text-[23px] font-semibold text-black dark:text-white">
-                {aura.kyc?.verified
-                  ? "Личность подтверждена"
-                  : "Подтверждение личности"}
-              </h2>
-              <p
-                role="status"
-                className="mt-3 text-[15px] leading-6 text-black/50 dark:text-white/50"
+          {displayPage === "verification" &&
+            (!aura.loading && !aura.registered ? (
+              <WalletContactOnboarding
+                email={email}
+                phone={phone}
+                setEmail={setEmail}
+                setPhone={setPhone}
+                loading={aura.loading}
+                busy={aura.busy}
+                available={aura.available}
+                error={aura.error}
+                save={aura.save}
+                onComplete={() => void aura.start()}
+              />
+            ) : (
+              <Card
+                className="!mx-4 !rounded-[28px] text-center"
+                contentWrapPadding="p-6"
               >
-                {aura.loading
-                  ? "Проверяем статус…"
-                  : aura.kyc?.verified
-                    ? "Проверка успешно пройдена."
-                    : aura.kyc?.status === "pending" ||
-                        aura.kyc?.status === "in_review"
-                      ? "Документы на проверке. Статус обновится после завершения."
-                      : aura.kyc?.status === "rejected"
-                        ? "Проверка не пройдена. Обратитесь в поддержку, если нужна помощь."
-                        : "Сохраните телефон и почту в личных данных, затем подтвердите документы в защищённой форме."}
-              </p>
-              {aura.error && (
+                <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] bg-gradient-to-b from-green-400 to-green-600 text-white dark:from-green-400 dark:to-green-700">
+                  <CheckmarkShieldFill className="text-[38px]" />
+                </span>
+                <h2 className="mt-5 text-[23px] font-semibold text-black dark:text-white">
+                  {aura.kyc?.verified
+                    ? "Личность подтверждена"
+                    : "Подтверждение личности"}
+                </h2>
                 <p
-                  role="alert"
-                  className="mt-3 text-[13px] leading-5 text-red-600 dark:text-red-400"
+                  role="status"
+                  className="mt-3 text-[15px] leading-6 text-black/50 dark:text-white/50"
                 >
-                  {aura.error}
+                  {aura.loading
+                    ? "Проверяем статус…"
+                    : aura.kyc?.verified
+                      ? "Проверка успешно пройдена."
+                      : aura.kyc?.status === "pending" ||
+                          aura.kyc?.status === "in_review"
+                        ? "Документы на проверке. Статус обновится после завершения."
+                        : aura.kyc?.status === "rejected"
+                          ? "Проверка не пройдена. Обратитесь в поддержку, если нужна помощь."
+                          : "Сохраните телефон и почту в личных данных, затем подтвердите документы в защищённой форме."}
                 </p>
-              )}
-              {!aura.kyc?.verified && (
-                <Button
-                  data-wpay-primary=""
-                  rounded
-                  disabled={
-                    !aura.available ||
-                    aura.loading ||
-                    aura.busy ||
-                    Boolean(aura.kyc?.terminal)
-                  }
-                  className="!mb-0 !mt-6 !w-full"
-                  onClick={() => void aura.start()}
-                >
-                  {aura.busy ? "Подготавливаем…" : "Пройти проверку"}
-                </Button>
-              )}
-              {aura.sessionUrl && (
-                <a
-                  className="mt-4 block text-[15px] text-primary"
-                  href={aura.sessionUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Продолжить проверку
-                </a>
-              )}
-              {aura.available && (
-                <button
-                  type="button"
-                  className="mt-4 min-h-11 px-3 text-[15px] text-primary"
-                  onClick={() => void aura.refresh()}
-                >
-                  Обновить статус
-                </button>
-              )}
-              {!aura.kyc?.verified && (
-                <button
-                  type="button"
-                  className="mt-2 block min-h-11 w-full px-3 text-[15px] text-primary"
-                  onClick={() => setDisplayPage("personal")}
-                >
-                  Личные данные
-                </button>
-              )}
-            </Card>
-          )}
+                {aura.error && (
+                  <p
+                    role="alert"
+                    className="mt-3 text-[13px] leading-5 text-red-600 dark:text-red-400"
+                  >
+                    {aura.error}
+                  </p>
+                )}
+                {!aura.kyc?.verified && (
+                  <Button
+                    data-wpay-primary=""
+                    rounded
+                    disabled={
+                      !aura.available ||
+                      aura.loading ||
+                      aura.busy ||
+                      Boolean(aura.kyc?.terminal)
+                    }
+                    className="!mb-0 !mt-6 !w-full"
+                    onClick={() => void aura.start()}
+                  >
+                    {aura.busy ? "Подготавливаем…" : "Пройти проверку"}
+                  </Button>
+                )}
+                {aura.sessionUrl && (
+                  <a
+                    className="mt-4 block text-[15px] text-primary"
+                    href={aura.sessionUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Продолжить проверку
+                  </a>
+                )}
+                {aura.available && (
+                  <button
+                    type="button"
+                    className="mt-4 min-h-11 px-3 text-[15px] text-primary"
+                    onClick={() => void aura.refresh()}
+                  >
+                    Обновить статус
+                  </button>
+                )}
+                {!aura.kyc?.verified && (
+                  <button
+                    type="button"
+                    className="mt-2 block min-h-11 w-full px-3 text-[15px] text-primary"
+                    onClick={() => setDisplayPage("personal")}
+                  >
+                    Личные данные
+                  </button>
+                )}
+              </Card>
+            ))}
 
           {displayPage === "provider" && (
             <>

@@ -28,6 +28,7 @@ export function useAuraProfile(page: string | null) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [available, setAvailable] = useState(false);
+  const [registered, setRegistered] = useState(false);
   const [error, setError] = useState("");
   const [kyc, setKyc] = useState<KycState | null>(null);
   const [sessionUrl, setSessionUrl] = useState("");
@@ -70,6 +71,7 @@ export function useAuraProfile(page: string | null) {
           if (controller.signal.aborted) return;
           setEmail(profile.email || "");
           setPhone(profile.phone || "");
+          setRegistered(true);
           if (page === "verification") await refresh(controller.signal);
         } catch (e) {
           if (
@@ -78,6 +80,7 @@ export function useAuraProfile(page: string | null) {
           ) {
             setPhone("");
             setEmail("");
+            setRegistered(false);
             setKyc({ status: "not_started", verified: false, terminal: false });
           } else throw e;
         }
@@ -135,6 +138,7 @@ export function useAuraProfile(page: string | null) {
       });
       setPhone(cleanPhone);
       setEmail(cleanEmail);
+      setRegistered(true);
       return true;
     } catch (e) {
       setError(message(e));
@@ -189,6 +193,7 @@ export function useAuraProfile(page: string | null) {
     loading,
     busy,
     available,
+    registered,
     error,
     kyc,
     sessionUrl,
