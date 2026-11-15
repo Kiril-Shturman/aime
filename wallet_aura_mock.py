@@ -110,6 +110,10 @@ def make_app():
         }))
 
     async def start_kyc(request):
+        if request.content_type != "application/json":
+            return envelope("unsupported_media_type", "JSON body is required", 415)
+        if await request.json() != {}:
+            return envelope("invalid_request", "Expected an empty JSON object", 400)
         customer_id = request.match_info["customer_id"]
         customer_item = state.customers.get(customer_id)
         if not customer_item:
@@ -122,7 +126,7 @@ def make_app():
             "updated_at": "2026-01-01T00:01:00Z",
         })
         return web.json_response({
-            **item, "verification_url": "https://local.invalid/kyc/" + customer_id,
+            **item, "kyc_url": "https://local.invalid/kyc/" + customer_id,
         })
 
     async def submit_identity(request):

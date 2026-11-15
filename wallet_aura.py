@@ -1150,7 +1150,7 @@ class AuraClient:
 
     async def start_kyc(self, customer_id):
         customer_id = quote(_safe_identifier(customer_id, "customer id"), safe="")
-        return await self.request("POST", "/customers/" + customer_id + "/kyc")
+        return await self.request("POST", "/customers/" + customer_id + "/kyc", body={})
 
     async def submit_customer_identity(self, customer_id, identity):
         customer_id = _safe_identifier(customer_id, "customer id")
@@ -1747,7 +1747,7 @@ class AuraService:
         )
         result = await self.client.start_kyc(customer_id)
         state = self._store_kyc(uid, customer_id, result)
-        session_url = result.get("url") or result.get("session_url") or result.get("verification_url")
+        session_url = result.get("kyc_url") or result.get("url") or result.get("session_url") or result.get("verification_url")
         if session_url is not None:
             session_url = str(session_url)
             if not session_url.startswith("https://") or len(session_url) > 2048:

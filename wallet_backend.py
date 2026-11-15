@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -1975,6 +1976,12 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(result)
             raise ApiError('NOT_FOUND', 'Метод не найден', 404)
         except ApiError as error:
+            if action in {'aura-customer', 'aura-kyc'}:
+                logging.getLogger('wpay.profile').warning(
+                    'Profile request failed action=%s method=%s status=%s code=%s request_id=%s',
+                    action, request.method, error.status, error.name,
+                    getattr(error, 'request_id', '') or '-',
+                )
             return web.json_response({'ok': False, 'error': {'name': error.name}, 'detail': error.detail}, status=error.status, headers={'Retry-After': str(error.retry_after)} if error.retry_after else None)
         except (ValueError, KeyError, TypeError):
             return web.json_response({'ok': False, 'error': {'name': 'INVALID_REQUEST'}, 'detail': 'Некорректные данные запроса или ответа провайдера'}, status=400)
