@@ -107,8 +107,8 @@ export default function WalletLockBadge() {
             strapColor="#253657"
             metal="graphite"
             finish="matte"
-            size={0.75}
-            strapLength={0.3}
+            size={0.4}
+            strapLength={0.1}
             breeze={0.15}
             damping={0.65}
             interactive

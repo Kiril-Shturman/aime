@@ -139,6 +139,8 @@ test("saved native marker locks on reload even without local hint; cancellation 
     { width: 768, height: 1024 },
   ]) {
     await page.setViewportSize(size);
+    const badge = await page.getByLabel("Бейдж профиля").boundingBox();
+    expect(badge!.height).toBe(size.height);
     const copy = await page.locator(".wpay-lock-copy").boundingBox();
     const actions = await page.locator(".wpay-lock-actions").boundingBox();
     expect(copy!.y + copy!.height).toBeLessThan(actions!.y);
@@ -151,6 +153,7 @@ test("saved native marker locks on reload even without local hint; cancellation 
   await expect(page.getByRole("button", { name: "Открыть", exact: true })).toBeEnabled();
   await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
   await expect(page.getByLabel("Бейдж профиля")).toBeVisible();
+
   await page.getByRole("button", { name: "Открыть", exact: true }).click();
   await expect(page.getByRole("main", { name: "Блокировка WPay" })).toHaveCount(0);
   await expect(page.locator(".wpay-biometric-content")).toBeVisible();

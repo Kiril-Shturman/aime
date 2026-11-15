@@ -214,7 +214,7 @@
   top: 0;
   left: 0;
   width: 100%;
-  height: min(52dvh, 480px);
+  height: 100%;
 }
 .wpay-lock-badge > .relative {
   position: absolute;
@@ -295,7 +295,7 @@
 @media (max-height: 650px) {
   .wpay-lock-badge {
     top: 0;
-    height: 47dvh;
+    height: 100%;
   }
   .wpay-lock-copy {
     top: 53%;
@@ -313,3 +313,8 @@
 
 .wpay-unlock-label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .wpay-unlock-label > svg { width: 22px; height: 22px; flex-shrink: 0; }
+
+.wpay-lock-copy, .wpay-lock-actions { z-index: 1; }
+.wpay-lock-badge-fallback { justify-content: flex-start; }
+.wpay-lock-badge-fallback img { height: 40%; }
+.wpay-lock-badge-strap { height: 14%; }
