@@ -71,6 +71,31 @@ ordinary support messages.
   the complete error catalogue is still required.
 - Rate-limit handling must use `X-RateLimit-Limit` and related headers and wait
   exactly for `Retry-After`; do not invent an immediate retry loop.
+- Aura uses a replenishing request bucket per API key. Every authenticated
+  response can contain `X-RateLimit-Limit` (bucket capacity),
+  `X-RateLimit-Remaining` (whole requests remaining after this response) and
+  `X-RateLimit-Reset` (seconds until full replenishment).
+- The transport must observe these headers on successful and failed responses,
+  coordinate one limiter for all Aura calls using the same key, and proactively
+  slow background work before remaining reaches zero.
+- `rate_limited` means the key's request bucket is empty: wait exactly
+  `Retry-After`, then retry the identical request (and the identical
+  idempotency key for monetary POSTs).
+- `resource_exhausted` means a volume/state quota such as a daily allowance, not
+  a transient request rate. Do not schedule blind retries; wait for an explicit
+  state change/new period and surface the condition to user/admin.
+- `unavailable` (503) is transient and is documented with a default five-second
+  `Retry-After`; retries still need bounded exponential backoff and the same
+  idempotency key for monetary operations.
+- The supplied text is internally inconsistent: one header table says
+  `resource_exhausted` can carry its own Retry-After (or 60 seconds), while the
+  following section says Retry-After comes only with `rate_limited`. Implement
+  the conservative rule until the error catalogue resolves it: never blindly
+  retry `resource_exhausted`, even if a header is present; record the suggested
+  time only as operator metadata.
+- `GET /cards/{card_id}/credentials` has a separate, much smaller bucket. It is
+  never called by background sync/prefetch; only an authenticated owner action
+  may consume this budget.
 - Log `X-Request-Id` for failed calls (without request secrets) so Aura support
   can locate the provider request.
 - List endpoints use cursor pagination: `limit` 1–100 (default 25), optional
@@ -333,6 +358,26 @@ protobuf/service contract and operational requirements first.
 - Historical 2.x releases did not follow this compatibility policy; WPay targets
   the current v3 contract and still remains defensive.
 
+## Rate-limit implementation rules
+
+- Maintain separate limiter state for test/live keys and a dedicated
+  credentials limiter; never let testnet telemetry throttle production or vice
+  versa.
+- Interactive operations have priority over reconciliation/history scans, but
+  must still fail closed when the provider explicitly reports no capacity.
+- Spread background reconciliation across time, request maximum useful page
+  sizes (up to 100), and avoid dense status polling when a webhook is expected.
+- Persist `remaining`, reset deadline, last Retry-After, error type and request ID
+  for admin health visibility. If WPay later runs multiple API processes, limiter
+  coordination must move from process memory to SQLite/Redis or another shared
+  atomic store.
+- Bound all retries by attempt/time budget. A circuit breaker should mark Aura
+  degraded after repeated 429/503/provider failures without blocking unrelated
+  GoSwap products.
+- Credentials requests must never be automatically retried by a browser refresh
+  loop. If throttled, show the remaining wait and require an intentional later
+  user action.
+
 ## Sandbox facts
 
 - Initial/additional test USDT is granted through the test portal, not the API.
@@ -422,7 +467,8 @@ card-details contract and PCI implications must be reviewed before implementatio
 2. **Provider foundation** — add provider namespaces, product routing, separate
    reconciliation and admin capability display without changing live routing.
 3. **Aura transport/testnet** — authenticated client, startup environment guard,
-   durable idempotency, cursor pagination, error taxonomy and redacted logging.
+   durable idempotency, shared adaptive rate limiter, cursor pagination, error
+   taxonomy, circuit breaking and redacted logging.
 4. **Webhook inbox** — Aura signature verification, replay window, event dedup,
    quick acknowledgement and restart-safe processing.
 5. **Customers and KYC** — ownership, registration, KYC launch/status, consent
@@ -451,7 +497,8 @@ card-details contract and PCI implications must be reviewed before implementatio
 - Remaining details: exact response schemas for every recorded route; SBP
   quote/rate/order fields and authoritative REST-versus-gRPC availability;
   complete card-operation schemas/types; QR-payment route schemas; rate-limit
-  header semantics; full error catalogue; AML review fields; and the
+  error-code contradiction for `resource_exhausted`; full error catalogue; AML
+  review fields; and the
   authoritative withdrawal contract resolving the v3.5-removal versus v3.17
   route-list contradiction.
 - Partner-specific fee/limit responses or redacted examples.
