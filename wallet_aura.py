@@ -10,7 +10,7 @@ import hmac
 import json
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import quote, urlsplit
 
@@ -323,6 +323,54 @@ def _card_credentials_result(payload, expected_card_id):
     return {"card_id": card_id, "cvv": cvv, "expiry": expiry, "number": number}
 
 
+def _aura_datetime(value, label):
+    if not isinstance(value, str) or not value:
+        raise ValueError("Invalid Aura " + label)
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError("Invalid Aura " + label)
+    if parsed.tzinfo is None:
+        raise ValueError("Invalid Aura " + label)
+    return parsed
+
+
+def _card_otp_result(payload, expected_card_id):
+    if payload is None:
+        return None
+    required = {
+        "card_id", "card_number_masked", "code", "consumed_at", "expires_at",
+        "id", "received_at", "subject",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura card OTP response")
+    card_id = _safe_identifier(payload.get("card_id"), "card id")
+    if card_id != expected_card_id:
+        raise ValueError("Aura card OTP card_id mismatch")
+    otp_id = _safe_identifier(payload.get("id"), "OTP id")
+    code = payload.get("code")
+    if not isinstance(code, str) or not code or len(code) > 100:
+        raise ValueError("Invalid Aura card OTP code")
+    masked = payload.get("card_number_masked")
+    if masked is not None and (not isinstance(masked, str) or len(masked) > 64):
+        raise ValueError("Invalid Aura card OTP masked number")
+    subject = payload.get("subject")
+    if subject is not None and (not isinstance(subject, str) or len(subject) > 500):
+        raise ValueError("Invalid Aura card OTP subject")
+    received = _aura_datetime(payload.get("received_at"), "card OTP received_at")
+    expires = _aura_datetime(payload.get("expires_at"), "card OTP expires_at")
+    if expires - received != timedelta(minutes=2):
+        raise ValueError("Invalid Aura card OTP lifetime")
+    consumed_at = payload.get("consumed_at")
+    if consumed_at is not None:
+        _aura_datetime(consumed_at, "card OTP consumed_at")
+    return {
+        "card_id": card_id, "card_number_masked": masked, "code": code,
+        "consumed_at": consumed_at, "expires_at": payload["expires_at"],
+        "id": otp_id, "received_at": payload["received_at"], "subject": subject,
+    }
+
+
 def _retry_policy(code, status):
     if code in FINAL_ERROR_CODES:
         return "no"
@@ -401,7 +449,8 @@ class AuraClient:
         error.retry_policy = _retry_policy(code, response.status)
         return error
 
-    async def request(self, method, path, *, params=None, body=None, idempotency_key=None):
+    async def request(self, method, path, *, params=None, body=None, idempotency_key=None,
+                      allow_null=False):
         if not self.api_key:
             raise self.error_cls("aura_not_configured", "Aura is not configured", 503)
         await self._throttle()
@@ -427,6 +476,8 @@ class AuraClient:
                     raise self.error_cls("aura_invalid_response", "Aura returned invalid JSON", 502)
                 if response.status < 200 or response.status >= 300:
                     raise self._error(response, payload)
+                if payload is None and allow_null:
+                    return None
                 if not isinstance(payload, (dict, list)):
                     raise self.error_cls("aura_invalid_response", "Aura returned an invalid response", 502)
                 return payload
@@ -538,6 +589,14 @@ class AuraClient:
         path_id = quote(card_id, safe="")
         payload = await self.request("GET", "/cards/" + path_id + "/credentials")
         return _card_credentials_result(payload, card_id)
+
+    async def get_latest_card_otp(self, card_id):
+        card_id = _safe_identifier(card_id, "card id")
+        path_id = quote(card_id, safe="")
+        payload = await self.request(
+            "GET", "/cards/" + path_id + "/otp/latest", allow_null=True
+        )
+        return _card_otp_result(payload, card_id)
 
     async def list_card_operations(self, card_id=None, *, cursor=None, limit=100):
         params = {"limit": min(max(int(limit), 1), 100)}

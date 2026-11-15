@@ -554,6 +554,17 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             "card_id": card["id"], "cvv": "123", "expiry": "09/29",
             "number": "4111111111111234",
         })
+        self.assertIsNone(await self.client.get_latest_card_otp(card["id"]))
+        otp = {
+            "card_id": card["id"], "card_number_masked": "•••• 1234",
+            "code": "582130", "consumed_at": None,
+            "expires_at": "2099-09-11T10:02:00Z",
+            "id": "0d7e2f7a-3c1b-4f5e-9a8d-6b4c2e1f0a9b",
+            "received_at": "2099-09-11T10:00:00Z",
+            "subject": "3DS Verification",
+        }
+        self.mock.app["state"].card_otps[card["id"]] = otp
+        self.assertEqual(await self.client.get_latest_card_otp(card["id"]), otp)
         operation = await self.mock.post(
             "/mock/card-operations", json={"card_id": card["id"], "amount": "3"}
         )
@@ -1011,6 +1022,53 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         persisted = "\n".join(ledger.db.iterdump())
         self.assertNotIn(credentials["number"], persisted)
         self.assertNotIn(credentials["cvv"], persisted)
+
+    async def test_latest_card_otp_is_owner_scoped_no_store_nullable_and_never_persisted(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner, json={}
+        )
+        customer_id = (await registered.json())["customer_id"]
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id, "kind": "virtual"}
+        )
+        card_payload = await created.json()
+        raw, signature = signed(card_payload["webhook"])
+        self.assertEqual((await self.wpay.post(
+            "/api/wallet/aura-webhook", data=raw,
+            headers={"X-Aura-Signature-V2": signature},
+        )).status, 200)
+        await self.wpay.post("/api/wallet/admin-aura-process", headers=self.owner)
+        card_id = card_payload["card"]["id"]
+        empty = await self.wpay.get(
+            "/api/wallet/aura-card-otp-latest?card_id=" + card_id,
+            headers=self.owner,
+        )
+        self.assertEqual(empty.status, 200, await empty.text())
+        self.assertEqual(empty.headers["Cache-Control"], "no-store")
+        self.assertIsNone(await empty.json())
+        otp = {
+            "card_id": card_id, "card_number_masked": "•••• 1234",
+            "code": "582130", "consumed_at": None,
+            "expires_at": "2099-09-11T10:02:00Z",
+            "id": "0d7e2f7a-3c1b-4f5e-9a8d-6b4c2e1f0a9b",
+            "received_at": "2099-09-11T10:00:00Z",
+            "subject": "3DS Verification",
+        }
+        self.mock.app["state"].card_otps[card_id] = otp
+        foreign = await self.wpay.get(
+            "/api/wallet/aura-card-otp-latest?card_id=" + card_id,
+            headers={"X-Telegram-Init-Data": init_data(322)},
+        )
+        self.assertEqual(foreign.status, 404)
+        response = await self.wpay.get(
+            "/api/wallet/aura-card-otp-latest?card_id=" + card_id,
+            headers=self.owner,
+        )
+        self.assertEqual(response.status, 200, await response.text())
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        self.assertEqual(await response.json(), otp)
+        persisted = "\n".join(self.app["wpay_ledger"].db.iterdump())
+        self.assertNotIn(otp["code"], persisted)
 
     async def test_card_issue_route_reserves_spends_and_failed_event_refunds_once(self):
         ledger = self.app["wpay_ledger"]

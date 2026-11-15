@@ -910,6 +910,22 @@ def install_wallet(app, root, owner_check):
                 response = web.json_response(credentials)
                 response.headers['Cache-Control'] = 'no-store'
                 return response
+            if action == 'aura-card-otp-latest' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                card_id = str(request.query.get('card_id') or '')
+                if not card_id:
+                    raise ValueError('card_id is required')
+                owned = ledger.db.execute(
+                    'SELECT 1 FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?',
+                    (card_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
+                otp = await aura_client.get_latest_card_otp(card_id)
+                response = web.json_response(otp)
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             if action == 'aura-card-cancel' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)

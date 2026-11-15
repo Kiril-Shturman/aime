@@ -23,6 +23,7 @@ class State:
         self.kyc = {}
         self.cards = {}
         self.card_operations = []
+        self.card_otps = {}
         self.orders = {}
         self.qr_payments = {}
         self.withdrawals = {}
@@ -203,6 +204,14 @@ def make_app():
             {"card_id": card_id, "cvv": "123", "expiry": "09/29",
              "number": "4111111111111234"},
             headers={"Cache-Control": "no-store"},
+        )
+
+    async def latest_card_otp(request):
+        card_id = request.match_info["card_id"]
+        if card_id not in state.cards:
+            return envelope("card_not_found", "Card not found", 404)
+        return web.json_response(
+            state.card_otps.get(card_id), headers={"Cache-Control": "no-store"}
         )
 
     async def card_operations(request):
@@ -472,6 +481,7 @@ def make_app():
     app.router.add_get("/v1/partner/cards/operations", card_operations)
     app.router.add_get("/v1/partner/cards/{card_id}/operations", card_operations)
     app.router.add_get("/v1/partner/cards/{card_id}/credentials", card_credentials)
+    app.router.add_get("/v1/partner/cards/{card_id}/otp/latest", latest_card_otp)
     app.router.add_get("/v1/partner/cards/{card_id}", card)
     app.router.add_post("/v1/partner/cards/{card_id}/recharge", recharge_card)
     app.router.add_post("/v1/partner/cards/{card_id}/cancel", cancel_card)
