@@ -3,6 +3,7 @@ import json
 import re
 from decimal import Decimal, localcontext
 from aiohttp import web
+from wallet_reconciliation import audit
 
 METHODS = {'invoices': ('getInvoices', 'invoice_id', 'invoice_ids'),
            'transfers': ('getTransfers', 'spend_id', 'spend_id'),
@@ -12,18 +13,24 @@ METHODS = {'invoices': ('getInvoices', 'invoice_id', 'invoice_ids'),
 def prepare_operations(ledger):
     ledger.db.execute('SAVEPOINT wallet_address_migration')
     try:
-        # Upgrade legacy network-only keys without losing existing USDT addresses.
-        columns = [row[1] for row in ledger.db.execute('PRAGMA table_info(wallet_addresses)')]
-        if columns and 'asset' not in columns:
-            ledger.db.execute('ALTER TABLE wallet_addresses RENAME TO wallet_addresses_legacy')
-        ledger.db.execute('CREATE TABLE IF NOT EXISTS wallet_addresses (user_id TEXT, asset TEXT, network TEXT, body TEXT NOT NULL, PRIMARY KEY(user_id,asset,network))')
-        if columns and 'asset' not in columns:
-            rows = ledger.db.execute('SELECT user_id, network, body FROM wallet_addresses_legacy').fetchall()
+        columns = list(ledger.db.execute('PRAGMA table_info(wallet_addresses)'))
+        keys = [row[1] for row in sorted(columns, key=lambda row: row[5]) if row[5]]
+        migrate = bool(columns) and keys != ['user_id', 'network']
+        if migrate:
+            ledger.db.execute('ALTER TABLE wallet_addresses RENAME TO wallet_addresses_archive_v1')
+        ledger.db.execute('CREATE TABLE IF NOT EXISTS wallet_addresses (user_id TEXT, network TEXT, body TEXT NOT NULL, PRIMARY KEY(user_id,network))')
+        if migrate:
+            rows = ledger.db.execute("SELECT user_id,network,body FROM wallet_addresses_archive_v1 ORDER BY CASE WHEN asset='USDT' THEN 0 ELSE 1 END").fetchall()
             for row in rows:
-                body = json.loads(row['body'])
-                body['asset'] = body.get('asset', 'USDT')
-                ledger.db.execute('INSERT OR IGNORE INTO wallet_addresses VALUES (?,?,?,?)', (row['user_id'], body['asset'], row['network'], json.dumps(body)))
-            ledger.db.execute('DROP TABLE wallet_addresses_legacy')
+                value = json.loads(row['body'])
+                save_address(ledger, row['user_id'], value, value.get('asset', 'USDT'), migrating=True)
+            # Archive is retained for audit; it is never used to issue payment details.
+        else:
+            for row in ledger.db.execute('SELECT user_id,network,body FROM wallet_addresses').fetchall():
+                value = json.loads(row['body'])
+                value.setdefault('asset', 'USDT')
+                value.setdefault('assets', [value['asset']])
+                ledger.db.execute('UPDATE wallet_addresses SET body=? WHERE user_id=? AND network=?', (json.dumps(value), row['user_id'], row['network']))
         ledger.db.execute('RELEASE SAVEPOINT wallet_address_migration')
     except Exception:
         ledger.db.execute('ROLLBACK TO SAVEPOINT wallet_address_migration')
@@ -31,12 +38,21 @@ def prepare_operations(ledger):
         raise
 
 
-def save_address(ledger, uid, result, asset='USDT'):
-    # TRON uses expiring exact-amount claims, never permanent addresses.
-    if result.get('address') and result.get('network') in {'BSC', 'ETH', 'TON', 'SOL'}:
-        public = {key: result[key] for key in ('address', 'network', 'client_ref', 'min_deposit') if key in result}
-        public['asset'] = asset
-        ledger.db.execute('INSERT OR REPLACE INTO wallet_addresses VALUES (?,?,?,?)', (uid, asset, result['network'], json.dumps(public)))
+def save_address(ledger, uid, result, asset='USDT', migrating=False):
+    # A provider client has one permanent address per network. Asset describes
+    # observed support, never a second independently owned wallet address.
+    if not result.get('address') or result.get('network') not in {'BSC', 'ETH', 'TON', 'SOL'}:
+        return
+    previous = ledger.db.execute('SELECT body FROM wallet_addresses WHERE user_id=? AND network=?', (uid, result['network'])).fetchone()
+    previous = json.loads(previous['body']) if previous else {}
+    if previous and previous['address'] != result['address']:
+        if migrating:
+            return  # Prefer the legacy USDT row; alternative is retained in archive.
+        raise ValueError('Provider changed the permanent address unexpectedly')
+    public = {**previous, **{key: result[key] for key in ('address', 'network', 'client_ref', 'min_deposit') if key in result}}
+    public['assets'] = sorted(set(previous.get('assets', [previous.get('asset', asset)])) | {asset})
+    public['asset'] = previous.get('asset', asset)
+    ledger.db.execute('INSERT OR REPLACE INTO wallet_addresses VALUES (?,?,?)', (uid, result['network'], json.dumps(public)))
 
 
 def page_number(raw):
@@ -50,7 +66,7 @@ async def operations_route(request, action, uid, client_ref, ledger, provider, A
     if action == 'access' and request.method == 'GET':
         return web.json_response({'owner': owner})
     if action == 'addresses' and request.method == 'GET':
-        rows = ledger.db.execute('SELECT body FROM wallet_addresses WHERE user_id=? ORDER BY asset,network', (uid,))
+        rows = ledger.db.execute('SELECT body FROM wallet_addresses WHERE user_id=? ORDER BY network', (uid,))
         return web.json_response({'items': [json.loads(row[0]) for row in rows]})
     if action == 'address' and request.method == 'POST':
         body = await request.json()
@@ -71,6 +87,10 @@ async def operations_route(request, action, uid, client_ref, ledger, provider, A
             if not owner:
                 raise ApiError('FORBIDDEN', 'Сверка доступна только владельцу организации', 403)
             params = {'count': count}
+            if 'before' in request.query and 'after' in request.query:
+                raise ValueError('Use before or after, not both')
+            if 'after' in request.query:
+                params['after'] = page_number(request.query['after'])
             if request.query.get('before'):
                 params['before'] = page_number(request.query['before'])
             result = await provider.call('getTransactions', params)
@@ -102,42 +122,7 @@ async def operations_route(request, action, uid, client_ref, ledger, provider, A
     if action == 'provider-audit' and request.method == 'GET':
         if not owner:
             raise ApiError('FORBIDDEN', 'Сверка доступна только владельцу организации', 403)
-        def balances(rows):
-            return {row['currency_code']: Decimal(str(row['available'])) for row in rows}
-        def difference(a, b):
-            with localcontext() as ctx:
-                ctx.prec = 60
-                return a - b
-        start = balances(await provider.call('getBalance'))
-        totals, seen, cursor, complete = {}, set(), None, False
-        for _ in range(20):
-            params = {'count': 1000}
-            if cursor is not None:
-                params['before'] = cursor
-            page = await provider.call('getTransactions', params)
-            for item in page.get('items', []):
-                key = str(item['id'])
-                if key in seen:
-                    continue
-                seen.add(key)
-                asset = item['asset']
-                with localcontext() as ctx:
-                    ctx.prec = 60
-                    totals[asset] = totals.get(asset, Decimal(0)) + Decimal(str(item['net']))
-            if not page.get('has_more'):
-                complete = True
-                break
-            next_cursor = page.get('cursor')
-            if next_cursor is None or next_cursor == cursor:
-                raise ApiError('PROVIDER_UNAVAILABLE', 'Провайдер не вернул следующий курсор сверки', 502)
-            cursor = next_cursor
-        end = balances(await provider.call('getBalance'))
-        stable = start == end
-        rows = [{'asset': asset, 'balance': str(end.get(asset, Decimal(0))),
-                 'net': str(totals.get(asset, Decimal(0))),
-                 'difference': str(difference(end.get(asset, Decimal(0)), totals.get(asset, Decimal(0)))) if complete and stable else None}
-                for asset in sorted(set(end) | set(totals))]
-        return web.json_response({'items': rows, 'complete': complete, 'stable': stable, 'entries': len(seen)})
+        return web.json_response(await audit(ledger, provider, ApiError))
     if action == 'revoke-transfer' and request.method == 'POST':
         # These are organization payouts. Revocation returns money to the organization,
         # not a personal ledger balance. Do not expose it as a client-side refund.

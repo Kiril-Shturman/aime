@@ -140,6 +140,12 @@ export default function WalletCryptoDeposit({
           . Перевод в другой сети может привести к потере средств.
         </p>
       </div>
+      {entry.min_deposit && code === "USDT" && (
+        <p className="px-2 text-[14px] text-black/45 dark:text-white/45">
+          Минимум пополнения: {entry.min_deposit} USDT. Переводы меньше минимума
+          не зачисляются.
+        </p>
+      )}
       <Button
         data-wpay-primary=""
         rounded

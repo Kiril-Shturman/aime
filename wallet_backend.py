@@ -20,6 +20,7 @@ from urllib.parse import parse_qsl, urlsplit
 from aiohttp import ClientSession, ClientTimeout, web
 
 from wallet_operations import prepare_operations, operations_route, save_address
+from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
 
 BASE_URL = 'https://goswap.site/api/'
 NETWORKS = {'BSC', 'ETH', 'TON', 'SOL', 'TRON'}
@@ -88,8 +89,8 @@ def telegram_user(raw, token):
 
 
 class ApiError(Exception):
-    def __init__(self, name, detail, status=400):
-        self.name, self.detail, self.status = name, detail, status
+    def __init__(self, name, detail, status=400, retry_after=None):
+        self.name, self.detail, self.status, self.retry_after = name, detail, status, retry_after
 
 
 class GoSwap:
@@ -114,7 +115,7 @@ class GoSwap:
                     raise ApiError('PROVIDER_UNAVAILABLE', 'Некорректный ответ провайдера', 502)
                 if response.status >= 400 or not body.get('ok'):
                     error = body.get('error') or {}
-                    raise ApiError(error.get('name', 'PROVIDER_ERROR'), str(body.get('detail') or 'Ошибка провайдера')[:300], response.status if response.status >= 400 else 502)
+                    raise ApiError(error.get('name', 'PROVIDER_ERROR'), str(body.get('detail') or 'Ошибка провайдера')[:300], response.status if response.status >= 400 else 502, response.headers.get('Retry-After'))
                 return body.get('result')
         except (asyncio.TimeoutError, OSError):
             raise ApiError('PROVIDER_TIMEOUT', 'Ответ не получен. Проверьте статус операции перед повтором.', 504)
@@ -141,6 +142,7 @@ class Ledger:
           CREATE TABLE IF NOT EXISTS admin_broadcast_deliveries (broadcast_id TEXT NOT NULL, user_id TEXT NOT NULL, status TEXT NOT NULL, error TEXT, updated_at TEXT NOT NULL, PRIMARY KEY(broadcast_id,user_id));
         ''')
 
+        prepare_withdrawals(self)
         columns = {row[1] for row in self.db.execute('PRAGMA table_info(wallet_accounts)')}
         for name, definition in {
             'telegram_id': 'INTEGER',
@@ -248,7 +250,10 @@ class Ledger:
             available, reserved = self.balance(uid[0], asset)
             with localcontext() as ctx:
                 ctx.prec = 50
-                self.put_balance(uid[0], asset, available + amount, reserved)
+                owed = debt(self, uid[0], asset)
+                repayment = min(owed, amount)
+                self.db.execute('INSERT OR REPLACE INTO wallet_debts VALUES (?,?,?)', (uid[0], asset, str(owed-repayment)))
+                self.put_balance(uid[0], asset, available + amount - repayment, reserved)
             self.db.execute('INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)', (event_id, uid[0], asset, str(amount), 'deposit', str(payload.get('credited_at') or now()), json.dumps(payload)))
             self.db.execute('COMMIT')
             return True
@@ -268,6 +273,8 @@ class Ledger:
                 if expiry <= datetime.now(timezone.utc):
                     raise ApiError('QUOTE_EXPIRED', 'Котировка истекла. Запросите новую.', 409)
                 amount = money(quote['amount'])
+                if debt(self, uid, quote['asset']):
+                    raise ApiError('INSUFFICIENT_FUNDS', 'Есть задолженность по уточнённому выводу', 409)
                 available, reserved = self.balance(uid, quote['asset'])
                 self.put_balance(uid, quote['asset'], add(available, -amount), add(reserved, amount))
                 self.db.execute("UPDATE wallet_quotes SET state='reserved' WHERE quote_id=?", (quote_id,))
@@ -292,6 +299,8 @@ class Ledger:
                 self.db.execute('COMMIT')
                 return False
             quote = json.loads(row['body'])
+            if row['payment_id'] and payload.get('payment_id') and str(payload['payment_id']) != row['payment_id']:
+                raise ValueError('Payment ID mismatch')
             amount = money(quote['amount'])
             if payload.get('amount') is not None and money(payload['amount']) != amount:
                 raise ValueError('Сумма платежа не совпадает с котировкой')
@@ -335,6 +344,7 @@ def install_wallet(app, root, owner_check):
     admin_ids = {value.strip() for value in os.environ.get('WPAY_ADMIN_IDS', '').split(',') if value.strip().isdigit()}
     ledger = Ledger(os.environ.get('WPAY_DB_PATH', os.path.join(root, 'wpay.sqlite3')))
     prepare_operations(ledger)
+    prepare_withdrawals(ledger)
     provider = GoSwap(token)
     app['wpay_provider'] = provider
     app['wpay_ledger'] = ledger
@@ -365,7 +375,7 @@ def install_wallet(app, root, owner_check):
                 body = await response.json(content_type=None)
                 if response.status >= 400 or not isinstance(body, dict) or not body.get('ok'):
                     detail = body.get('description') if isinstance(body, dict) else 'Telegram error'
-                    raise ApiError('TELEGRAM_ERROR', str(detail or 'Telegram error')[:300], response.status if response.status >= 400 else 502)
+                    raise ApiError('TELEGRAM_ERROR', str(detail or 'Telegram error')[:300], response.status if response.status >= 400 else 502, response.headers.get('Retry-After'))
                 return body.get('result')
 
     async def sync_telegram_users(only_missing=False):
@@ -422,9 +432,10 @@ def install_wallet(app, root, owner_check):
             'states': {
                 'quotes': grouped_counts('wallet_quotes', 'state'),
                 'transfers': grouped_counts('wallet_transfers', 'status'),
-                'withdrawals': grouped_counts('wallet_withdrawals', 'status'),
+                'withdrawals': grouped_counts('wallet_withdrawal_intents', 'state'),
             },
             'recent': recent,
+            'debts': decoded_rows('SELECT user_id,asset,amount FROM wallet_debts WHERE CAST(amount AS REAL)>0'),
             'provider': {'app': app_info, 'balance': organization_balance, 'currencies': currencies},
         }
 
@@ -480,7 +491,7 @@ def install_wallet(app, root, owner_check):
 
     def admin_payments():
         result = {'events': decoded_rows('SELECT rowid,* FROM wallet_events ORDER BY rowid DESC LIMIT 500')}
-        for table, key in [('wallet_quotes', 'quotes'), ('wallet_invoices', 'invoices'), ('wallet_transfers', 'transfers'), ('wallet_withdrawals', 'withdrawals')]:
+        for table, key in [('wallet_quotes', 'quotes'), ('wallet_invoices', 'invoices'), ('wallet_transfers', 'transfers'), ('wallet_withdrawal_intents', 'withdrawals')]:
             result[key] = decoded_rows(f'SELECT rowid,* FROM {table} ORDER BY rowid DESC LIMIT 500') if table in tables() else []
         return result
 
@@ -584,6 +595,12 @@ def install_wallet(app, root, owner_check):
                 kind, payload = event.get('update_type'), event.get('payload', {})
                 if kind == 'deposit_received':
                     ledger.deposit(payload)
+                elif kind in {'withdrawal_completed', 'withdrawal_failed'}:
+                    expected_status = kind.removeprefix('withdrawal_')
+                    if payload.get('status') != expected_status:
+                        raise ValueError('Несовпадение типа события и статуса')
+                    # Always query current provider state before a failed-event refund.
+                    await reconcile_withdrawals(ledger, provider, money, ApiError, spend_id=payload.get('spend_id'))
                 elif kind in {'qr_payment_completed', 'qr_payment_failed', 'qr_payment_refunded'}:
                     status = kind.removeprefix('qr_payment_')
                     if payload.get('status') != status:
@@ -626,17 +643,23 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(await admin_broadcasts(request, uid))
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
+            if action == 'operations-withdrawals' and uid != 'owner':
+                return await withdrawal_route(request, 'withdrawal-history', uid, ledger, provider, money, ApiError)
             operations = await operations_route(request, action, uid, client_ref, ledger, provider, ApiError)
             if operations is not None:
                 return operations
+            withdrawals = await withdrawal_route(request, action, uid, ledger, provider, money, ApiError)
+            if withdrawals is not None:
+                return withdrawals
             if action == 'overview' and request.method == 'GET':
                 await sync_payments(uid)
+                await reconcile_withdrawals(ledger, provider, money, ApiError, uid)
                 rates = await provider.call('getExchangeRates')
                 balances = [dict(r) for r in ledger.db.execute('SELECT asset,available,reserved FROM wallet_balances WHERE user_id=?', (uid,))]
                 items = [dict(r) for r in ledger.db.execute('SELECT event_id,asset,amount,type,created_at,detail FROM wallet_events WHERE user_id=? ORDER BY rowid DESC LIMIT 100', (uid,))]
                 for item in items:
                     item['detail'] = json.loads(item['detail'])
-                return web.json_response({'balances': balances, 'rates': rates, 'transactions': items})
+                return web.json_response({'balances': balances, 'rates': rates, 'transactions': items, 'debts': [dict(row) for row in ledger.db.execute('SELECT asset,amount FROM wallet_debts WHERE user_id=?', (uid,))]})
             if action == 'provider' and request.method == 'GET':
                 if not admin:
                     raise ApiError('FORBIDDEN', 'Только владелец', 403)
@@ -654,6 +677,9 @@ def install_wallet(app, root, owner_check):
                 if network not in DEPOSIT_NETWORKS.get(asset, set()):
                     raise ValueError('Пополнение этой валюты в выбранной сети не поддерживается')
                 if network == 'TRON':
+                    exact_amount = money(body.get('amount'))
+                    if exact_amount < 1 or exact_amount.as_tuple().exponent < -6:
+                        raise ValueError('TRON: минимум 1 USDT, до 6 знаков после точки')
                     if asset != 'USDT':
                         raise ValueError('TRON поддерживает пополнение USDT')
                     result = await provider.call('createExactDeposit', {'client_ref': client_ref, 'amount': str(money(body.get('amount'))), 'network': 'TRON', 'asset': 'USDT'}, post=True)
@@ -662,17 +688,24 @@ def install_wallet(app, root, owner_check):
                 save_address(ledger, uid, result, asset)
                 return web.json_response(result)
             if action == 'sync' and request.method == 'POST':
-                # Fetch all pages; bound the work and allow the next sync to continue.
-                for offset in range(0, 5000, 1000):
+                ledger.db.execute('CREATE TABLE IF NOT EXISTS wallet_deposit_sync_cursor (user_id TEXT PRIMARY KEY, offset INTEGER NOT NULL)')
+                progress = ledger.db.execute('SELECT offset FROM wallet_deposit_sync_cursor WHERE user_id=?', (uid,)).fetchone()
+                offset, complete = progress[0] if progress else 0, False
+                for _ in range(10):
                     data = await provider.call('getDeposits', {'client_ref': client_ref, 'count': 1000, 'offset': offset})
                     items = data.get('items', [])
                     for item in items:
                         if item.get('client_ref') == client_ref:
                             ledger.deposit(item)
-                    if len(items) < 1000:
+                    if not items:
+                        offset, complete = 0, True
+                        ledger.db.execute('INSERT OR REPLACE INTO wallet_deposit_sync_cursor VALUES (?,?)', (uid, offset))
                         break
+                    offset += 1000
+                    ledger.db.execute('INSERT OR REPLACE INTO wallet_deposit_sync_cursor VALUES (?,?)', (uid, offset))
                 await sync_payments(uid)
-                return web.json_response({'ok': True})
+                await reconcile_withdrawals(ledger, provider, money, ApiError, uid)
+                return web.json_response({'ok': True, 'sync_complete': complete, 'offset': offset})
             if action == 'quote' and request.method == 'POST':
                 body = await request.json()
                 qr = body.get('qr')
@@ -706,7 +739,7 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(result)
             raise ApiError('NOT_FOUND', 'Метод не найден', 404)
         except ApiError as error:
-            return web.json_response({'ok': False, 'error': {'name': error.name}, 'detail': error.detail}, status=error.status)
+            return web.json_response({'ok': False, 'error': {'name': error.name}, 'detail': error.detail}, status=error.status, headers={'Retry-After': str(error.retry_after)} if error.retry_after else None)
         except (ValueError, KeyError, TypeError):
             return web.json_response({'ok': False, 'error': {'name': 'INVALID_REQUEST'}, 'detail': 'Некорректные данные запроса или ответа провайдера'}, status=400)
 

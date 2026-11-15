@@ -11,7 +11,7 @@ import {
   addressNetworkNames,
   addressNetworkStandards,
 } from "./WalletAddressDetails";
-import { walletRequest } from "../lib/wallet-api";
+import { walletRequest, WalletApiError } from "../lib/wallet-api";
 import { SiTether } from "@icons-pack/react-simple-icons";
 import { useEffect, useState } from "react";
 import {
@@ -151,6 +151,92 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
     [recipient, setRecipient] = useState(""),
     [network, setNetwork] = useState("TRON"),
     [review, setReview] = useState(false);
+  const [memo, setMemo] = useState("");
+  const [estimate, setEstimate] = useState<{
+    intent_id: string;
+    fee: string;
+    total: string;
+    expires_at: number;
+  } | null>(null);
+  const [outcome, setOutcome] = useState<{
+    status: string;
+    spend_id?: string;
+    tx_hash?: string;
+  } | null>(null);
+  const [busy, setBusy] = useState(false),
+    [paymentError, setPaymentError] = useState("");
+  function resetEstimate() {
+    setReview(false);
+    setEstimate(null);
+    setOutcome(null);
+    setPaymentError("");
+  }
+  async function reviewWithdrawal() {
+    if (method !== "usdt" || wallet.demo) {
+      setReview(true);
+      return;
+    }
+    if (!source) return;
+    setBusy(true);
+    setPaymentError("");
+    try {
+      const quote = await walletRequest<{
+        intent_id: string;
+        fee: string;
+        total: string;
+        expires_at: number;
+      }>("withdrawal-estimate", {
+        asset: "USDT",
+        network: source.network,
+        source_address: source.address,
+        address: recipient.trim(),
+        amount: amount.replace(",", "."),
+        ...(memo ? { memo } : {}),
+      });
+      if (
+        !quote.intent_id ||
+        quote.fee === undefined ||
+        quote.total === undefined
+      )
+        throw Error("Некорректный расчёт провайдера");
+      setEstimate(quote);
+      setReview(true);
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error ? error.message : "Не удалось рассчитать вывод",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function submitWithdrawal() {
+    if (!estimate || busy) return;
+    setBusy(true);
+    setPaymentError("");
+    try {
+      setOutcome(
+        await walletRequest("withdrawal-create", {
+          intent_id: estimate.intent_id,
+        }),
+      );
+      void wallet.refresh();
+    } catch (error) {
+      if (
+        error instanceof WalletApiError &&
+        ["QUOTE_EXPIRED", "REESTIMATE_REQUIRED"].includes(error.code)
+      ) {
+        setEstimate(null);
+        setReview(false);
+      }
+      setPaymentError(
+        error instanceof Error
+          ? error.message
+          : "Ответ не получен. Повторите с тем же номером операции.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
   const [source, setSource] = useState<{
     network: string;
     address: string;
@@ -225,6 +311,9 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
     source?.amount ?? (wallet.ready ? Number(wallet.balance("USDT")) : null);
   const insufficient =
     validAmount && availableAmount !== null && value > availableAmount;
+  const outstandingDebt = wallet.data.debts?.find(
+    (row) => row.asset === "USDT" && Number(row.amount) > 0,
+  );
   const totalUsdt = wallet.demo
     ? 1234.56
     : wallet.ready
@@ -259,6 +348,15 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
         <h2 className="px-2 text-[17px] font-semibold text-black/50 dark:text-white/50">
           Ваш портфель
         </h2>
+        {outstandingDebt && (
+          <p
+            role="alert"
+            className="px-2 text-[14px] text-orange-600 dark:text-orange-400"
+          >
+            Задолженность по уточнённому выводу: {outstandingDebt.amount} USDT.
+            Следующее пополнение погасит её.
+          </p>
+        )}
         <Card
           className="!m-0 !rounded-[30px] overflow-hidden !bg-white dark:!bg-[#1c1c1e]"
           contentWrapPadding="px-5 py-0"
@@ -384,7 +482,7 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
               value={amount}
               onChange={(e) => {
                 setAmount(e.target.value.replace(/[^\d.,]/g, ""));
-                setReview(false);
+                resetEstimate();
               }}
               placeholder="0.00"
               className="min-w-0 flex-1 bg-transparent text-[36px] font-semibold tracking-tight text-black outline-none placeholder:text-black/20 dark:text-white dark:placeholder:text-white/25"
@@ -434,7 +532,7 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
             value={amount}
             onChange={(e) => {
               setAmount(e.target.value.replace(/[^\d.,]/g, ""));
-              setReview(false);
+              resetEstimate();
             }}
             placeholder="0.00"
             className="min-w-0 flex-1 bg-transparent text-[36px] font-semibold tracking-tight text-black outline-none placeholder:text-black/20 dark:text-white dark:placeholder:text-white/25"
@@ -467,7 +565,7 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
             onClick={() => {
               setSourceConfirmed(false);
               setRecipient("");
-              setReview(false);
+              resetEstimate();
             }}
           >
             Изменить адрес списания
@@ -493,7 +591,7 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
             value={recipient}
             onChange={(e) => {
               setRecipient(e.target.value);
-              setReview(false);
+              resetEstimate();
             }}
             placeholder={
               method === "username" ? "@username" : "Вставьте адрес получателя"
@@ -507,6 +605,25 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
                 : "Проверьте формат адреса и выбранную сеть."}
             </p>
           )}
+        </Card>
+      )}
+      {method === "usdt" && ["TON", "SOL"].includes(network) && (
+        <Card className={surface} contentWrapPadding="p-5">
+          <label
+            htmlFor="withdraw-memo"
+            className="text-[14px] text-black/45 dark:text-white/45"
+          >
+            Комментарий / memo (если нужен получателю)
+          </label>
+          <input
+            id="withdraw-memo"
+            value={memo}
+            onChange={(event) => {
+              setMemo(event.target.value);
+              resetEstimate();
+            }}
+            className="mt-3 w-full bg-transparent text-[17px] text-black outline-none dark:text-white"
+          />
         </Card>
       )}
       {method === "check" && (
@@ -549,35 +666,118 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
             )}
             <div className="flex justify-between gap-4">
               <dt className="text-black/45 dark:text-white/45">Комиссия</dt>
-              <dd>Пока недоступна</dd>
+              <dd>{estimate ? estimate.fee + " USDT" : "Пока недоступна"}</dd>
             </div>
+            {estimate && (
+              <div className="flex justify-between gap-4">
+                <dt className="text-black/45 dark:text-white/45">
+                  Всего к списанию
+                </dt>
+                <dd className="font-semibold">{estimate.total} USDT</dd>
+              </div>
+            )}
           </dl>
-          <p
-            role="status"
-            className="mt-4 rounded-[18px] bg-black/5 p-4 text-[14px] leading-5 text-black/50 dark:bg-white/10 dark:text-white/50"
-          >
-            {method === "check"
-              ? "Создание чеков"
-              : method === "username"
-                ? "Переводы по username"
-                : "Вывод USDT"}{" "}
-            пока не подключены. Средства не списаны.
-          </p>
+          {estimate ? (
+            <p
+              role="status"
+              className="mt-4 text-[14px] text-black/50 dark:text-white/50"
+            >
+              {outcome
+                ? outcome.status === "completed"
+                  ? "Отправлено"
+                  : outcome.status === "failed"
+                    ? "Вывод не состоялся. Средства возвращены."
+                    : "Вывод принят. Ожидаем отправку в сеть."
+                : "Получатель получит сумму целиком. Комиссия списывается сверху. После подтверждения отменить вывод нельзя."}
+            </p>
+          ) : (
+            <p
+              role="status"
+              className="mt-4 rounded-[18px] bg-black/5 p-4 text-[14px] leading-5 text-black/50 dark:bg-white/10 dark:text-white/50"
+            >
+              {method === "check"
+                ? "Создание чеков"
+                : method === "username"
+                  ? "Переводы по username"
+                  : "Вывод USDT"}{" "}
+              пока не подключены. Средства не списаны.
+            </p>
+          )}
         </Card>
+      )}
+      {paymentError && (
+        <p
+          role="alert"
+          className="rounded-2xl bg-red-500/10 p-4 text-[14px] text-red-600 dark:bg-red-400/10 dark:text-red-400"
+        >
+          {paymentError}
+        </p>
+      )}
+      {estimate && !outcome && (
+        <Button
+          data-wpay-primary=""
+          rounded
+          large
+          disabled={
+            busy ||
+            (availableAmount !== null &&
+              Number(estimate.total) > availableAmount)
+          }
+          onClick={() => void submitWithdrawal()}
+        >
+          {busy ? "Отправляем…" : "Подтвердить вывод"}
+        </Button>
+      )}
+      {outcome && (
+        <Button
+          data-wpay-primary=""
+          rounded
+          tonal
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            try {
+              const history = await walletRequest<{
+                items: { status: string; spend_id?: string }[];
+              }>("withdrawal-history");
+              const item = history.items.find(
+                (row) => row.spend_id === outcome.spend_id,
+              );
+              if (item) setOutcome(item);
+            } catch (error) {
+              setPaymentError(
+                error instanceof Error
+                  ? error.message
+                  : "Не удалось обновить статус",
+              );
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          Обновить статус
+        </Button>
       )}
       <Button
         data-wpay-primary=""
         rounded
         large
-        disabled={!validAmount || !validRecipient || insufficient || review}
+        disabled={
+          !validAmount || !validRecipient || insufficient || review || busy
+        }
         className="!m-0 !w-full !rounded-[22px]"
-        onClick={() => setReview(true)}
+        onClick={() => void reviewWithdrawal()}
       >
-        {review ? "Операция пока недоступна" : "Проверить реквизиты"}
+        {busy
+          ? "Рассчитываем…"
+          : review
+            ? "Реквизиты проверены"
+            : "Проверить реквизиты"}
       </Button>
       <p className="px-2 text-center text-[13px] leading-5 text-black/40 dark:text-white/40">
-        Вывод появится после подключения провайдера. Комиссия и лимиты будут
-        показаны до подтверждения.
+        {wallet.demo
+          ? "Демонстрационный режим. Средства не списываются."
+          : "Комиссия и доступность вывода проверяются до подтверждения."}
       </p>
     </main>
   );

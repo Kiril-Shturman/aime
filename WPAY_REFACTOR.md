@@ -17,11 +17,11 @@ The production preview on Sites is a static demo; the Python server remains a se
 ## Address contract
 
 `GET /api/wallet/addresses` returns an explicit `asset` on every saved address.
-The database key is `(user_id, asset, network)`. Startup migrates old rows as USDT inside a savepoint.
+The database key is `(user_id, network)`; asset support is metadata. See `WPAY_GOSWAP_CONTRACT.md` for the updated API contract and migration.
 An asset-specific `createDeposit` persists the requested asset. `getClientAddress` remains USDT-only; callers cannot silently obtain USDT details as another asset.
 TRON exact-amount, expiring deposits are not saved as permanent addresses.
 
-Displayed assets do not imply working payment capabilities: live deposits currently expose USDT, ETH, BNB and SOL. Other asset screens remain available in the explicit demo. Withdrawals and paid extra addresses remain unavailable until their server execution is implemented.
+Displayed assets do not imply working payment capabilities: live deposits currently expose USDT, ETH, BNB and SOL. Other asset screens remain available in the explicit demo. Live withdrawals now use server estimates, reservations and versioned reconciliation. Paid extra addresses remain demo-only.
 
 ## Verification
 

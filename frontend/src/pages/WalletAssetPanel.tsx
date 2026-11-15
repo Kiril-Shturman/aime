@@ -125,9 +125,7 @@ export default function WalletAssetPanel({
     text: "Цифровой актив в вашем кошельке.",
   };
   const [loadingAddresses, setLoadingAddresses] = useState(false);
-  const [addresses, setAddresses] = useState<
-    { address: string; network: string }[]
-  >([]);
+  const [addresses, setAddresses] = useState<WalletAddress[]>([]);
   const [selectedAddress, setSelectedAddress] = useState<{
       address: string;
       network: string;
@@ -157,27 +155,6 @@ export default function WalletAssetPanel({
           );
           if (!current) return;
           setAddresses(saved);
-          const missing = networks.filter(
-            (network) => !saved.some((item) => item.network === network),
-          );
-          const results = await Promise.allSettled(
-            missing.map(async (network) => {
-              const item = await walletRequest<{ address?: string }>(
-                "address",
-                { network, asset: code },
-              );
-              if (!item.address) throw Error("Сервис не вернул адрес");
-              if (current)
-                setAddresses((previous) => [
-                  ...previous.filter((row) => row.network !== network),
-                  { network, address: item.address! },
-                ]);
-            }),
-          );
-          if (current && results.some((result) => result.status === "rejected"))
-            setAddressError(
-              "Не все адреса удалось получить. Нажмите на нужную сеть, чтобы повторить.",
-            );
         } catch {
           if (current)
             setAddressError(
@@ -205,12 +182,16 @@ export default function WalletAssetPanel({
     setAddressBusy(true);
     setAddressError("");
     try {
-      const item = await walletRequest<{ address?: string; network?: string }>(
-        "address",
-        { network, asset: code },
-      );
+      const item = await walletRequest<Partial<WalletAddress>>("address", {
+        network,
+        asset: code,
+      });
       if (!item.address) throw Error("Сервис не вернул адрес");
-      const entry = { address: item.address, network: item.network ?? network };
+      const entry = {
+        address: item.address,
+        min_deposit: item.min_deposit,
+        network: item.network ?? network,
+      };
       setAddresses((previous) => [
         ...previous.filter((row) => row.network !== entry.network),
         entry,
@@ -379,6 +360,8 @@ export default function WalletAssetPanel({
                       onOpenAddress({
                         network,
                         address: item.address,
+                        min_deposit:
+                          "min_deposit" in item ? item.min_deposit : undefined,
                         demo: demoPortfolio,
                         amount: demoPortfolio
                           ? code === "USDT"
@@ -455,19 +438,21 @@ export default function WalletAssetPanel({
                 {addressError}
               </p>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                setAddressError("");
-                setCreatingAddress(true);
-              }}
-              className="flex min-h-12 w-full items-center gap-3 py-2 text-left text-[16px] font-medium text-primary"
-            >
-              <span className="flex h-8 w-9 shrink-0 items-center justify-center">
-                <Plus size={23} />
-              </span>
-              Создать ещё адрес
-            </button>
+            {wallet.demo && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAddressError("");
+                  setCreatingAddress(true);
+                }}
+                className="flex min-h-12 w-full items-center gap-3 py-2 text-left text-[16px] font-medium text-primary"
+              >
+                <span className="flex h-8 w-9 shrink-0 items-center justify-center">
+                  <Plus size={23} />
+                </span>
+                Создать ещё адрес
+              </button>
+            )}
           </div>
         </Card>
       </section>

@@ -2,16 +2,31 @@ import { boardKey, initData } from "./telegram";
 
 export class WalletApiError extends Error {
   code: string;
-  constructor(code: string, message: string) {
+  retryAfter: string | null;
+  constructor(code: string, message: string, retryAfter: string | null = null) {
     super(message);
     this.code = code;
+    this.retryAfter = retryAfter;
   }
 }
+const cooldowns = new Map<string, number>();
 export async function walletRequest<T>(
   action: string,
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
+  const network =
+    typeof body === "object" && body !== null && "network" in body
+      ? String(body.network)
+      : "";
+  const cooldownKey = action + ":" + network;
+  const until = cooldowns.get(cooldownKey) ?? 0;
+  if (Date.now() < until)
+    throw new WalletApiError(
+      "RETRY_LATER",
+      `Повторите через ${Math.ceil((until - Date.now()) / 1000)} с`,
+      String(Math.ceil((until - Date.now()) / 1000)),
+    );
   const response = await fetch(`/api/wallet/${action}`, {
     method: body === undefined ? "GET" : "POST",
     cache: "no-store",
@@ -23,11 +38,20 @@ export async function walletRequest<T>(
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+  const retryAfter = response.headers.get("Retry-After");
+  if (!response.ok && retryAfter) {
+    const seconds = Number(retryAfter);
+    const until = Number.isFinite(seconds)
+      ? Date.now() + seconds * 1000
+      : Date.parse(retryAfter);
+    if (Number.isFinite(until)) cooldowns.set(cooldownKey, until);
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok)
     throw new WalletApiError(
       data?.error?.name ?? "UNAVAILABLE",
       data?.detail ?? "Не удалось связаться с кошельком",
+      response.headers.get("Retry-After"),
     );
   if (data === null)
     throw new WalletApiError(
@@ -45,6 +69,7 @@ export interface WalletTransaction {
   detail: Record<string, unknown>;
 }
 export interface WalletOverview {
+  debts?: { asset: string; amount: string }[];
   balances: { asset: string; available: string; reserved: string }[];
   rates: { source: string; target: string; rate: string; is_valid: boolean }[];
   transactions: WalletTransaction[];
@@ -65,6 +90,7 @@ export interface QrPayment {
   payment_id?: string;
 }
 export interface Deposit {
+  min_deposit?: string;
   address?: string | null;
   network: string;
   url?: string;

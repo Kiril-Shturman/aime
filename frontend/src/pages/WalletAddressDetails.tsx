@@ -21,6 +21,7 @@ export interface WalletAddressSelection {
   demo: boolean;
   amount: number | null;
   rate: number | null;
+  min_deposit?: string;
 }
 export {
   networkStandards as addressNetworkStandards,
