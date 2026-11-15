@@ -919,7 +919,10 @@ def install_wallet(app, root, owner_check):
                 if not owned:
                     raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
                 operations = [dict(row) for row in ledger.db.execute(
-                    'SELECT operation_id,operation_type,status,asset,amount,fee,merchant,provider_updated_at '
+                    'SELECT operation_id,operation_type,status,previous_status,asset,amount,fee,merchant,'
+                    'original_amount,original_currency,refunded_amount,balance_before,balance_after,'
+                    'merchant_country,mcc,merchant_category,decline_reason,decline_message,'
+                    'provider_created_at,provider_updated_at '
                     'FROM aura_card_operations WHERE card_id=? AND user_id=? '
                     'ORDER BY updated_at DESC LIMIT 200', (card_id, uid),
                 )]

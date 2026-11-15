@@ -84,7 +84,9 @@ def prepare(ledger):
         environment TEXT NOT NULL, operation_type TEXT, status TEXT NOT NULL,
         asset TEXT, amount TEXT, fee TEXT, merchant TEXT,
         original_amount TEXT, original_currency TEXT, refunded_amount TEXT,
-        balance_after TEXT, merchant_country TEXT, mcc TEXT, merchant_category TEXT,
+        balance_before TEXT, balance_after TEXT, merchant_country TEXT, mcc TEXT,
+        merchant_category TEXT, previous_status TEXT, decline_reason TEXT,
+        decline_message TEXT, provider_created_at TEXT,
         provider_updated_at TEXT, body TEXT NOT NULL,
         created_at REAL NOT NULL, updated_at REAL NOT NULL
       );
@@ -153,8 +155,9 @@ def prepare(ledger):
         ledger.db.execute("ALTER TABLE aura_cards ADD COLUMN tracking TEXT")
     operation_columns = {row[1] for row in ledger.db.execute("PRAGMA table_info(aura_card_operations)")}
     for name in (
-        "original_amount", "original_currency", "refunded_amount", "balance_after",
-        "merchant_country", "mcc", "merchant_category",
+        "original_amount", "original_currency", "refunded_amount", "balance_before",
+        "balance_after", "merchant_country", "mcc", "merchant_category",
+        "previous_status", "decline_reason", "decline_message", "provider_created_at",
     ):
         if name not in operation_columns:
             ledger.db.execute("ALTER TABLE aura_card_operations ADD COLUMN " + name + " TEXT")
@@ -1123,7 +1126,7 @@ def _settle_card_request(ledger, environment, card_id, status):
 
 
 def _settle_card_recharge(ledger, environment, operation_id, status):
-    if status not in {"completed", "failed"}:
+    if status not in {"completed", "failed", "declined", "cancelled"}:
         return
     entity = ledger.db.execute(
         "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
@@ -1135,7 +1138,8 @@ def _settle_card_recharge(ledger, environment, operation_id, status):
     stored = json.loads(entity["request_body"])
     held = _decimal(stored.get("held_amount"))
     available, reserved = ledger.balance(entity["user_id"], "USDT")
-    release = held if status == "failed" else Decimal(0)
+    failed = status in {"failed", "declined", "cancelled"}
+    release = held if failed else Decimal(0)
     ledger.put_balance(
         entity["user_id"], "USDT", available + release, reserved - held
     )
@@ -1143,15 +1147,16 @@ def _settle_card_recharge(ledger, environment, operation_id, status):
         ledger, environment, entity["user_id"], "USDT", release, -held
     )
     if isinstance(stored.get("result"), dict):
-        stored["result"]["status"] = status
-        if status == "failed" and stored["result"].get("failure_reason") is None:
+        stored["result"]["status"] = "failed" if failed else "completed"
+        if failed and stored["result"].get("failure_reason") is None:
             stored["result"]["failure_reason"] = "provider_rejected"
     stored["held_amount"] = "0"
     ledger.db.execute(
         "UPDATE wallet_provider_entities SET status=?,request_body=?,updated_at=? "
         "WHERE provider='aura' AND environment=? AND entity_type='card_recharge' "
         "AND local_id=?",
-        (status, json.dumps(stored, sort_keys=True, separators=(",", ":")),
+        ("failed" if failed else "completed",
+         json.dumps(stored, sort_keys=True, separators=(",", ":")),
          time.time(), environment, entity["local_id"]),
     )
 
@@ -1243,23 +1248,28 @@ def _store_card_operation(ledger, environment, data):
         (operation_id,),
     ).fetchone()
     incoming_updated = str(data.get("updated_at") or "")
+    if not incoming_updated:
+        raise ValueError("Aura card operation updated_at is required")
     if (existing and incoming_updated and existing[0]
             and incoming_updated <= existing[0]):
         return
-    amount = None if data.get("amount") is None else str(_signed_decimal(data["amount"]))
-    fee = None if data.get("fee") is None else str(_signed_decimal(data["fee"]))
+    amount = None if data.get("amount") is None else str(_decimal(data["amount"], allow_zero=True))
+    fee = None if data.get("fee") is None else str(_decimal(data["fee"], allow_zero=True))
     asset = data.get("currency") or data.get("asset")
     asset = str(asset).upper()[:20] if asset is not None else None
-    merchant = data.get("merchant")
+    merchant = data.get("merchant_name") or data.get("merchant")
     if isinstance(merchant, dict):
         merchant = merchant.get("name") or merchant.get("descriptor")
     merchant = str(merchant)[:300] if merchant is not None else None
     operation_type = data.get("type") or data.get("operation_type")
     operation_type = str(operation_type)[:100] if operation_type is not None else None
     status = str(data.get("status") or "unknown")[:100]
-    optional_amount = lambda key: (None if data.get(key) is None else str(_signed_decimal(data[key])))
+    optional_amount = lambda key: (
+        None if data.get(key) is None else str(_decimal(data[key], allow_zero=True))
+    )
     original_amount = optional_amount("original_amount")
     refunded_amount = optional_amount("refunded_amount")
+    balance_before = optional_amount("balance_before")
     balance_after = optional_amount("balance_after")
     original_currency = data.get("original_currency")
     original_currency = str(original_currency).upper()[:20] if original_currency is not None else None
@@ -1269,23 +1279,37 @@ def _store_card_operation(ledger, environment, data):
     mcc = str(mcc)[:20] if mcc is not None else None
     merchant_category = data.get("merchant_category")
     merchant_category = str(merchant_category)[:200] if merchant_category is not None else None
+    previous_status = data.get("previous_status")
+    previous_status = str(previous_status)[:100] if previous_status is not None else None
+    decline_reason = data.get("decline_reason")
+    decline_reason = str(decline_reason)[:200] if decline_reason is not None else None
+    decline_message = data.get("decline_message")
+    decline_message = str(decline_message)[:500] if decline_message is not None else None
+    provider_created_at = data.get("created_at")
+    provider_created_at = str(provider_created_at)[:100] if provider_created_at is not None else None
     stamp = time.time()
     ledger.db.execute(
         "INSERT INTO aura_card_operations "
         "(operation_id,card_id,user_id,environment,operation_type,status,asset,amount,fee,merchant,"
-        "original_amount,original_currency,refunded_amount,balance_after,merchant_country,mcc,merchant_category,"
-        "provider_updated_at,body,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
+        "original_amount,original_currency,refunded_amount,balance_before,balance_after,merchant_country,mcc,"
+        "merchant_category,previous_status,decline_reason,decline_message,provider_created_at,"
+        "provider_updated_at,body,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) "
         "ON CONFLICT(operation_id) DO UPDATE SET operation_type=excluded.operation_type,"
         "status=excluded.status,asset=excluded.asset,amount=excluded.amount,fee=excluded.fee,"
         "merchant=excluded.merchant,provider_updated_at=excluded.provider_updated_at,"
         "original_amount=excluded.original_amount,original_currency=excluded.original_currency,"
-        "refunded_amount=excluded.refunded_amount,balance_after=excluded.balance_after,"
+        "refunded_amount=excluded.refunded_amount,balance_before=excluded.balance_before,"
+        "balance_after=excluded.balance_after,previous_status=excluded.previous_status,"
+        "decline_reason=excluded.decline_reason,decline_message=excluded.decline_message,"
+        "provider_created_at=excluded.provider_created_at,"
         "merchant_country=excluded.merchant_country,mcc=excluded.mcc,"
         "merchant_category=excluded.merchant_category,"
         "body=excluded.body,updated_at=excluded.updated_at",
         (operation_id, card_id, card[0], environment, operation_type, status, asset,
          amount, fee, merchant, original_amount, original_currency, refunded_amount,
-         balance_after, merchant_country, mcc, merchant_category, incoming_updated or None,
+         balance_before, balance_after, merchant_country, mcc, merchant_category,
+         previous_status, decline_reason, decline_message, provider_created_at,
+         incoming_updated,
          json.dumps(_redact_card_data(data), separators=(",", ":"), ensure_ascii=False),
          stamp, stamp),
     )

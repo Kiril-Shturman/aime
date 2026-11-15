@@ -176,7 +176,7 @@ class AuraUnitTests(unittest.TestCase):
             "occurred_at": "2026-01-01T00:04:00Z", "partner_id": MOCK_PARTNER,
             "data": {
                 "id": "op_one", "card_id": "card_one", "type": "purchase",
-                "status": "completed", "asset": "USDT", "amount": "-2.5",
+                "status": "completed", "asset": "USDT", "amount": "2.5",
                 "fee": "0", "merchant": "Store",
                 "updated_at": "2026-01-01T00:04:00Z",
             },
@@ -191,7 +191,7 @@ class AuraUnitTests(unittest.TestCase):
         stored_operation = self.ledger.db.execute(
             "SELECT * FROM aura_card_operations"
         ).fetchone()
-        self.assertEqual(stored_operation["amount"], "-2.5")
+        self.assertEqual(stored_operation["amount"], "2.5")
 
         otp = {
             "event": "card.otp", "event_id": "evt_otp",
@@ -223,6 +223,62 @@ class AuraUnitTests(unittest.TestCase):
         card = self.ledger.db.execute("SELECT * FROM aura_cards").fetchone()
         self.assertEqual(card["delivery_status"], "out_for_delivery")
         self.assertEqual(json.loads(card["tracking"])["number"], "TRACK1")
+
+    def test_documented_card_operation_transitions_ignore_stale_events(self):
+        opened = {
+            "event": "card.opened", "event_id": "evt_operation_card",
+            "occurred_at": "2026-09-11T09:59:00Z", "partner_id": MOCK_PARTNER,
+            "data": {
+                "card_id": "card_operation", "owner_id": self.customer,
+                "customer_id": "internal-aura-customer", "status": "opened",
+                "card_number_masked": "411111••••••1234",
+            },
+        }
+        base = {
+            "card_id": "card_operation",
+            "operation_id": "3f2a1b0c-9d8e-4f7a-8b6c-5d4e3f2a1b0c",
+            "type": "purchase", "status": "pending", "previous_status": None,
+            "amount": "96.1314", "currency": "USDT",
+            "original_amount": "75.87", "original_currency": "GBP",
+            "merchant_name": "ANTHROPIC* CLAUDE SUB", "merchant_country": "US",
+            "mcc": "5734", "merchant_category": "Computer Software Stores",
+            "refunded_amount": "0", "decline_reason": None,
+            "decline_message": None, "balance_before": "150",
+            "balance_after": "53.8686", "created_at": "2026-09-11T10:00:00.000Z",
+            "updated_at": "2026-09-11T10:00:00.000Z",
+        }
+        completed_data = {
+            **base, "status": "completed", "previous_status": "pending",
+            "updated_at": "2026-09-12T10:00:00.000Z",
+        }
+        events = (
+            opened,
+            {"event": "card.operation", "event_id": "evt_operation_pending",
+             "occurred_at": base["updated_at"], "partner_id": MOCK_PARTNER,
+             "data": base},
+            {"event": "card.operation", "event_id": "evt_operation_completed",
+             "occurred_at": completed_data["updated_at"], "partner_id": MOCK_PARTNER,
+             "data": completed_data},
+            {"event": "card.operation", "event_id": "evt_operation_stale",
+             "occurred_at": base["updated_at"], "partner_id": MOCK_PARTNER,
+             "data": base},
+        )
+        for event in events:
+            raw, signature = signed(event)
+            store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 4)
+        operation = self.ledger.db.execute(
+            "SELECT * FROM aura_card_operations WHERE operation_id=?",
+            (base["operation_id"],),
+        ).fetchone()
+        self.assertEqual(operation["status"], "completed")
+        self.assertEqual(operation["previous_status"], "pending")
+        self.assertEqual(operation["amount"], "96.1314")
+        self.assertEqual(operation["merchant"], "ANTHROPIC* CLAUDE SUB")
+        self.assertEqual(operation["balance_before"], "150")
+        self.assertEqual(operation["balance_after"], "53.8686")
+        self.assertEqual(operation["provider_created_at"], "2026-09-11T10:00:00.000Z")
+        self.assertEqual(operation["provider_updated_at"], "2026-09-12T10:00:00.000Z")
 
     def test_documented_card_opened_uses_owner_id_not_internal_customer_id(self):
         event = {
@@ -599,22 +655,27 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             self.ledger.balance(uid, "USDT"), (Decimal("43.899996"), Decimal("10.2"))
         )
-        failed_event = {
+        declined_event = {
             "api_version": "3.17.0", "event": "card.operation",
             "event_id": "evt_recharge_failed", "occurred_at": "2026-01-01T00:30:00Z",
             "partner_id": MOCK_PARTNER,
             "data": {
                 "operation_id": pending_result["operation_id"], "card_id": card_id,
-                "type": "topup", "status": "failed", "currency": "USDT",
+                "type": "topup", "status": "declined", "previous_status": "pending",
+                "currency": "USDT",
                 "amount": "10", "fee": "0.2", "updated_at": "2026-01-01T00:30:00Z",
             },
         }
-        raw, signature = signed(failed_event)
+        raw, signature = signed(declined_event)
         store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
         self.assertEqual(process_inbox(self.ledger, "test"), 1)
         self.assertEqual(
             self.ledger.balance(uid, "USDT"), (Decimal("54.099996"), Decimal("0"))
         )
+        recharge = self.ledger.db.execute(
+            "SELECT status FROM wallet_provider_entities WHERE local_id='recharge-service-pending'"
+        ).fetchone()
+        self.assertEqual(recharge["status"], "failed")
         self.assertEqual(process_inbox(self.ledger, "test"), 0)
 
     async def test_card_money_input_validation(self):
@@ -795,7 +856,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )).status, 200)
         card_id = card_result["card"]["id"]
         operation = await self.mock.post(
-            "/mock/card-operations", json={"card_id": card_id, "amount": "-4.5"}
+            "/mock/card-operations", json={"card_id": card_id, "amount": "4.5"}
         )
         operation_event = (await operation.json())["webhook"]
         raw, signature = signed(operation_event)
@@ -813,7 +874,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "/api/wallet/aura-card-operations?card_id=" + card_id,
             headers=self.owner,
         )
-        self.assertEqual((await operations.json())["data"][0]["amount"], "-4.5")
+        self.assertEqual((await operations.json())["data"][0]["amount"], "4.5")
         fees = await self.wpay.get("/api/wallet/aura-card-fees", headers=self.owner)
         self.assertEqual(fees.status, 200)
         self.assertEqual(fees.headers["Cache-Control"], "no-store")

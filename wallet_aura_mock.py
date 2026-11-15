@@ -324,12 +324,24 @@ def make_app():
         if card_id not in state.cards:
             return envelope("card_not_found", "Card not found", 404)
         item = {
-            "id": "op_" + uuid.uuid4().hex, "card_id": card_id,
+            "operation_id": str(uuid.uuid4()), "card_id": card_id,
             "type": str(body.get("type") or "purchase"),
             "status": str(body.get("status") or "completed"),
-            "asset": "USDT", "amount": str(body.get("amount") or "1"),
+            "previous_status": body.get("previous_status"),
+            "currency": "USDT", "amount": str(body.get("amount") or "1"),
             "fee": str(body.get("fee") or "0"),
-            "merchant": body.get("merchant") or "Local Store",
+            "original_amount": str(body.get("original_amount") or body.get("amount") or "1"),
+            "original_currency": str(body.get("original_currency") or "USD"),
+            "merchant_name": body.get("merchant_name") or body.get("merchant") or "Local Store",
+            "merchant_country": str(body.get("merchant_country") or "US"),
+            "mcc": str(body.get("mcc") or "5734"),
+            "merchant_category": str(body.get("merchant_category") or "Computer Software Stores"),
+            "refunded_amount": str(body.get("refunded_amount") or "0"),
+            "decline_reason": body.get("decline_reason"),
+            "decline_message": body.get("decline_message"),
+            "balance_before": str(body.get("balance_before") or "100"),
+            "balance_after": str(body.get("balance_after") or "99"),
+            "created_at": "2026-01-01T00:03:00Z",
             "updated_at": "2026-01-01T00:04:00Z",
         }
         state.card_operations.append(item)
