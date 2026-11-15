@@ -211,7 +211,7 @@
 }
 .wpay-lock-badge {
   position: absolute;
-  top: max(64px, var(--tg-content-safe-area-inset-top, 0px));
+  top: 0;
   left: 0;
   width: 100%;
   height: min(52dvh, 480px);
@@ -294,7 +294,7 @@
 }
 @media (max-height: 650px) {
   .wpay-lock-badge {
-    top: 30px;
+    top: 0;
     height: 47dvh;
   }
   .wpay-lock-copy {
