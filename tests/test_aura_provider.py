@@ -136,6 +136,27 @@ class AuraUnitTests(unittest.TestCase):
         self.assertEqual(process_inbox(self.ledger, "test"), 1)
         self.assertEqual(str(self.ledger.balance(self.uid, "USDT")[0]), "9")
 
+    def test_kyc_webhook_updates_latest_state_idempotently(self):
+        event = {
+            "event": "customer.kyc.updated", "event_id": "evt_kyc",
+            "occurred_at": "2026-01-01T00:02:00Z", "partner_id": MOCK_PARTNER,
+            "data": {
+                "customer_id": self.customer, "status": "verified",
+                "verified": True, "terminal": True,
+                "updated_at": "2026-01-01T00:02:00Z",
+            },
+        }
+        raw, signature = signed(event)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        self.assertEqual(process_inbox(self.ledger, "test"), 0)
+        state = self.ledger.db.execute(
+            "SELECT * FROM aura_kyc_cases WHERE user_id=?", (self.uid,)
+        ).fetchone()
+        self.assertEqual(state["status"], "verified")
+        self.assertEqual(state["verified"], 1)
+        self.assertEqual(state["terminal"], 1)
+
 
 class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -168,6 +189,32 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.client.remaining, 99)
         report = await reconcile(self.ledger, self.client, "test")
         self.assertEqual(report["state"], "ok")
+
+    async def test_customer_and_widget_kyc_contract(self):
+        uid = "tg:778"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(
+            uid, ref, email="ivan@example.com", phone="+79991234567"
+        )
+        customer = await self.client.get_customer(customer_id)
+        self.assertEqual(customer["email"], "ivan@example.com")
+        customers = await self.client.list_customers()
+        self.assertEqual(customers["data"][0]["id"], customer_id)
+        session = await self.service.start_kyc(uid, ref)
+        self.assertEqual(session["status"], "pending")
+        self.assertTrue(session["session_url"].startswith("https://"))
+        stored = self.ledger.db.execute(
+            "SELECT body FROM aura_kyc_cases WHERE user_id=?", (uid,)
+        ).fetchone()[0]
+        self.assertNotIn("session", stored)
+        status = await self.service.get_kyc(uid, ref)
+        self.assertFalse(status["verified"])
+
+    async def test_customer_input_validation(self):
+        with self.assertRaises(ValueError):
+            await self.client.upsert_customer("customer", email="not-an-email")
+        with self.assertRaises(ValueError):
+            await self.client.upsert_customer("customer", phone="89991234567")
 
     async def test_environment_key_guard(self):
         with self.assertRaises(ValueError):
@@ -247,6 +294,38 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             str(self.app["wpay_ledger"].balance("owner", "USDT")[0]), "9"
         )
+
+    async def test_customer_kyc_session_status_and_webhook(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner,
+            json={"email": "owner@example.com", "phone": "+79991234567"},
+        )
+        self.assertEqual(registered.status, 200, await registered.text())
+        customer_id = (await registered.json())["customer_id"]
+        started = await self.wpay.post(
+            "/api/wallet/aura-kyc", headers=self.owner, json={}
+        )
+        self.assertEqual(started.status, 200, await started.text())
+        self.assertEqual((await started.json())["status"], "pending")
+        changed = await self.mock.post(
+            "/mock/kyc", json={"customer_id": customer_id, "status": "verified"}
+        )
+        event = (await changed.json())["webhook"]
+        raw, signature = signed(event)
+        webhook = await self.wpay.post(
+            "/api/wallet/aura-webhook", data=raw,
+            headers={"X-Aura-Signature-V2": signature},
+        )
+        self.assertEqual(webhook.status, 200, await webhook.text())
+        processed = await self.wpay.post(
+            "/api/wallet/admin-aura-process", headers=self.owner
+        )
+        self.assertEqual(processed.status, 200, await processed.text())
+        status = await self.wpay.get("/api/wallet/aura-kyc", headers=self.owner)
+        self.assertEqual(status.status, 200, await status.text())
+        body = await status.json()
+        self.assertTrue(body["verified"])
+        self.assertTrue(body["terminal"])
 
 
 if __name__ == "__main__":

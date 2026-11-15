@@ -692,20 +692,26 @@ Implemented:
 - Atomic wallet ledger posting, provider-position update and webhook completion,
   so a crash cannot leave a half-applied deposit.
 - Provider balance reconciliation and admin health/processing endpoints.
-- Local Aura mock for `/me`, customers, deposit addresses, deposits, balance and
-  signed confirmed-deposit scenarios.
+- Local Aura mock for `/me`, customers, hosted KYC, deposit addresses, deposits,
+  balance and signed webhook scenarios.
+- Customer upsert/read/list transport, strict email and Russian `+7` phone
+  validation, short-lived hosted KYC sessions, current KYC status and
+  idempotent `customer.kyc.updated` processing. Session URLs are never persisted;
+  only minimal status/verified/terminal/reason metadata is retained.
 
 Verification on this branch:
 
-- 83 backend unit/integration tests passed, including duplicate delivery,
+- 87 backend unit/integration tests passed, including duplicate delivery,
   pending-to-confirmed transition, invalid-signature recovery, event-ID reuse,
   environment guards and the complete mock deposit route.
 - Frontend tests passed (3/3), production build passed and lint completed with
   pre-existing warnings only.
 - Python compilation and `git diff --check` passed.
 
-Still not implemented: KYC, cards, SBP purchase, outgoing QR payment and
-withdrawals. Those require their exact request/response schemas and real Aura
-testnet or a tightly controlled production pilot. A newly issued live key may
-later be installed only in server secret storage; the key previously pasted in
-chat must remain revoked.
+Still not implemented: KYC identity import, cards, SBP purchase, outgoing QR
+payment and withdrawals. Identity import remains intentionally blocked until the
+exact passport request schema and retention requirements are available; hosted
+KYC is the safe default. The remaining products require their exact
+request/response schemas and real Aura testnet or a tightly controlled
+production pilot. A newly issued live key may later be installed only in server
+secret storage; the key previously pasted in chat must remain revoked.

@@ -20,6 +20,7 @@ MOCK_PARTNER = "partner_local_mock"
 class State:
     def __init__(self):
         self.customers = {}
+        self.kyc = {}
         self.addresses = {}
         self.deposits = []
         self.balance = Decimal("0")
@@ -72,6 +73,64 @@ def make_app():
         })
         item.update({key: body[key] for key in ("email", "phone") if key in body})
         return web.json_response(item)
+
+    async def list_customers(request):
+        items = list(reversed(list(state.customers.values())))
+        limit = min(max(int(request.query.get("limit", "100")), 1), 100)
+        return web.json_response({"data": items[:limit], "next_cursor": None})
+
+    async def customer(request):
+        customer_id = request.match_info["customer_id"]
+        if customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        return web.json_response(state.customers[customer_id])
+
+    async def kyc_status(request):
+        customer_id = request.match_info["customer_id"]
+        if customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        return web.json_response(state.kyc.get(customer_id, {
+            "customer_id": customer_id, "status": "not_started",
+            "verified": False, "terminal": False,
+            "updated_at": "2026-01-01T00:00:00Z",
+        }))
+
+    async def start_kyc(request):
+        customer_id = request.match_info["customer_id"]
+        customer_item = state.customers.get(customer_id)
+        if not customer_item:
+            return envelope("customer_not_found", "Customer not found", 404)
+        if not customer_item.get("email"):
+            return envelope("kyc_email_required", "Customer email is required", 412)
+        item = state.kyc.setdefault(customer_id, {
+            "customer_id": customer_id, "status": "pending",
+            "verified": False, "terminal": False,
+            "updated_at": "2026-01-01T00:01:00Z",
+        })
+        return web.json_response({
+            **item, "verification_url": "https://local.invalid/kyc/" + customer_id,
+        })
+
+    async def set_kyc(request):
+        body = await request.json()
+        customer_id = str(body.get("customer_id") or "")
+        if customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        status = str(body.get("status") or "verified")
+        item = {
+            "customer_id": customer_id, "status": status,
+            "verified": bool(body.get("verified", status == "verified")),
+            "terminal": bool(body.get("terminal", status in {"verified", "rejected"})),
+            "reason": body.get("reason"),
+            "updated_at": str(body.get("updated_at") or "2026-01-01T00:02:00Z"),
+        }
+        state.kyc[customer_id] = item
+        event = {
+            "event": "customer.kyc.updated", "event_id": "evt_" + uuid.uuid4().hex,
+            "occurred_at": item["updated_at"], "partner_id": MOCK_PARTNER,
+            "data": item,
+        }
+        return web.json_response({"kyc": item, "webhook": event})
 
     async def addresses(request):
         customer_id = request.match_info["customer_id"]
@@ -133,11 +192,16 @@ def make_app():
         return web.json_response({"deposit": item, "webhook": event})
 
     app.router.add_get("/v1/partner/me", me)
+    app.router.add_get("/v1/partner/customers", list_customers)
     app.router.add_post("/v1/partner/customers", customers)
+    app.router.add_get("/v1/partner/customers/{customer_id}", customer)
+    app.router.add_get("/v1/partner/customers/{customer_id}/kyc", kyc_status)
+    app.router.add_post("/v1/partner/customers/{customer_id}/kyc", start_kyc)
     app.router.add_get("/v1/partner/customers/{customer_id}/deposit-addresses", addresses)
     app.router.add_get("/v1/partner/deposits", deposits)
     app.router.add_get("/v1/partner/balance", balance)
     app.router.add_post("/mock/deposits", create_deposit)
+    app.router.add_post("/mock/kyc", set_kyc)
     return app
 
 

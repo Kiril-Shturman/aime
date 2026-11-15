@@ -64,6 +64,13 @@ def prepare(ledger):
         environment TEXT NOT NULL, state TEXT NOT NULL, email_hash TEXT, phone_hash TEXT,
         provider_updated_at TEXT, created_at REAL NOT NULL, updated_at REAL NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS aura_kyc_cases (
+        user_id TEXT PRIMARY KEY, customer_id TEXT UNIQUE NOT NULL,
+        environment TEXT NOT NULL, status TEXT NOT NULL,
+        verified INTEGER NOT NULL DEFAULT 0, terminal INTEGER NOT NULL DEFAULT 0,
+        reason TEXT, provider_updated_at TEXT, body TEXT NOT NULL,
+        created_at REAL NOT NULL, updated_at REAL NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS aura_deposit_addresses (
         address_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, customer_id TEXT NOT NULL,
         environment TEXT NOT NULL, network TEXT NOT NULL, address TEXT NOT NULL,
@@ -250,10 +257,34 @@ class AuraClient:
     async def upsert_customer(self, customer_id, *, email=None, phone=None):
         body = {"id": _safe_identifier(customer_id, "customer id")}
         if email:
-            body["email"] = str(email)[:320]
+            email = str(email).strip()
+            if len(email) > 320 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+                raise ValueError("Invalid Aura customer email")
+            body["email"] = email
         if phone:
-            body["phone"] = str(phone)[:32]
+            phone = str(phone).strip()
+            if not re.fullmatch(r"\+7\d{10}", phone):
+                raise ValueError("Aura SBP phone must be a Russian mobile number in +7 format")
+            body["phone"] = phone
         return await self.request("POST", "/customers", body=body)
+
+    async def get_customer(self, customer_id):
+        customer_id = quote(_safe_identifier(customer_id, "customer id"), safe="")
+        return await self.request("GET", "/customers/" + customer_id)
+
+    async def list_customers(self, *, cursor=None, limit=100):
+        params = {"limit": min(max(int(limit), 1), 100)}
+        if cursor:
+            params["cursor"] = str(cursor)
+        return await self.request("GET", "/customers", params=params)
+
+    async def get_kyc(self, customer_id):
+        customer_id = quote(_safe_identifier(customer_id, "customer id"), safe="")
+        return await self.request("GET", "/customers/" + customer_id + "/kyc")
+
+    async def start_kyc(self, customer_id):
+        customer_id = quote(_safe_identifier(customer_id, "customer id"), safe="")
+        return await self.request("POST", "/customers/" + customer_id + "/kyc")
 
     async def deposit_addresses(self, customer_id):
         return await self.request("GET", "/customers/" + quote(_safe_identifier(customer_id, "customer id"), safe="") + "/deposit-addresses")
@@ -309,6 +340,70 @@ class AuraService:
              digest(email), digest(phone), result.get("updated_at"), stamp, stamp),
         )
         return customer_id
+
+    def _store_kyc(self, uid, customer_id, payload):
+        if not isinstance(payload, dict):
+            raise ValueError("Invalid Aura KYC state")
+        status = str(payload.get("status") or payload.get("state") or (
+            "verified" if payload.get("verified") is True else "pending"
+        ))[:100]
+        verified = payload.get("verified") is True or status == "verified"
+        terminal = payload.get("terminal") is True
+        reason = payload.get("reason")
+        if reason is None and isinstance(payload.get("details"), dict):
+            reason = payload["details"].get("reason")
+        reason = str(reason)[:500] if reason is not None else None
+        updated = payload.get("updated_at") or payload.get("provider_updated_at")
+        safe_body = {
+            "status": status, "verified": verified, "terminal": terminal,
+            "reason": reason, "updated_at": updated,
+        }
+        stamp = time.time()
+        current = self.ledger.db.execute(
+            "SELECT provider_updated_at FROM aura_kyc_cases WHERE user_id=?", (uid,)
+        ).fetchone()
+        if current and updated and current[0] and str(updated) <= str(current[0]):
+            return self.kyc_state(uid)
+        self.ledger.db.execute(
+            "INSERT INTO aura_kyc_cases VALUES (?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(user_id) DO UPDATE SET status=excluded.status,"
+            "verified=excluded.verified,terminal=excluded.terminal,reason=excluded.reason,"
+            "provider_updated_at=excluded.provider_updated_at,body=excluded.body,"
+            "updated_at=excluded.updated_at",
+            (uid, customer_id, self.environment, status, int(verified), int(terminal),
+             reason, updated, json.dumps(safe_body, separators=(",", ":")), stamp, stamp),
+        )
+        return safe_body
+
+    def kyc_state(self, uid):
+        row = self.ledger.db.execute(
+            "SELECT status,verified,terminal,reason,provider_updated_at "
+            "FROM aura_kyc_cases WHERE user_id=?", (uid,)
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "status": row["status"], "verified": bool(row["verified"]),
+            "terminal": bool(row["terminal"]), "reason": row["reason"],
+            "updated_at": row["provider_updated_at"],
+        }
+
+    async def get_kyc(self, uid, client_ref):
+        customer_id = await self.ensure_customer(uid, client_ref)
+        return self._store_kyc(uid, customer_id, await self.client.get_kyc(customer_id))
+
+    async def start_kyc(self, uid, client_ref, *, email=None, phone=None):
+        customer_id = await self.ensure_customer(
+            uid, client_ref, email=email, phone=phone
+        )
+        result = await self.client.start_kyc(customer_id)
+        state = self._store_kyc(uid, customer_id, result)
+        session_url = result.get("url") or result.get("session_url") or result.get("verification_url")
+        if session_url is not None:
+            session_url = str(session_url)
+            if not session_url.startswith("https://") or len(session_url) > 2048:
+                raise ValueError("Invalid Aura KYC session URL")
+        return {**state, "session_url": session_url}
 
     async def get_or_create_deposit_address(self, uid, client_ref):
         customer_id = await self.ensure_customer(uid, client_ref)
@@ -452,7 +547,20 @@ def process_inbox(ledger, environment, limit=20):
             if current[0] is not None:
                 ledger.commit()
                 continue
-            if kind == "customer.deposit.confirmed":
+            if kind == "customer.kyc.updated":
+                customer_id = _safe_identifier(
+                    data.get("customer_id") or data.get("id"), "customer id"
+                )
+                owner = ledger.db.execute(
+                    "SELECT user_id FROM aura_customers WHERE customer_id=? AND environment=?",
+                    (customer_id, environment),
+                ).fetchone()
+                if not owner:
+                    raise ValueError("Unknown Aura KYC owner")
+                AuraService(ledger, None, environment)._store_kyc(
+                    owner[0], customer_id, data
+                )
+            elif kind == "customer.deposit.confirmed":
                 deposit_id = _safe_identifier(data.get("id") or data.get("deposit_id"), "deposit id")
                 customer_id = _safe_identifier(data.get("customer_id") or data.get("owner_id"), "customer id")
                 owner = ledger.db.execute(

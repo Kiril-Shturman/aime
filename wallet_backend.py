@@ -793,6 +793,42 @@ def install_wallet(app, root, owner_check):
                 }})
             if action == 'admin-broadcasts' and request.method in {'GET', 'POST'}:
                 return web.json_response(await admin_broadcasts(request, uid))
+            if action == 'aura-customer' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                body = await request.json()
+                allowed = {'email', 'phone'}
+                if not isinstance(body, dict) or set(body) - allowed:
+                    raise ValueError('Unsupported Aura customer fields')
+                customer_id = await aura_service.ensure_customer(
+                    uid, client_ref, email=body.get('email'), phone=body.get('phone')
+                )
+                return web.json_response({'customer_id': customer_id, 'registered': True})
+            if action == 'aura-customer' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                row = ledger.db.execute(
+                    'SELECT customer_id FROM aura_customers WHERE user_id=? AND environment=?',
+                    (uid, aura_environment),
+                ).fetchone()
+                if not row:
+                    raise ApiError('CUSTOMER_NOT_REGISTERED', 'Aura customer is not registered', 404)
+                result = await aura_client.get_customer(row['customer_id'])
+                return web.json_response(result)
+            if action == 'aura-kyc' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                return web.json_response(await aura_service.get_kyc(uid, client_ref))
+            if action == 'aura-kyc' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                body = await request.json()
+                allowed = {'email', 'phone'}
+                if not isinstance(body, dict) or set(body) - allowed:
+                    raise ValueError('Unsupported Aura KYC fields')
+                return web.json_response(await aura_service.start_kyc(
+                    uid, client_ref, email=body.get('email'), phone=body.get('phone')
+                ))
             if action == 'aura-deposit-address' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
