@@ -10,14 +10,33 @@ METHODS = {'invoices': ('getInvoices', 'invoice_id', 'invoice_ids'),
 
 
 def prepare_operations(ledger):
-    ledger.db.execute('CREATE TABLE IF NOT EXISTS wallet_addresses (user_id TEXT, network TEXT, body TEXT NOT NULL, PRIMARY KEY(user_id,network))')
+    ledger.db.execute('SAVEPOINT wallet_address_migration')
+    try:
+        # Upgrade legacy network-only keys without losing existing USDT addresses.
+        columns = [row[1] for row in ledger.db.execute('PRAGMA table_info(wallet_addresses)')]
+        if columns and 'asset' not in columns:
+            ledger.db.execute('ALTER TABLE wallet_addresses RENAME TO wallet_addresses_legacy')
+        ledger.db.execute('CREATE TABLE IF NOT EXISTS wallet_addresses (user_id TEXT, asset TEXT, network TEXT, body TEXT NOT NULL, PRIMARY KEY(user_id,asset,network))')
+        if columns and 'asset' not in columns:
+            rows = ledger.db.execute('SELECT user_id, network, body FROM wallet_addresses_legacy').fetchall()
+            for row in rows:
+                body = json.loads(row['body'])
+                body['asset'] = body.get('asset', 'USDT')
+                ledger.db.execute('INSERT OR IGNORE INTO wallet_addresses VALUES (?,?,?,?)', (row['user_id'], body['asset'], row['network'], json.dumps(body)))
+            ledger.db.execute('DROP TABLE wallet_addresses_legacy')
+        ledger.db.execute('RELEASE SAVEPOINT wallet_address_migration')
+    except Exception:
+        ledger.db.execute('ROLLBACK TO SAVEPOINT wallet_address_migration')
+        ledger.db.execute('RELEASE SAVEPOINT wallet_address_migration')
+        raise
 
 
-def save_address(ledger, uid, result):
+def save_address(ledger, uid, result, asset='USDT'):
     # TRON uses expiring exact-amount claims, never permanent addresses.
     if result.get('address') and result.get('network') in {'BSC', 'ETH', 'TON', 'SOL'}:
         public = {key: result[key] for key in ('address', 'network', 'client_ref', 'min_deposit') if key in result}
-        ledger.db.execute('INSERT OR REPLACE INTO wallet_addresses VALUES (?,?,?)', (uid, result['network'], json.dumps(public)))
+        public['asset'] = asset
+        ledger.db.execute('INSERT OR REPLACE INTO wallet_addresses VALUES (?,?,?,?)', (uid, asset, result['network'], json.dumps(public)))
 
 
 def page_number(raw):
@@ -31,10 +50,13 @@ async def operations_route(request, action, uid, client_ref, ledger, provider, A
     if action == 'access' and request.method == 'GET':
         return web.json_response({'owner': owner})
     if action == 'addresses' and request.method == 'GET':
-        rows = ledger.db.execute('SELECT body FROM wallet_addresses WHERE user_id=? ORDER BY network', (uid,))
+        rows = ledger.db.execute('SELECT body FROM wallet_addresses WHERE user_id=? ORDER BY asset,network', (uid,))
         return web.json_response({'items': [json.loads(row[0]) for row in rows]})
     if action == 'address' and request.method == 'POST':
-        network = (await request.json()).get('network')
+        body = await request.json()
+        network = body.get('network')
+        if body.get('asset', 'USDT') != 'USDT':
+            raise ValueError('Permanent client addresses support USDT only; use an asset-specific deposit')
         if network not in {'BSC', 'ETH', 'TON', 'SOL'}:
             raise ValueError('Unsupported permanent network')
         result = await provider.call('getClientAddress', {'client_ref': client_ref, 'network': network}, post=True)

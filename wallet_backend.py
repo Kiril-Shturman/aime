@@ -659,7 +659,7 @@ def install_wallet(app, root, owner_check):
                     result = await provider.call('createExactDeposit', {'client_ref': client_ref, 'amount': str(money(body.get('amount'))), 'network': 'TRON', 'asset': 'USDT'}, post=True)
                 else:
                     result = await provider.call('createDeposit', {'client_ref': client_ref, 'network': network, 'asset': asset}, post=True)
-                save_address(ledger, uid, result)
+                save_address(ledger, uid, result, asset)
                 return web.json_response(result)
             if action == 'sync' and request.method == 'POST':
                 # Fetch all pages; bound the work and allow the next sync to continue.

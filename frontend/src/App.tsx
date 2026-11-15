@@ -1,99 +1,106 @@
-import { useEffect } from 'react'
-import {
-  BrowserRouter,
-  Route,
-  Routes,
-  useLocation,
-} from 'react-router-dom'
-import { App as KonstaApp } from 'konsta/react'
-import HomePage from './pages/HomePage'
-import ProjectPage from './pages/ProjectPage'
-import ProjectSettingsPage from './pages/ProjectSettingsPage'
-import DesignKitPage from './pages/DesignKitPage'
-import FilterPage from './pages/FilterPage'
-import ProfilePage from './pages/ProfilePage'
-import BoardSettingsPage from './pages/BoardSettingsPage'
-import ProfileEditPage from './pages/ProfileEditPage'
-import GeneratePage from './pages/GeneratePage'
-import HistoryPage from './pages/HistoryPage'
-import TariffsPage from './pages/TariffsPage'
-import PaymentPage from './pages/PaymentPage'
-import TermsPage from './pages/TermsPage'
-import PrivacyPage from './pages/PrivacyPage'
-import TransactionsPage from './pages/TransactionsPage'
-import TokenUsagePage from './pages/TokenUsagePage'
-import BalancePage from './pages/BalancePage'
-import McpKeysPage from './pages/McpKeysPage'
-import AgentDocsPage from './pages/AgentDocsPage'
-import ConnectedAppsPage from './pages/ConnectedAppsPage'
-import FaqPage from './pages/FaqPage'
-import ChatPage from './pages/ChatPage'
-import AgentChatPage from './pages/AgentChatPage'
-import GmailConnectPage from './pages/GmailConnectPage'
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
-import WalletPage from './pages/WalletPage'
-import WalletAdminPage from './pages/WalletAdminPage'
-import TabPill from './components/TabPill'
-import DesktopSidebar from './components/DesktopSidebar'
-import CopyToast from './components/CopyToast'
-import { AppStoreProvider, useApp } from './store/AppStore'
-import { ThemeProvider, useTheme } from './store/ThemeStore'
-import { applyTgTheme, initTelegram } from './lib/telegram'
+import { useEffect, lazy, Suspense } from "react";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { App as KonstaApp } from "konsta/react";
+const HomePage = lazy(() => import("./pages/HomePage"));
+const ProjectPage = lazy(() => import("./pages/ProjectPage"));
+const ProjectSettingsPage = lazy(() => import("./pages/ProjectSettingsPage"));
+const DesignKitPage = lazy(() => import("./pages/DesignKitPage"));
+const FilterPage = lazy(() => import("./pages/FilterPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const BoardSettingsPage = lazy(() => import("./pages/BoardSettingsPage"));
+const ProfileEditPage = lazy(() => import("./pages/ProfileEditPage"));
+const GeneratePage = lazy(() => import("./pages/GeneratePage"));
+const HistoryPage = lazy(() => import("./pages/HistoryPage"));
+const TariffsPage = lazy(() => import("./pages/TariffsPage"));
+const PaymentPage = lazy(() => import("./pages/PaymentPage"));
+const TermsPage = lazy(() => import("./pages/TermsPage"));
+const PrivacyPage = lazy(() => import("./pages/PrivacyPage"));
+const TransactionsPage = lazy(() => import("./pages/TransactionsPage"));
+const TokenUsagePage = lazy(() => import("./pages/TokenUsagePage"));
+const BalancePage = lazy(() => import("./pages/BalancePage"));
+const McpKeysPage = lazy(() => import("./pages/McpKeysPage"));
+const AgentDocsPage = lazy(() => import("./pages/AgentDocsPage"));
+const ConnectedAppsPage = lazy(() => import("./pages/ConnectedAppsPage"));
+const FaqPage = lazy(() => import("./pages/FaqPage"));
+const ChatPage = lazy(() => import("./pages/ChatPage"));
+const AgentChatPage = lazy(() => import("./pages/AgentChatPage"));
+const GmailConnectPage = lazy(() => import("./pages/GmailConnectPage"));
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const WalletPage = lazy(() => import("./pages/WalletPage"));
+const WalletAdminPage = lazy(() => import("./pages/WalletAdminPage"));
+import TabPill from "./components/TabPill";
+import DesktopSidebar from "./components/DesktopSidebar";
+import CopyToast from "./components/CopyToast";
+import { AppStoreProvider, useApp } from "./store/AppStore";
+import { ThemeProvider, useTheme } from "./store/ThemeStore";
+import { applyTgTheme, initTelegram } from "./lib/telegram";
 
 export default function App() {
   useEffect(() => {
-    initTelegram()
-  }, [])
+    initTelegram();
+  }, []);
 
   return (
     <ThemeProvider>
       <Themed />
     </ThemeProvider>
-  )
+  );
 }
 
 function Themed() {
-  const { theme } = useTheme()
-  const dark = theme === 'dark'
+  const { theme } = useTheme();
+  const dark = theme === "dark";
 
   // Перекрашиваем шапку/фон ТГ-мини-аппы под нашу тему.
   useEffect(() => {
-    const sync = () => { initTelegram(); applyTgTheme(theme) }
-    sync()
-    window.addEventListener('telegram-ready', sync)
-    window.addEventListener('load', sync)
+    const sync = () => {
+      initTelegram();
+      applyTgTheme(theme);
+    };
+    sync();
+    window.addEventListener("telegram-ready", sync);
+    window.addEventListener("load", sync);
     return () => {
-      window.removeEventListener('telegram-ready', sync)
-      window.removeEventListener('load', sync)
-    }
-  }, [theme])
+      window.removeEventListener("telegram-ready", sync);
+      window.removeEventListener("load", sync);
+    };
+  }, [theme]);
 
   return (
     <KonstaApp theme="ios" dark={dark}>
       <AppStoreProvider>
         <BrowserRouter>
           <Gate>
-            <AppRoutes />
+            <Suspense
+              fallback={
+                <div
+                  role="status"
+                  className="p-6 text-center text-black/45 dark:text-white/45"
+                >
+                  Загрузка…
+                </div>
+              }
+            >
+              <AppRoutes />
+            </Suspense>
           </Gate>
         </BrowserRouter>
       </AppStoreProvider>
       <CopyToast />
     </KonstaApp>
-  )
+  );
 }
 
 function AppRoutes() {
-  const { pathname } = useLocation()
+  const { pathname } = useLocation();
   if (isWalletHost()) {
-    return pathname === '/admin' ? <WalletAdminPage /> : <WalletPage />
+    return pathname === "/admin" ? <WalletAdminPage /> : <WalletPage />;
   }
   const hasTabPill =
-    pathname === '/' ||
-    pathname === '/generate' ||
-    pathname === '/profile'
+    pathname === "/" || pathname === "/generate" || pathname === "/profile";
   // На страницах авторизации сайдбар не рисуем — там своя вёрстка на всю ширину.
-  const withSidebar = !PUBLIC_PATHS.some((p) => pathname.startsWith(p))
+  const withSidebar = !PUBLIC_PATHS.some((p) => pathname.startsWith(p));
 
   return (
     <div className="flex h-full w-full">
@@ -102,7 +109,10 @@ function AppRoutes() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/project/:id" element={<ProjectPage />} />
-          <Route path="/project/:id/settings" element={<ProjectSettingsPage />} />
+          <Route
+            path="/project/:id/settings"
+            element={<ProjectSettingsPage />}
+          />
           <Route path="/design" element={<DesignKitPage />} />
           <Route path="/filter/:kind" element={<FilterPage />} />
           <Route path="/profile" element={<ProfilePage />} />
@@ -131,34 +141,45 @@ function AppRoutes() {
         {hasTabPill && <TabPill className="md:hidden" />}
       </div>
     </div>
-  )
+  );
 }
 
 // Публичные страницы: авторизация и правовые — их гейт не закрывает.
-const PUBLIC_PATHS = ['/login', '/register', '/terms', '/privacy', '/agent', '/wallet']
+const PUBLIC_PATHS = [
+  "/login",
+  "/register",
+  "/terms",
+  "/privacy",
+  "/agent",
+  "/wallet",
+];
 
 // Доска закрыта ключом. Из Телеграма подпись приходит сама, в браузере
 // ключ передаётся один раз: адрес?key=…
 function Gate({ children }: { children: React.ReactNode }) {
-  const { denied } = useApp()
-  const { pathname } = useLocation()
-  const isPublic = isWalletHost() || PUBLIC_PATHS.some((p) => pathname.startsWith(p))
-  if (!denied || isPublic) return <>{children}</>
+  const { denied } = useApp();
+  const { pathname } = useLocation();
+  const isPublic =
+    isWalletHost() || PUBLIC_PATHS.some((p) => pathname.startsWith(p));
+  if (!denied || isPublic) return <>{children}</>;
   return (
     <div className="h-full flex items-center justify-center px-8 text-center">
       <div>
         <div className="text-[19px] font-semibold">Доска закрыта</div>
         <p className="opacity-60 text-[15px] mt-2 leading-snug">
-          Открой её из бота в Телеграме. Если нужен обычный браузер, добавь
-          к адресу ?key= и свой ключ.
+          Открой её из бота в Телеграме. Если нужен обычный браузер, добавь к
+          адресу ?key= и свой ключ.
         </p>
       </div>
     </div>
-  )
+  );
 }
 
 function isWalletHost() {
-  return window.location.hostname.startsWith('wallet.')
-    || window.location.hostname === 'wpay-react-wallet.gildedmandrill1.chatgpt.site'
-    || import.meta.env.VITE_APP_MODE === 'wallet'
+  return (
+    window.location.hostname.startsWith("wallet.") ||
+    window.location.hostname ===
+      "wpay-react-wallet.gildedmandrill1.chatgpt.site" ||
+    import.meta.env.VITE_APP_MODE === "wallet"
+  );
 }
