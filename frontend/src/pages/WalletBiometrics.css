@@ -310,3 +310,6 @@
 .wpay-lock-actions .wpay-lock-settings {
   order: -1;
 }
+
+.wpay-unlock-label { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.wpay-unlock-label > svg { width: 22px; height: 22px; flex-shrink: 0; }

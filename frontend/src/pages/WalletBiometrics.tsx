@@ -431,7 +431,10 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
                 className="!m-0 !w-full"
                 onClick={() => void unlock(true)}
               >
-                {busy ? "Подтверждение…" : "Разблокировать"}
+                <span className="wpay-unlock-label">
+                  <FaceIdIcon />
+                  <span>{busy ? "Подтверждение…" : "Разблокировать"}</span>
+                </span>
               </Button>
             )}
             {ready && (
