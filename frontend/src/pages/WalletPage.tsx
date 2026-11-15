@@ -1,4 +1,6 @@
-import WalletVerification from "./WalletVerification";
+import WalletVerification, {
+  preloadVerificationArtwork,
+} from "./WalletVerification";
 import { useAuraProfile } from "../wallet/useAuraProfile";
 import { WalletBiometricGate, WalletBiometricRow } from "./WalletBiometrics";
 import { resolveDeposit } from "../wallet/deposit";
@@ -2772,6 +2774,9 @@ function ProfileSection({
   initials: string;
   showNotice: NoticeHandler;
 }) {
+  useEffect(() => {
+    preloadVerificationArtwork();
+  }, []);
   const [profileName, setProfileName] = useState("");
   const displayName =
     profileName ||

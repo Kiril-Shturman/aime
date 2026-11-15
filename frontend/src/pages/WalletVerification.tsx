@@ -1,8 +1,18 @@
+import passportArtwork from "../assets/verification/passport.webp";
+import cardArtwork from "../assets/verification/wpay-card.webp";
 import { List, ListInput } from "framework7-react";
 import { Button } from "konsta/react";
 import { Check, LockKeyhole, ArrowUpRight, RefreshCw } from "lucide-react";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
 import "./WalletVerification.css";
+
+export function preloadVerificationArtwork() {
+  for (const src of [passportArtwork, cardArtwork]) {
+    const image = new Image();
+    image.src = src;
+    void image.decode().catch(() => {});
+  }
+}
 
 type Props = {
   aura: ReturnType<typeof useAuraProfile>;
@@ -109,13 +119,21 @@ export default function WalletVerification({
           </span>
           <img
             className="wpay-verification-passport"
-            src="/verification/passport.png"
+            src={passportArtwork}
+            width={600}
+            height={833}
+            decoding="async"
+            fetchPriority="high"
             alt=""
             draggable={false}
           />
           <img
             className="wpay-verification-card"
-            src="/verification/wpay-card.png"
+            src={cardArtwork}
+            width={1000}
+            height={627}
+            decoding="async"
+            fetchPriority="high"
             alt=""
             draggable={false}
           />

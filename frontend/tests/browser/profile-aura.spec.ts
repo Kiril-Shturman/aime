@@ -173,6 +173,14 @@ for (const theme of ["light", "dark"]) {
     await expect(screen).toBeVisible();
     const images = screen.locator("img");
     await expect(images).toHaveCount(2);
+    for (const image of await images.all()) {
+      await expect(image).toHaveAttribute("src", /\/assets\/.*\.webp$/);
+      await expect
+        .poll(() =>
+          image.evaluate((node) => (node as HTMLImageElement).naturalWidth),
+        )
+        .toBeGreaterThan(0);
+    }
     for (const size of [
       { width: 375, height: 667 },
       { width: 390, height: 844 },
