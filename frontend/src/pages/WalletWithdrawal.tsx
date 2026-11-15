@@ -1,3 +1,4 @@
+import { WalletTransfer } from "./WalletUserFinance";
 import { SiTether } from "@icons-pack/react-simple-icons";
 import { useState } from "react";
 import {
@@ -43,7 +44,7 @@ const methods = [
   },
   {
     id: "username" as const,
-    title: "По username",
+    title: "По Telegram ID",
     description: "Перевод пользователю Telegram",
     Icon: PersonCropCircleFill,
     color: "#007aff",
@@ -149,7 +150,7 @@ interface Outcome {
   tx_hash?: string;
 }
 
-export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
+function CoreWithdrawalForm({ method }: { method: WithdrawalMethod }) {
   const wallet = useLiveWallet();
   const [network, setNetwork] = useState("");
   const [recipient, setRecipient] = useState(""),
@@ -510,5 +511,13 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
         </Button>
       )}
     </main>
+  );
+}
+
+export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
+  return method === "username" ? (
+    <WalletTransfer />
+  ) : (
+    <CoreWithdrawalForm method={method} />
   );
 }

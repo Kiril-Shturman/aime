@@ -46,7 +46,7 @@ class FakeProvider:
         if method == 'getMe':
             return {'name': 'Test', 'can_transfer': True, 'can_withdraw': False}
         if method == 'getBalance':
-            return [{'currency_code': 'USDT', 'available': '10'}]
+            return [{'currency_code': 'USDT', 'available': getattr(self,'organization_balance','10')}]
         if method == 'getInvoices':
             return {'items': [{'invoice_id': '101', 'status': 'active'}, {'invoice_id': '999', 'status': 'paid'}]}
         if method == 'getTransfers':
@@ -147,7 +147,7 @@ class AuthenticationTests(unittest.TestCase):
 class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.env = patch.dict(os.environ, {'GOSWAP_API_TOKEN': TOKEN, 'WPAY_BOT_TOKEN': BOT, 'WPAY_DB_PATH': self.tmp.name + '/db', 'WPAY_ADMIN_IDS': '321'})
+        self.env = patch.dict(os.environ, {'GOSWAP_API_TOKEN': TOKEN, 'WPAY_BOT_TOKEN': BOT, 'WPAY_DB_PATH': self.tmp.name + '/db', 'WPAY_ADMIN_IDS': '321', 'WPAY_FINANCE_WORKER': '0'})
         self.env.start()
         self.fake = patch('wallet_backend.GoSwap', FakeProvider)
         self.fake.start()
@@ -169,6 +169,7 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         return await self.client.post('/api/wallet/webhook', data=raw, headers={'crypto-pay-api-signature': 'wrong' if bad else sign_body(raw)})
 
     async def fund(self):
+        self.provider.organization_balance='100.00'
         ref = self.ledger.account('owner')
         payload = {'deposit_id': 'deposit-1', 'client_ref': ref, 'asset': 'USDT', 'credited': '100.00'}
         response = await self.webhook('deposit_received', payload)
@@ -387,7 +388,8 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.withdrawal_timeout = False
         self.withdrawal_create_calls = []
         async def scripted(method, data=None, post=False):
-            if method == 'getMe': return {'can_withdraw': True}
+            if method == 'getMe': return {}
+            if method == 'getBalance': return [{'currency_code':'USDT','available':'100'}]
             if method == 'getCurrencies': return [{'code': 'USDT', 'can_withdraw': True}]
             if method == 'estimateWithdrawal': return {**data, 'fee': '1', 'total': str(Decimal(data['amount'])+1)}
             if method == 'createWithdrawal':

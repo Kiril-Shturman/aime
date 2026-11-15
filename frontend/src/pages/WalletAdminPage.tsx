@@ -1,3 +1,4 @@
+import { WalletFinanceReport } from "./WalletUserFinance";
 import {
   useCallback,
   useEffect,
@@ -356,7 +357,13 @@ function TabContent({
     );
   if (tab === "payments") return <Payments data={payload as PaymentsData} />;
   if (tab === "crypto") return <Crypto data={payload as CryptoData} />;
-  if (tab === "goswap") return <GoSwap data={payload as GoSwapData} />;
+  if (tab === "goswap")
+    return (
+      <>
+        <WalletFinanceReport />
+        <GoSwap data={payload as GoSwapData} />
+      </>
+    );
   return <Broadcasts data={payload as BroadcastData} reload={reload} />;
 }
 

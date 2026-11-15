@@ -6,6 +6,7 @@ import uuid
 import weakref
 from decimal import Decimal, localcontext
 from aiohttp import web
+from wallet_finance import require_coverage
 
 
 def prepare_withdrawals(ledger):
@@ -31,14 +32,14 @@ def apply_outcome(ledger, payload, money, ApiError):
     state, version = payload.get('status'), payload.get('version')
     if state not in {'processing', 'completed', 'failed'} or type(version) is not int or version < 0 or (state in {'completed','failed'} and version < 1):
         raise ValueError('Invalid withdrawal outcome')
-    ledger.db.execute('BEGIN IMMEDIATE')
+    ledger.begin('withdrawal_outcome','provider','Withdrawal '+str(payload.get('spend_id'))+' version '+str(version))
     try:
         row = ledger.db.execute('SELECT * FROM wallet_withdrawal_intents WHERE spend_id=?', (payload.get('spend_id'),)).fetchone()
         if not row or row['state'] in {'estimated', 'rejected'}:
-            ledger.db.execute('COMMIT')
+            ledger.commit()
             return False
         if version <= row['version']:
-            ledger.db.execute('COMMIT')
+            ledger.commit()
             return False
         if row['state'] in {'completed', 'failed'} and state == 'processing':
             raise ValueError('A terminal outcome cannot return to processing')
@@ -72,17 +73,20 @@ def apply_outcome(ledger, payload, money, ApiError):
                 available -= repayment
                 owed -= repayment
             ledger.put_balance(row['user_id'], body['asset'], available, reserved + new_reserved - old_reserved)
-            ledger.db.execute('INSERT OR REPLACE INTO wallet_debts VALUES (?,?,?)', (row['user_id'], body['asset'], str(owed)))
+            ledger.set_debt(row['user_id'],body['asset'],owed)
+        old_fee=old_total-amount if row['state']=='completed' else Decimal(0)
+        new_fee=fee if state=='completed' else Decimal(0)
+        ledger.book.fee(body['asset'],new_fee-old_fee,'withdrawal-fee:'+row['spend_id']+':'+str(version))
         ledger.db.execute('UPDATE wallet_withdrawal_intents SET state=?,version=?,held=?,withdrawal_id=?,outcome=? WHERE intent_id=?', (state, version, str(total), payload['withdrawal_id'], json.dumps(payload), row['intent_id']))
         # Reservation is internal. Events record actual spends/refunds, not duplicate completions.
         previous_spent = old_total if row['state'] == 'completed' else Decimal(0)
         current_spent = total if state == 'completed' else Decimal(0)
         delta = previous_spent - current_spent
         ledger.db.execute('INSERT OR IGNORE INTO wallet_events VALUES (?,?,?,?,?,?,?)', ('withdrawal:'+row['spend_id']+':'+str(version), row['user_id'], body['asset'], str(delta), 'withdrawal_'+state, payload.get('completed_at') or payload.get('failed_at') or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), json.dumps(payload)))
-        ledger.db.execute('COMMIT')
+        ledger.commit()
         return True
     except Exception:
-        ledger.db.execute('ROLLBACK')
+        ledger.rollback()
         raise
 
 
@@ -121,9 +125,6 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
         asset, network = str(body.get('asset', '')).upper(), str(body.get('network', '')).upper()
         if asset == 'BTC':
             raise ValueError('BTC по API пока не выводится')
-        capabilities = await provider.call('getMe')
-        if not capabilities.get('can_withdraw'):
-            raise ApiError('NOT_ENABLED', 'Вывод для организации не включён', 403)
         currencies = await provider.call('getCurrencies')
         rows = currencies if isinstance(currencies, list) else currencies.get('items', [])
         if not any((row.get('code') or row.get('currency_code')) == asset and row.get('can_withdraw') is True for row in rows):
@@ -148,7 +149,12 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
         ledger.db.execute('INSERT INTO wallet_withdrawal_intents(intent_id,user_id,spend_id,body,state,held,expires_at) VALUES (?,?,?,?,?,?,?)', (intent_id, uid, spend_id, json.dumps(canonical), 'estimated', str(total), time.time()+120))
         return web.json_response({**canonical, 'intent_id': intent_id, 'expires_at': time.time()+120})
     intent_id = body.get('intent_id')
-    ledger.db.execute('BEGIN IMMEDIATE')
+    pending=ledger.db.execute('SELECT state,body FROM wallet_withdrawal_intents WHERE intent_id=? AND user_id=?',(intent_id,uid)).fetchone()
+    if pending and pending['state']=='estimated':
+        check=json.loads(pending['body'])
+        if ledger.balance(uid,check['asset'])[0]<money(check['total']):raise ApiError('INSUFFICIENT_FUNDS','Недостаточно средств с учётом комиссии',409)
+        await require_coverage(ledger,provider,check['asset'],ApiError)
+    ledger.begin('withdrawal_reserve',uid,'Reserve withdrawal '+str(intent_id))
     try:
         row = ledger.db.execute('SELECT * FROM wallet_withdrawal_intents WHERE intent_id=? AND user_id=?', (intent_id, uid)).fetchone()
         if not row:
@@ -167,9 +173,9 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
                 ctx.prec = 60
                 ledger.put_balance(uid, canonical['asset'], available-total, reserved+total)
             ledger.db.execute("UPDATE wallet_withdrawal_intents SET state='reserved' WHERE intent_id=?", (intent_id,))
-        ledger.db.execute('COMMIT')
+        ledger.commit()
     except Exception:
-        ledger.db.execute('ROLLBACK')
+        ledger.rollback()
         raise
     if row['state'] in {'processing', 'completed', 'failed'}:
         return web.json_response(json.loads(row['outcome']))
@@ -190,8 +196,8 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
     except ApiError as error:
         # Concurrent retries use the same provider spend_id. Never release an
         # unknown reservation on timeout/503 or conflict; reconciliation owns it.
-        if 400 <= error.status < 500 and error.name != 'SPEND_ID_CONFLICT':
-            ledger.db.execute('BEGIN IMMEDIATE')
+        if row['state'] == 'estimated' and 400 <= error.status < 500 and error.name != 'SPEND_ID_CONFLICT':
+            ledger.begin()
             try:
                 current = ledger.db.execute('SELECT state FROM wallet_withdrawal_intents WHERE intent_id=?', (intent_id,)).fetchone()
                 if current['state'] == 'reserved':
@@ -201,9 +207,9 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
                         ctx.prec = 60
                         ledger.put_balance(uid, canonical['asset'], available+total, reserved-total)
                     ledger.db.execute("UPDATE wallet_withdrawal_intents SET state='rejected' WHERE intent_id=?", (intent_id,))
-                ledger.db.execute('COMMIT')
+                ledger.commit()
             except Exception:
-                ledger.db.execute('ROLLBACK')
+                ledger.rollback()
                 raise
         raise
 

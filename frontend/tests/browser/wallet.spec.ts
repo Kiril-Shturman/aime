@@ -333,3 +333,140 @@ test("TRC20 withdrawal works with no deposit address and sends no source_address
   });
   expect(allocations).toBe(0);
 });
+
+async function openTelegramTransfer(page: import("@playwright/test").Page) {
+  await page
+    .locator(".wpay-wallet-home span.font-semibold")
+    .filter({ hasText: /^Tether$/ })
+    .first()
+    .click();
+  await page
+    .locator('[data-wallet-surface="asset"]')
+    .getByRole("button", { name: "Вывести", exact: true })
+    .click();
+  await page
+    .locator('[aria-hidden="false"]')
+    .last()
+    .getByText("По Telegram ID", { exact: true })
+    .click();
+}
+
+test("disabled transfers show unavailable and never send money", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  let posts = 0;
+  await page.route("**/api/wallet/financial-capabilities", (route) =>
+    route.fulfill({ json: { can_transfer: false, currencies: [] } }),
+  );
+  await page.route("**/api/wallet/transfer-*", (route) => {
+    posts++;
+    return route.fulfill({ json: {} });
+  });
+  await openTelegramTransfer(page);
+  await expect(
+    page.getByText("Переводы в Telegram недоступны", { exact: true }),
+  ).toBeVisible();
+  expect(posts).toBe(0);
+});
+
+test("transfer confirms a server intent and retains it after timeout", async ({
+  page,
+}) => {
+  await setup(page, "dark");
+  let sends = 0,
+    prepares = 0;
+  await page.route("**/api/wallet/financial-capabilities", (route) =>
+    route.fulfill({ json: { can_transfer: true, currencies: [] } }),
+  );
+  await page.route("**/api/wallet/transfer-prepare", (route) => {
+    prepares++;
+    expect(route.request().postDataJSON()).toEqual({
+      recipient_id: "777",
+      asset: "USDT",
+      amount: "10",
+    });
+    return route.fulfill({ json: { intent_id: "server-transfer" } });
+  });
+  await page.route("**/api/wallet/transfer-send", (route) => {
+    sends++;
+    expect(route.request().postDataJSON()).toEqual({
+      intent_id: "server-transfer",
+    });
+    return sends === 1
+      ? route.fulfill({ status: 504, json: { detail: "Ответ потерян" } })
+      : route.fulfill({ json: { status: "completed" } });
+  });
+  await openTelegramTransfer(page);
+  await page.getByLabel("Telegram ID получателя", { exact: true }).fill("777");
+  await page.getByLabel("Сумма перевода USDT", { exact: true }).fill("10");
+  await page
+    .getByRole("button", { name: "Проверить перевод", exact: true })
+    .click();
+  expect(sends).toBe(0);
+  await page
+    .getByRole("button", { name: "Подтвердить перевод", exact: true })
+    .click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Ответ потерян" }),
+  ).toHaveText("Ответ потерян");
+  await page
+    .getByRole("button", { name: "Подтвердить перевод", exact: true })
+    .click();
+  await expect(
+    page.getByText("Перевод получен", { exact: true }),
+  ).toBeVisible();
+  expect(prepares).toBe(1);
+  expect(sends).toBe(2);
+});
+
+test("invoice creation keeps server ownership and rechecks the same intent", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  let creates = 0,
+    prepares = 0;
+  await page.route("**/api/wallet/invoice-prepare", (route) => {
+    prepares++;
+    expect(route.request().postDataJSON()).toEqual({
+      asset: "USDT",
+      amount: "10",
+      description: "Подписка",
+    });
+    return route.fulfill({ json: { intent_id: "server-invoice" } });
+  });
+  await page.route("**/api/wallet/invoice-create", (route) => {
+    creates++;
+    expect(route.request().postDataJSON()).toEqual({
+      intent_id: "server-invoice",
+    });
+    return creates === 1
+      ? route.fulfill({ status: 504, json: { detail: "Ответ потерян" } })
+      : route.fulfill({
+          json: {
+            invoice_id: "1000",
+            status: "active",
+            bot_invoice_url: "https://t.me/goswap?start=invoice",
+          },
+        });
+  });
+  await page.getByRole("link", { name: "История", exact: true }).click();
+  await page
+    .getByLabel("Фильтр операций")
+    .getByRole("button", { name: "Счета", exact: true })
+    .click();
+  await page.getByLabel("Сумма счёта", { exact: true }).fill("10");
+  await page.getByLabel("Описание счёта", { exact: true }).fill("Подписка");
+  await page.getByRole("button", { name: "Создать счёт", exact: true }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Ответ потерян" }),
+  ).toHaveText("Ответ потерян");
+  await page
+    .getByRole("button", { name: "Проверить созданный счёт", exact: true })
+    .click();
+  await expect(
+    page.getByText("Счёт № 1000 · active", { exact: true }),
+  ).toBeVisible();
+  expect(prepares).toBe(1);
+  expect(creates).toBe(2);
+});

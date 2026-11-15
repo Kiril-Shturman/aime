@@ -1,3 +1,4 @@
+import { WalletInvoiceCreate } from "./WalletUserFinance";
 import { useEffect, useRef, useState } from "react";
 import { List, ListItem, Button } from "konsta/react";
 import { Popup, Page, Navbar, NavRight, Link } from "framework7-react";
@@ -334,10 +335,13 @@ export default function WalletOperations({
     setRevoking(true);
     setActionError("");
     try {
-      const result = await walletRequest<Entry>("revoke-transfer", {
-        spend_id: selected.spend_id,
-      });
-      setSelected(result);
+      const result = await walletRequest<Entry>(
+        selected.intent_id ? "transfer-revoke" : "revoke-transfer",
+        selected.intent_id
+          ? { intent_id: selected.intent_id }
+          : { spend_id: selected.spend_id },
+      );
+      setSelected({ ...selected, ...result });
       setItems((rows) =>
         rows.map((row) => (row.spend_id === result.spend_id ? result : row)),
       );
@@ -454,6 +458,11 @@ export default function WalletOperations({
           </p>
         )}
       </div>
+      {!admin && tab === "invoices" && wallet.configured && (
+        <div className="mx-4 mb-5">
+          <WalletInvoiceCreate onCreated={() => void load()} />
+        </div>
+      )}
       <section id="operations-panel" aria-label={tabs[tab]} aria-busy={busy}>
         {!wallet.configured && (
           <p
@@ -933,7 +942,7 @@ export default function WalletOperations({
                   </div>
                 )}
               {tab === "transfers" &&
-                owner &&
+                (owner || !!selected?.intent_id) &&
                 selected?.status === "pending" && (
                   <div className="mt-5 rounded-[28px] bg-white p-4 dark:bg-[#1c1c1e]">
                     {confirmRevoke ? (

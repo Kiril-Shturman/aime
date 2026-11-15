@@ -13,12 +13,18 @@ import re
 import sqlite3
 import time
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import parse_qsl, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, web
 
+from wallet_book import Book
+from wallet_user_ops import prepare as prepare_user_ops, route as user_ops_route
+from wallet_inbox import prepare as prepare_inbox, receive as receive_webhook
+from wallet_finance_worker import prepare as prepare_finance_worker, Worker as FinanceWorker
+from wallet_finance import finance_route, require_coverage
 from wallet_operations import prepare_operations, operations_route, save_address
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
 
@@ -120,10 +126,15 @@ class GoSwap:
     def __init__(self, token):
         self.token = token
         self.session = None
+        self.rate_windows = defaultdict(deque)
 
     async def call(self, method, data=None, post=False):
         if not self.token:
             raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
+        window=self.rate_windows[method];stamp=time.monotonic();limit=30 if method=='getClientAddress' else 60
+        while window and window[0]<=stamp-60:window.popleft()
+        if len(window)>=limit:raise ApiError('RATE_LIMITED','Лимит запросов GoSwap',429,str(max(1,int(61-(stamp-window[0])))))
+        window.append(stamp)
         if self.session is None:
             self.session = ClientSession(timeout=ClientTimeout(total=20))
         try:
@@ -166,6 +177,7 @@ class Ledger:
         ''')
 
         prepare_withdrawals(self)
+        self.book = Book(self.db, ApiError)
         columns = {row[1] for row in self.db.execute('PRAGMA table_info(wallet_accounts)')}
         for name, definition in {
             'telegram_id': 'INTEGER',
@@ -249,14 +261,23 @@ class Ledger:
         elif blocked:
             self.db.execute('UPDATE wallet_accounts SET bot_blocked_at=COALESCE(bot_blocked_at,?),updated_at=? WHERE user_id=?', (now(), now(), uid))
 
+    def begin(self, kind='balance_change', actor='system', reason='Balance projection update'):
+        self.book.begin(kind,actor,reason)
+
+    def commit(self):self.book.commit()
+    def rollback(self):self.book.rollback()
+
     def balance(self, uid, asset):
-        row = self.db.execute('SELECT available,reserved FROM wallet_balances WHERE user_id=? AND asset=?', (uid, asset)).fetchone()
-        return (Decimal(row[0]), Decimal(row[1])) if row else (Decimal(0), Decimal(0))
+        row=self.db.execute('SELECT available,reserved FROM wallet_balances WHERE user_id=? AND asset=?',(uid,asset)).fetchone()
+        available,reserved=(Decimal(row[0]),Decimal(row[1])) if row else (Decimal(0),Decimal(0))
+        self.book.check(uid,asset,available,reserved)
+        return available,reserved
 
     def put_balance(self, uid, asset, available, reserved):
-        if available < 0 or reserved < 0:
-            raise ApiError('INSUFFICIENT_FUNDS', 'Недостаточно средств на вашем балансе', 409)
-        self.db.execute('INSERT OR REPLACE INTO wallet_balances VALUES (?,?,?,?)', (uid, asset, str(available), str(reserved)))
+        if available<0 or reserved<0:raise ApiError('INSUFFICIENT_FUNDS','Недостаточно средств на вашем балансе',409)
+        self.book.set_balance(uid,asset,available,reserved)
+
+    def set_debt(self, uid, asset, amount):self.book.set_debt(uid,asset,amount)
 
     def deposit(self, payload):
         uid = self.db.execute('SELECT user_id FROM wallet_accounts WHERE client_ref=?', (payload.get('client_ref'),)).fetchone()
@@ -265,27 +286,27 @@ class Ledger:
         amount = money(payload['credited'])
         asset = str(payload['asset']).upper()
         event_id = 'deposit:' + str(payload['deposit_id'])
-        self.db.execute('BEGIN IMMEDIATE')
+        self.begin('deposit','provider',event_id)
         try:
             if self.db.execute('SELECT 1 FROM wallet_events WHERE event_id=?', (event_id,)).fetchone():
-                self.db.execute('COMMIT')
+                self.commit()
                 return False
             available, reserved = self.balance(uid[0], asset)
             with localcontext() as ctx:
                 ctx.prec = 50
                 owed = debt(self, uid[0], asset)
                 repayment = min(owed, amount)
-                self.db.execute('INSERT OR REPLACE INTO wallet_debts VALUES (?,?,?)', (uid[0], asset, str(owed-repayment)))
+                self.set_debt(uid[0],asset,owed-repayment)
                 self.put_balance(uid[0], asset, available + amount - repayment, reserved)
             self.db.execute('INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)', (event_id, uid[0], asset, str(amount), 'deposit', str(payload.get('credited_at') or now()), json.dumps(payload)))
-            self.db.execute('COMMIT')
+            self.commit()
             return True
         except Exception:
-            self.db.execute('ROLLBACK')
+            self.rollback()
             raise
 
     def reserve(self, uid, quote_id):
-        self.db.execute('BEGIN IMMEDIATE')
+        self.begin('qr_reserve',uid,'Reserve QR '+str(quote_id))
         try:
             row = self.db.execute('SELECT * FROM wallet_quotes WHERE quote_id=? AND user_id=?', (quote_id, uid)).fetchone()
             if not row:
@@ -301,25 +322,25 @@ class Ledger:
                 available, reserved = self.balance(uid, quote['asset'])
                 self.put_balance(uid, quote['asset'], add(available, -amount), add(reserved, amount))
                 self.db.execute("UPDATE wallet_quotes SET state='reserved' WHERE quote_id=?", (quote_id,))
-            self.db.execute('COMMIT')
+            self.commit()
             return dict(row), quote
         except Exception:
-            self.db.execute('ROLLBACK')
+            self.rollback()
             raise
 
     def payment(self, payload):
         state = payload.get('status')
         if state not in {'processing', 'completed', 'failed', 'refunded'}:
             raise ValueError('Некорректный статус платежа')
-        self.db.execute('BEGIN IMMEDIATE')
+        self.begin('qr_outcome','provider','QR '+str(payload.get('spend_id'))+' '+str(state))
         try:
             row = self.db.execute('SELECT * FROM wallet_quotes WHERE spend_id=?', (payload.get('spend_id'),)).fetchone()
             if not row or row['state'] == 'quoted':
-                self.db.execute('COMMIT')
+                self.commit()
                 return False
             old = row['state']
             if old in {'failed', 'refunded'} or old == state or (old == 'completed' and state != 'refunded'):
-                self.db.execute('COMMIT')
+                self.commit()
                 return False
             quote = json.loads(row['body'])
             if row['payment_id'] and payload.get('payment_id') and str(payload['payment_id']) != row['payment_id']:
@@ -346,10 +367,10 @@ class Ledger:
             if state in {'completed', 'failed', 'refunded'}:
                 delta = -amount if state == 'completed' else amount if state == 'refunded' else Decimal(0)
                 self.db.execute('INSERT OR IGNORE INTO wallet_events VALUES (?,?,?,?,?,?,?)', ('qr:' + row['spend_id'] + ':' + state, row['user_id'], quote['asset'], str(delta), 'qr_' + state, now(), json.dumps(payload)))
-            self.db.execute('COMMIT')
+            self.commit()
             return True
         except Exception:
-            self.db.execute('ROLLBACK')
+            self.rollback()
             raise
 
 
@@ -368,6 +389,9 @@ def install_wallet(app, root, owner_check):
     ledger = Ledger(os.environ.get('WPAY_DB_PATH', os.path.join(root, 'wpay.sqlite3')))
     prepare_operations(ledger)
     prepare_withdrawals(ledger)
+    prepare_user_ops(ledger)
+    prepare_inbox(ledger)
+    prepare_finance_worker(ledger)
     provider = GoSwap(token)
     app['wpay_provider'] = provider
     app['wpay_ledger'] = ledger
@@ -636,27 +660,7 @@ def install_wallet(app, root, owner_check):
             if action == 'status' and request.method == 'GET':
                 return web.json_response({'configured': bool(token), 'telegram_auth': bool(bot_token)})
             if action == 'webhook' and request.method == 'POST':
-                raw = await request.read()
-                signature = request.headers.get('crypto-pay-api-signature', '')
-                expected = hmac.new(hashlib.sha256(token.encode()).digest(), raw, hashlib.sha256).hexdigest()
-                if not token or not hmac.compare_digest(expected, signature):
-                    raise ApiError('BAD_SIGNATURE', 'Неверная подпись', 401)
-                event = json.loads(raw)
-                kind, payload = event.get('update_type'), event.get('payload', {})
-                if kind == 'deposit_received':
-                    ledger.deposit(payload)
-                elif kind in {'withdrawal_completed', 'withdrawal_failed'}:
-                    expected_status = kind.removeprefix('withdrawal_')
-                    if payload.get('status') != expected_status:
-                        raise ValueError('Несовпадение типа события и статуса')
-                    # Always query current provider state before a failed-event refund.
-                    await reconcile_withdrawals(ledger, provider, money, ApiError, spend_id=payload.get('spend_id'))
-                elif kind in {'qr_payment_completed', 'qr_payment_failed', 'qr_payment_refunded'}:
-                    status = kind.removeprefix('qr_payment_')
-                    if payload.get('status') != status:
-                        raise ValueError('Несовпадение типа события и статуса')
-                    ledger.payment(payload)
-                return web.json_response({'ok': True})
+                return await receive_webhook(request,ledger,provider,token,money,ApiError)
             uid = identity(request)
             admin = is_admin(uid)
             client_ref = ledger.account(
@@ -697,6 +701,11 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(await admin_broadcasts(request, uid))
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
+            financial = await finance_route(request,action,uid,admin,ledger,provider,money,ApiError)
+            if financial is not None:return financial
+            aliases={'operations-transfers':'transfer-history','operations-invoices':'invoice-history'}
+            owned = await user_ops_route(request,aliases.get(action,action) if uid!='owner' else action,uid,ledger,provider,money,ApiError)
+            if owned is not None:return owned
             if action == 'operations-withdrawals' and uid != 'owner':
                 return await withdrawal_route(request, 'withdrawal-history', uid, ledger, provider, money, ApiError)
             operations = await operations_route(request, action, uid, client_ref, ledger, provider, ApiError)
@@ -740,6 +749,7 @@ def install_wallet(app, root, owner_check):
                 else:
                     result = await provider.call('createDeposit', {'client_ref': client_ref, 'network': network, 'asset': asset}, post=True)
                 save_address(ledger, uid, result, asset)
+                ledger.db.execute('INSERT OR REPLACE INTO wallet_deposit_requests VALUES (?,?,?,?,?)',(str(result.get('claim_id') or uuid.uuid4().hex),uid,network,json.dumps(result),time.time()))
                 return web.json_response(result)
             if action == 'sync' and request.method == 'POST':
                 ledger.db.execute('CREATE TABLE IF NOT EXISTS wallet_deposit_sync_cursor (user_id TEXT PRIMARY KEY, offset INTEGER NOT NULL)')
@@ -777,6 +787,11 @@ def install_wallet(app, root, owner_check):
                 return web.json_response({**result, 'spend_id': spend_id})
             if action == 'pay' and request.method == 'POST':
                 body = await request.json()
+                pending=ledger.db.execute('SELECT state,body FROM wallet_quotes WHERE quote_id=? AND user_id=?',(str(body.get('quote_id','')),uid)).fetchone()
+                if pending and pending['state']=='quoted':
+                    check=json.loads(pending['body'])
+                    if ledger.balance(uid,check['asset'])[0]<money(check['amount']):raise ApiError('INSUFFICIENT_FUNDS','Недостаточно средств',409)
+                    await require_coverage(ledger,provider,check['asset'],ApiError)
                 row, quote = ledger.reserve(uid, str(body.get('quote_id', '')))
                 if row['state'] in {'completed', 'failed', 'refunded', 'processing'}:
                     return web.json_response({'spend_id': row['spend_id'], 'status': row['state']})
@@ -798,6 +813,9 @@ def install_wallet(app, root, owner_check):
             return web.json_response({'ok': False, 'error': {'name': 'INVALID_REQUEST'}, 'detail': 'Некорректные данные запроса или ответа провайдера'}, status=400)
 
     async def cleanup(_):
+        task=app.get('wpay_finance_task')
+        if task:
+            task.cancel();await asyncio.gather(task,return_exceptions=True)
         for task in app['wpay_broadcast_tasks']:
             task.cancel()
         if app['wpay_broadcast_tasks']:
@@ -806,6 +824,8 @@ def install_wallet(app, root, owner_check):
         ledger.db.close()
 
     async def startup(_):
+        if token and os.environ.get('WPAY_FINANCE_WORKER','1')!='0':
+            app['wpay_finance_task']=asyncio.create_task(FinanceWorker(ledger,provider,money,ApiError).run())
         if bot_token:
             task = asyncio.create_task(sync_telegram_users(only_missing=True))
             app['wpay_broadcast_tasks'].add(task)
