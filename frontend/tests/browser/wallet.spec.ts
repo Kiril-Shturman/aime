@@ -21,6 +21,16 @@ async function setup(
       return route.fulfill({
         json: { can_withdraw: true, can_transfer: true, currencies: [] },
       });
+    if (path.endsWith("/custody-status"))
+      return route.fulfill({
+        json: {
+          configured: false,
+          generation_enabled: false,
+          chain_env: "mainnet",
+          creation_fee: "0",
+          networks: [],
+        },
+      });
     if (path.endsWith("/status"))
       return route.fulfill({ json: { configured: true } });
     if (path.endsWith("/overview"))
@@ -785,8 +795,7 @@ const publicCustodyWallet = (network = "BTC") => ({
   withdraw_enabled: false,
 });
 async function openCustody(page: import("@playwright/test").Page) {
-  await page.getByRole("button", { name: "Профиль", exact: true }).click();
-  await page.getByRole("link", { name: /Мои кошельки/ }).click();
+  await page.goto("/wallet");
   return page.getByRole("region", { name: "Собственные кошельки WPay" });
 }
 for (const theme of ["light", "dark"])
@@ -833,11 +842,12 @@ for (const theme of ["light", "dark"])
       }),
     ).toBeVisible();
     await expect(panel.getByText("$2.00", { exact: true })).toHaveCount(0);
-    await panel
-      .locator("xpath=ancestor::section[1]")
-      .getByLabel("Назад", { exact: true })
-      .click();
-    await page.getByRole("link", { name: /Мои кошельки/ }).click();
+    await page.getByRole("button", { name: "Профиль", exact: true }).click();
+    await expect(page.getByRole("link", { name: /Мои кошельки/ })).toHaveCount(
+      0,
+    );
+    await expect(panel).toHaveCount(0);
+    await page.getByRole("link", { name: "Кошелёк", exact: true }).click();
     await expect(panel.getByLabel("Адрес Bitcoin", { exact: true })).toHaveText(
       publicCustodyWallet().address,
     );

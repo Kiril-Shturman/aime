@@ -659,6 +659,12 @@ function WalletScreen() {
               )}
             </section>
 
+            <div className="mt-8">
+              <WalletCustody
+                active={activeTab === "wallet"}
+                showNotice={showNotice}
+              />
+            </div>
             <WalletConnectionNote />
           </main>
         )}
@@ -2791,12 +2797,6 @@ function ProfileSection({
           />
           <ProfileListItem
             link
-            title="Мои кошельки"
-            subtitle="Адреса BTC, ETH, BNB, TON и SOL"
-            onClick={() => setProfilePage("wallets")}
-          />
-          <ProfileListItem
-            link
             title="Реферальная программа"
             subtitle="Приглашайте друзей"
             onClick={() => setProfilePage("referral")}
@@ -2874,7 +2874,6 @@ function ProfileSection({
 }
 
 const profilePageTitles = {
-  wallets: "Мои кошельки",
   personal: "Личные данные",
   security: "Безопасность",
   notifications: "Уведомления",
@@ -3219,12 +3218,6 @@ function ProfileSettingsPushView({
             </>
           )}
 
-          {displayPage === "wallets" && (
-            <WalletCustody
-              active={page === "wallets"}
-              showNotice={showNotice}
-            />
-          )}
           {displayPage === "referral" && <ReferralProgram />}
           {(displayPage === "terms" || displayPage === "privacy") && (
             <Card className="!mx-4 !rounded-[28px]" contentWrapPadding="p-6">

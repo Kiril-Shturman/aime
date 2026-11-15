@@ -120,7 +120,7 @@ export default function WalletCustody({
       <div className="px-1">
         <Wallet className="mb-3 text-primary" size={30} />
         <h2 className="text-[23px] font-semibold text-black dark:text-white">
-          Ваши адреса
+          Мои кошельки
         </h2>
         <p className="mt-2 text-[15px] leading-6 text-black/50 dark:text-white/50">
           Создание бесплатно. В каждой сети — свой постоянный адрес.
@@ -144,7 +144,7 @@ export default function WalletCustody({
           Создание кошельков пока недоступно
         </p>
       )}
-      {status?.networks.map((network) => {
+      {status?.networks?.map((network) => {
         const row = wallets.find(
           (item) =>
             item.network === network.network &&

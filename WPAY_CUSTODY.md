@@ -1,11 +1,14 @@
 # Own wallet address generation
 
 Branch: `wpay/self-hosted-crypto`. Implements the address-generation portion of
-custody for BTC, Ethereum, BNB Smart Chain, TON and Solana. No production/demo deployment.
+custody for BTC, Ethereum, BNB Smart Chain, TON and Solana. The separate VSE
+preview now enables mainnet address generation; the working WPay service is unchanged.
+Deposits, credits and withdrawals remain disabled.
 
 ## User-visible behavior
 
-Profile → “Мои кошельки” lists the five networks. Creation is free; the API creates
+The “Кошелёк” tab → “Мои кошельки” section lists the five networks, below
+the asset list. The former profile entry is removed. Creation is free; the API creates
 one permanent wallet per authenticated user/network/environment. Repeating a POST,
 including from concurrent processes, returns the existing address. Private keys
 and recovery seeds are never returned to the browser. Copy copies only an address.
