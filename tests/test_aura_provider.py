@@ -18,7 +18,7 @@ from wallet_aura import (
 from wallet_backend import ApiError, Ledger
 from wallet_inbox import prepare as prepare_inbox
 from wallet_aura_mock import MOCK_KEY, MOCK_PARTNER, make_app
-from tests.test_wallet_backend import BOT
+from tests.test_wallet_backend import BOT, init_data
 
 
 SECRET = "whsec_unit_test"
@@ -549,6 +549,11 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(fees["minimum_recharge_amount"], "10")
         self.assertEqual((await self.client.list_cards())["data"][0]["id"], card["id"])
         self.assertEqual((await self.client.get_card(card["id"]))["status"], "opened")
+        credentials = await self.client.get_card_credentials(card["id"])
+        self.assertEqual(credentials, {
+            "card_id": card["id"], "cvv": "123", "expiry": "09/29",
+            "number": "4111111111111234",
+        })
         operation = await self.mock.post(
             "/mock/card-operations", json={"card_id": card["id"], "amount": "3"}
         )
@@ -763,6 +768,25 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
                 },
             )
 
+    async def test_card_credentials_have_a_separate_five_per_minute_budget(self):
+        uid = "tg:credentials-budget"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(uid, ref)
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id, "kind": "virtual"}
+        )
+        card_id = (await created.json())["card"]["id"]
+        for _ in range(5):
+            self.assertEqual(
+                (await self.client.get_card_credentials(card_id))["card_id"], card_id
+            )
+        with self.assertRaises(ApiError) as limited:
+            await self.client.get_card_credentials(card_id)
+        self.assertEqual(limited.exception.name, "rate_limited")
+        self.assertEqual(limited.exception.details["scope"], "credentials_reveal")
+        self.assertIsNotNone(limited.exception.retry_after)
+        self.assertEqual((await self.client.get_card(card_id))["status"], "opened")
+
     async def test_sbp_read_contracts(self):
         uid = "tg:780"
         ref = self.ledger.account(uid)
@@ -944,6 +968,49 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         fees = await self.wpay.get("/api/wallet/aura-card-fees", headers=self.owner)
         self.assertEqual(fees.status, 200)
         self.assertEqual(fees.headers["Cache-Control"], "no-store")
+
+    async def test_card_credentials_are_owner_scoped_no_store_and_never_persisted(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner, json={}
+        )
+        customer_id = (await registered.json())["customer_id"]
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id, "kind": "virtual"}
+        )
+        card_payload = await created.json()
+        raw, signature = signed(card_payload["webhook"])
+        self.assertEqual((await self.wpay.post(
+            "/api/wallet/aura-webhook", data=raw,
+            headers={"X-Aura-Signature-V2": signature},
+        )).status, 200)
+        self.assertEqual((await self.wpay.post(
+            "/api/wallet/admin-aura-process", headers=self.owner
+        )).status, 200)
+        card_id = card_payload["card"]["id"]
+        foreign = await self.wpay.get(
+            "/api/wallet/aura-card-credentials?card_id=" + card_id,
+            headers={"X-Telegram-Init-Data": init_data(321)},
+        )
+        self.assertEqual(foreign.status, 404)
+        response = await self.wpay.get(
+            "/api/wallet/aura-card-credentials?card_id=" + card_id,
+            headers=self.owner,
+        )
+        self.assertEqual(response.status, 200, await response.text())
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+        credentials = await response.json()
+        self.assertEqual(credentials["number"], "4111111111111234")
+        self.assertEqual(credentials["cvv"], "123")
+        ledger = self.app["wpay_ledger"]
+        audit = ledger.db.execute(
+            "SELECT action,outcome FROM aura_sensitive_access_audit WHERE card_id=?",
+            (card_id,),
+        ).fetchone()
+        self.assertEqual((audit["action"], audit["outcome"]),
+                         ("card.credentials.reveal", "succeeded"))
+        persisted = "\n".join(ledger.db.iterdump())
+        self.assertNotIn(credentials["number"], persisted)
+        self.assertNotIn(credentials["cvv"], persisted)
 
     async def test_card_issue_route_reserves_spends_and_failed_event_refunds_once(self):
         ledger = self.app["wpay_ledger"]

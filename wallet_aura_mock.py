@@ -192,6 +192,19 @@ def make_app():
             return envelope("card_not_found", "Card not found", 404)
         return web.json_response(state.cards[card_id])
 
+    async def card_credentials(request):
+        card_id = request.match_info["card_id"]
+        card_item = state.cards.get(card_id)
+        if not card_item:
+            return envelope("card_not_found", "Card not found", 404)
+        if card_item.get("status") != "opened":
+            return envelope("card_not_opened", "Card is not opened", 412)
+        return web.json_response(
+            {"card_id": card_id, "cvv": "123", "expiry": "09/29",
+             "number": "4111111111111234"},
+            headers={"Cache-Control": "no-store"},
+        )
+
     async def card_operations(request):
         card_id = request.match_info.get("card_id")
         items = [item for item in reversed(state.card_operations)
@@ -458,6 +471,7 @@ def make_app():
     app.router.add_get("/v1/partner/cards", cards)
     app.router.add_get("/v1/partner/cards/operations", card_operations)
     app.router.add_get("/v1/partner/cards/{card_id}/operations", card_operations)
+    app.router.add_get("/v1/partner/cards/{card_id}/credentials", card_credentials)
     app.router.add_get("/v1/partner/cards/{card_id}", card)
     app.router.add_post("/v1/partner/cards/{card_id}/recharge", recharge_card)
     app.router.add_post("/v1/partner/cards/{card_id}/cancel", cancel_card)

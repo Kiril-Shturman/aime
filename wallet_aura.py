@@ -139,6 +139,11 @@ def prepare(ledger):
       CREATE TABLE IF NOT EXISTS aura_runtime_state (
         key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at REAL NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS aura_sensitive_access_audit (
+        access_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, card_id TEXT NOT NULL,
+        environment TEXT NOT NULL, action TEXT NOT NULL, outcome TEXT NOT NULL,
+        created_at REAL NOT NULL, completed_at REAL
+      );
     """
     )
     columns = {row[1] for row in ledger.db.execute("PRAGMA table_info(wallet_webhook_inbox)")}
@@ -299,6 +304,25 @@ def _card_recharge_result(payload, request_body):
     }
 
 
+def _card_credentials_result(payload, expected_card_id):
+    required = {"card_id", "cvv", "expiry", "number"}
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura card credentials response")
+    card_id = _safe_identifier(payload.get("card_id"), "card id")
+    if card_id != expected_card_id:
+        raise ValueError("Aura card credentials card_id mismatch")
+    number = payload.get("number")
+    expiry = payload.get("expiry")
+    cvv = payload.get("cvv")
+    if not isinstance(number, str) or not re.fullmatch(r"\d+", number):
+        raise ValueError("Invalid Aura card number")
+    if not isinstance(expiry, str) or not re.fullmatch(r"(0[1-9]|1[0-2])/\d{2}", expiry):
+        raise ValueError("Invalid Aura card expiry")
+    if cvv is not None and (not isinstance(cvv, str) or not cvv):
+        raise ValueError("Invalid Aura card CVV")
+    return {"card_id": card_id, "cvv": cvv, "expiry": expiry, "number": number}
+
+
 def _retry_policy(code, status):
     if code in FINAL_ERROR_CODES:
         return "no"
@@ -335,6 +359,8 @@ class AuraClient:
         self.reset_at = 0.0
         self._me_cache = None
         self._me_cache_until = 0.0
+        self._credentials_lock = asyncio.Lock()
+        self._credentials_reveals = []
 
     @property
     def configured(self):
@@ -490,6 +516,28 @@ class AuraClient:
     async def get_card(self, card_id):
         card_id = quote(_safe_identifier(card_id, "card id"), safe="")
         return await self.request("GET", "/cards/" + card_id)
+
+    async def get_card_credentials(self, card_id):
+        card_id = _safe_identifier(card_id, "card id")
+        async with self._credentials_lock:
+            stamp = time.monotonic()
+            self._credentials_reveals = [
+                seen for seen in self._credentials_reveals if seen > stamp - 60
+            ]
+            if len(self._credentials_reveals) >= 5:
+                retry_after = max(1, int(61 - (stamp - self._credentials_reveals[0])))
+                error = self.error_cls(
+                    "rate_limited", "Aura card credentials reveal limit reached",
+                    429, str(retry_after),
+                )
+                error.provider = "aura"
+                error.details = {"scope": "credentials_reveal"}
+                error.retry_policy = "after_delay"
+                raise error
+            self._credentials_reveals.append(stamp)
+        path_id = quote(card_id, safe="")
+        payload = await self.request("GET", "/cards/" + path_id + "/credentials")
+        return _card_credentials_result(payload, card_id)
 
     async def list_card_operations(self, card_id=None, *, cursor=None, limit=100):
         params = {"limit": min(max(int(limit), 1), 100)}

@@ -875,6 +875,41 @@ def install_wallet(app, root, owner_check):
                 for item in cards:
                     item['frozen'] = bool(item['frozen'])
                 return web.json_response({'data': cards})
+            if action == 'aura-card-credentials' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                card_id = str(request.query.get('card_id') or '')
+                if not card_id:
+                    raise ValueError('card_id is required')
+                owned = ledger.db.execute(
+                    'SELECT 1 FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?',
+                    (card_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
+                access_id = uuid.uuid4().hex
+                ledger.db.execute(
+                    'INSERT INTO aura_sensitive_access_audit '
+                    '(access_id,user_id,card_id,environment,action,outcome,created_at,completed_at) '
+                    'VALUES (?,?,?,?,?,?,?,NULL)',
+                    (access_id, uid, card_id, aura_environment,
+                     'card.credentials.reveal', 'requested', time.time()),
+                )
+                try:
+                    credentials = await aura_client.get_card_credentials(card_id)
+                except Exception:
+                    ledger.db.execute(
+                        'UPDATE aura_sensitive_access_audit SET outcome=?,completed_at=? '
+                        'WHERE access_id=?', ('failed', time.time(), access_id),
+                    )
+                    raise
+                ledger.db.execute(
+                    'UPDATE aura_sensitive_access_audit SET outcome=?,completed_at=? '
+                    'WHERE access_id=?', ('succeeded', time.time(), access_id),
+                )
+                response = web.json_response(credentials)
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             if action == 'aura-card-cancel' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
