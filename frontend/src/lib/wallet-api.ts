@@ -21,6 +21,7 @@ async function requestOnce<T>(
   action: string,
   body?: unknown,
   signal?: AbortSignal,
+  idempotencyKey?: string,
 ): Promise<T> {
   const network =
     typeof body === "object" && body !== null && "network" in body
@@ -40,6 +41,7 @@ async function requestOnce<T>(
     signal,
     headers: {
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
+      ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
       ...(initData() ? { "X-Telegram-Init-Data": initData() } : {}),
       ...(boardKey() ? { "X-Board-Key": boardKey() } : {}),
     },
@@ -67,6 +69,19 @@ async function requestOnce<T>(
       "Сервис вернул некорректный ответ",
     );
   return data as T;
+}
+export function walletIdempotentRequest<T>(
+  action: string,
+  body: unknown,
+  idempotencyKey: string,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!idempotencyKey)
+    throw new WalletApiError(
+      "IDEMPOTENCY_KEY_REQUIRED",
+      "Не удалось создать безопасный номер операции",
+    );
+  return requestOnce<T>(action, body, signal, idempotencyKey);
 }
 export async function walletRequest<T>(
   action: string,
@@ -124,6 +139,17 @@ export interface WalletOverview {
   balances: { asset: string; available: string; reserved: string }[];
   rates: { source: string; target: string; rate: string; is_valid: boolean }[];
   transactions: WalletTransaction[];
+}
+export interface WalletCapabilities {
+  cards: boolean;
+  sbp_buy: boolean;
+  crypto_processing: boolean;
+  qr_pay: boolean;
+}
+export interface WalletStatus {
+  configured: boolean;
+  capabilities: WalletCapabilities;
+  routes: { qr_pay: "aura" | "goswap" | null };
 }
 export interface QrQuote {
   quote_id: string;

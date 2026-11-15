@@ -1324,7 +1324,13 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_aura_only_wallet_status_overview_sync_and_generic_deposit(self):
         status = await self.wpay.get("/api/wallet/status", headers=self.owner)
-        self.assertTrue((await status.json())["configured"])
+        status_body = await status.json()
+        self.assertTrue(status_body["configured"])
+        self.assertEqual(status_body["routes"]["qr_pay"], "aura")
+        self.assertEqual(status_body["capabilities"], {
+            "cards": True, "sbp_buy": True,
+            "crypto_processing": True, "qr_pay": True,
+        })
         await self.wpay.post(
             "/api/wallet/admin-provider-route", headers=self.owner,
             json={"product": "crypto_deposit", "asset": "USDT", "network": "TRON",
@@ -1342,6 +1348,17 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         synced = await self.wpay.post("/api/wallet/sync", headers=self.owner, json={})
         self.assertEqual(synced.status, 200, await synced.text())
         self.assertTrue((await synced.json())["ok"])
+
+    async def test_wallet_status_hides_disabled_aura_products(self):
+        self.mock.app["state"].products.update({"cards": False, "qr_pay": False})
+        self.app["wpay_aura_provider"]._me_cache = None
+        status = await self.wpay.get("/api/wallet/status", headers=self.owner)
+        self.assertEqual(status.status, 200, await status.text())
+        body = await status.json()
+        self.assertFalse(body["capabilities"]["cards"])
+        self.assertFalse(body["capabilities"]["qr_pay"])
+        self.assertIsNone(body["routes"]["qr_pay"])
+        self.assertFalse(body["providers"]["aura"]["products"]["cards"])
 
     async def test_additional_deposit_address_is_owner_scoped(self):
         await self.wpay.post(
@@ -1915,10 +1932,25 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             json={"quote_token": quote["quote_token"], "qr_payload": qr_payload},
         )
         self.assertEqual(paid.status, 200, await paid.text())
+        payment = await paid.json()
         self.assertEqual(
             ledger.balance(uid, "USDT"),
             (Decimal("10.000000"), Decimal("10.000000")),
         )
+        self.mock.app["state"].qr_payments[payment["id"]].update({
+            "status": "completed", "completed_at": "2026-12-01T00:01:00Z",
+        })
+        synced = await self.wpay.post("/api/wallet/sync", headers=headers, json={})
+        self.assertEqual(synced.status, 200, await synced.text())
+        self.assertEqual((await synced.json())["recovered"]["qr_payments"], 1)
+        self.assertEqual(
+            ledger.balance(uid, "USDT"),
+            (Decimal("10.000000"), Decimal("0.000000")),
+        )
+        overview = await self.wpay.get("/api/wallet/overview", headers=headers)
+        self.assertEqual(overview.status, 200, await overview.text())
+        events = (await overview.json())["transactions"]
+        self.assertEqual(events[0]["type"], "qr_completed")
 
     async def test_disabled_sbp_product_blocks_kyc_start_and_rate(self):
         self.mock.app["state"].products["sbp_buy"] = False

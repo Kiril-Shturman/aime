@@ -32,9 +32,12 @@ import {
 import { getMarketUsdRates } from "../lib/market-data";
 import {
   walletRequest,
+  walletIdempotentRequest,
   WalletApiError,
   type QrQuote,
+  type WalletCapabilities,
   type WalletOverview,
+  type WalletStatus,
 } from "../lib/wallet-api";
 
 const empty: WalletOverview = { balances: [], rates: [], transactions: [] };
@@ -49,11 +52,16 @@ export const usdPrice = (n: number) =>
   });
 export const cryptoAmount = (n: string | number) =>
   Number(n).toLocaleString("en-US", { maximumFractionDigits: 8 });
+const operationKey = () =>
+  globalThis.crypto?.randomUUID?.() ??
+  `wpay-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 interface WalletContextValue {
   demo: boolean;
   data: WalletOverview;
   ready: boolean;
   configured: boolean;
+  capabilities: WalletCapabilities;
+  qrProvider: "aura" | "goswap" | null;
   loading: boolean;
   error: string;
   refresh: (sync?: boolean) => Promise<void>;
@@ -62,6 +70,12 @@ interface WalletContextValue {
   total: number;
 }
 const WalletContext = createContext<WalletContextValue | null>(null);
+const noCapabilities: WalletCapabilities = {
+  cards: false,
+  sbp_buy: false,
+  crypto_processing: false,
+  qr_pay: false,
+};
 export function useLiveWallet() {
   const value = useContext(WalletContext);
   if (!value) throw Error("Wallet provider missing");
@@ -73,6 +87,12 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState(empty),
     [ready, setReady] = useState(false),
     [configured, setConfigured] = useState(false),
+    [capabilities, setCapabilities] = useState<WalletCapabilities>(
+      demo ? { cards: true, sbp_buy: true, crypto_processing: true, qr_pay: true } : noCapabilities,
+    ),
+    [qrProvider, setQrProvider] = useState<"aura" | "goswap" | null>(
+      demo ? "goswap" : null,
+    ),
     [loading, setLoading] = useState(true),
     [error, setError] = useState("");
   const [marketRates, setMarketRates] = useState<Record<string, number>>({});
@@ -118,13 +138,15 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
       }
       setLoading(true);
       try {
-        const status = await walletRequest<{ configured: boolean }>(
+        const status = await walletRequest<WalletStatus>(
           "status",
           undefined,
           controller.signal,
         );
         if (controller.signal.aborted) return;
         setConfigured(status.configured);
+        setCapabilities(status.capabilities ?? noCapabilities);
+        setQrProvider(status.routes?.qr_pay ?? null);
         if (!status.configured) {
           setData(empty);
           setReady(false);
@@ -190,6 +212,8 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         data,
         ready,
         configured,
+        capabilities,
+        qrProvider,
         loading,
         error,
         refresh,
@@ -424,20 +448,44 @@ export function LiveQrPanel({
 }) {
   const wallet = useLiveWallet(),
     [qr, setQr] = useState(initialQr),
-    [quote, setQuote] = useState<QrQuote | null>(null),
+    [quote, setQuote] = useState<(QrQuote & { quoteToken?: string }) | null>(null),
+    [paymentId, setPaymentId] = useState(""),
     [status, setStatus] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false);
   const [clock, setClock] = useState(Date.now());
+  const idempotencyKey = useRef(operationKey());
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
     if (status !== "processing" && status !== "reserved") return;
+    if (wallet.qrProvider === "aura" && paymentId) {
+      let stopped = false;
+      const poll = async () => {
+        try {
+          const item = await walletRequest<{ status: string }>(
+            `aura-qr-payment?payment_id=${encodeURIComponent(paymentId)}`,
+          );
+          if (stopped) return;
+          setStatus(item.status);
+          if (["completed", "failed", "refunded"].includes(item.status))
+            await wallet.refresh();
+        } catch {
+          /* Keep the reserved state until the authenticated read succeeds. */
+        }
+      };
+      void poll();
+      const timer = window.setInterval(poll, 5000);
+      return () => {
+        stopped = true;
+        window.clearInterval(timer);
+      };
+    }
     const timer = window.setInterval(() => void wallet.refresh(), 5000);
     return () => clearInterval(timer);
-  }, [status, wallet.refresh]);
+  }, [paymentId, status, wallet.qrProvider, wallet.refresh]);
   useEffect(() => {
     const item = wallet.data.transactions.find(
       (x) => x.detail.spend_id === quote?.spend_id,
@@ -449,7 +497,31 @@ export function LiveQrPanel({
     setBusy(true);
     setError("");
     try {
-      setQuote(await walletRequest<QrQuote>("quote", { qr }));
+      if (wallet.qrProvider === "aura") {
+        const item = await walletRequest<{
+          quote_token: string;
+          amount_rub: string;
+          merchant_name: string | null;
+          total_usdt: string;
+          rate: string;
+          expires_at: string;
+        }>("aura-qr-quote", { qr_payload: qr });
+        setQuote({
+          quote_id: "",
+          spend_id: "",
+          quoteToken: item.quote_token,
+          amount_rub: item.amount_rub,
+          merchant_name: item.merchant_name,
+          amount: item.total_usdt,
+          asset: "USDT",
+          rate: item.rate,
+          expires_at: item.expires_at,
+        });
+      } else {
+        setQuote(await walletRequest<QrQuote>("quote", { qr }));
+      }
+      idempotencyKey.current = operationKey();
+      setPaymentId("");
       setStatus("");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка котировки");
@@ -462,9 +534,17 @@ export function LiveQrPanel({
     setBusy(true);
     setError("");
     try {
-      const payment = await walletRequest<{ status: string }>("pay", {
-        quote_id: quote.quote_id,
-      });
+      const payment =
+        wallet.qrProvider === "aura"
+          ? await walletIdempotentRequest<{ id: string; status: string }>(
+              "aura-qr-payment",
+              { quote_token: quote.quoteToken, qr_payload: qr },
+              idempotencyKey.current,
+            )
+          : await walletRequest<{ payment_id?: string; status: string }>("pay", {
+              quote_id: quote.quote_id,
+            });
+      setPaymentId("id" in payment ? payment.id : payment.payment_id || "");
       setStatus(payment.status);
       await wallet.refresh();
     } catch (e) {
@@ -472,7 +552,9 @@ export function LiveQrPanel({
         !(e instanceof WalletApiError) ||
         ![
           "INSUFFICIENT_FUNDS",
+          "insufficient_funds",
           "QUOTE_EXPIRED",
+          "quote_expired",
           "QUOTE_NOT_FOUND",
           "AUTH_REQUIRED",
           "NOT_CONFIGURED",
@@ -510,6 +592,8 @@ export function LiveQrPanel({
           onChange={(e) => {
             setQr(e.target.value);
             setQuote(null);
+            setPaymentId("");
+            idempotencyKey.current = operationKey();
           }}
           placeholder="https://qr.nspk.ru/… или ST00012|…"
           className="min-h-28 w-full rounded-2xl bg-white p-4 text-[15px] text-black dark:bg-white/10 dark:text-white"
@@ -518,7 +602,7 @@ export function LiveQrPanel({
           data-wpay-primary=""
           rounded
           large
-          disabled={!wallet.configured || busy || !qr || !!status}
+          disabled={!wallet.configured || !wallet.capabilities.qr_pay || busy || !qr || !!status}
           onClick={() => void getQuote()}
           className="!w-full"
         >
@@ -577,9 +661,9 @@ export function LiveQrPanel({
             Повторить запрос с тем же номером
           </Button>
         )}
-        {(error || !wallet.configured) && (
+        {(error || !wallet.configured || !wallet.capabilities.qr_pay) && (
           <p role="alert" className="text-[14px] leading-relaxed text-red-500">
-            {error || wallet.error}
+            {error || wallet.error || "Оплата QR сейчас не подключена"}
           </p>
         )}
       </main>

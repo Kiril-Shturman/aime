@@ -31,7 +31,7 @@ from wallet_aura import (
     AuraClient, AuraService, prepare as prepare_aura,
     receive_webhook as receive_aura_webhook, process_inbox as process_aura_inbox,
     reconcile as reconcile_aura, run_worker as run_aura_worker,
-    store_withdrawal_snapshot,
+    reconcile_pending as reconcile_aura_pending, store_withdrawal_snapshot,
 )
 
 BASE_URL = 'https://goswap.site/api/'
@@ -698,13 +698,42 @@ def install_wallet(app, root, owner_check):
         try:
             action = request.match_info['action']
             if action == 'status' and request.method == 'GET':
+                aura_products = {
+                    'cards': False, 'sbp_buy': False,
+                    'crypto_processing': False, 'qr_pay': False,
+                }
+                aura_available = bool(aura_enabled and aura_client.configured)
+                if aura_available:
+                    try:
+                        me = await aura_client.get_me()
+                        advertised = me.get('products', {})
+                        aura_products = {
+                            key: advertised.get(key) is True for key in aura_products
+                        }
+                    except (ApiError, asyncio.TimeoutError, OSError, ValueError):
+                        aura_available = False
+                qr_provider = (
+                    'aura' if aura_available and aura_products['qr_pay']
+                    else 'goswap' if bool(token) else None
+                )
                 return web.json_response({
                     'configured': bool(token) or bool(aura_enabled and aura_client.configured),
                     'telegram_auth': bool(bot_token),
+                    'capabilities': {
+                        'cards': aura_available and aura_products['cards'],
+                        'sbp_buy': aura_available and aura_products['sbp_buy'],
+                        'crypto_processing': (
+                            aura_available and aura_products['crypto_processing']
+                        ),
+                        'qr_pay': bool(qr_provider),
+                    },
+                    'routes': {'qr_pay': qr_provider},
                     'providers': {
                         'goswap': {'configured': bool(token)},
                         'aura': {'enabled': aura_enabled, 'configured': aura_client.configured,
-                                 'environment': aura_environment},
+                                 'available': aura_available,
+                                 'environment': aura_environment,
+                                 'products': aura_products},
                     },
                 })
             if action == 'webhook' and request.method == 'POST':
@@ -1360,7 +1389,12 @@ def install_wallet(app, root, owner_check):
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Платёжный провайдер не подключён', 503)
                 processed = process_aura_inbox(ledger, aura_environment)
-                return web.json_response({'ok': True, 'processed': processed})
+                recovered = await reconcile_aura_pending(
+                    ledger, aura_client, aura_environment
+                )
+                return web.json_response({
+                    'ok': True, 'processed': processed, 'recovered': recovered,
+                })
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
             financial = await finance_route(request,action,uid,admin,ledger,provider,money,ApiError)

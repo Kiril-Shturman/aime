@@ -310,6 +310,7 @@ export default function WalletPage() {
     });
     return () => observer.disconnect();
   }, []);
+
   return (
     <F7App
       name="WPay"
@@ -375,6 +376,11 @@ function WalletScreen() {
     };
   }, []);
 
+  useEffect(() => {
+    if (activeTab === "cards" && !live.capabilities.cards) setActiveTab("wallet");
+    if (!live.capabilities.qr_pay) setQrValue(null);
+  }, [activeTab, live.capabilities.cards, live.capabilities.qr_pay]);
+
   const initials = (user?.first_name || "К").slice(0, 1).toUpperCase();
   const menuItems = useMemo(
     () => [
@@ -427,6 +433,10 @@ function WalletScreen() {
   }
 
   function scanPaymentQr() {
+    if (!live.capabilities.qr_pay) {
+      showNotice("Оплата QR сейчас не подключена");
+      return;
+    }
     const telegram = tg();
     if (!telegram?.showScanQrPopup || !telegram.isVersionAtLeast?.("6.4")) {
       showNotice("Откройте миниапку в Telegram для сканирования QR-кода");
@@ -514,6 +524,7 @@ function WalletScreen() {
         dark={theme === "dark"}
         onTheme={toggleTheme}
         name={user?.first_name || "Ваш аккаунт"}
+        cardsEnabled={live.capabilities.cards}
       />
       <WalletNavbar
         title={tabMeta[activeTab].title}
@@ -597,7 +608,9 @@ function WalletScreen() {
               </section>
 
               <WalletActionGrid
-                items={actions.map((action) => ({
+                items={actions.filter(
+                  (action) => action.label !== "QR-код" || live.capabilities.qr_pay,
+                ).map((action) => ({
                   ...action,
                   onClick: () => {
                     if (action.label === "QR-код") scanPaymentQr();
@@ -616,11 +629,11 @@ function WalletScreen() {
               inset
               className="!mb-0 !mt-6 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]"
             >
-              {loading ? (
+              {live.capabilities.sbp_buy && (loading ? (
                 <CurrencySkeletonRow rubles />
               ) : (
                 <CurrencyRow asset={rubleAsset} balanceHidden={balanceHidden} />
-              )}
+              ))}
             </List>
 
             <section className="mt-8">
@@ -669,7 +682,9 @@ function WalletScreen() {
           />
         )}
         {activeTab === "history" && <LiveHistory />}
-        {activeTab === "cards" && <CardsSection showNotice={showNotice} />}
+        {activeTab === "cards" && live.capabilities.cards && (
+          <CardsSection showNotice={showNotice} />
+        )}
         {activeTab === "profile" && (
           <ProfileSection
             user={user}
@@ -695,7 +710,7 @@ function WalletScreen() {
         showNotice={showNotice}
       />
 
-      {qrValue !== null && (
+      {qrValue !== null && live.capabilities.qr_pay && (
         <LiveQrPanel initialQr={qrValue} onClose={() => setQrValue(null)} />
       )}
 
@@ -715,7 +730,8 @@ function WalletScreen() {
               label: "Профиль",
               icon: PersonCropCircleFill,
             },
-          ].map(({ id, label, icon: Icon }) => (
+          ].filter((item) => item.id !== "cards" || live.capabilities.cards)
+          .map(({ id, label, icon: Icon }) => (
             <TabbarLink
               key={id}
               active={activeTab === id}

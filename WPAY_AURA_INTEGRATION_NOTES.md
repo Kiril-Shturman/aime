@@ -740,17 +740,24 @@ Additional completed areas:
 - Aura-only deployments now report the wallet as configured, serve overview and
   sync without GoSwap, and route the generic USDT/TRON deposit screen through
   Aura when the explicit provider route is enabled.
+- `/api/wallet/status` now publishes the cached Aura `/me.products` capability
+  map and the selected QR provider. The live wallet hides unavailable cards,
+  SBP and QR entry points. When Aura QR is enabled, the QR sheet uses Aura
+  quote/pay directly with one stable idempotency key and authenticated status
+  polling; Aura-only sync also performs read-only pending recovery.
 
 Verification on this branch:
 
-- 131 backend unit/integration tests passed, including duplicate delivery,
+- 132 backend unit/integration tests passed, including duplicate delivery,
   pending-to-confirmed transition, invalid-signature recovery, event-ID reuse,
   environment guards, idempotent money mutations, QR reserve/release/refund,
   SBP credit settlement and read-only recovery.
 - Frontend production build passed.
+- Frontend unit tests and lint passed (lint retains existing warnings only).
 - Python compilation and `git diff --check` passed.
 
-Remaining before broad production rollout: expose only enabled Aura capabilities
-in the UI and run a controlled testnet pilot with server-installed secrets. A
-live key may be installed only in server secret storage; credentials pasted in
-chat must remain revoked.
+Remaining before broad production rollout: run a controlled real Aura testnet
+pilot with server-installed secrets, then replace the illustrative card catalog
+with owner-scoped Aura card data before enabling the card UI. A live key may be
+installed only in server secret storage; credentials pasted in chat must remain
+revoked.
