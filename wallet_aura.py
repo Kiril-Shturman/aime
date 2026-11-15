@@ -2329,10 +2329,19 @@ def store_webhook(ledger, raw, signature, headers, secret, partner_id=None):
     valid = verify_signature(secret, raw, signature)
     try:
         event = json.loads(raw)
-        if not isinstance(event, dict) or not isinstance(event.get("data"), dict):
+        if not isinstance(event, dict):
             raise ValueError("Invalid Aura envelope")
-        event_id = _safe_identifier(event.get("event_id"), "event id")
         kind = _safe_identifier(event.get("event"), "event type")
+        is_test = kind == "webhook.test"
+        if not is_test and not isinstance(event.get("data"), dict):
+            raise ValueError("Invalid Aura envelope")
+        # The portal's signed test delivery uses a small camelCase envelope,
+        # while normal API events use the documented snake_case envelope.
+        # Keep the compatibility exception deliberately limited to webhook.test.
+        event_id = _safe_identifier(
+            event.get("event_id") or (event.get("eventId") if is_test else None),
+            "event id",
+        )
         if headers.get("X-Aura-Event-Id") not in {None, "", event_id}:
             valid = False
         if headers.get("X-Aura-Event") not in {None, "", kind}:
@@ -2347,7 +2356,10 @@ def store_webhook(ledger, raw, signature, headers, secret, partner_id=None):
         attempt = headers.get("X-Aura-Attempt")
         if attempt not in {None, ""} and (not str(attempt).isdigit() or int(attempt) < 1):
             valid = False
-        if partner_id and str(event.get("partner_id")) != partner_id:
+        event_partner_id = event.get("partner_id")
+        if is_test and event_partner_id is None:
+            event_partner_id = event.get("partnerId")
+        if partner_id and str(event_partner_id) != partner_id:
             valid = False
         stored_event = event
         if kind == "card.otp":

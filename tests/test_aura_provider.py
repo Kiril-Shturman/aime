@@ -72,6 +72,43 @@ class AuraUnitTests(unittest.TestCase):
         old_raw, old_signature = signed(self.event(), int(time.time()) - 301)
         self.assertFalse(verify_signature(SECRET, old_raw, old_signature))
 
+    def test_portal_webhook_test_camelcase_envelope_is_accepted(self):
+        event = {
+            "event": "webhook.test",
+            "eventId": "e17624f7-7477-4dc4-8556-81c60d7c69cb",
+            "partnerId": MOCK_PARTNER,
+            "sentAt": "2026-11-15T17:27:16Z",
+            "message": "Test webhook",
+        }
+        raw, signature = signed(event)
+        row, valid = store_webhook(
+            self.ledger,
+            raw,
+            signature,
+            {
+                "X-Aura-Event": event["event"],
+                "X-Aura-Event-Id": event["eventId"],
+            },
+            SECRET,
+            MOCK_PARTNER,
+        )
+        self.assertTrue(valid)
+        self.assertEqual(row["update_type"], "webhook.test")
+        self.assertEqual(row["provider_event_id"], event["eventId"])
+
+    def test_camelcase_is_not_accepted_for_normal_aura_events(self):
+        event = {
+            "event": "customer.deposit.confirmed",
+            "eventId": "evt_camelcase",
+            "partnerId": MOCK_PARTNER,
+            "data": {},
+        }
+        raw, signature = signed(event)
+        _, valid = store_webhook(
+            self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER
+        )
+        self.assertFalse(valid)
+
     def test_confirmed_deposit_is_atomic_namespaced_and_idempotent(self):
         event = self.event()
         raw, signature = signed(event)
