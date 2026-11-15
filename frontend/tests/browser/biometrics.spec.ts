@@ -118,6 +118,7 @@ test("saved native marker locks on reload even without local hint; cancellation 
     page.getByRole("main", { name: "Блокировка WPay" }),
   ).toBeVisible();
   await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
+  await expect(page.locator(".wpay-lock-aurora")).toBeVisible();
   vault.authorized = true;
   await page
     .getByRole("button", { name: "Разблокировать", exact: true })

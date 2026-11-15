@@ -11,6 +11,7 @@ import { Button } from "konsta/react";
 import { ListItem, Toggle } from "framework7-react";
 import { tg, getUser, haptic, type TgBiometricManager } from "../lib/telegram";
 import "./WalletBiometrics.css";
+import Aurora from "../components/reactbits/Aurora";
 
 // Device privacy lock only. Server authentication and financial authorization remain independent.
 function nativeCall<T>(
@@ -392,6 +393,10 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
       )}
       {hidden && (
         <main className="wpay-lock-screen" aria-label="Блокировка WPay">
+          <div className="wpay-lock-aurora" aria-hidden="true">
+            <Aurora colorStops={["#264575", "#6872b8", "#3654a4"]} speed={0.22} amplitude={0.65} height={0.7} glow={0.25} opacity={0.6} layers={2} mouseInteraction={false} intro={false} dpr={1} />
+          </div>
+          <span className="wpay-lock-wordmark" aria-hidden="true">WPAY</span>
           <span className="wpay-lock-mark">
             <FaceIdIcon />
           </span>

@@ -103,3 +103,20 @@
 .wpay-biometric-row .item-inner { position: relative; }
 .wpay-biometric-row .item-after { position: absolute; top: 50%; right: 18px; transform: translateY(-50%); }
 .wpay-biometric-row .item-title, .wpay-biometric-row .item-subtitle { padding-right: 66px; }
+
+/* Aurora stays behind the private lock screen and never receives pointer input. */
+.wpay-lock-screen { isolation: isolate; overflow: hidden; background: #f3f5fa; }
+.dark .wpay-lock-screen { background: #090c14; }
+.wpay-lock-aurora { position: absolute; z-index: -2; inset: 0; pointer-events: none; opacity: .4; background: radial-gradient(ellipse at 55% 15%, #657fbc26, transparent 65%); }
+.dark .wpay-lock-aurora { opacity: .85; }
+.wpay-lock-screen::after { content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent, #f3f5fa99 40%, #f3f5fae8 100%); }
+.dark .wpay-lock-screen::after { background: linear-gradient(180deg, #090c141a, #090c1480 40%, #090c14e6 100%); }
+.wpay-lock-wordmark { position: absolute; top: max(110px, calc(var(--tg-content-safe-area-inset-top, 0px) + 48px)); font-size: 12px; letter-spacing: .32em; font-weight: 650; color: #65728b; }
+.dark .wpay-lock-wordmark { color: #a4adc3; }
+.wpay-lock-mark { width: 76px; height: 76px; border-radius: 25px; background: linear-gradient(145deg, #ffffffb3, #ffffff33); color: #3c5b93; border: 1px solid #ffffffb3; box-shadow: inset 0 1px 0 #fff9, 0 12px 44px #1838680d; backdrop-filter: blur(18px); }
+.dark .wpay-lock-mark { background: linear-gradient(145deg, #ffffff12, #ffffff04); border-color: #ffffff20; color: #b4c7ef; box-shadow: inset 0 1px 0 #ffffff14, 0 12px 44px #0002; }
+.wpay-lock-mark svg { width: 42px; height: 42px; stroke-width: 1.3; }
+.wpay-lock-screen h1 { font-size: clamp(25px, 6vw, 30px); font-weight: 600; letter-spacing: -.8px; }
+.wpay-lock-screen > p { font-size: 14px; }
+.wpay-lock-settings { margin-top: 4px; font-size: 14px; }
+@media (prefers-reduced-motion: reduce) { .wpay-lock-aurora canvas { display: none; } }
