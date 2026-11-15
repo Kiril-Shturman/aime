@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { getUser } from "../lib/telegram";
+import { getUser, initData, boardKey } from "../lib/telegram";
 
 const Lanyard = lazy(() => import("../components/reactbits/Lanyard"));
 
@@ -116,13 +116,36 @@ export default function WalletLockBadge() {
         paint();
       }
     };
-    if (user?.photo_url) img.src = user.photo_url;
+    const controller = new AbortController();
+    let objectUrl = "";
+    if (user?.id) {
+      void fetch("/api/wallet/profile-avatar", {
+        cache: "no-store",
+        signal: controller.signal,
+        headers: {
+          ...(initData() ? { "X-Telegram-Init-Data": initData() } : {}),
+          ...(boardKey() ? { "X-Board-Key": boardKey() } : {}),
+        },
+      })
+        .then(async (response) => {
+          if (!response.ok) throw Error("Avatar unavailable");
+          const blob = await response.blob();
+          if (!active || !blob.type.startsWith("image/")) return;
+          objectUrl = URL.createObjectURL(blob);
+          img.src = objectUrl;
+        })
+        .catch(() => {
+          /* Keep initials when Telegram has no accessible photo. */
+        });
+    }
     return () => {
+      controller.abort();
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
       active = false;
       img.onload = null;
       mark.onload = null;
     };
-  }, [user?.photo_url]);
+  }, [user?.id, user?.photo_url]);
   return (
     <div className="wpay-lock-badge" aria-label="Бейдж профиля">
       <div className="wpay-lock-badge-fallback" aria-hidden="true">

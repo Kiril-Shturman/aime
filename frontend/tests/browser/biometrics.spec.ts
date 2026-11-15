@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 
-async function setup(page: Page, saved = false) {
+async function setup(page: Page, saved = false, avatar?: Buffer) {
   const vault = {
     token: saved ? "device-marker" : "",
     authorized: true,
@@ -64,6 +64,10 @@ async function setup(page: Page, saved = false) {
       },
     }),
   );
+  if (avatar)
+    await page.route("**/api/wallet/profile-avatar", (route) =>
+      route.fulfill({ body: avatar, contentType: "image/png" }),
+    );
   const hash = new URLSearchParams({
     tgWebAppVersion: "9.6",
     tgWebAppPlatform: "ios",
@@ -209,4 +213,32 @@ test("badge respects reduced motion", async ({ page }) => {
     "animation-name",
     "none",
   );
+});
+
+test("badge paints the authenticated same-origin avatar into its texture", async ({
+  page,
+}) => {
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 2;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#ff0000";
+    ctx.fillRect(0, 0, 2, 2);
+    return canvas.toDataURL().split(",")[1];
+  });
+  await setup(page, true, Buffer.from(png, "base64"));
+  await expect
+    .poll(() =>
+      page.locator(".wpay-lock-badge-fallback img").evaluate(async (node) => {
+        const img = node as HTMLImageElement;
+        await img.decode();
+        const canvas = document.createElement("canvas");
+        canvas.width = 1024;
+        canvas.height = 1440;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        return Array.from(ctx.getImageData(512, 650, 1, 1).data).slice(0, 3);
+      }),
+    )
+    .toEqual([255, 0, 0]);
 });

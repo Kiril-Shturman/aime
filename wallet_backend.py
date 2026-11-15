@@ -19,6 +19,7 @@ from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import parse_qsl, quote, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, web
+from wallet_avatar import load_avatar, AvatarNotFound
 
 from wallet_book import Book
 from wallet_user_ops import prepare as prepare_user_ops, route as user_ops_route
@@ -1108,6 +1109,21 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            if action == 'profile-avatar' and request.method == 'GET':
+                if request.query:
+                    raise ValueError('Avatar query parameters are not supported')
+                if not uid.startswith('tg:'):
+                    raise ApiError('AVATAR_NOT_FOUND', 'Фото профиля не найдено', 404)
+                try:
+                    image, content_type = await load_avatar(bot_token, int(uid.removeprefix('tg:')))
+                except AvatarNotFound:
+                    raise ApiError('AVATAR_NOT_FOUND', 'Фото профиля не найдено', 404)
+                except ValueError:
+                    raise ApiError('AVATAR_UNAVAILABLE', 'Фото профиля временно недоступно', 502)
+                return web.Response(body=image, content_type=content_type, headers={
+                    'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
+                    'Content-Security-Policy': "sandbox; default-src 'none'; img-src data:",
+                })
             if admin and uid.startswith('tg:'):
                 ledger.db.execute("UPDATE wallet_accounts SET role='admin' WHERE user_id=?", (uid,))
             if action == 'access' and request.method == 'GET':
