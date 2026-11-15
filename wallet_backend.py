@@ -27,6 +27,11 @@ from wallet_finance_worker import prepare as prepare_finance_worker, Worker as F
 from wallet_finance import finance_route, require_coverage
 from wallet_operations import prepare_operations, operations_route, save_address
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
+from wallet_aura import (
+    AuraClient, AuraService, prepare as prepare_aura,
+    receive_webhook as receive_aura_webhook, process_inbox as process_aura_inbox,
+    reconcile as reconcile_aura, run_worker as run_aura_worker,
+)
 
 BASE_URL = 'https://goswap.site/api/'
 NETWORKS = {'BSC', 'ETH', 'TON', 'SOL', 'TRON'}
@@ -283,18 +288,20 @@ class Ledger:
 
     def set_debt(self, uid, asset, amount):self.book.set_debt(uid,asset,amount)
 
-    def deposit(self, payload):
+    def deposit(self, payload, manage_transaction=True):
         uid = self.db.execute('SELECT user_id FROM wallet_accounts WHERE client_ref=?', (payload.get('client_ref'),)).fetchone()
         if not uid:
             return False
         amount = money(payload['credited'])
         asset = str(payload['asset']).upper()
         event_id = 'deposit:' + str(payload['deposit_id'])
-        self.begin('deposit','provider',event_id)
+        if manage_transaction:
+            self.begin('deposit','provider',event_id)
         try:
             self.db.execute('INSERT OR IGNORE INTO wallet_deposit_owners VALUES (?,?,?)',(str(payload['deposit_id']),uid[0],asset))
             if self.db.execute('SELECT 1 FROM wallet_events WHERE event_id=?', (event_id,)).fetchone():
-                self.commit()
+                if manage_transaction:
+                    self.commit()
                 return False
             available, reserved = self.balance(uid[0], asset)
             with localcontext() as ctx:
@@ -304,10 +311,12 @@ class Ledger:
                 self.set_debt(uid[0],asset,owed-repayment)
                 self.put_balance(uid[0], asset, available + amount - repayment, reserved)
             self.db.execute('INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)', (event_id, uid[0], asset, str(amount), 'deposit', str(payload.get('credited_at') or now()), json.dumps(payload)))
-            self.commit()
+            if manage_transaction:
+                self.commit()
             return True
         except Exception:
-            self.rollback()
+            if manage_transaction:
+                self.rollback()
             raise
 
     def reserve(self, uid, quote_id):
@@ -386,9 +395,18 @@ def install_wallet(app, root, owner_check):
         with open(secrets_file, encoding='utf-8') as config:
             for line in config:
                 key, sep, value = line.strip().partition('=')
-                if sep and key in {'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS'}:
+                if sep and key in {
+                    'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS',
+                    'AURA_API_KEY', 'AURA_ENVIRONMENT', 'AURA_BASE_URL',
+                    'AURA_WEBHOOK_SECRET', 'AURA_PARTNER_ID', 'WPAY_AURA_ENABLED',
+                }:
                     os.environ.setdefault(key, value.strip().strip('\"\''))
     token = os.environ.get('GOSWAP_API_TOKEN', '')
+    aura_enabled = os.environ.get('WPAY_AURA_ENABLED', '0') == '1'
+    aura_environment = os.environ.get('AURA_ENVIRONMENT', 'test')
+    aura_token = os.environ.get('AURA_API_KEY', '')
+    aura_secret = os.environ.get('AURA_WEBHOOK_SECRET', '')
+    aura_partner_id = os.environ.get('AURA_PARTNER_ID', '') or None
     bot_token = os.environ.get('WPAY_BOT_TOKEN') or os.environ.get('BOARD_BOT_TOKEN', '')
     admin_ids = {value.strip() for value in os.environ.get('WPAY_ADMIN_IDS', '').split(',') if value.strip().isdigit()}
     ledger = Ledger(os.environ.get('WPAY_DB_PATH', os.path.join(root, 'wpay.sqlite3')))
@@ -396,9 +414,16 @@ def install_wallet(app, root, owner_check):
     prepare_withdrawals(ledger)
     prepare_user_ops(ledger)
     prepare_inbox(ledger)
+    prepare_aura(ledger)
     prepare_finance_worker(ledger)
     provider = GoSwap(token)
+    aura_client = AuraClient(
+        aura_token, aura_environment, ApiError,
+        base_url=os.environ.get('AURA_BASE_URL') or None,
+    )
+    aura_service = AuraService(ledger, aura_client, aura_environment)
     app['wpay_provider'] = provider
+    app['wpay_aura_provider'] = aura_client
     app['wpay_ledger'] = ledger
     app['wpay_broadcast_tasks'] = set()
 
@@ -663,9 +688,22 @@ def install_wallet(app, root, owner_check):
         try:
             action = request.match_info['action']
             if action == 'status' and request.method == 'GET':
-                return web.json_response({'configured': bool(token), 'telegram_auth': bool(bot_token)})
+                return web.json_response({
+                    'configured': bool(token), 'telegram_auth': bool(bot_token),
+                    'providers': {
+                        'goswap': {'configured': bool(token)},
+                        'aura': {'enabled': aura_enabled, 'configured': aura_client.configured,
+                                 'environment': aura_environment},
+                    },
+                })
             if action == 'webhook' and request.method == 'POST':
                 return await receive_webhook(request,ledger,provider,token,money,ApiError)
+            if action == 'aura-webhook' and request.method == 'POST':
+                if not aura_enabled or not aura_secret:
+                    raise ApiError('NOT_CONFIGURED', 'Aura webhook is not configured', 503)
+                return await receive_aura_webhook(
+                    request, ledger, aura_secret, ApiError, aura_partner_id
+                )
             uid = identity(request)
             admin = is_admin(uid)
             client_ref = ledger.account(
@@ -702,8 +740,71 @@ def install_wallet(app, root, owner_check):
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
                 return web.json_response(await admin_goswap_action(request))
+            if action == 'admin-providers' and request.method == 'GET':
+                aura_state = {
+                    'enabled': aura_enabled,
+                    'configured': aura_client.configured,
+                    'environment': aura_environment,
+                    'routes': [dict(row) for row in ledger.db.execute(
+                        "SELECT * FROM wallet_provider_routes ORDER BY product,asset,network,environment"
+                    )],
+                    'reconciliation': [dict(row) for row in ledger.db.execute(
+                        "SELECT * FROM wallet_provider_reconciliation ORDER BY provider,environment,asset"
+                    )],
+                }
+                if aura_enabled and aura_client.configured:
+                    aura_state['capabilities'] = await aura_client.get_me()
+                return web.json_response({
+                    'goswap': {'enabled': bool(token), 'configured': bool(token)},
+                    'aura': aura_state,
+                })
+            if action == 'admin-aura-process' and request.method == 'POST':
+                if not aura_enabled:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is disabled', 503)
+                count = process_aura_inbox(ledger, aura_environment)
+                result = {'processed': count}
+                if aura_client.configured:
+                    result['reconciliation'] = await reconcile_aura(
+                        ledger, aura_client, aura_environment
+                    )
+                return web.json_response(result)
+            if action == 'admin-provider-route' and request.method == 'POST':
+                body = await request.json()
+                allowed = {
+                    ('crypto_deposit', 'USDT', 'TRON', 'test', 'aura'),
+                    ('crypto_deposit', 'USDT', 'TRON', 'live', 'aura'),
+                }
+                key = (
+                    str(body.get('product') or ''), str(body.get('asset') or '').upper(),
+                    str(body.get('network') or '').upper(),
+                    str(body.get('environment') or ''), str(body.get('provider') or ''),
+                )
+                if key not in allowed or type(body.get('enabled')) is not bool:
+                    raise ApiError('INVALID_ROUTE', 'Unsupported provider route', 400)
+                if key[3] == 'live' and aura_environment != 'live':
+                    raise ApiError('ENVIRONMENT_MISMATCH', 'Aura live route requires live configuration', 409)
+                ledger.db.execute(
+                    "INSERT OR REPLACE INTO wallet_provider_routes VALUES (?,?,?,?,?,?,?)",
+                    (*key, int(body['enabled']), time.time()),
+                )
+                return web.json_response({'ok': True, 'route': {
+                    'product': key[0], 'asset': key[1], 'network': key[2],
+                    'environment': key[3], 'provider': key[4], 'enabled': body['enabled'],
+                }})
             if action == 'admin-broadcasts' and request.method in {'GET', 'POST'}:
                 return web.json_response(await admin_broadcasts(request, uid))
+            if action == 'aura-deposit-address' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                active = ledger.db.execute(
+                    "SELECT enabled FROM wallet_provider_routes WHERE product='crypto_deposit' "
+                    "AND asset='USDT' AND network='TRON' AND environment=? AND provider='aura'",
+                    (aura_environment,),
+                ).fetchone()
+                if not active or not active['enabled']:
+                    raise ApiError('ROUTE_DISABLED', 'Aura TRON deposits are disabled', 503)
+                result = await aura_service.get_or_create_deposit_address(uid, client_ref)
+                return web.json_response(result)
             if not token:
                 raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён. Ожидается серверный API-ключ.', 503)
             financial = await finance_route(request,action,uid,admin,ledger,provider,money,ApiError)
@@ -821,11 +922,15 @@ def install_wallet(app, root, owner_check):
         task=app.get('wpay_finance_task')
         if task:
             task.cancel();await asyncio.gather(task,return_exceptions=True)
+        aura_task = app.get('wpay_aura_task')
+        if aura_task:
+            aura_task.cancel();await asyncio.gather(aura_task,return_exceptions=True)
         for task in app['wpay_broadcast_tasks']:
             task.cancel()
         if app['wpay_broadcast_tasks']:
             await asyncio.gather(*app['wpay_broadcast_tasks'], return_exceptions=True)
         await provider.close()
+        await aura_client.close()
         ledger.db.close()
 
     async def startup(_):
@@ -835,6 +940,10 @@ def install_wallet(app, root, owner_check):
             task = asyncio.create_task(sync_telegram_users(only_missing=True))
             app['wpay_broadcast_tasks'].add(task)
             task.add_done_callback(app['wpay_broadcast_tasks'].discard)
+        if aura_enabled and aura_secret:
+            app['wpay_aura_task'] = asyncio.create_task(
+                run_aura_worker(ledger, aura_client, aura_environment)
+            )
 
     app.router.add_route('*', '/api/wallet/{action}', route)
     app.on_startup.append(startup)

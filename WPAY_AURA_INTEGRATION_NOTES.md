@@ -668,3 +668,44 @@ card-details contract and PCI implications must be reviewed before implementatio
 - User-supplied Aura Partner API guide excerpts, specification version 3.17.0.
 - Aura public business overview: <https://aurawallet.co/business>
 - Aura public fees/limits: <https://help.aurawallet.co/fees-limits>
+
+## Implemented foundation
+
+Branch: `wpay/aura-provider-foundation`. This implementation is deliberately
+disabled by default and does not change the active GoSwap production route.
+No Aura credential is committed, and development can run entirely against the
+local mock until Aura issues a test key.
+
+Implemented:
+
+- Provider/product/environment routing with existing operations pinned to their
+  original provider and Aura TRON deposits behind an explicit admin switch.
+- Aura HTTP client with test/live environment guards, decimal amounts,
+  idempotency validation, rate-limit observation, typed error envelopes and the
+  documented retry-policy classes.
+- Durable Aura webhook inbox with V2 HMAC verification over raw bytes, replay
+  window, multiple-signature support, partner/header consistency checks,
+  deduplication and event-ID-reuse quarantine.
+- Customer upsert and personal TRON deposit-address flow.
+- Pending/rejected/confirmed deposit lifecycle. Only `confirmed` deposits credit
+  the wallet, only `net_amount` is credited, and provider state cannot regress.
+- Atomic wallet ledger posting, provider-position update and webhook completion,
+  so a crash cannot leave a half-applied deposit.
+- Provider balance reconciliation and admin health/processing endpoints.
+- Local Aura mock for `/me`, customers, deposit addresses, deposits, balance and
+  signed confirmed-deposit scenarios.
+
+Verification on this branch:
+
+- 83 backend unit/integration tests passed, including duplicate delivery,
+  pending-to-confirmed transition, invalid-signature recovery, event-ID reuse,
+  environment guards and the complete mock deposit route.
+- Frontend tests passed (3/3), production build passed and lint completed with
+  pre-existing warnings only.
+- Python compilation and `git diff --check` passed.
+
+Still not implemented: KYC, cards, SBP purchase, outgoing QR payment and
+withdrawals. Those require their exact request/response schemas and real Aura
+testnet or a tightly controlled production pilot. A newly issued live key may
+later be installed only in server secret storage; the key previously pasted in
+chat must remain revoked.

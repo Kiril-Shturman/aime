@@ -1,0 +1,148 @@
+"""Local Aura contract mock for development without provider credentials.
+
+Run: ``python3 wallet_aura_mock.py``.  This process is test-only and binds to
+127.0.0.1.  It never accepts an Aura production key.
+"""
+
+import argparse
+import hashlib
+import json
+import time
+import uuid
+from decimal import Decimal
+
+from aiohttp import web
+
+MOCK_KEY = "ak_test_local_mock"
+MOCK_PARTNER = "partner_local_mock"
+
+
+class State:
+    def __init__(self):
+        self.customers = {}
+        self.addresses = {}
+        self.deposits = []
+        self.balance = Decimal("0")
+
+
+def envelope(code, message, status=400, error_type="invalid_request_error", **details):
+    request_id = "req_" + uuid.uuid4().hex
+    return web.json_response(
+        {"error": {"code": code, "type": error_type, "message": message,
+                   "request_id": request_id, "doc_url": "https://local.invalid/errors#" + code,
+                   **({"details": details} if details else {})}},
+        status=status, headers={"X-Request-Id": request_id},
+    )
+
+
+@web.middleware
+async def auth_and_limits(request, handler):
+    if request.path.startswith("/mock/"):
+        return await handler(request)
+    if request.headers.get("X-API-Key") != MOCK_KEY:
+        return envelope("unauthenticated", "Invalid local mock key", 401, "authentication_error")
+    response = await handler(request)
+    response.headers["X-RateLimit-Limit"] = "100"
+    response.headers["X-RateLimit-Remaining"] = "99"
+    response.headers["X-RateLimit-Reset"] = "1"
+    response.headers["X-Request-Id"] = response.headers.get("X-Request-Id", "req_" + uuid.uuid4().hex)
+    return response
+
+
+def make_app():
+    app = web.Application(middlewares=[auth_and_limits])
+    state = State()
+    app["state"] = state
+
+    async def me(_):
+        return web.json_response({
+            "partner_id": MOCK_PARTNER, "environment": "test",
+            "products": {"crypto_processing": True, "cards": True,
+                         "sbp_buy": True, "qr_pay": True},
+        })
+
+    async def customers(request):
+        body = await request.json()
+        customer_id = str(body.get("id") or "")
+        if not customer_id:
+            return envelope("invalid_argument", "id is required")
+        item = state.customers.setdefault(customer_id, {
+            "id": customer_id, "status": "registered",
+            "created_at": "2026-01-01T00:00:00Z",
+        })
+        item.update({key: body[key] for key in ("email", "phone") if key in body})
+        return web.json_response(item)
+
+    async def addresses(request):
+        customer_id = request.match_info["customer_id"]
+        if customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        if customer_id not in state.addresses:
+            digest = hashlib.sha256(customer_id.encode()).hexdigest()
+            state.addresses[customer_id] = [{
+                "id": "addr_" + digest[:24], "customer_id": customer_id,
+                "network": "nile", "address": "T" + digest[:33],
+                "is_default": True, "label": None,
+            }]
+        return web.json_response({"data": state.addresses[customer_id], "next_cursor": None})
+
+    async def deposits(request):
+        customer_id = request.query.get("customer_id")
+        items = [item for item in reversed(state.deposits)
+                 if not customer_id or item["customer_id"] == customer_id]
+        return web.json_response({"data": items[:int(request.query.get("limit", "100"))], "next_cursor": None})
+
+    async def balance(_):
+        return web.json_response({
+            "platform_balance": str(state.balance), "cards_balance": "0",
+            "deposit_address": "TLOCALMOCKBALANCEADDRESS",
+        })
+
+    async def create_deposit(request):
+        body = await request.json()
+        customer_id = str(body.get("customer_id") or "")
+        if customer_id not in state.customers:
+            return envelope("customer_not_found", "Customer not found", 404)
+        amount = Decimal(str(body.get("amount") or "0"))
+        fee = Decimal(str(body.get("fee") or "0"))
+        if amount <= 0 or fee < 0 or fee > amount:
+            return envelope("amount_out_of_range", "Invalid amount")
+        if customer_id not in state.addresses:
+            digest = hashlib.sha256(customer_id.encode()).hexdigest()
+            state.addresses[customer_id] = [{
+                "id": "addr_" + digest[:24], "customer_id": customer_id,
+                "network": "nile", "address": "T" + digest[:33],
+                "is_default": True, "label": None,
+            }]
+        item = {
+            "id": "dep_" + uuid.uuid4().hex, "customer_id": customer_id,
+            "address_id": state.addresses[customer_id][0]["id"], "status": "confirmed",
+            "currency": "USDT", "network": "nile", "amount": str(amount),
+            "fee": str(fee), "net_amount": str(amount - fee),
+            "transaction_hash": uuid.uuid4().hex, "confirmations": 20,
+            "confirmed_at": "2026-01-01T00:00:00Z",
+            "updated_at": "2026-01-01T00:00:00Z",
+        }
+        state.deposits.append(item)
+        state.balance += amount - fee
+        event = {
+            "event": "customer.deposit.confirmed", "event_id": "evt_" + uuid.uuid4().hex,
+            "occurred_at": "2026-01-01T00:00:00Z", "partner_id": MOCK_PARTNER,
+            "data": item,
+        }
+        return web.json_response({"deposit": item, "webhook": event})
+
+    app.router.add_get("/v1/partner/me", me)
+    app.router.add_post("/v1/partner/customers", customers)
+    app.router.add_get("/v1/partner/customers/{customer_id}/deposit-addresses", addresses)
+    app.router.add_get("/v1/partner/deposits", deposits)
+    app.router.add_get("/v1/partner/balance", balance)
+    app.router.add_post("/mock/deposits", create_deposit)
+    return app
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=8099)
+    args = parser.parse_args()
+    web.run_app(make_app(), host="127.0.0.1", port=args.port)
