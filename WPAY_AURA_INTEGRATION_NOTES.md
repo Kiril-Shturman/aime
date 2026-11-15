@@ -65,10 +65,32 @@ ordinary support messages.
 - Timeout, connection loss and 5xx are retried with exponential backoff and the
   same key/body. A non-retryable 4xx requires a corrected new operation and a
   new key; never mutate the body behind an existing key.
-- Non-2xx errors have an object containing `type`, `code`, `message`, optional
-  `param`/`details`, `request_id` and `doc_url`.
-- Retry behavior must branch on error type/status and honor rate-limit headers;
-  the complete error catalogue is still required.
+- Every non-2xx response uses the stable envelope `{error:{...}}`. The error
+  contains stable machine fields `code` and `type`, mutable human text
+  `message`, `request_id` matching `X-Request-Id`, `doc_url`, and may include
+  request-field `param` and structured `details`.
+- Application decisions branch on `code`, never on `message`. Human-readable
+  text may be displayed or logged only after normal secret/PII redaction.
+- Aura defines five retry policies in its error catalogue:
+  - `no`: final/configuration failure; do not retry;
+  - `wait`: retry only after an observed state change, never on a blind timer;
+  - `after_delay`: wait for the provider delay and retry the identical request;
+  - `later`: bounded exponential backoff with jitter for provider/internal
+    failures;
+  - `after_fix`: first correct the request or business state, then create a
+    corrected attempt as appropriate.
+- Known examples are `unauthenticated` -> `no`, `kyc_pending` -> `wait`,
+  `rate_limited` -> `after_delay`, `internal`/`unavailable` -> `later`, and
+  `insufficient_funds`/`invalid_argument` -> `after_fix`.
+- Timeout, connection loss and 5xx do not prove whether a money operation ran.
+  Retry the identical canonical request with its original `Idempotency-Key`.
+  Attempts and elapsed time are bounded; exhaustion moves the operation to
+  durable `needs_review`/manual reconciliation rather than declaring failure.
+- New error codes may appear without a path-version change. Unknown codes must
+  not crash decoding: classify conservatively by HTTP status and `type`, retain
+  the raw code, log `request_id`, and expose the case in provider monitoring.
+- The complete generated error catalogue is still required before coding
+  route-specific behavior.
 - Rate-limit handling must use `X-RateLimit-Limit` and related headers and wait
   exactly for `Retry-After`; do not invent an immediate retry loop.
 - Aura uses a replenishing request bucket per API key. Every authenticated
@@ -377,6 +399,27 @@ protobuf/service contract and operational requirements first.
 - Credentials requests must never be automatically retried by a browser refresh
   loop. If throttled, show the remaining wait and require an intentional later
   user action.
+
+## Error-handling implementation rules
+
+- Implement one typed Aura error decoder and retry classifier in the provider
+  transport. Cards, KYC, deposits, SBP, QR and withdrawals must not duplicate
+  their own conflicting retry tables.
+- Persist provider `code`, `type`, HTTP status, `request_id`, retry policy,
+  attempt count and next eligible time on durable external intents. Do not
+  persist secrets or unredacted sensitive request/response bodies.
+- `wait` conditions need a concrete wake-up source (webhook, reconciliation,
+  user action or known period transition). They must not occupy a hot worker
+  loop.
+- For `after_fix`, a changed payload always requires a new intent/key and an
+  audit link to the rejected intent. If only external state changes, follow the
+  exact code-specific idempotency contract; do not guess whether Aura expects
+  the old key or a new one until the generated catalogue confirms it.
+- Retry exhaustion and ambiguous monetary outcomes are operational states, not
+  user-visible terminal failures. Reconcile by provider ID, history and webhook
+  before releasing a reservation or sending another money-moving request.
+- Admin health should group failures by code/type and show request IDs so an
+  operator can contact Aura without searching application logs.
 
 ## Sandbox facts
 
