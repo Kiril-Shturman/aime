@@ -208,10 +208,10 @@ def make_app():
         if previous:
             if previous[0] != fingerprint:
                 return envelope("idempotency_key_reused", "Idempotency-Key was reused", 409)
-            return web.json_response(previous[1])
+            return web.json_response(previous[1], headers={"Idempotency-Key": key})
         result = create()
         state.idempotency[slot] = (fingerprint, result)
-        return web.json_response(result)
+        return web.json_response(result, headers={"Idempotency-Key": key})
 
     async def open_card(request):
         body = await request.json()
@@ -234,7 +234,7 @@ def make_app():
             }
             state.cards[card_id] = item
             state.balance -= Decimal("15")
-            return item
+            return {"card_id": card_id}
 
         return idempotent(request, body, create)
 

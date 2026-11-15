@@ -451,13 +451,14 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         replay = await self.client.create_card(
             customer_id, kind="virtual", idempotency_key="open-card-one"
         )
-        self.assertEqual(card["id"], replay["id"])
+        self.assertEqual(set(card), {"card_id"})
+        self.assertEqual(card["card_id"], replay["card_id"])
         self.assertEqual(self.mock.app["state"].balance, Decimal("85"))
         recharge = await self.client.recharge_card(
-            card["id"], amount="25", idempotency_key="recharge-one"
+            card["card_id"], amount="25", idempotency_key="recharge-one"
         )
         recharge_replay = await self.client.recharge_card(
-            card["id"], amount="25", idempotency_key="recharge-one"
+            card["card_id"], amount="25", idempotency_key="recharge-one"
         )
         self.assertEqual(recharge["id"], recharge_replay["id"])
         self.assertEqual(recharge["charged_amount"], "25")
@@ -465,7 +466,7 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
 
         with self.assertRaises(ApiError) as reused:
             await self.client.recharge_card(
-                card["id"], amount="26", idempotency_key="recharge-one"
+                card["card_id"], amount="26", idempotency_key="recharge-one"
             )
         self.assertEqual(reused.exception.name, "idempotency_key_reused")
 
@@ -473,12 +474,30 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             customer_id, kind="virtual", idempotency_key="open-card-two"
         )
         self.assertEqual(self.mock.app["state"].balance, Decimal("45"))
-        cancelled = await self.client.cancel_card(second["id"])
+        cancelled = await self.client.cancel_card(second["card_id"])
         self.assertEqual(cancelled["status"], "cancelled")
         self.assertEqual(self.mock.app["state"].balance, Decimal("60"))
         with self.assertRaises(ApiError) as not_cancelable:
-            await self.client.cancel_card(second["id"])
+            await self.client.cancel_card(second["card_id"])
         self.assertEqual(not_cancelable.exception.name, "card_request_not_cancelable")
+
+    async def test_card_request_response_is_linked_to_pending_owner(self):
+        uid = "tg:card-request"
+        ref = self.ledger.account(uid)
+        self.mock.app["state"].balance = Decimal("100")
+        result = await self.service.create_card_request(
+            uid, ref, kind="virtual", idempotency_key="request-link-one"
+        )
+        self.assertEqual(result["status"], "processing")
+        card = self.ledger.db.execute(
+            "SELECT * FROM aura_cards WHERE card_id=?", (result["card_id"],)
+        ).fetchone()
+        entity = self.ledger.db.execute(
+            "SELECT * FROM wallet_provider_entities WHERE local_id='request-link-one'"
+        ).fetchone()
+        self.assertEqual(card["user_id"], uid)
+        self.assertEqual(card["status"], "processing")
+        self.assertEqual(entity["remote_id"], result["card_id"])
 
     async def test_card_money_input_validation(self):
         with self.assertRaises(ValueError):
@@ -488,6 +507,15 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(ValueError):
             await self.client.recharge_card(
                 "card-id", amount="1", amount_spend="1", idempotency_key="bad-amount"
+            )
+        with self.assertRaises(ValueError):
+            await self.client.create_card(
+                "owner", kind="physical", idempotency_key="bad-address",
+                shipping_address={
+                    "full_name": "Иван Петров", "phone": "+15555550100",
+                    "country": "RU", "city": "Moscow", "postal_code": "101000",
+                    "address_line": "Lenina St 1",
+                },
             )
 
     async def test_sbp_read_contracts(self):

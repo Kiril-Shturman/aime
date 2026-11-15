@@ -391,9 +391,25 @@ class AuraClient:
             required = {"full_name", "phone", "country", "city", "postal_code", "address_line"}
             if set(shipping_address) != required:
                 raise ValueError("Invalid Aura shipping address fields")
-            body["shipping_address"] = {
-                key: str(shipping_address[key]).strip() for key in sorted(required)
+            address = {key: str(shipping_address[key]).strip() for key in required}
+            limits = {
+                "full_name": (2, 64), "city": (1, 64), "postal_code": (3, 12),
+                "address_line": (5, 120), "phone": (9, 16), "country": (2, 2),
             }
+            if any(
+                not limits[key][0] <= len(value) <= limits[key][1]
+                or any(ord(char) < 32 or ord(char) > 126 for char in value)
+                for key, value in address.items()
+            ):
+                raise ValueError("Invalid Aura shipping address value")
+            if not re.fullmatch(r"[A-Za-z]{2}", address["country"]):
+                raise ValueError("Invalid Aura shipping country")
+            address["country"] = address["country"].upper()
+            if not re.fullmatch(r"\+[1-9][0-9]{7,14}", address["phone"]):
+                raise ValueError("Invalid Aura shipping phone")
+            if not re.fullmatch(r"[A-Za-z0-9 -]{3,12}", address["postal_code"]):
+                raise ValueError("Invalid Aura shipping postal code")
+            body["shipping_address"] = address
         elif kind == "physical":
             raise ValueError("Aura physical card requires a shipping address")
         return await self.request(
@@ -594,6 +610,36 @@ class AuraService:
             if not session_url.startswith("https://") or len(session_url) > 2048:
                 raise ValueError("Invalid Aura KYC session URL")
         return {**state, "session_url": session_url}
+
+    async def create_card_request(self, uid, client_ref, *, kind="virtual",
+                                  idempotency_key, shipping_address=None):
+        customer_id = await self.ensure_customer(uid, client_ref)
+        result = await self.client.create_card(
+            customer_id, kind=kind, idempotency_key=idempotency_key,
+            shipping_address=shipping_address,
+        )
+        if not isinstance(result, dict) or set(result) != {"card_id"}:
+            raise ValueError("Invalid Aura card creation response")
+        card_id = _safe_identifier(result["card_id"], "card id")
+        _store_card_event(
+            self.ledger, self.environment, "card.requested",
+            {"card_id": card_id, "owner_id": customer_id, "kind": kind,
+             "status": "processing"},
+        )
+        stamp = time.time()
+        request_body = {"owner_id": customer_id, "kind": kind}
+        if shipping_address is not None:
+            request_body["shipping_address"] = shipping_address
+        self.ledger.db.execute(
+            "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(provider,environment,entity_type,local_id) DO UPDATE SET "
+            "remote_id=excluded.remote_id,status=excluded.status,updated_at=excluded.updated_at",
+            ("aura", self.environment, "card_request", str(idempotency_key), card_id,
+             uid, "processing", str(idempotency_key),
+             json.dumps(request_body, sort_keys=True, separators=(",", ":")),
+             None, stamp, stamp),
+        )
+        return {"card_id": card_id, "status": "processing"}
 
     async def get_or_create_deposit_address(self, uid, client_ref):
         customer_id = await self.ensure_customer(uid, client_ref)
