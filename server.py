@@ -1754,17 +1754,23 @@ async def wpay_telegram_webhook(request):
         update = await request.json()
     except (ValueError, TypeError):
         return web.json_response({"ok": False}, status=400)
-    message = update.get("message") or {}
+    message = update.get("message") or update.get("edited_message") or {}
+    callback = update.get("callback_query") or {}
+    sender = message.get("from") or callback.get("from") or {}
     text = message.get("text") or ""
     command = text.split(maxsplit=1)[0].split("@", 1)[0] if text else ""
+    sender_id = sender.get("id")
+    if isinstance(sender_id, int) and sender_id > 0:
+        start_param = text.split(maxsplit=1)[1].strip() if command == "/start" and len(text.split(maxsplit=1)) > 1 else None
+        request.app["wpay_ledger"].account(
+            f"tg:{sender_id}", sender, bot_started=True, source="bot",
+            start_param=start_param, touch=True,
+        )
     if command not in {"/start", "/admin"}:
         return web.json_response({"ok": True})
     chat_id = (message.get("chat") or {}).get("id")
-    sender_id = (message.get("from") or {}).get("id")
     if not chat_id:
         return web.json_response({"ok": True})
-    if isinstance(sender_id, int) and sender_id > 0:
-        request.app["wpay_ledger"].account(f"tg:{sender_id}", message.get("from") or {}, bot_started=True)
     admin_ids = {value.strip() for value in os.environ.get("WPAY_ADMIN_IDS", "").split(",") if value.strip().isdigit()}
     app_url = os.environ.get("WPAY_APP_URL", "https://wallet.178-236-255-214.nip.io/wallet")
     if command == "/admin":

@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import os
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -22,8 +23,11 @@ def sign_body(body):
     return hmac.new(hashlib.sha256(TOKEN.encode()).digest(), body, hashlib.sha256).hexdigest()
 
 
-def init_data(uid=123, age=0):
-    values = {'auth_date': str(int(time.time()) - age), 'user': json.dumps({'id': uid})}
+def init_data(uid=123, age=0, user=None, start_param=None):
+    profile = {'id': uid, **(user or {})}
+    values = {'auth_date': str(int(time.time()) - age), 'user': json.dumps(profile)}
+    if start_param is not None:
+        values['start_param'] = start_param
     secret = hmac.new(b'WebAppData', BOT.encode(), hashlib.sha256).digest()
     values['hash'] = hmac.new(secret, '\n'.join(f'{k}={values[k]}' for k in sorted(values)).encode(), hashlib.sha256).hexdigest()
     return urlencode(values)
@@ -96,6 +100,32 @@ class AuthenticationTests(unittest.TestCase):
             self.assertEqual(str(ledger.balance('one', 'ETH')[0]), '123456789012.123456789012345679')
             ledger.db.close()
 
+    def test_legacy_accounts_are_migrated_and_rich_profiles_are_kept(self):
+        with tempfile.TemporaryDirectory() as path:
+            database = path + '/db'
+            db = sqlite3.connect(database)
+            db.execute('CREATE TABLE wallet_accounts (user_id TEXT PRIMARY KEY, client_ref TEXT UNIQUE NOT NULL)')
+            db.execute("INSERT INTO wallet_accounts VALUES ('tg:777','legacy-ref')")
+            db.commit()
+            db.close()
+            ledger = Ledger(database)
+            ledger.account('tg:777', {
+                'id': 777, 'username': 'tester', 'first_name': 'Test', 'last_name': 'User',
+                'language_code': 'ru', 'is_premium': True, 'photo_url': 'https://example.test/avatar.jpg',
+                'added_to_attachment_menu': True, 'allows_write_to_pm': True,
+            }, bot_started=True, source='bot', start_param='franchise-one')
+            row = ledger.db.execute("SELECT * FROM wallet_accounts WHERE user_id='tg:777'").fetchone()
+            self.assertEqual(row['telegram_id'], 777)
+            self.assertEqual(row['telegram_username'], 'tester')
+            self.assertEqual(row['first_name'], 'Test')
+            self.assertEqual(row['language_code'], 'ru')
+            self.assertEqual(row['is_premium'], 1)
+            self.assertEqual(row['allows_write_to_pm'], 1)
+            self.assertEqual(row['first_start_param'], 'franchise-one')
+            self.assertIsNotNone(row['bot_started_at'])
+            self.assertIsNone(row['created_at'])
+            ledger.db.close()
+
 
 class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
@@ -133,6 +163,23 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
             response = await self.client.get('/api/wallet/overview', headers=headers)
             self.assertEqual(response.status, 401)
         self.assertEqual(self.provider.calls, [])
+
+    async def test_signed_miniapp_profile_and_acquisition_are_persisted(self):
+        profile = {
+            'first_name': 'Alice', 'last_name': 'Example', 'username': 'alice',
+            'language_code': 'ru', 'is_premium': True, 'allows_write_to_pm': True,
+            'photo_url': 'https://example.test/alice.jpg',
+        }
+        headers = {'X-Telegram-Init-Data': init_data(555, user=profile, start_param='partner-42')}
+        response = await self.client.get('/api/wallet/access', headers=headers)
+        self.assertEqual(response.status, 200)
+        row = self.ledger.db.execute("SELECT * FROM wallet_accounts WHERE user_id='tg:555'").fetchone()
+        self.assertEqual(row['telegram_username'], 'alice')
+        self.assertEqual(row['first_name'], 'Alice')
+        self.assertEqual(row['language_code'], 'ru')
+        self.assertEqual(row['is_premium'], 1)
+        self.assertEqual(row['first_start_param'], 'partner-42')
+        self.assertIsNotNone(row['last_miniapp_at'])
 
     async def test_raw_signature_and_duplicate_deposit(self):
         payload = await self.fund()

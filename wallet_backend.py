@@ -48,7 +48,7 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
-def telegram_profile(raw, token):
+def telegram_payload(raw, token):
     if not raw or not token:
         return None
     try:
@@ -66,9 +66,20 @@ def telegram_profile(raw, token):
             return None
         user = json.loads(data['user'])
         uid = user.get('id')
-        return user if isinstance(uid, int) and not isinstance(uid, bool) and uid > 0 else None
+        if not isinstance(uid, int) or isinstance(uid, bool) or uid <= 0:
+            return None
+        return {
+            'user': user,
+            'auth_date': int(data['auth_date']),
+            'start_param': str(data.get('start_param') or '')[:128],
+        }
     except (ValueError, KeyError, TypeError):
         return None
+
+
+def telegram_profile(raw, token):
+    payload = telegram_payload(raw, token)
+    return payload['user'] if payload else None
 
 
 def telegram_user(raw, token):
@@ -132,31 +143,86 @@ class Ledger:
 
         columns = {row[1] for row in self.db.execute('PRAGMA table_info(wallet_accounts)')}
         for name, definition in {
+            'telegram_id': 'INTEGER',
             'telegram_username': 'TEXT', 'first_name': 'TEXT', 'last_name': 'TEXT',
-            'created_at': 'TEXT', 'last_seen': 'TEXT', 'bot_started_at': 'TEXT',
+            'language_code': 'TEXT', 'is_premium': 'INTEGER', 'photo_url': 'TEXT',
+            'added_to_attachment_menu': 'INTEGER', 'allows_write_to_pm': 'INTEGER',
+            'created_at': 'TEXT', 'updated_at': 'TEXT', 'last_seen': 'TEXT',
+            'last_miniapp_at': 'TEXT', 'bot_started_at': 'TEXT', 'last_bot_at': 'TEXT',
+            'profile_synced_at': 'TEXT', 'profile_source': 'TEXT',
+            'profile_sync_attempted_at': 'TEXT', 'profile_sync_error': 'TEXT',
+            'first_start_param': 'TEXT', 'last_start_param': 'TEXT',
+            'bot_blocked_at': 'TEXT',
+            'role': "TEXT NOT NULL DEFAULT 'user'",
             'status': "TEXT NOT NULL DEFAULT 'active'",
         }.items():
             if name not in columns:
                 self.db.execute(f'ALTER TABLE wallet_accounts ADD COLUMN {name} {definition}')
+        self.db.execute("UPDATE wallet_accounts SET telegram_id=CAST(SUBSTR(user_id,4) AS INTEGER) WHERE user_id LIKE 'tg:%' AND telegram_id IS NULL")
+        self.db.execute('CREATE UNIQUE INDEX IF NOT EXISTS wallet_accounts_telegram_id ON wallet_accounts(telegram_id) WHERE telegram_id IS NOT NULL')
+        self.db.execute('CREATE INDEX IF NOT EXISTS wallet_accounts_last_seen ON wallet_accounts(last_seen)')
 
-    def account(self, uid, profile=None, bot_started=False):
+    def account(self, uid, profile=None, bot_started=False, source='miniapp', start_param=None, touch=True):
         stamp = now()
+        telegram_id = int(uid[3:]) if uid.startswith('tg:') and uid[3:].isdigit() else None
         self.db.execute(
-            'INSERT OR IGNORE INTO wallet_accounts(user_id,client_ref,created_at,last_seen) VALUES (?,?,?,?)',
-            (uid, 'wpay-' + uuid.uuid4().hex, stamp, stamp),
+            'INSERT OR IGNORE INTO wallet_accounts(user_id,client_ref,telegram_id,created_at,updated_at,last_seen,last_miniapp_at) VALUES (?,?,?,?,?,?,?)',
+            (uid, 'wpay-' + uuid.uuid4().hex, telegram_id, stamp, stamp,
+             stamp if touch and source == 'miniapp' else None,
+             stamp if touch and source == 'miniapp' else None),
         )
         if uid.startswith('tg:'):
-            values = [stamp]
-            updates = ['last_seen=?']
-            if profile:
-                updates.extend(['telegram_username=?', 'first_name=?', 'last_name=?'])
-                values.extend([str(profile.get('username') or '')[:64], str(profile.get('first_name') or '')[:128], str(profile.get('last_name') or '')[:128]])
-            if bot_started:
-                updates.append('bot_started_at=COALESCE(bot_started_at,?)')
+            updates, values = ['telegram_id=COALESCE(telegram_id,?)', 'updated_at=?'], [telegram_id, stamp]
+            if touch and source == 'miniapp':
+                updates.extend(['last_seen=?', 'last_miniapp_at=?'])
+                values.extend([stamp, stamp])
+            elif touch and source == 'bot':
+                updates.append('last_bot_at=?')
                 values.append(stamp)
+            if profile:
+                updates.extend([
+                    'telegram_username=?', 'first_name=?', 'last_name=?',
+                    'profile_synced_at=?', 'profile_source=?', 'profile_sync_error=NULL',
+                ])
+                values.extend([
+                    str(profile.get('username'))[:64] if profile.get('username') else None,
+                    str(profile.get('first_name'))[:128] if profile.get('first_name') else None,
+                    str(profile.get('last_name'))[:128] if profile.get('last_name') else None,
+                    stamp, source[:32],
+                ])
+                optional = {
+                    'language_code': (str(profile.get('language_code'))[:16] if profile.get('language_code') else None),
+                    'is_premium': int(bool(profile.get('is_premium'))) if 'is_premium' in profile else None,
+                    'photo_url': str(profile.get('photo_url'))[:1000] if profile.get('photo_url') else None,
+                    'added_to_attachment_menu': int(bool(profile.get('added_to_attachment_menu'))) if 'added_to_attachment_menu' in profile else None,
+                    'allows_write_to_pm': int(bool(profile.get('allows_write_to_pm'))) if 'allows_write_to_pm' in profile else None,
+                }
+                for column, value in optional.items():
+                    if value is not None:
+                        updates.append(f'{column}=?')
+                        values.append(value)
+            if bot_started:
+                updates.extend(['bot_started_at=COALESCE(bot_started_at,?)', 'bot_blocked_at=NULL'])
+                values.append(stamp)
+            if start_param:
+                value = str(start_param)[:128]
+                updates.extend(['first_start_param=COALESCE(first_start_param,?)', 'last_start_param=?'])
+                values.extend([value, value])
             values.append(uid)
             self.db.execute(f"UPDATE wallet_accounts SET {','.join(updates)} WHERE user_id=?", values)
         return self.db.execute('SELECT client_ref FROM wallet_accounts WHERE user_id=?', (uid,)).fetchone()[0]
+
+    def profile_sync_result(self, uid, error=None):
+        self.db.execute(
+            'UPDATE wallet_accounts SET profile_sync_attempted_at=?,profile_sync_error=? WHERE user_id=?',
+            (now(), str(error)[:300] if error else None, uid),
+        )
+
+    def bot_delivery(self, uid, delivered, blocked=False):
+        if delivered:
+            self.db.execute('UPDATE wallet_accounts SET bot_blocked_at=NULL,updated_at=? WHERE user_id=?', (now(), uid))
+        elif blocked:
+            self.db.execute('UPDATE wallet_accounts SET bot_blocked_at=COALESCE(bot_blocked_at,?),updated_at=? WHERE user_id=?', (now(), now(), uid))
 
     def balance(self, uid, asset):
         row = self.db.execute('SELECT available,reserved FROM wallet_balances WHERE user_id=? AND asset=?', (uid, asset)).fetchone()
@@ -275,10 +341,11 @@ def install_wallet(app, root, owner_check):
     app['wpay_broadcast_tasks'] = set()
 
     def identity(request):
-        profile = telegram_profile(request.headers.get('X-Telegram-Init-Data', ''), bot_token)
-        if profile:
-            request['wpay_profile'] = profile
-            return f"tg:{profile['id']}"
+        payload = telegram_payload(request.headers.get('X-Telegram-Init-Data', ''), bot_token)
+        if payload:
+            request['wpay_profile'] = payload['user']
+            request['wpay_start_param'] = payload['start_param']
+            return f"tg:{payload['user']['id']}"
         key = request.headers.get('X-Board-Key', '')
         if key and owner_check(key):
             return 'owner'
@@ -286,6 +353,42 @@ def install_wallet(app, root, owner_check):
 
     def is_admin(uid):
         return uid == 'owner' or (uid.startswith('tg:') and uid[3:] in admin_ids)
+
+    for admin_id in admin_ids:
+        ledger.db.execute("UPDATE wallet_accounts SET role='admin' WHERE user_id=?", (f'tg:{admin_id}',))
+
+    async def telegram_api(method, data):
+        if not bot_token:
+            raise ApiError('TELEGRAM_NOT_CONFIGURED', 'Telegram-бот не настроен', 503)
+        async with ClientSession(timeout=ClientTimeout(total=15)) as session:
+            async with session.post(f'https://api.telegram.org/bot{bot_token}/{method}', json=data) as response:
+                body = await response.json(content_type=None)
+                if response.status >= 400 or not isinstance(body, dict) or not body.get('ok'):
+                    detail = body.get('description') if isinstance(body, dict) else 'Telegram error'
+                    raise ApiError('TELEGRAM_ERROR', str(detail or 'Telegram error')[:300], response.status if response.status >= 400 else 502)
+                return body.get('result')
+
+    async def sync_telegram_users(only_missing=False):
+        where = "WHERE user_id LIKE 'tg:%'"
+        if only_missing:
+            where += " AND profile_synced_at IS NULL"
+        rows = ledger.db.execute(f'SELECT user_id,telegram_id FROM wallet_accounts {where} ORDER BY rowid').fetchall()
+        synced = failed = 0
+        for row in rows:
+            uid = row['user_id']
+            telegram_id = row['telegram_id'] or int(uid.removeprefix('tg:'))
+            try:
+                profile = await telegram_api('getChat', {'chat_id': telegram_id})
+                if not isinstance(profile, dict):
+                    raise ApiError('TELEGRAM_ERROR', 'Telegram вернул пустой профиль', 502)
+                ledger.account(uid, profile, source='bot_api', touch=False)
+                ledger.profile_sync_result(uid)
+                synced += 1
+            except (ApiError, asyncio.TimeoutError, OSError, ValueError) as error:
+                ledger.profile_sync_result(uid, getattr(error, 'detail', str(error)))
+                failed += 1
+            await asyncio.sleep(0.04)
+        return {'total': len(rows), 'synced': synced, 'failed': failed}
 
     async def admin_overview():
         liabilities = {}
@@ -412,16 +515,19 @@ def install_wallet(app, root, owner_check):
                 if button_text and button_url:
                     payload['reply_markup'] = {'inline_keyboard': [[{'text': button_text, 'url': button_url}]]}
                 error = None
+                blocked = False
                 try:
                     async with session.post(f'https://api.telegram.org/bot{bot_token}/sendMessage', json=payload) as response:
                         body = await response.json(content_type=None)
                         if response.status >= 400 or not body.get('ok'):
                             error = str(body.get('description') or 'Telegram error')[:300]
+                            blocked = response.status == 403
                 except (asyncio.TimeoutError, OSError, ValueError) as reason:
                     error = str(reason)[:300]
                 status = 'failed' if error else 'sent'
                 failed += bool(error)
                 sent += not bool(error)
+                ledger.bot_delivery(uid, not error, blocked)
                 ledger.db.execute('INSERT OR REPLACE INTO admin_broadcast_deliveries VALUES (?,?,?,?,?)', (broadcast_id, uid, status, error, now()))
                 ledger.db.execute('UPDATE admin_broadcasts SET sent=?,failed=? WHERE broadcast_id=?', (sent, failed, broadcast_id))
                 await asyncio.sleep(0.04)
@@ -486,7 +592,14 @@ def install_wallet(app, root, owner_check):
                 return web.json_response({'ok': True})
             uid = identity(request)
             admin = is_admin(uid)
-            client_ref = ledger.account(uid, request.get('wpay_profile'))
+            client_ref = ledger.account(
+                uid,
+                request.get('wpay_profile'),
+                source='miniapp',
+                start_param=request.get('wpay_start_param'),
+            )
+            if admin and uid.startswith('tg:'):
+                ledger.db.execute("UPDATE wallet_accounts SET role='admin' WHERE user_id=?", (uid,))
             if action == 'access' and request.method == 'GET':
                 return web.json_response({'owner': admin})
             if action.startswith('admin-') and not admin:
@@ -497,6 +610,8 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(await admin_overview())
             if action == 'admin-users' and request.method == 'GET':
                 return web.json_response(admin_users())
+            if action == 'admin-sync-users' and request.method == 'POST':
+                return web.json_response(await sync_telegram_users())
             if action == 'admin-database' and request.method == 'GET':
                 return web.json_response(admin_database(request))
             if action == 'admin-payments' and request.method == 'GET':
@@ -602,5 +717,13 @@ def install_wallet(app, root, owner_check):
             await asyncio.gather(*app['wpay_broadcast_tasks'], return_exceptions=True)
         await provider.close()
         ledger.db.close()
+
+    async def startup(_):
+        if bot_token:
+            task = asyncio.create_task(sync_telegram_users(only_missing=True))
+            app['wpay_broadcast_tasks'].add(task)
+            task.add_done_callback(app['wpay_broadcast_tasks'].discard)
+
     app.router.add_route('*', '/api/wallet/{action}', route)
+    app.on_startup.append(startup)
     app.on_cleanup.append(cleanup)
