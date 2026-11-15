@@ -114,17 +114,39 @@ class Worker:
             provider = BudgetProvider(self)
             errors = []
 
-            async def phase(task):
+            def finish():
+                pending = ledger.db.execute(
+                    "SELECT error FROM wallet_webhook_inbox WHERE processed_at IS NULL AND signature_valid=1 AND origin='webhook' AND error IS NOT NULL LIMIT 1"
+                ).fetchone()
+                if pending:
+                    errors.append("inbox pending retry: " + pending["error"])
+                detail = "; ".join(errors)[:1000]
+                self.state("last_cycle_calls", provider.total)
+                self.state("last_cycle_errors", detail)
+                self.state("last_attempt", time.time())
+                self.state("health", "degraded" if errors else "healthy")
+                self.state("last_error", detail)
+                if not errors:
+                    self.state("last_success", time.time())
+
+            async def phase(task, critical=None):
                 try:
                     return await task
-                except BudgetExhausted:
+                except BudgetExhausted as error:
+                    if critical:
+                        errors.append(
+                            critical + ": deferred by budget/backoff " + str(error)
+                        )
                     return None
                 except Exception as error:
-                    errors.append(str(error))
+                    errors.append((critical + ": " if critical else "") + str(error))
                     return None
 
             # Journal, inbox and coverage have priority over bulk status polling.
-            pages = await phase(fetch_pages(ledger, provider, self.error, max_pages=2))
+            pages = await phase(
+                fetch_pages(ledger, provider, self.error, max_pages=2),
+                critical="journal",
+            )
             if pages is not None:
                 apply_pages(ledger, pages, self.money, self.error)
             # Terminal transfer changes are signalled by the immutable journal.
@@ -172,16 +194,17 @@ class Worker:
                             ledger.rollback()
                             raise
 
-            await phase(journal_transfers())
+            await phase(journal_transfers(), critical="transfer journal")
             inbox = ledger.db.execute(
                 "SELECT * FROM wallet_webhook_inbox WHERE processed_at IS NULL AND signature_valid=1 AND origin='webhook' AND next_attempt_at<=? ORDER BY id LIMIT 4",
                 (time.time(),),
             ).fetchall()
             for row in inbox:
                 await phase(
-                    process_inbox(ledger, provider, row, self.money, self.error)
+                    process_inbox(ledger, provider, row, self.money, self.error),
+                    critical="inbox",
                 )
-            await phase(coverage(ledger, provider, self.error))
+            await phase(coverage(ledger, provider, self.error), critical="coverage")
             await phase(sync_invoices(ledger, provider, background=True))
             # Apply newly owned invoice rows without waiting for the next cycle.
             apply_pages(ledger, [], self.money, self.error)
@@ -254,15 +277,14 @@ class Worker:
                     if not rows:
                         break
                 self.state("last_client", account["user_id"])
-            self.state("last_cycle_calls", provider.total)
-            self.state("last_cycle_errors", "; ".join(errors)[:1000])
-            self.state("last_success", time.time())
-            self.state("last_error", "")
+            finish()
             return True
         except BudgetExhausted:
-            self.state("last_cycle_calls", provider.total)
+            finish()
             return True
         except Exception as error:
+            self.state("health", "degraded")
+            self.state("last_attempt", time.time())
             self.state("last_error", str(error)[:1000])
             raise
         finally:

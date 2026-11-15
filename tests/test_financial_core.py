@@ -962,3 +962,91 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(limited.total, 24)
         with self.assertRaises(BudgetExhausted):
             await limited.call("getQrPayments", {})
+
+    async def test_invoice_429_waits_and_retries_same_payload_once(self):
+        import time
+
+        stamp = time.time()
+        original = self.provider.call
+        posts = []
+
+        async def rate_limited(method, data=None, post=False):
+            if method == "createInvoice":
+                posts.append(dict(data))
+                if len(posts) == 1:
+                    raise ApiError("RATE_LIMITED", "Wait", 429, "120")
+            return await original(method, data, post)
+
+        self.provider.call = rate_limited
+        intent = await self.invoice()
+        with patch("wallet_user_ops.time.time", return_value=stamp):
+            response = await self.post("invoice-create", {"intent_id": intent})
+            self.assertEqual(response.status, 429)
+            self.assertEqual(response.headers["Retry-After"], "120")
+            row = self.ledger.db.execute(
+                "SELECT state FROM wallet_user_invoices WHERE intent_id=?", (intent,)
+            ).fetchone()
+            self.assertEqual(row["state"], "prepared")
+            other = Ledger(self.path)
+            prepare_ops(other)
+            try:
+                from wallet_user_ops import create_invoice
+
+                with self.assertRaises(ApiError) as failure:
+                    await create_invoice(
+                        other, self.provider, "tg:123", intent, ApiError
+                    )
+                self.assertEqual(failure.exception.status, 429)
+                retry = other.db.execute(
+                    "SELECT * FROM wallet_invoice_retries WHERE intent_id=?", (intent,)
+                ).fetchone()
+                self.assertEqual(retry["retry_after"], "120")
+                self.assertEqual(retry["retry_at"], stamp + 120)
+            finally:
+                other.db.close()
+            self.assertEqual(len(posts), 1)
+        with patch("wallet_user_ops.time.time", return_value=stamp + 121):
+            responses = await asyncio.gather(
+                *[self.post("invoice-create", {"intent_id": intent}) for _ in range(2)]
+            )
+            self.assertEqual([response.status for response in responses], [200, 200])
+        self.assertEqual(len(posts), 2)
+        self.assertEqual(posts[0], posts[1])
+        self.assertEqual(len(self.provider.invoices), 1)
+
+    async def test_worker_critical_errors_and_backoff_preserve_last_success(self):
+        await Worker(self.ledger, self.provider, money, ApiError).step()
+
+        def state():
+            return dict(
+                self.ledger.db.execute(
+                    "SELECT key,value FROM finance_worker_state"
+                ).fetchall()
+            )
+
+        success = state()["last_success"]
+        original = self.provider.call
+        for target in ["getTransactions", "getBalance"]:
+
+            async def broken(method, data=None, post=False):
+                if method == target:
+                    raise ApiError("UNAVAILABLE", "critical " + target, 503, "120")
+                return await original(method, data, post)
+
+            self.provider.call = broken
+            await Worker(self.ledger, self.provider, money, ApiError).step()
+            self.assertEqual(state()["health"], "degraded")
+            self.assertEqual(state()["last_success"], success)
+            self.assertTrue(state()["last_error"])
+            self.provider.call = original
+            await Worker(self.ledger, self.provider, money, ApiError).step()
+            self.assertEqual(state()["health"], "degraded")
+            self.assertEqual(state()["last_success"], success)
+            self.ledger.db.execute(
+                "DELETE FROM finance_worker_state WHERE key LIKE 'backoff:%'"
+            )
+            await Worker(self.ledger, self.provider, money, ApiError).step()
+            self.assertEqual(state()["health"], "healthy")
+            self.assertEqual(state()["last_error"], "")
+            self.assertGreater(float(state()["last_success"]), float(success))
+            success = state()["last_success"]

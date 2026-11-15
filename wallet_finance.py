@@ -107,7 +107,13 @@ async def finance_route(request, action, uid, admin, ledger, provider, money, Ap
     if action == "finance-reconciliation" and request.method == "GET":
         if not admin:
             raise ApiError("FORBIDDEN", "Только администратор", 403)
-        return web.json_response(await coverage(ledger, provider, ApiError))
+        report = await coverage(ledger, provider, ApiError)
+        report["worker"] = dict(
+            ledger.db.execute(
+                "SELECT key,value FROM finance_worker_state WHERE key IN ('health','last_attempt','last_success','last_error','last_cycle_errors')"
+            ).fetchall()
+        )
+        return web.json_response(report)
     if action == "finance-adjustment" and request.method == "POST":
         if not admin:
             raise ApiError("FORBIDDEN", "Только администратор", 403)

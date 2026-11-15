@@ -2,6 +2,8 @@
 
 import asyncio
 import json
+import math
+from email.utils import parsedate_to_datetime
 import time
 import uuid
 import weakref
@@ -16,6 +18,7 @@ D = Decimal
 def prepare(ledger):
     ledger.db.executescript(
         """
+      CREATE TABLE IF NOT EXISTS wallet_invoice_retries (intent_id TEXT PRIMARY KEY,retry_after TEXT NOT NULL,retry_at REAL NOT NULL);
       CREATE TABLE IF NOT EXISTS wallet_user_transfers (intent_id TEXT PRIMARY KEY,user_id TEXT NOT NULL,spend_id TEXT UNIQUE NOT NULL,body TEXT NOT NULL,state TEXT NOT NULL,outcome TEXT,transfer_id TEXT UNIQUE,created_at REAL NOT NULL);
       CREATE TABLE IF NOT EXISTS wallet_user_invoices (intent_id TEXT PRIMARY KEY,user_id TEXT NOT NULL,payload TEXT UNIQUE NOT NULL,body TEXT NOT NULL,state TEXT NOT NULL,invoice_id TEXT UNIQUE,outcome TEXT,created_at REAL NOT NULL);
       CREATE TABLE IF NOT EXISTS wallet_invoice_scan (scope TEXT PRIMARY KEY,offset INTEGER NOT NULL);
@@ -518,6 +521,16 @@ async def create_invoice(ledger, provider, uid, intent, ApiError):
             "Ответ потерян. Счёт ищется по серверному payload; повторный createInvoice не выполняется.",
             503,
         )
+    retry = ledger.db.execute(
+        "SELECT retry_at FROM wallet_invoice_retries WHERE intent_id=?", (intent,)
+    ).fetchone()
+    if retry and retry["retry_at"] > time.time():
+        raise ApiError(
+            "RATE_LIMITED",
+            "Дождитесь окончания лимита создания счетов",
+            429,
+            str(max(1, math.ceil(retry["retry_at"] - time.time()))),
+        )
     # Persist the intent BEFORE an endpoint that has no spend_id idempotency.
     changed = ledger.db.execute(
         "UPDATE wallet_user_invoices SET state='creating' WHERE intent_id=? AND state='prepared'",
@@ -530,6 +543,44 @@ async def create_invoice(ledger, provider, uid, intent, ApiError):
             "createInvoice", json.loads(row["body"]), post=True
         )
     except ApiError as error:
+        if error.status == 429:
+            raw = str(error.retry_after or "60")
+            try:
+                delay = float(raw)
+                if not math.isfinite(delay) or delay < 0:
+                    raise ValueError("Invalid Retry-After")
+                retry_at = time.time() + max(1, delay)
+            except ValueError:
+                try:
+                    retry_at = max(
+                        time.time() + 1, parsedate_to_datetime(raw).timestamp()
+                    )
+                except (ValueError, TypeError, OverflowError):
+                    retry_at = time.time() + 60
+            ledger.begin(
+                "invoice_rate_limited",
+                "provider",
+                "Retry same intent after definitive rate limit",
+            )
+            try:
+                ledger.db.execute(
+                    "INSERT OR REPLACE INTO wallet_invoice_retries VALUES (?,?,?)",
+                    (intent, raw, retry_at),
+                )
+                ledger.db.execute(
+                    "UPDATE wallet_user_invoices SET state='prepared' WHERE intent_id=? AND state='creating'",
+                    (intent,),
+                )
+                ledger.commit()
+            except Exception:
+                ledger.rollback()
+                raise
+            raise ApiError(
+                "RATE_LIMITED",
+                error.detail,
+                429,
+                str(max(1, math.ceil(retry_at - time.time()))),
+            )
         if error.status in {400, 401, 403, 404, 405, 422}:
             ledger.db.execute(
                 "UPDATE wallet_user_invoices SET state='rejected' WHERE intent_id=? AND state='creating'",

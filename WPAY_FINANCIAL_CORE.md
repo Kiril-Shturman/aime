@@ -104,7 +104,7 @@ configured webhook URL are required; no key is shipped to the browser.
 
 ## Verification
 
-- 72 backend tests: the previous 63 plus 9 audit regressions.
+- 74 backend tests: the previous 63 plus 11 audit regressions.
 - 3 frontend unit tests.
 - 15 Playwright tests: all previous 13 plus withdrawal permission denial and
   recovery after a definitive invoice rejection; the prior tests cover confirmation/retry
@@ -140,9 +140,34 @@ have been performed. Review this commit before any deployment.
   discovery reads at most one page per background cycle and resumes its offset.
 - An explicit 400/401/403/404/405/422 createInvoice rejection persists rejected;
   the UI unlocks its fields and starts a new server intent on retry. Ambiguous
-  timeout/408/429/5xx remain creating and use payload-based discovery.
+  timeout/408/5xx remain creating and use payload-based discovery. A definitive
+  429 returns to prepared with a durable Retry-After deadline.
 
 All earlier tests are retained; authorized withdrawal fixtures now explicitly
 include the organization capability, with separate denial cases for missing and
 false flags. The QR recovery test advances its polling schedule to exercise the
 new hourly terminal sweep. No production/demo deployment was performed.
+
+## Final rate-limit and worker health patch
+
+`wallet_invoice_retries(intent_id,retry_after,retry_at)` persists the original
+Retry-After header and absolute retry deadline. Numeric seconds and HTTP dates
+are accepted; absent/invalid headers conservatively wait 60 seconds. A known
+429 means no invoice was created: the same server intent returns to prepared.
+Before the deadline, the server returns 429 with remaining Retry-After without
+calling createInvoice. After the deadline, the existing creating CAS and intent
+lock permit one new POST with the same payload. Unknown timeout/connection loss
+remains creating and is never blindly reposted.
+
+Worker health now records last_attempt and healthy/degraded. Errors in journal,
+inbox, transfer-journal refresh or coverage, including a critical phase deferred
+by budget/backoff, preserve last_success and populate last_error. Other phase
+errors also mark the cycle degraded. Successful critical phases with ordinary
+optional quota exhaustion can still complete a healthy bounded cycle. A later
+fully successful cycle clears the error and advances last_success. Admin coverage
+response includes worker state; the UI renders degraded separately from healthy.
+
+Regressions verify restart-persistent 429 deadlines, zero early POSTs, parallel
+retry with exactly one new POST and the same payload, and degraded journal/coverage
+health through persistent backoff followed by recovery. The previous timeout
+recovery tests remain unchanged. Production and demo remain untouched.

@@ -332,6 +332,7 @@ export function WalletInvoiceCreate({ onCreated }: { onCreated?: () => void }) {
 export function WalletFinanceReport() {
   const [report, setReport] = useState<{
       blocked: boolean;
+      worker?: { health?: string; last_error?: string; last_success?: string };
       items: {
         asset: string;
         provider_available: string;
@@ -369,6 +370,17 @@ export function WalletFinanceReport() {
               ? "Новые расходы заблокированы: есть расхождение"
               : "Баланс организации покрывает обязательства"}
           </p>
+          <p role="status">
+            Worker:{" "}
+            {report.worker?.health === "healthy"
+              ? "Работает"
+              : report.worker?.health === "degraded"
+                ? "Требует внимания"
+                : "Статус неизвестен"}
+          </p>
+          {report.worker?.last_error && (
+            <p role="alert">{report.worker.last_error}</p>
+          )}
           {report.items.map((row) => (
             <div
               key={row.asset}
