@@ -1145,7 +1145,10 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
                          ("card.credentials.reveal", "succeeded"))
         persisted = "\n".join(ledger.db.iterdump())
         self.assertNotIn(credentials["number"], persisted)
-        self.assertNotIn(credentials["cvv"], persisted)
+        # Three digits can occur inside unrelated timestamps/UUIDs. Check stored
+        # credential values, not arbitrary substrings of the SQL dump.
+        self.assertNotIn("'" + credentials["cvv"] + "'", persisted)
+        self.assertNotRegex(persisted, r'"(?:cvv|cvc|security_code)"\s*:\s*"?' + credentials["cvv"] + r'"?(?:[,}])')
 
     async def test_latest_card_otp_is_owner_scoped_no_store_nullable_and_never_persisted(self):
         registered = await self.wpay.post(
