@@ -849,6 +849,23 @@ def install_wallet(app, root, owner_check):
                 response = web.json_response(await aura_client.get_card_fees())
                 response.headers['Cache-Control'] = 'no-store'
                 return response
+            if action == 'aura-cards' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                if not await aura_client.product_enabled('cards'):
+                    raise ApiError('cards_not_enabled', 'Aura cards are not enabled', 403)
+                idempotency_key = request.headers.get('Idempotency-Key', '')
+                if not 1 <= len(idempotency_key) <= 200:
+                    raise ApiError('idempotency_key_required', 'Idempotency-Key is required', 400)
+                body = await request.json()
+                allowed = {'kind', 'shipping_address'}
+                if not isinstance(body, dict) or set(body) - allowed:
+                    raise ValueError('Unsupported Aura card fields')
+                return web.json_response(await aura_service.create_card_request(
+                    uid, client_ref, kind=body.get('kind', 'virtual'),
+                    idempotency_key=idempotency_key,
+                    shipping_address=body.get('shipping_address'),
+                ))
             if action == 'aura-cards' and request.method == 'GET':
                 cards = [dict(row) for row in ledger.db.execute(
                     'SELECT card_id,kind,status,frozen,masked_pan,delivery_status,provider_updated_at '
@@ -858,6 +875,21 @@ def install_wallet(app, root, owner_check):
                 for item in cards:
                     item['frozen'] = bool(item['frozen'])
                 return web.json_response({'data': cards})
+            if action == 'aura-card-cancel' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'card_id'}:
+                    raise ValueError('card_id is required')
+                card_id = str(body['card_id'])
+                owned = ledger.db.execute(
+                    'SELECT 1 FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?',
+                    (card_id, uid, aura_environment),
+                ).fetchone()
+                if not owned:
+                    raise ApiError('CARD_NOT_FOUND', 'Card not found', 404)
+                result = await aura_client.cancel_card(card_id)
+                return web.json_response({'card_id': card_id, 'status': result.get('status')})
             if action == 'aura-card-operations' and request.method == 'GET':
                 card_id = str(request.query.get('card_id') or '')
                 if not card_id:

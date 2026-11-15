@@ -216,6 +216,42 @@ def _safe_identifier(value, label):
     return value
 
 
+def _card_request_body(owner_id, kind, shipping_address=None):
+    owner_id = _safe_identifier(owner_id, "card owner id")
+    kind = str(kind)
+    if kind not in {"virtual", "physical"}:
+        raise ValueError("Invalid Aura card kind")
+    body = {"owner_id": owner_id, "kind": kind}
+    if shipping_address is not None:
+        if kind != "physical" or not isinstance(shipping_address, dict):
+            raise ValueError("Aura shipping address is valid only for a physical card")
+        required = {"full_name", "phone", "country", "city", "postal_code", "address_line"}
+        if set(shipping_address) != required:
+            raise ValueError("Invalid Aura shipping address fields")
+        address = {key: str(shipping_address[key]).strip() for key in required}
+        limits = {
+            "full_name": (2, 64), "city": (1, 64), "postal_code": (3, 12),
+            "address_line": (5, 120), "phone": (9, 16), "country": (2, 2),
+        }
+        if any(
+            not limits[key][0] <= len(value) <= limits[key][1]
+            or any(ord(char) < 32 or ord(char) > 126 for char in value)
+            for key, value in address.items()
+        ):
+            raise ValueError("Invalid Aura shipping address value")
+        if not re.fullmatch(r"[A-Za-z]{2}", address["country"]):
+            raise ValueError("Invalid Aura shipping country")
+        address["country"] = address["country"].upper()
+        if not re.fullmatch(r"\+[1-9][0-9]{7,14}", address["phone"]):
+            raise ValueError("Invalid Aura shipping phone")
+        if not re.fullmatch(r"[A-Za-z0-9 -]{3,12}", address["postal_code"]):
+            raise ValueError("Invalid Aura shipping postal code")
+        body["shipping_address"] = address
+    elif kind == "physical":
+        raise ValueError("Aura physical card requires a shipping address")
+    return body
+
+
 def _retry_policy(code, status):
     if code in FINAL_ERROR_CODES:
         return "no"
@@ -380,38 +416,7 @@ class AuraClient:
 
     async def create_card(self, owner_id, *, kind="virtual", idempotency_key,
                           shipping_address=None):
-        owner_id = _safe_identifier(owner_id, "card owner id")
-        kind = str(kind)
-        if kind not in {"virtual", "physical"}:
-            raise ValueError("Invalid Aura card kind")
-        body = {"owner_id": owner_id, "kind": kind}
-        if shipping_address is not None:
-            if kind != "physical" or not isinstance(shipping_address, dict):
-                raise ValueError("Aura shipping address is valid only for a physical card")
-            required = {"full_name", "phone", "country", "city", "postal_code", "address_line"}
-            if set(shipping_address) != required:
-                raise ValueError("Invalid Aura shipping address fields")
-            address = {key: str(shipping_address[key]).strip() for key in required}
-            limits = {
-                "full_name": (2, 64), "city": (1, 64), "postal_code": (3, 12),
-                "address_line": (5, 120), "phone": (9, 16), "country": (2, 2),
-            }
-            if any(
-                not limits[key][0] <= len(value) <= limits[key][1]
-                or any(ord(char) < 32 or ord(char) > 126 for char in value)
-                for key, value in address.items()
-            ):
-                raise ValueError("Invalid Aura shipping address value")
-            if not re.fullmatch(r"[A-Za-z]{2}", address["country"]):
-                raise ValueError("Invalid Aura shipping country")
-            address["country"] = address["country"].upper()
-            if not re.fullmatch(r"\+[1-9][0-9]{7,14}", address["phone"]):
-                raise ValueError("Invalid Aura shipping phone")
-            if not re.fullmatch(r"[A-Za-z0-9 -]{3,12}", address["postal_code"]):
-                raise ValueError("Invalid Aura shipping postal code")
-            body["shipping_address"] = address
-        elif kind == "physical":
-            raise ValueError("Aura physical card requires a shipping address")
+        body = _card_request_body(owner_id, kind, shipping_address)
         return await self.request(
             "POST", "/cards", body=body, idempotency_key=idempotency_key
         )
@@ -614,31 +619,107 @@ class AuraService:
     async def create_card_request(self, uid, client_ref, *, kind="virtual",
                                   idempotency_key, shipping_address=None):
         customer_id = await self.ensure_customer(uid, client_ref)
-        result = await self.client.create_card(
-            customer_id, kind=kind, idempotency_key=idempotency_key,
-            shipping_address=shipping_address,
-        )
+        idempotency_key = str(idempotency_key)
+        request_fields = _card_request_body(customer_id, kind, shipping_address)
+        kind = request_fields["kind"]
+        shipping_address = request_fields.get("shipping_address")
+        existing = self.ledger.db.execute(
+            "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+            "AND entity_type='card_request' AND local_id=?",
+            (self.environment, idempotency_key),
+        ).fetchone()
+        if existing:
+            stored = json.loads(existing["request_body"])
+            comparable = {key: value for key, value in stored.items() if key != "fee"}
+            if comparable != request_fields:
+                raise ValueError("Aura idempotency key reused with another card request")
+            if existing["remote_id"]:
+                return {"card_id": existing["remote_id"], "status": existing["status"]}
+            if existing["status"] == "rejected":
+                raise self.client.error_cls(
+                    "card_request_rejected",
+                    "The original Aura card request was rejected; use a new idempotency key",
+                    409,
+                )
+            fee = _decimal(stored["fee"])
+        else:
+            fees = await self.client.get_card_fees()
+            if not isinstance(fees, dict) or fees.get("currency") != "USDT":
+                raise ValueError("Invalid Aura card fees")
+            fee_field = "open_physical_card_fee" if kind == "physical" else "open_virtual_card_fee"
+            if fees.get(fee_field) in {None, ""}:
+                raise self.client.error_cls(
+                    "card_kind_unavailable", "Aura card kind is unavailable", 412
+                )
+            fee = _decimal(fees[fee_field])
+            available, reserved = self.ledger.balance(uid, "USDT")
+            self.ledger.begin("aura_card_reserve", uid, idempotency_key)
+            try:
+                self.ledger.put_balance(uid, "USDT", available - fee, reserved + fee)
+                _position_adjust(
+                    self.ledger, self.environment, uid, "USDT", -fee, fee
+                )
+                stamp = time.time()
+                stored_body = {**request_fields, "fee": str(fee)}
+                self.ledger.db.execute(
+                    "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    ("aura", self.environment, "card_request", idempotency_key, None,
+                     uid, "reserved", idempotency_key,
+                     json.dumps(stored_body, sort_keys=True, separators=(",", ":")),
+                     None, stamp, stamp),
+                )
+                self.ledger.commit()
+            except Exception:
+                self.ledger.rollback()
+                raise
+        try:
+            result = await self.client.create_card(
+                customer_id, kind=kind, idempotency_key=idempotency_key,
+                shipping_address=shipping_address,
+            )
+        except Exception as error:
+            if getattr(error, "retry_policy", None) in {"no", "after_fix"}:
+                self.ledger.begin("aura_card_release", uid, idempotency_key)
+                try:
+                    available, reserved = self.ledger.balance(uid, "USDT")
+                    self.ledger.put_balance(uid, "USDT", available + fee, reserved - fee)
+                    _position_adjust(
+                        self.ledger, self.environment, uid, "USDT", fee, -fee
+                    )
+                    self.ledger.db.execute(
+                        "UPDATE wallet_provider_entities SET status='rejected',updated_at=? "
+                        "WHERE provider='aura' AND environment=? AND entity_type='card_request' "
+                        "AND local_id=?", (time.time(), self.environment, idempotency_key),
+                    )
+                    self.ledger.commit()
+                except Exception:
+                    self.ledger.rollback()
+                    raise
+            raise
         if not isinstance(result, dict) or set(result) != {"card_id"}:
             raise ValueError("Invalid Aura card creation response")
         card_id = _safe_identifier(result["card_id"], "card id")
-        _store_card_event(
-            self.ledger, self.environment, "card.requested",
-            {"card_id": card_id, "owner_id": customer_id, "kind": kind,
-             "status": "processing"},
-        )
-        stamp = time.time()
-        request_body = {"owner_id": customer_id, "kind": kind}
-        if shipping_address is not None:
-            request_body["shipping_address"] = shipping_address
-        self.ledger.db.execute(
-            "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(provider,environment,entity_type,local_id) DO UPDATE SET "
-            "remote_id=excluded.remote_id,status=excluded.status,updated_at=excluded.updated_at",
-            ("aura", self.environment, "card_request", str(idempotency_key), card_id,
-             uid, "processing", str(idempotency_key),
-             json.dumps(request_body, sort_keys=True, separators=(",", ":")),
-             None, stamp, stamp),
-        )
+        self.ledger.begin("aura_card_submitted", uid, idempotency_key)
+        try:
+            available, reserved = self.ledger.balance(uid, "USDT")
+            self.ledger.put_balance(uid, "USDT", available, reserved - fee)
+            _position_adjust(
+                self.ledger, self.environment, uid, "USDT", Decimal(0), -fee
+            )
+            _store_card_event(
+                self.ledger, self.environment, "card.requested",
+                {"card_id": card_id, "owner_id": customer_id, "kind": kind,
+                 "status": "processing"},
+            )
+            self.ledger.db.execute(
+                "UPDATE wallet_provider_entities SET remote_id=?,status='processing',updated_at=? "
+                "WHERE provider='aura' AND environment=? AND entity_type='card_request' "
+                "AND local_id=?", (card_id, time.time(), self.environment, idempotency_key),
+            )
+            self.ledger.commit()
+        except Exception:
+            self.ledger.rollback()
+            raise
         return {"card_id": card_id, "status": "processing"}
 
     async def get_or_create_deposit_address(self, uid, client_ref):
@@ -774,6 +855,10 @@ async def receive_webhook(request, ledger, secret, error_cls, partner_id=None):
 
 
 def _position_add(ledger, environment, uid, asset, amount):
+    _position_adjust(ledger, environment, uid, asset, amount, Decimal(0))
+
+
+def _position_adjust(ledger, environment, uid, asset, available_delta, reserved_delta):
     row = ledger.db.execute(
         "SELECT available,reserved FROM wallet_provider_positions "
         "WHERE provider='aura' AND environment=? AND user_id=? AND asset=?",
@@ -782,12 +867,48 @@ def _position_add(ledger, environment, uid, asset, amount):
     old_available, reserved = (Decimal(row[0]), Decimal(row[1])) if row else (Decimal(0), Decimal(0))
     with localcontext() as ctx:
         ctx.prec = 80
-        available = old_available + amount
+        available = old_available + available_delta
+        reserved = reserved + reserved_delta
+    if available < 0 or reserved < 0:
+        raise ValueError("Insufficient Aura-backed position")
     ledger.db.execute(
         "INSERT INTO wallet_provider_positions VALUES ('aura',?,?,?,?,?,?) "
         "ON CONFLICT(provider,environment,user_id,asset) DO UPDATE SET "
         "available=excluded.available,reserved=excluded.reserved,updated_at=excluded.updated_at",
         (environment, uid, asset, str(available), str(reserved), time.time()),
+    )
+
+
+def _settle_card_request(ledger, environment, card_id, status):
+    entity = ledger.db.execute(
+        "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+        "AND entity_type='card_request' AND remote_id=?", (environment, card_id),
+    ).fetchone()
+    if not entity:
+        return
+    if status == "opened":
+        if entity["status"] == "processing":
+            ledger.db.execute(
+                "UPDATE wallet_provider_entities SET status='opened',updated_at=? "
+                "WHERE provider='aura' AND environment=? AND entity_type='card_request' "
+                "AND local_id=?", (time.time(), environment, entity["local_id"]),
+            )
+        return
+    if status not in {"failed_to_open", "cancelled"} or entity["status"] in {
+        "refunded", "failed_to_open", "cancelled",
+    }:
+        return
+    request_body = json.loads(entity["request_body"])
+    fee = _decimal(request_body.get("fee"))
+    available, reserved = ledger.balance(entity["user_id"], "USDT")
+    ledger.put_balance(entity["user_id"], "USDT", available + fee, reserved)
+    _position_adjust(
+        ledger, environment, entity["user_id"], "USDT", fee, Decimal(0)
+    )
+    ledger.db.execute(
+        "UPDATE wallet_provider_entities SET status='refunded',updated_at=? "
+        "WHERE provider='aura' AND environment=? AND entity_type='card_request' "
+        "AND local_id=?", (time.time(), environment, entity["local_id"]),
     )
 
 
@@ -859,6 +980,7 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
          incoming_updated or None,
          json.dumps(safe, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
     )
+    _settle_card_request(ledger, environment, card_id, status)
 
 
 def _store_card_operation(ledger, environment, data):

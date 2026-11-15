@@ -176,8 +176,9 @@ def make_app():
 
     async def card_fees(_):
         return web.json_response({
-            "currency": "USDT", "issue_fee": "15", "recharge_fee": "0",
-            "minimum_recharge": "1", "updated_at": "2026-01-01T00:00:00Z",
+            "currency": "USDT", "minimum_recharge_amount": "10",
+            "open_physical_card_fee": "70", "open_virtual_card_fee": "20",
+            "physical_recharge_fee_pct": "1.7", "recharge_fee_pct": "2",
         })
 
     async def cards(request):
@@ -233,7 +234,7 @@ def make_app():
                 "tracking": None, "updated_at": "2026-01-01T00:03:00Z",
             }
             state.cards[card_id] = item
-            state.balance -= Decimal("15")
+            state.balance -= Decimal("70" if kind == "physical" else "20")
             return {"card_id": card_id}
 
         return idempotent(request, body, create)
@@ -274,7 +275,7 @@ def make_app():
             )
         item["status"] = "cancelled"
         item["updated_at"] = "2026-01-01T00:06:00Z"
-        state.balance += Decimal("15")
+        state.balance += Decimal("70" if item["kind"] == "physical" else "20")
         return web.json_response(item)
 
     async def create_card(request):
