@@ -99,6 +99,7 @@ import Eye from "framework7-icons/react/esm/Eye.js";
 import EyeSlash from "framework7-icons/react/esm/EyeSlash.js";
 import GearAlt from "framework7-icons/react/esm/GearAlt.js";
 import Globe from "framework7-icons/react/esm/Globe.js";
+import CheckmarkShieldFill from "framework7-icons/react/esm/CheckmarkShieldFill.js";
 import LockShieldFill from "framework7-icons/react/esm/LockShieldFill.js";
 import LogoApple from "framework7-icons/react/esm/LogoApple.js";
 import LogoGoogle from "framework7-icons/react/esm/LogoGoogle.js";
@@ -2758,12 +2759,13 @@ function CardPushView({
 
 function ProfileListItem(props: ComponentProps<typeof F7ListItem>) {
   const title = String(props.title ?? "");
+  const verification = /Верификац/i.test(title);
   const security = /защит|парол|устройств|доступ|Безопасность/.test(title);
   const notification = /Уведомления|Платежи|Пополнения|курсов|Новости/.test(
     title,
   );
   const personal = /Имя|данные|проверки|Документы/.test(title);
-  const Icon = /кошельк/i.test(title)
+  const Icon = verification ? CheckmarkShieldFill : /кошельк/i.test(title)
     ? WalletFill
     : /Реферальная/.test(title)
       ? PersonCropCircleFill
@@ -2778,7 +2780,7 @@ function ProfileListItem(props: ComponentProps<typeof F7ListItem>) {
               : /провайдер/.test(title)
                 ? BuildingColumnsFill
                 : QuestionCircleFill;
-  const color = /Реферальная/.test(title)
+  const color = verification ? "#30C759" : /Реферальная/.test(title)
     ? "#FF9500"
     : security
       ? "#30C759"
@@ -2869,7 +2871,7 @@ function ProfileSection({
           <ProfileListItem
             link
             title="Личные данные"
-            subtitle="Имя и документы"
+            subtitle="Имя и контакты"
             onClick={() => setProfilePage("personal")}
           />
           <ProfileListItem
@@ -2889,6 +2891,16 @@ function ProfileSection({
             title="Реферальная программа"
             subtitle="Приглашайте друзей"
             onClick={() => setProfilePage("referral")}
+          />
+        </F7List>
+
+        <F7List strong inset dividers className="profile-settings-list">
+          <ProfileListItem
+            link
+            title="Верификация"
+            subtitle="Подтверждение личности"
+            after="Скоро"
+            onClick={() => setProfilePage("verification")}
           />
         </F7List>
 
@@ -2964,6 +2976,7 @@ function ProfileSection({
 
 const profilePageTitles = {
   personal: "Личные данные",
+  verification: "Верификация",
   security: "Безопасность",
   notifications: "Уведомления",
   currency: "Основная валюта",
@@ -3238,13 +3251,6 @@ function ProfileSettingsPushView({
                       : "Имя пользователя не указано"
                   }
                 />
-                <F7ListInput
-                  label="KYC · Проверка личности"
-                  inputId="profile-verification"
-                  type="text"
-                  readonly
-                  value="Не пройдена"
-                />
               </F7List>
               <div className="px-4">
                 <Button
@@ -3274,6 +3280,15 @@ function ProfileSettingsPushView({
                 </p>
               </div>
             </>
+          )}
+
+          {displayPage === "verification" && (
+            <Card className="!mx-4 !rounded-[28px] text-center" contentWrapPadding="p-6">
+              <span className="mx-auto flex h-16 w-16 items-center justify-center rounded-[20px] bg-gradient-to-b from-green-400 to-green-600 text-white dark:from-green-400 dark:to-green-700"><CheckmarkShieldFill className="text-[38px]" /></span>
+              <h2 className="mt-5 text-[23px] font-semibold text-black dark:text-white">Подтверждение личности</h2>
+              <p className="mt-3 text-[15px] leading-6 text-black/50 dark:text-white/50">Проверка личности пока недоступна. Здесь можно будет подтвердить документы и посмотреть результат проверки.</p>
+              <Button data-wpay-primary="" rounded disabled className="!mb-0 !mt-6 !w-full">Пройти проверку</Button>
+            </Card>
           )}
 
           {displayPage === "provider" && (
