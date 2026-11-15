@@ -94,7 +94,7 @@ type BiometricState = {
   label: string;
   locked: boolean;
   error: string;
-  setEnabled: (next: boolean) => Promise<void>;
+  setEnabled: (next: boolean) => Promise<boolean>;
 };
 const Context = createContext<BiometricState | null>(null);
 export function WalletBiometricGate({ children }: { children: ReactNode }) {
@@ -235,7 +235,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
   );
   const change = useCallback(
     async (next: boolean) => {
-      if (next === enabledRef.current || !begin()) return;
+      if (next === enabledRef.current || !begin()) return false;
       const previous = enabledRef.current;
       try {
         const bio = manager();
@@ -263,7 +263,15 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
           throw reason;
         }
         remember(next);
+        if (!next && alive.current) {
+          setApproved(false);
+          setLocked(false);
+          setAllowed(true);
+          setError("");
+          obscured(false);
+        }
         haptic("success");
+        return true;
       } catch (reason) {
         const message =
           reason instanceof Error
@@ -416,11 +424,19 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
           </div>
           {ready && locked && <WalletLockBadge />}
           <div className="wpay-lock-copy">
-            <h1>{approved ? "Добро пожаловать" : ready ? "wPay заблокирован" : "WPay"}</h1>
+            <h1>
+              {approved
+                ? "Добро пожаловать"
+                : ready
+                  ? "wPay заблокирован"
+                  : "WPay"}
+            </h1>
             <p>
-              {approved ? "Вход подтверждён" : ready
-                ? `Подтвердите вход с помощью ${label}`
-                : "Проверяем защиту устройства…"}
+              {approved
+                ? "Вход подтверждён"
+                : ready
+                  ? `Подтвердите вход с помощью ${label}`
+                  : "Проверяем защиту устройства…"}
             </p>
             {error && (
               <p role="alert" className="wpay-lock-error">
@@ -436,8 +452,16 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
                 disabled={busy}
                 className="!m-0 !w-full"
                 onClick={() => {
-                  if (!approved) { void unlock(true); return; }
-                  if (background.current || document.visibilityState === "hidden" || busyRef.current) return;
+                  if (!approved) {
+                    void unlock(true);
+                    return;
+                  }
+                  if (
+                    background.current ||
+                    document.visibilityState === "hidden" ||
+                    busyRef.current
+                  )
+                    return;
                   setApproved(false);
                   obscured(false);
                   setLocked(false);
@@ -446,7 +470,13 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
               >
                 <span className="wpay-unlock-label">
                   {!approved && <FaceIdIcon />}
-                  <span>{busy ? "Подтверждение…" : approved ? "Открыть" : "Разблокировать"}</span>
+                  <span>
+                    {busy
+                      ? "Подтверждение…"
+                      : approved
+                        ? "Открыть"
+                        : "Разблокировать"}
+                  </span>
                 </span>
               </Button>
             )}
@@ -509,13 +539,14 @@ export function WalletBiometricRow({
             const next = !state.enabled;
             void state
               .setEnabled(next)
-              .then(() =>
-                showNotice(
-                  next
-                    ? "Биометрическая защита включена"
-                    : "Биометрическая защита выключена",
-                ),
-              )
+              .then((changed) => {
+                if (changed)
+                  showNotice(
+                    next
+                      ? "Биометрическая защита включена"
+                      : "Биометрическая защита выключена",
+                  );
+              })
               .catch((reason) =>
                 showNotice(
                   reason instanceof Error

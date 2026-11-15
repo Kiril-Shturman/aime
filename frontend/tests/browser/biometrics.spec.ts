@@ -4,6 +4,7 @@ async function setup(page: Page, saved = false, avatar?: Buffer) {
   const vault = {
     token: saved ? "device-marker" : "",
     authorized: true,
+    rejectRemoval: false,
     posts: [] as string[],
   };
   await page.exposeFunction("nativeBiometry", (type: string, raw: string) => {
@@ -32,6 +33,8 @@ async function setup(page: Page, saved = false, avatar?: Buffer) {
         },
       };
     if (type === "web_app_biometry_update_token") {
+      if (!JSON.parse(raw).token && vault.rejectRemoval)
+        return { event: "biometry_token_updated", data: { status: "failed" } };
       vault.token = JSON.parse(raw).token;
       return {
         event: "biometry_token_updated",
@@ -104,9 +107,36 @@ test("native Face ID: enable, cancel disable, then confirm disable", async ({
   await expect(toggle).toBeChecked();
   expect(vault.token).not.toBe("");
   vault.authorized = true;
+  vault.rejectRemoval = true;
+  await page.locator(".wpay-biometric-row .toggle").click();
+  await expect(toggle).toBeEnabled();
+  await expect(toggle).toBeChecked();
+  expect(vault.token).not.toBe("");
+  await expect(
+    page.getByText("Telegram не сохранил настройку. Попробуйте ещё раз.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  vault.rejectRemoval = false;
   await page.locator(".wpay-biometric-row .toggle").click();
   await expect(toggle).not.toBeChecked();
   await expect.poll(() => vault.token).toBe("");
+  const authCalls = () =>
+    vault.posts.filter((type) => type === "web_app_biometry_request_auth")
+      .length;
+  const before = authCalls();
+  await page.evaluate(() => {
+    (window as any).Telegram.WebView.receiveEvent("deactivated", {});
+    (window as any).Telegram.WebView.receiveEvent("activated", {});
+  });
+  await expect(page.getByRole("main", { name: "Блокировка WPay" })).toHaveCount(
+    0,
+  );
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Профиль", exact: true }),
+  ).toBeVisible();
+  expect(authCalls()).toBe(before);
 });
 test("saved native marker locks on reload even without local hint; cancellation does not reveal wallet", async ({
   page,
