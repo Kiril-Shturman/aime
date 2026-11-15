@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="282" height="116" viewBox="0 0 282 116" fill="none">
+<title>wPay</title>
+<defs>
+<linearGradient id="blue" x1="5" y1="8" x2="52" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#079CFF"/><stop offset="1" stop-color="#0063D9"/></linearGradient>
+<linearGradient id="red" x1="77" y1="8" x2="37" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#FF6429"/><stop offset="1" stop-color="#F52A11"/></linearGradient>
+<linearGradient id="gold" x1="72" y1="8" x2="108" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#FFC629"/><stop offset="1" stop-color="#FFB000"/></linearGradient>
+<linearGradient id="green" x1="145" y1="8" x2="104" y2="88" gradientUnits="userSpaceOnUse"><stop stop-color="#04B450"/><stop offset="1" stop-color="#008D39"/></linearGradient>
+</defs>
+<g transform="translate(-2 30) scale(.66)">
+<path d="M4 8H31L58 88H31L4 8Z" fill="url(#blue)"/>
+<path d="M31 88H58L87 8H60L31 88Z" fill="url(#red)"/>
+<path d="M60 8H87L114 88H87L60 8Z" fill="url(#gold)"/>
+<path d="M87 88H114L145 8H118L87 88Z" fill="url(#green)"/>
+<path d="M31 88L46 48L58 88H31Z" fill="#002E8F" opacity=".12"/>
+<path d="M87 88L102 48L114 88H87Z" fill="#157541" opacity=".15"/>
+</g>
+<text x="103" y="88" font-family="Arial,Helvetica,sans-serif" font-size="94" font-weight="700" letter-spacing="-4" fill="#171D2A">Pay</text>
+</svg>

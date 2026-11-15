@@ -28,23 +28,13 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 750;
-  letter-spacing: -0.7px;
+  min-width: 88px;
 }
-.wpay-contact-brand-mark {
-  display: inline-flex;
-  width: 29px;
-  height: 29px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: linear-gradient(145deg, #1976ff, #64b6ff);
-  box-shadow: 0 7px 16px rgba(23, 113, 255, 0.27);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 850;
+.wpay-contact-brand img {
+  display: block;
+  width: 88px;
+  height: 31px;
+  object-fit: contain;
 }
 .wpay-contact-step {
   justify-self: end;

@@ -29,8 +29,7 @@ const cleanPhone = (value: string) => {
 function WPayMark() {
   return (
     <span className="wpay-contact-brand" aria-label="WPay">
-      <span className="wpay-contact-brand-mark">W</span>
-      <span>WPay</span>
+      <img src="/brands/wpay-wordmark.svg" alt="" />
     </span>
   );
 }
