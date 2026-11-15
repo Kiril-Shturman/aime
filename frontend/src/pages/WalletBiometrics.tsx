@@ -12,6 +12,7 @@ import { ListItem, Toggle } from "framework7-react";
 import { tg, getUser, haptic, type TgBiometricManager } from "../lib/telegram";
 import "./WalletBiometrics.css";
 import Aurora from "../components/reactbits/Aurora";
+import WalletLockBadge from "./WalletLockBadge";
 
 // Device privacy lock only. Server authentication and financial authorization remain independent.
 function nativeCall<T>(
@@ -394,51 +395,63 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
       {hidden && (
         <main className="wpay-lock-screen" aria-label="Блокировка WPay">
           <div className="wpay-lock-aurora" aria-hidden="true">
-            <Aurora colorStops={["#264575", "#6872b8", "#3654a4"]} speed={0.22} amplitude={0.65} height={0.7} glow={0.25} opacity={0.6} layers={2} mouseInteraction={false} intro={false} dpr={1} />
+            <Aurora
+              colorStops={["#264575", "#6872b8", "#3654a4"]}
+              speed={0.22}
+              amplitude={0.65}
+              height={0.7}
+              glow={0.25}
+              opacity={0.6}
+              layers={2}
+              mouseInteraction={false}
+              intro={false}
+              dpr={1}
+            />
           </div>
-          <span className="wpay-lock-wordmark" aria-hidden="true">WPAY</span>
-          <span className="wpay-lock-mark">
-            <FaceIdIcon />
-          </span>
-          <h1>{ready ? "WPay заблокирован" : "WPay"}</h1>
-          <p>
-            {ready
-              ? `Подтвердите вход с помощью ${label}`
-              : "Проверяем защиту устройства…"}
-          </p>
-          {error && (
-            <p role="alert" className="wpay-lock-error">
-              {error}
+          {ready && locked && <WalletLockBadge />}
+          <div className="wpay-lock-copy">
+            <h1>{ready ? "WPay заблокирован" : "WPay"}</h1>
+            <p>
+              {ready
+                ? `Подтвердите вход с помощью ${label}`
+                : "Проверяем защиту устройства…"}
             </p>
-          )}
-          {ready && (
-            <Button
-              data-wpay-primary=""
-              rounded
-              disabled={busy}
-              className="!mt-6 !w-full"
-              onClick={() => void unlock(true)}
-            >
-              {busy ? "Подтверждение…" : "Разблокировать"}
-            </Button>
-          )}
-          {ready && (
-            <button
-              type="button"
-              className="wpay-lock-settings"
-              onClick={() => {
-                try {
-                  manager()?.openSettings();
-                } catch {
-                  setError(
-                    "Включите биометрию в настройках устройства и Telegram.",
-                  );
-                }
-              }}
-            >
-              Настройки Telegram
-            </button>
-          )}
+            {error && (
+              <p role="alert" className="wpay-lock-error">
+                {error}
+              </p>
+            )}
+          </div>
+          <div className="wpay-lock-actions">
+            {ready && (
+              <Button
+                data-wpay-primary=""
+                rounded
+                disabled={busy}
+                className="!m-0 !w-full"
+                onClick={() => void unlock(true)}
+              >
+                {busy ? "Подтверждение…" : "Разблокировать"}
+              </Button>
+            )}
+            {ready && (
+              <button
+                type="button"
+                className="wpay-lock-settings"
+                onClick={() => {
+                  try {
+                    manager()?.openSettings();
+                  } catch {
+                    setError(
+                      "Включите биометрию в настройках устройства и Telegram.",
+                    );
+                  }
+                }}
+              >
+                Настройки Telegram
+              </button>
+            )}
+          </div>
         </main>
       )}
     </Context.Provider>

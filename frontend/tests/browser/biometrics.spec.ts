@@ -119,6 +119,27 @@ test("saved native marker locks on reload even without local hint; cancellation 
   ).toBeVisible();
   await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
   await expect(page.locator(".wpay-lock-aurora")).toBeVisible();
+  await expect(page.getByLabel("Бейдж профиля")).toBeVisible();
+  await expect(page.locator(".wpay-lock-badge-fallback img")).toHaveAttribute(
+    "src",
+    /^data:image/,
+  );
+  const unlockBox = await page
+    .getByRole("button", { name: "Разблокировать", exact: true })
+    .boundingBox();
+  expect(unlockBox!.y + unlockBox!.height).toBeGreaterThan(
+    page.viewportSize()!.height - 65,
+  );
+  for (const size of [
+    { width: 375, height: 667 },
+    { width: 768, height: 1024 },
+  ]) {
+    await page.setViewportSize(size);
+    const copy = await page.locator(".wpay-lock-copy").boundingBox();
+    const actions = await page.locator(".wpay-lock-actions").boundingBox();
+    expect(copy!.y + copy!.height).toBeLessThan(actions!.y);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
   vault.authorized = true;
   await page
     .getByRole("button", { name: "Разблокировать", exact: true })
