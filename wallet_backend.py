@@ -413,7 +413,7 @@ def install_wallet(app, root, owner_check):
             provider.call('getMe'), provider.call('getBalance'), provider.call('getCurrencies')
         )
         return {
-            'users': ledger.db.execute('SELECT COUNT(*) FROM wallet_accounts').fetchone()[0],
+            'users': ledger.db.execute("SELECT COUNT(*) FROM wallet_accounts WHERE user_id LIKE 'tg:%'").fetchone()[0],
             'events': ledger.db.execute('SELECT COUNT(*) FROM wallet_events').fetchone()[0],
             'liabilities': [
                 {'asset': asset, 'available': str(values[0]), 'reserved': str(values[1]), 'total': str(add(values[0], values[1]))}
@@ -447,10 +447,10 @@ def install_wallet(app, root, owner_check):
           SELECT a.*,
                  COALESCE((SELECT COUNT(*) FROM wallet_events e WHERE e.user_id=a.user_id),0) event_count,
                  COALESCE((SELECT COUNT(*) FROM wallet_addresses d WHERE d.user_id=a.user_id),0) address_count
-          FROM wallet_accounts a ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
+          FROM wallet_accounts a WHERE a.user_id LIKE 'tg:%' ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
         ''') if 'wallet_addresses' in tables() else decoded_rows('''
           SELECT a.*, COALESCE((SELECT COUNT(*) FROM wallet_events e WHERE e.user_id=a.user_id),0) event_count, 0 address_count
-          FROM wallet_accounts a ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
+          FROM wallet_accounts a WHERE a.user_id LIKE 'tg:%' ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
         ''')
         balances = decoded_rows('SELECT user_id,asset,available,reserved FROM wallet_balances ORDER BY user_id,asset')
         by_user = {}
@@ -458,7 +458,7 @@ def install_wallet(app, root, owner_check):
             by_user.setdefault(balance['user_id'], []).append(balance)
         for row in rows:
             row['balances'] = by_user.get(row['user_id'], [])
-        return {'items': rows, 'total': ledger.db.execute('SELECT COUNT(*) FROM wallet_accounts').fetchone()[0]}
+        return {'items': rows, 'total': ledger.db.execute("SELECT COUNT(*) FROM wallet_accounts WHERE user_id LIKE 'tg:%'").fetchone()[0]}
 
     def admin_database(request):
         allowed = sorted(name for name in tables() if name.startswith(('wallet_', 'admin_')))
