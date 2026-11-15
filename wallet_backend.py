@@ -25,6 +25,29 @@ BASE_URL = 'https://goswap.site/api/'
 NETWORKS = {'BSC', 'ETH', 'TON', 'SOL', 'TRON'}
 DEPOSIT_NETWORKS = {'USDT': NETWORKS, 'ETH': {'ETH'}, 'BNB': {'BSC'}, 'TON': {'TON'}, 'SOL': {'SOL'}}
 
+ADMIN_GOSWAP_METHODS = {
+    'getMe': {'title': 'Приложение', 'post': False, 'params': [], 'required': [], 'example': {}},
+    'getBalance': {'title': 'Баланс организации', 'post': False, 'params': [], 'required': [], 'example': {}},
+    'getCurrencies': {'title': 'Валюты', 'post': False, 'params': [], 'required': [], 'example': {}},
+    'getExchangeRates': {'title': 'Курсы', 'post': False, 'params': [], 'required': [], 'example': {}},
+    'getInvoices': {'title': 'Счета', 'post': False, 'params': ['invoice_ids', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
+    'getTransfers': {'title': 'Выплаты', 'post': False, 'params': ['spend_id', 'user_id', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
+    'getWithdrawals': {'title': 'Выводы', 'post': False, 'params': ['withdrawal_ids', 'spend_id', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
+    'getDeposits': {'title': 'Пополнения', 'post': False, 'params': ['client_ref', 'network', 'count', 'offset'], 'required': [], 'example': {'count': 1000, 'offset': 0}},
+    'getTransactions': {'title': 'Лента операций', 'post': False, 'params': ['asset', 'type', 'count', 'before', 'after'], 'required': [], 'example': {'count': 100, 'after': 0}},
+    'getQrPayments': {'title': 'QR-платежи', 'post': False, 'params': ['payment_ids', 'spend_ids', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
+    'estimateWithdrawal': {'title': 'Расчёт вывода', 'post': False, 'params': ['asset', 'network', 'address', 'amount', 'memo'], 'required': ['asset', 'network', 'address', 'amount'], 'example': {'asset': 'USDT', 'network': 'BSC', 'address': '', 'amount': '10'}},
+    'createInvoice': {'title': 'Создать счёт', 'post': True, 'params': ['asset', 'amount', 'description', 'payload', 'expires_in'], 'required': ['asset', 'amount'], 'example': {'asset': 'USDT', 'amount': '10', 'description': '', 'payload': '', 'expires_in': 3600}},
+    'transfer': {'title': 'Выплата пользователю', 'post': True, 'dangerous': True, 'params': ['user_id', 'asset', 'amount', 'spend_id', 'comment'], 'required': ['user_id', 'asset', 'amount', 'spend_id'], 'example': {'user_id': '', 'asset': 'USDT', 'amount': '1', 'spend_id': '', 'comment': ''}},
+    'revokeTransfer': {'title': 'Отозвать выплату', 'post': True, 'dangerous': True, 'params': ['spend_id'], 'required': ['spend_id'], 'example': {'spend_id': ''}},
+    'createWithdrawal': {'title': 'Вывод в сеть', 'post': True, 'dangerous': True, 'params': ['asset', 'network', 'address', 'amount', 'spend_id', 'memo', 'max_fee'], 'required': ['asset', 'network', 'address', 'amount', 'spend_id'], 'example': {'asset': 'USDT', 'network': 'BSC', 'address': '', 'amount': '1', 'spend_id': '', 'max_fee': ''}},
+    'getClientAddress': {'title': 'Адрес клиента', 'post': True, 'params': ['client_ref', 'network'], 'required': ['client_ref', 'network'], 'example': {'client_ref': '', 'network': 'BSC'}},
+    'createDeposit': {'title': 'Окно пополнения', 'post': True, 'params': ['client_ref', 'network', 'asset'], 'required': ['client_ref'], 'example': {'client_ref': '', 'network': 'BSC', 'asset': 'USDT'}},
+    'createExactDeposit': {'title': 'Точное пополнение TRON', 'post': True, 'params': ['client_ref', 'amount', 'network', 'asset'], 'required': ['client_ref', 'amount'], 'example': {'client_ref': '', 'amount': '1', 'network': 'TRON', 'asset': 'USDT'}},
+    'createQrQuote': {'title': 'Котировка QR', 'post': True, 'params': ['qr'], 'required': ['qr'], 'example': {'qr': ''}},
+    'payQr': {'title': 'Оплатить QR', 'post': True, 'dangerous': True, 'params': ['quote_id', 'spend_id'], 'required': ['quote_id', 'spend_id'], 'example': {'quote_id': '', 'spend_id': ''}},
+}
+
 
 def money(value, positive=True):
     try:
@@ -503,10 +526,37 @@ def install_wallet(app, root, owner_check):
             'account': ('getMe', {}), 'balance': ('getBalance', {}), 'currencies': ('getCurrencies', {}),
             'transactions': ('getTransactions', {'count': 100}), 'invoices': ('getInvoices', {'count': 100}),
             'transfers': ('getTransfers', {'count': 100}), 'withdrawals': ('getWithdrawals', {'count': 100}),
-            'deposits': ('getDeposits', {'count': 100}),
+            'deposits': ('getDeposits', {'count': 100}), 'qrPayments': ('getQrPayments', {'count': 100}),
+            'rates': ('getExchangeRates', {}),
         }
         values = await asyncio.gather(*(safe_provider(method, params) for method, params in methods.values()))
-        return dict(zip(methods, values))
+        catalog = [{'method': method, **spec} for method, spec in ADMIN_GOSWAP_METHODS.items()]
+        return {'snapshot': dict(zip(methods, values)), 'methods': catalog}
+
+    async def admin_goswap_action(request):
+        body = await request.json()
+        if not isinstance(body, dict):
+            raise ValueError('Некорректный запрос')
+        method = str(body.get('method') or '')
+        spec = ADMIN_GOSWAP_METHODS.get(method)
+        if not spec:
+            raise ApiError('METHOD_NOT_ALLOWED', 'Метод отсутствует в разрешённом списке GoSwap', 400)
+        params = body.get('params') or {}
+        if not isinstance(params, dict):
+            raise ValueError('Параметры должны быть JSON-объектом')
+        unknown = sorted(set(params) - set(spec['params']))
+        if unknown:
+            raise ApiError('INVALID_PARAMS', 'Недопустимые параметры: ' + ', '.join(unknown), 400)
+        params = {key: value for key, value in params.items() if value is not None and value != ''}
+        if any(isinstance(value, (dict, list)) for value in params.values()):
+            raise ApiError('INVALID_PARAMS', 'Параметры должны быть строками, числами или флагами', 400)
+        missing = [key for key in spec['required'] if key not in params]
+        if missing:
+            raise ApiError('MISSING_PARAMS', 'Обязательные параметры: ' + ', '.join(missing), 400)
+        if spec['post'] and body.get('confirm') != method:
+            raise ApiError('CONFIRMATION_REQUIRED', f'Подтвердите вызов {method}', 409)
+        result = await provider.call(method, params, post=spec['post'])
+        return {'ok': True, 'method': method, 'result': result}
 
     async def run_broadcast(broadcast_id, targets, text, button_text, button_url):
         ledger.db.execute("UPDATE admin_broadcasts SET status='sending',started_at=? WHERE broadcast_id=?", (now(), broadcast_id))
@@ -624,6 +674,10 @@ def install_wallet(app, root, owner_check):
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
                 return web.json_response(await admin_goswap())
+            if action == 'admin-goswap-action' and request.method == 'POST':
+                if not token:
+                    raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
+                return web.json_response(await admin_goswap_action(request))
             if action == 'admin-broadcasts' and request.method in {'GET', 'POST'}:
                 return web.json_response(await admin_broadcasts(request, uid))
             if not token:

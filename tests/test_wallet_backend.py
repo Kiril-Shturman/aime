@@ -76,6 +76,8 @@ class FakeProvider:
             return {'payment_id': 'p-one', 'spend_id': data['spend_id'], 'status': 'processing', 'asset': 'USDT', 'amount': '9.13'}
         if method == 'createDeposit':
             return {'address': 'test-address', 'network': data['network'], 'url': 'https://goswap.site/pay?dep=test'}
+        if method == 'createWithdrawal':
+            return {'withdrawal_id': 'withdrawal-one', 'spend_id': data['spend_id'], 'status': 'processing'}
         raise AssertionError('Unexpected provider call ' + method)
 
     async def close(self):
@@ -246,6 +248,24 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts']:
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers=admin_headers)).status, 200)
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers={'X-Telegram-Init-Data': init_data(999)})).status, 403)
+
+    async def test_admin_goswap_console_is_allowlisted_and_confirmed(self):
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        denied = await self.client.post('/api/wallet/admin-goswap-action', json={'method': 'getBalance', 'params': {}}, headers={'X-Telegram-Init-Data': init_data(999)})
+        self.assertEqual(denied.status, 403)
+        unknown = await self.client.post('/api/wallet/admin-goswap-action', json={'method': 'deleteEverything', 'params': {}}, headers=admin)
+        self.assertEqual(unknown.status, 400)
+        bad_param = await self.client.post('/api/wallet/admin-goswap-action', json={'method': 'getBalance', 'params': {'token': 'leak'}}, headers=admin)
+        self.assertEqual(bad_param.status, 400)
+        missing = await self.client.post('/api/wallet/admin-goswap-action', json={'method': 'createWithdrawal', 'params': {}}, headers=admin)
+        self.assertEqual(missing.status, 400)
+        params = {'asset': 'USDT', 'network': 'BSC', 'address': '0xabc', 'amount': '1', 'spend_id': 'admin-test-1'}
+        unconfirmed = await self.client.post('/api/wallet/admin-goswap-action', json={'method': 'createWithdrawal', 'params': params}, headers=admin)
+        self.assertEqual(unconfirmed.status, 409)
+        confirmed = await self.client.post('/api/wallet/admin-goswap-action', json={'method': 'createWithdrawal', 'params': params, 'confirm': 'createWithdrawal'}, headers=admin)
+        self.assertEqual(confirmed.status, 200)
+        self.assertEqual((await confirmed.json())['result']['status'], 'processing')
+        self.assertEqual(self.provider.calls[-1], ('createWithdrawal', params, True))
 
 
 class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
