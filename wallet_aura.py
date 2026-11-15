@@ -720,7 +720,7 @@ async def receive_webhook(request, ledger, secret, error_cls, partner_id=None):
     _, valid = store_webhook(ledger, raw, signature, request.headers, secret, partner_id)
     if not valid:
         raise error_cls("BAD_AURA_SIGNATURE", "Invalid Aura webhook signature", 400)
-    return web.json_response({"ok": True})
+    return web.Response(status=200)
 
 
 def _position_add(ledger, environment, uid, asset, amount):
@@ -765,7 +765,7 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
             and incoming_updated <= existing["provider_updated_at"]):
         return
     event_status = {
-        "card.opened": "opened", "card.failed": "failed",
+        "card.opened": "opened", "card.failed": "failed_to_open",
         "card.cancelled": "cancelled",
     }.get(kind)
     status = str(data.get("status") or event_status or "unknown")[:100]
