@@ -123,17 +123,28 @@ test("invalid contacts never post; viewing KYC never registers a customer", asyn
     .getByRole("link", { name: "Верификация Подтверждение личности" })
     .click();
   await page.getByRole("button", { name: "Начать", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("Сначала заполните");
+  await expect(
+    page.getByRole("heading", { name: "Ваши контакты" }),
+  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
   expect(state.posts).toHaveLength(0);
-  await page
-    .getByRole("button", { name: "Личные данные", exact: true })
-    .click();
-  await page.locator("#profile-first-name").fill("Кирилл");
-  await page.locator("#profile-phone").fill("123");
-  await page.locator("#profile-email").fill("hello@example.com");
-  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
+  await page.locator("#verification-phone").fill("123");
+  await page.locator("#verification-email").fill("hello@example.com");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("+7");
   expect(state.posts).toHaveLength(0);
+  await page.locator("#verification-phone").fill("8 (999) 123-45-67");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await expect(
+    page.getByRole("link", { name: "Продолжить проверку" }),
+  ).toHaveAttribute("href", "https://verify.example/session-private");
+  expect(state.posts).toEqual([
+    {
+      action: "aura-customer",
+      body: { phone: "+79991234567", email: "hello@example.com" },
+    },
+    { action: "aura-kyc", body: {} },
+  ]);
 });
 test("provider unavailable cannot fake a saved profile", async ({ page }) => {
   const state = await setup(page, false);

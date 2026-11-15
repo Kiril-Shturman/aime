@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { List, ListInput } from "framework7-react";
 import { Button } from "konsta/react";
 import { Check, LockKeyhole, ArrowUpRight, RefreshCw } from "lucide-react";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
@@ -8,9 +10,84 @@ type Props = {
   onPersonal: () => void;
 };
 export default function WalletVerification({ aura, onPersonal }: Props) {
+  const [contacts, setContacts] = useState(false);
   const verified = Boolean(aura.kyc?.verified);
   const pending = ["pending", "in_review"].includes(aura.kyc?.status || "");
   const rejected = aura.kyc?.status === "rejected";
+  if (contacts)
+    return (
+      <section
+        className="wpay-verification"
+        aria-label="Контакты для верификации"
+      >
+        <form
+          onSubmit={async (event) => {
+            event.preventDefault();
+            if (await aura.save()) await aura.start();
+          }}
+        >
+          <div className="wpay-verification-copy !text-left !px-6 !pt-8">
+            <h2>Ваши контакты</h2>
+            <p>Укажите телефон и почту, чтобы продолжить проверку личности.</p>
+          </div>
+          <List strong inset dividers className="profile-input-list">
+            <ListInput
+              label="Номер телефона"
+              inputId="verification-phone"
+              type="tel"
+              name="tel"
+              autocomplete="tel"
+              placeholder="+7 999 123-45-67"
+              value={aura.phone}
+              maxlength={32}
+              disabled={aura.busy}
+              onInput={(event) => aura.setPhone(event.target.value)}
+            />
+            <ListInput
+              label="Электронная почта"
+              inputId="verification-email"
+              type="email"
+              name="email"
+              autocomplete="email"
+              placeholder="name@example.com"
+              value={aura.email}
+              maxlength={254}
+              disabled={aura.busy}
+              onInput={(event) => aura.setEmail(event.target.value)}
+            />
+          </List>
+          {aura.error && (
+            <p
+              role="alert"
+              className="px-6 text-sm text-red-600 dark:text-red-400"
+            >
+              {aura.error}
+            </p>
+          )}
+          {aura.sessionUrl && (
+            <a
+              className="wpay-verification-text-action mx-6"
+              href={aura.sessionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Продолжить проверку <ArrowUpRight size={16} />
+            </a>
+          )}
+          <div className="wpay-verification-footer">
+            <Button
+              type="submit"
+              data-wpay-primary=""
+              rounded
+              disabled={aura.busy || aura.loading || !aura.available}
+              className="!m-0 !w-full"
+            >
+              {aura.busy ? "Подготавливаем…" : "Продолжить"}
+            </Button>
+          </div>
+        </form>
+      </section>
+    );
   return (
     <section className="wpay-verification" aria-label="Проверка личности">
       <div className="wpay-verification-body">
@@ -63,7 +140,12 @@ export default function WalletVerification({ aura, onPersonal }: Props) {
                     ? "Проверка не пройдена. Обратитесь в поддержку, если нужна помощь."
                     : "Подтвердите личность, чтобы пользоваться всеми возможностями wPay."}
           </p>
-          {!verified && !pending && !rejected && <p className="wpay-verification-guidance">Сохраните телефон и почту в личных данных, затем подтвердите документы в защищённой форме.</p>}
+          {!verified && !pending && !rejected && (
+            <p className="wpay-verification-guidance">
+              Сохраните телефон и почту в личных данных, затем подтвердите
+              документы в защищённой форме.
+            </p>
+          )}
           <span className="wpay-verification-trust">
             <LockKeyhole size={14} /> Защищённая форма проверки
           </span>
@@ -112,7 +194,10 @@ export default function WalletVerification({ aura, onPersonal }: Props) {
               Boolean(aura.kyc?.terminal)
             }
             className="!m-0 !w-full"
-            onClick={() => void aura.start()}
+            onClick={() => {
+              if (!aura.email.trim() || !aura.phone.trim()) setContacts(true);
+              else void aura.start();
+            }}
           >
             <span className="wpay-verification-button-content">
               <span>{aura.busy ? "Подготавливаем…" : "Начать"}</span>
