@@ -729,13 +729,6 @@ def install_wallet(app, root, owner_check):
                 return web.json_response({'owner': admin})
             if action.startswith('admin-') and not admin:
                 raise ApiError('FORBIDDEN', 'Админка доступна только администраторам WPay', 403)
-            if action in {
-                'aura-sbp-quote', 'aura-sbp-order', 'aura-sbp-order-cancel',
-                'aura-qr-quote', 'aura-qr-payment',
-            } and not admin:
-                # These flows move the partner's pooled balance. Keep them in a
-                # controlled pilot until per-user settlement is connected.
-                raise ApiError('AURA_PILOT_ONLY', 'Операция пока доступна только оператору', 403)
             if action == 'admin-overview' and request.method == 'GET':
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)

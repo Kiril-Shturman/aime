@@ -718,9 +718,10 @@ Implemented:
   its code is replaced by a payload hash before the durable inbox write.
 - Full SBP rate/quote/order/cancel and merchant QR quote/pay transports with
   strict schemas, idempotency, owner association and terminal lifecycle
-  handling. QR payloads, quote tokens and QR images are not retained. Because
-  both products move the partner's pooled balance, their mutation routes are
-  operator-only pilot flows until per-user settlement is connected.
+  handling. QR payloads, quote tokens and QR images are not retained. Both
+  products now have per-user immutable settlement: merchant QR reserves the
+  user's Aura-backed USDT before submission and consumes/releases/refunds it
+  exactly once; completed SBP orders credit their exact `crypto_amount` once.
 - Physical-card delivery updates and sanitized tracking metadata; expanded
   stable card-operation state for original/refunded amounts, balance after,
   country/MCC/category; deposit-fee reads including `fee_min`; and restart-safe
@@ -742,14 +743,14 @@ Additional completed areas:
 
 Verification on this branch:
 
-- 128 backend unit/integration tests passed, including duplicate delivery,
+- 131 backend unit/integration tests passed, including duplicate delivery,
   pending-to-confirmed transition, invalid-signature recovery, event-ID reuse,
-  environment guards, idempotent money mutations and read-only recovery.
+  environment guards, idempotent money mutations, QR reserve/release/refund,
+  SBP credit settlement and read-only recovery.
 - Frontend production build passed.
 - Python compilation and `git diff --check` passed.
 
-Remaining before general user rollout: connect SBP/QR pooled-balance movements
-to per-user immutable settlement, expose only enabled Aura capabilities in the
-UI, and run a controlled testnet pilot with server-installed secrets. A live key
-may be installed only in server secret storage; credentials pasted in chat must
-remain revoked.
+Remaining before broad production rollout: expose only enabled Aura capabilities
+in the UI and run a controlled testnet pilot with server-installed secrets. A
+live key may be installed only in server secret storage; credentials pasted in
+chat must remain revoked.

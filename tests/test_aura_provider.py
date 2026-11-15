@@ -536,6 +536,16 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.ledger.db.close()
         self.tmp.cleanup()
 
+    def fund(self, uid, amount):
+        amount = Decimal(str(amount))
+        self.ledger.begin("test_fund", "test", uid)
+        self.ledger.put_balance(uid, "USDT", amount, Decimal(0))
+        self.ledger.db.execute(
+            "INSERT INTO wallet_provider_positions VALUES ('aura','test',?,'USDT',?,'0',?)",
+            (uid, str(amount), time.time()),
+        )
+        self.ledger.commit()
+
     async def test_customer_address_and_balance_contract(self):
         uid = "tg:777"
         ref = self.ledger.account(uid)
@@ -639,6 +649,7 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         uid = "tg:qr-write"
         ref = self.ledger.account(uid)
         customer_id = await self.service.ensure_customer(uid, ref)
+        self.fund(uid, "100")
         self.mock.app["state"].balance = Decimal("100")
         qr_payload = "https://qr.nspk.ru/AS2A000000000001"
         quote = await self.service.create_qr_quote(uid, ref, qr_payload)
@@ -654,6 +665,10 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replay["id"], payment["id"])
         self.assertEqual(self.mock.app["state"].balance, Decimal("90.000000"))
         self.assertEqual(
+            self.ledger.balance(uid, "USDT"),
+            (Decimal("90.000000"), Decimal("10.000000")),
+        )
+        self.assertEqual(
             (await self.service.get_qr_payment(uid, payment["id"]))["id"], payment["id"]
         )
         row = self.ledger.db.execute(
@@ -662,11 +677,15 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         ).fetchone()
         self.assertEqual((row["user_id"], row["customer_id"]), (uid, customer_id))
         self.assertNotIn(qr_payload, row["body"])
+        dump = "\n".join(self.ledger.db.iterdump())
+        self.assertNotIn(qr_payload, dump)
+        self.assertNotIn(quote["quote_token"], dump)
 
     async def test_pending_recovery_polls_qr_terminal_state_without_replaying_post(self):
         uid = "tg:qr-recovery"
         ref = self.ledger.account(uid)
         await self.service.ensure_customer(uid, ref)
+        self.fund(uid, "100")
         self.mock.app["state"].balance = Decimal("100")
         qr_payload = "https://qr.nspk.ru/AS2A000000000002"
         quote = await self.service.create_qr_quote(uid, ref, qr_payload)
@@ -685,7 +704,109 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             "SELECT status FROM aura_qr_payments WHERE payment_id=?", (payment["id"],)
         ).fetchone()
         self.assertEqual(local["status"], "completed")
+        self.assertEqual(
+            self.ledger.balance(uid, "USDT"),
+            (Decimal("90.000000"), Decimal("0.000000")),
+        )
         self.assertEqual(len(self.mock.app["state"].qr_payments), 1)
+
+    async def test_qr_failure_releases_and_refund_credits_exactly_once(self):
+        uid = "tg:qr-settlement"
+        ref = self.ledger.account(uid)
+        await self.service.ensure_customer(uid, ref)
+        self.fund(uid, "100")
+        self.mock.app["state"].balance = Decimal("100")
+
+        failed_payload = "https://qr.nspk.ru/AS2A000000000003"
+        failed_quote = await self.service.create_qr_quote(uid, ref, failed_payload)
+        failed = await self.service.create_qr_payment(
+            uid, ref, failed_quote["quote_token"], failed_payload,
+            idempotency_key="qr-failed-one",
+        )
+        failed_remote = self.mock.app["state"].qr_payments[failed["id"]]
+        failed_remote.update({
+            "status": "failed", "failed_at": "2026-12-01T00:01:00Z",
+            "failure_reason": "failed",
+        })
+        self.mock.app["state"].balance += Decimal("10")
+        await self.service.get_qr_payment(uid, failed["id"])
+        await self.service.get_qr_payment(uid, failed["id"])
+        self.assertEqual(
+            self.ledger.balance(uid, "USDT"), (Decimal("100"), Decimal("0"))
+        )
+
+        refunded_payload = "https://qr.nspk.ru/AS2A000000000004"
+        refunded_quote = await self.service.create_qr_quote(uid, ref, refunded_payload)
+        paid = await self.service.create_qr_payment(
+            uid, ref, refunded_quote["quote_token"], refunded_payload,
+            idempotency_key="qr-refunded-one",
+        )
+        paid_remote = self.mock.app["state"].qr_payments[paid["id"]]
+        paid_remote.update({
+            "status": "completed", "completed_at": "2026-12-01T00:01:00Z",
+        })
+        await self.service.get_qr_payment(uid, paid["id"])
+        self.assertEqual(
+            self.ledger.balance(uid, "USDT"), (Decimal("90.000000"), Decimal("0"))
+        )
+        paid_remote.update({
+            "status": "refunded", "refunded_at": "2026-12-01T00:02:00Z",
+        })
+        self.mock.app["state"].balance += Decimal("10")
+        await self.service.get_qr_payment(uid, paid["id"])
+        await self.service.get_qr_payment(uid, paid["id"])
+        self.assertEqual(
+            self.ledger.balance(uid, "USDT"), (Decimal("100.000000"), Decimal("0"))
+        )
+        position = self.ledger.db.execute(
+            "SELECT available,reserved FROM wallet_provider_positions "
+            "WHERE provider='aura' AND environment='test' AND user_id=? AND asset='USDT'",
+            (uid,),
+        ).fetchone()
+        self.assertEqual((Decimal(position[0]), Decimal(position[1])),
+                         (Decimal("100"), Decimal("0")))
+        self.assertEqual(
+            self.ledger.db.execute(
+                "SELECT COUNT(*) FROM wallet_events WHERE user_id=? AND type LIKE 'qr_%'",
+                (uid,),
+            ).fetchone()[0], 2,
+        )
+        self.assertEqual((await reconcile(self.ledger, self.client, "test"))["state"], "ok")
+
+    async def test_sbp_completed_credits_user_exactly_once(self):
+        uid = "tg:sbp-settlement"
+        ref = self.ledger.account(uid)
+        customer_id = await self.service.ensure_customer(
+            uid, ref, email="settle@example.com", phone="+79991234568"
+        )
+        await self.service.submit_identity(uid, customer_id, {
+            "first_name": "Иван", "last_name": "Петров",
+            "birth_date": "1990-05-20", "passport": "4510123457",
+            "passport_issue_date": "2010-06-01",
+        })
+        quote = await self.service.create_sbp_quote(uid, ref, "9250")
+        order = await self.service.create_sbp_order(
+            uid, ref, quote["quote_token"], idempotency_key="sbp-settlement-one"
+        )
+        remote = self.mock.app["state"].orders[order["id"]]
+        remote.update({
+            "status": "completed", "completed_at": "2026-12-01T00:01:00Z",
+            "qr_url": None, "qr_png_base64": None,
+        })
+        self.mock.app["state"].balance += Decimal(order["crypto_amount"])
+        await self.service.get_sbp_order(uid, order["id"])
+        await self.service.get_sbp_order(uid, order["id"])
+        self.assertEqual(
+            self.ledger.balance(uid, "USDT"),
+            (Decimal(order["crypto_amount"]), Decimal("0")),
+        )
+        self.assertEqual(
+            self.ledger.db.execute(
+                "SELECT COUNT(*) FROM wallet_events WHERE user_id=? AND type='sbp_completed'",
+                (uid,),
+            ).fetchone()[0], 1,
+        )
+        self.assertEqual((await reconcile(self.ledger, self.client, "test"))["state"], "ok")
 
     async def test_customer_input_validation(self):
         with self.assertRaises(ValueError):
@@ -1713,7 +1834,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "/api/wallet/aura-sbp-order?order_id=" + order["id"],
             headers={"X-Telegram-Init-Data": init_data(323)},
         )
-        self.assertEqual(foreign.status, 403)
+        self.assertEqual(foreign.status, 404)
         cancelled = await self.wpay.post(
             "/api/wallet/aura-sbp-order-cancel", headers=self.owner,
             json={"order_id": order["id"]},
@@ -1726,6 +1847,14 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(registered.status, 200, await registered.text())
         self.mock.app["state"].balance = Decimal("100")
+        ledger = self.app["wpay_ledger"]
+        ledger.begin("test_fund", "test", "owner")
+        ledger.put_balance("owner", "USDT", Decimal("100"), Decimal("0"))
+        ledger.db.execute(
+            "INSERT INTO wallet_provider_positions VALUES "
+            "('aura','test','owner','USDT','100','0',?)", (time.time(),),
+        )
+        ledger.commit()
         qr_payload = "https://qr.nspk.ru/AS2A000000000001"
         quoted = await self.wpay.post(
             "/api/wallet/aura-qr-quote", headers=self.owner,
@@ -1752,7 +1881,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "/api/wallet/aura-qr-payment?payment_id=" + payment["id"],
             headers={"X-Telegram-Init-Data": init_data(323)},
         )
-        self.assertEqual(foreign.status, 403)
+        self.assertEqual(foreign.status, 404)
         fetched = await self.wpay.get(
             "/api/wallet/aura-qr-payment?payment_id=" + payment["id"],
             headers=self.owner,
@@ -1760,6 +1889,36 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await fetched.json())["status"], "processing")
         listed = await self.wpay.get("/api/wallet/aura-qr-payments", headers=self.owner)
         self.assertEqual((await listed.json())["data"][0]["payment_id"], payment["id"])
+
+    async def test_qr_write_flow_is_open_to_settled_non_admin_user(self):
+        uid = "tg:324"
+        headers = {"X-Telegram-Init-Data": init_data(324)}
+        self.mock.app["state"].balance = Decimal("20")
+        qr_payload = "https://qr.nspk.ru/AS2A000000000005"
+        quoted = await self.wpay.post(
+            "/api/wallet/aura-qr-quote", headers=headers,
+            json={"qr_payload": qr_payload},
+        )
+        self.assertEqual(quoted.status, 200, await quoted.text())
+        quote = await quoted.json()
+        ledger = self.app["wpay_ledger"]
+        ledger.begin("test_fund", "test", uid)
+        ledger.put_balance(uid, "USDT", Decimal("20"), Decimal("0"))
+        ledger.db.execute(
+            "INSERT INTO wallet_provider_positions VALUES "
+            "('aura','test',?,'USDT','20','0',?)", (uid, time.time()),
+        )
+        ledger.commit()
+        paid = await self.wpay.post(
+            "/api/wallet/aura-qr-payment",
+            headers={**headers, "Idempotency-Key": "user-qr-payment-one"},
+            json={"quote_token": quote["quote_token"], "qr_payload": qr_payload},
+        )
+        self.assertEqual(paid.status, 200, await paid.text())
+        self.assertEqual(
+            ledger.balance(uid, "USDT"),
+            (Decimal("10.000000"), Decimal("10.000000")),
+        )
 
     async def test_disabled_sbp_product_blocks_kyc_start_and_rate(self):
         self.mock.app["state"].products["sbp_buy"] = False

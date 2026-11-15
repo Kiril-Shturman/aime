@@ -248,6 +248,12 @@ def _safe_identifier(value, label):
     return value
 
 
+def _secret_hash(value):
+    if not isinstance(value, str) or not value:
+        raise ValueError("Invalid Aura secret value")
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
 def _card_request_body(owner_id, kind, shipping_address=None):
     owner_id = _safe_identifier(owner_id, "card owner id")
     kind = str(kind)
@@ -1710,10 +1716,55 @@ class AuraService:
 
     async def create_sbp_order(self, uid, client_ref, quote_token, *, idempotency_key):
         customer_id = await self.ensure_customer(uid, client_ref)
-        item = await self.client.create_sbp_order(
-            customer_id, quote_token, idempotency_key=idempotency_key
+        idempotency_key = str(idempotency_key)
+        request_body = {
+            "customer_id": customer_id, "quote_token_hash": _secret_hash(quote_token),
+        }
+        existing = self.ledger.db.execute(
+            "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+            "AND entity_type='sbp_order' AND local_id=?",
+            (self.environment, idempotency_key),
+        ).fetchone()
+        if existing:
+            if json.loads(existing["request_body"]) != request_body:
+                raise ValueError("Aura idempotency key reused with another SBP order")
+            if existing["status"] == "rejected":
+                raise self.client.error_cls(
+                    "sbp_order_rejected",
+                    "The original Aura order was rejected; use a new idempotency key", 409,
+                )
+        else:
+            stamp = time.time()
+            self.ledger.db.execute(
+                "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                ("aura", self.environment, "sbp_order", idempotency_key, None,
+                 uid, "submitting", idempotency_key,
+                 json.dumps(request_body, sort_keys=True, separators=(",", ":")),
+                 None, stamp, stamp),
+            )
+        try:
+            item = await self.client.create_sbp_order(
+                customer_id, quote_token, idempotency_key=idempotency_key
+            )
+        except Exception as error:
+            if getattr(error, "retry_policy", None) in {"no", "after_fix"}:
+                self.ledger.db.execute(
+                    "UPDATE wallet_provider_entities SET status='rejected',updated_at=? "
+                    "WHERE provider='aura' AND environment=? AND entity_type='sbp_order' "
+                    "AND local_id=?", (time.time(), self.environment, idempotency_key),
+                )
+            raise
+        item = self._store_sbp_api_order(uid, item)
+        self.ledger.db.execute(
+            "UPDATE wallet_provider_entities SET remote_id=?,status=?,updated_at=? "
+            "WHERE provider='aura' AND environment=? AND entity_type='sbp_order' "
+            "AND local_id=?",
+            (item["id"],
+             item["status"] if item["status"] == "awaiting_payment" else "submitted",
+             time.time(), self.environment, idempotency_key),
         )
-        return self._store_sbp_api_order(uid, item)
+        _settle_sbp_order(self.ledger, self.environment, item["id"], item["status"])
+        return item
 
     async def get_sbp_order(self, uid, order_id):
         row = self.ledger.db.execute(
@@ -1750,15 +1801,164 @@ class AuraService:
 
     async def create_qr_quote(self, uid, client_ref, qr_payload):
         customer_id = await self.ensure_customer(uid, client_ref)
-        return await self.client.create_qr_quote(qr_payload, customer_id=customer_id)
+        item = await self.client.create_qr_quote(qr_payload, customer_id=customer_id)
+        token_hash = _secret_hash(item["quote_token"])
+        safe = {
+            "customer_id": customer_id, "quote_token_hash": token_hash,
+            "qr_payload_hash": _secret_hash(qr_payload),
+            "total_usdt": item["total_usdt"], "expires_at": item["expires_at"],
+        }
+        stamp = time.time()
+        self.ledger.db.execute(
+            "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?) "
+            "ON CONFLICT(provider,environment,entity_type,local_id) DO UPDATE SET "
+            "user_id=excluded.user_id,status=excluded.status,request_body=excluded.request_body,"
+            "updated_at=excluded.updated_at",
+            ("aura", self.environment, "qr_quote", token_hash, None, uid, "quoted",
+             None, json.dumps(safe, sort_keys=True, separators=(",", ":")),
+             None, stamp, stamp),
+        )
+        return item
 
     async def create_qr_payment(self, uid, client_ref, quote_token, qr_payload,
                                 *, idempotency_key):
         customer_id = await self.ensure_customer(uid, client_ref)
-        item = await self.client.create_qr_payment(
-            customer_id, quote_token, qr_payload, idempotency_key=idempotency_key
-        )
-        return self._store_qr_api_payment(uid, item)
+        idempotency_key = str(idempotency_key)
+        token_hash, payload_hash = _secret_hash(quote_token), _secret_hash(qr_payload)
+        quote_row = self.ledger.db.execute(
+            "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+            "AND entity_type='qr_quote' AND local_id=? AND user_id=?",
+            (self.environment, token_hash, uid),
+        ).fetchone()
+        if not quote_row:
+            raise self.client.error_cls("quote_expired", "Aura QR quote not found", 409)
+        quote_body = json.loads(quote_row["request_body"])
+        if (quote_body.get("customer_id") != customer_id
+                or quote_body.get("qr_payload_hash") != payload_hash):
+            raise ValueError("Aura QR quote owner or payload mismatch")
+        expiry = datetime.fromisoformat(quote_body["expires_at"].replace("Z", "+00:00"))
+        prior = self.ledger.db.execute(
+            "SELECT 1 FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+            "AND entity_type='qr_payment' AND local_id=?",
+            (self.environment, idempotency_key),
+        ).fetchone()
+        if expiry <= datetime.now(timezone.utc) and not prior:
+            raise self.client.error_cls("quote_expired", "Aura QR quote expired", 409)
+        reserve_amount = _decimal(quote_body["total_usdt"])
+        request_body = {
+            "customer_id": customer_id, "quote_token_hash": token_hash,
+            "qr_payload_hash": payload_hash, "reserve_amount": str(reserve_amount),
+            "held_amount": str(reserve_amount),
+        }
+        existing = self.ledger.db.execute(
+            "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+            "AND entity_type='qr_payment' AND local_id=?",
+            (self.environment, idempotency_key),
+        ).fetchone()
+        if existing:
+            stored = json.loads(existing["request_body"])
+            immutable = {key: request_body[key] for key in (
+                "customer_id", "quote_token_hash", "qr_payload_hash", "reserve_amount"
+            )}
+            if {key: stored.get(key) for key in immutable} != immutable:
+                raise ValueError("Aura idempotency key reused with another QR payment")
+            if existing["status"] == "rejected":
+                raise self.client.error_cls(
+                    "qr_payment_rejected",
+                    "The original Aura QR payment was rejected; use a new idempotency key", 409,
+                )
+        else:
+            debt_row = self.ledger.db.execute(
+                "SELECT amount FROM wallet_debts WHERE user_id=? AND asset='USDT'", (uid,)
+            ).fetchone()
+            if debt_row and Decimal(debt_row[0]) > 0:
+                raise self.client.error_cls(
+                    "insufficient_funds", "Outstanding wallet debt must be repaid first", 409
+                )
+            available, reserved = self.ledger.balance(uid, "USDT")
+            self.ledger.begin("aura_qr_reserve", uid, idempotency_key)
+            try:
+                self.ledger.put_balance(
+                    uid, "USDT", available - reserve_amount, reserved + reserve_amount
+                )
+                # Aura removes the money from its available pooled balance when the
+                # payment is created. Keep the user hold in wallet.reserved, but do
+                # not count it as provider-backed available capital.
+                _position_adjust(
+                    self.ledger, self.environment, uid, "USDT", -reserve_amount, Decimal(0)
+                )
+                stamp = time.time()
+                self.ledger.db.execute(
+                    "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                    ("aura", self.environment, "qr_payment", idempotency_key, None,
+                     uid, "reserved", idempotency_key,
+                     json.dumps(request_body, sort_keys=True, separators=(",", ":")),
+                     None, stamp, stamp),
+                )
+                self.ledger.commit()
+            except Exception:
+                self.ledger.rollback()
+                raise
+        try:
+            item = await self.client.create_qr_payment(
+                customer_id, quote_token, qr_payload, idempotency_key=idempotency_key
+            )
+        except Exception as error:
+            if getattr(error, "retry_policy", None) in {"no", "after_fix"}:
+                _release_qr_reserve(
+                    self.ledger, self.environment, idempotency_key, "rejected"
+                )
+            raise
+        item = self._store_qr_api_payment(uid, item)
+        charged = _decimal(item["total_usdt"])
+        if charged > reserve_amount:
+            self.ledger.db.execute(
+                "UPDATE wallet_provider_entities SET remote_id=?,status='needs_reconciliation',"
+                "updated_at=? WHERE provider='aura' AND environment=? "
+                "AND entity_type='qr_payment' AND local_id=?",
+                (item["id"], time.time(), self.environment, idempotency_key),
+            )
+            raise self.client.error_cls(
+                "qr_settlement_exceeded_reserve",
+                "Aura QR payment exceeded the reserved amount; reconciliation is required", 502,
+            )
+        self.ledger.begin("aura_qr_submitted", uid, idempotency_key)
+        try:
+            current = self.ledger.db.execute(
+                "SELECT request_body,status FROM wallet_provider_entities WHERE provider='aura' "
+                "AND environment=? AND entity_type='qr_payment' AND local_id=?",
+                (self.environment, idempotency_key),
+            ).fetchone()
+            stored = json.loads(current["request_body"])
+            held = _decimal(stored["held_amount"], allow_zero=True)
+            if current["status"] in {"reserved", "submitting"}:
+                release = held - charged
+                available, reserved = self.ledger.balance(uid, "USDT")
+                self.ledger.put_balance(
+                    uid, "USDT", available + release, reserved - held + charged
+                )
+                _position_adjust(
+                    self.ledger, self.environment, uid, "USDT", release, Decimal(0)
+                )
+                stored["held_amount"] = str(charged)
+            self.ledger.db.execute(
+                "UPDATE wallet_provider_entities SET remote_id=?,status=?,request_body=?,updated_at=? "
+                "WHERE provider='aura' AND environment=? AND entity_type='qr_payment' "
+                "AND local_id=?",
+                (item["id"],
+                 item["status"] if item["status"] in {"processing", "unspecified"}
+                 else "processing",
+                 json.dumps(stored, sort_keys=True, separators=(",", ":")),
+                 time.time(), self.environment, idempotency_key),
+            )
+            _settle_qr_payment(
+                self.ledger, self.environment, item["id"], item["status"]
+            )
+            self.ledger.commit()
+        except Exception:
+            self.ledger.rollback()
+            raise
+        return item
 
     async def get_qr_payment(self, uid, payment_id):
         row = self.ledger.db.execute(
@@ -2294,6 +2494,178 @@ def _settle_card_recharge(ledger, environment, operation_id, status):
     )
 
 
+def _release_qr_reserve(ledger, environment, local_id, final_status):
+    entity = ledger.db.execute(
+        "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+        "AND entity_type='qr_payment' AND local_id=?", (environment, local_id),
+    ).fetchone()
+    if not entity or entity["status"] not in {"reserved", "submitting", "processing", "unspecified"}:
+        return False
+    stored = json.loads(entity["request_body"])
+    held = _decimal(stored.get("held_amount"), allow_zero=True)
+    managed = not ledger.db.in_transaction
+    if managed:
+        ledger.begin("aura_qr_release", entity["user_id"], str(local_id))
+    try:
+        if held:
+            available, reserved = ledger.balance(entity["user_id"], "USDT")
+            ledger.put_balance(
+                entity["user_id"], "USDT", available + held, reserved - held
+            )
+            _position_adjust(
+                ledger, environment, entity["user_id"], "USDT", held, Decimal(0)
+            )
+        stored["held_amount"] = "0"
+        stored["settled_amount"] = str(held)
+        ledger.db.execute(
+            "UPDATE wallet_provider_entities SET status=?,request_body=?,updated_at=? "
+            "WHERE provider='aura' AND environment=? AND entity_type='qr_payment' "
+            "AND local_id=?",
+            (final_status, json.dumps(stored, sort_keys=True, separators=(",", ":")),
+             time.time(), environment, local_id),
+        )
+        if managed:
+            ledger.commit()
+        return True
+    except Exception:
+        if managed:
+            ledger.rollback()
+        raise
+
+
+def _settle_qr_payment(ledger, environment, payment_id, status):
+    if status not in {"processing", "unspecified", "completed", "failed", "refunded"}:
+        return False
+    entity = ledger.db.execute(
+        "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+        "AND entity_type='qr_payment' AND remote_id=?", (environment, payment_id),
+    ).fetchone()
+    payment = ledger.db.execute(
+        "SELECT total_usdt,provider_updated_at FROM aura_qr_payments "
+        "WHERE payment_id=? AND environment=?", (payment_id, environment),
+    ).fetchone()
+    if not entity or not payment:
+        return False
+    stored = json.loads(entity["request_body"])
+    old = entity["status"]
+    held = _decimal(stored.get("held_amount"), allow_zero=True)
+    settled = _decimal(stored.get("settled_amount", "0"), allow_zero=True)
+    provider_amount = _decimal(payment["total_usdt"])
+    expected = held if held else settled
+    if expected and provider_amount != expected:
+        raise ValueError("Aura QR payment amount does not match reserved settlement")
+    if old in {"completed", "failed", "refunded", "rejected", "needs_reconciliation"}:
+        if old == "completed" and status == "refunded":
+            pass
+        else:
+            return False
+    if status in {"processing", "unspecified"}:
+        if old in {"reserved", "submitting"}:
+            ledger.db.execute(
+                "UPDATE wallet_provider_entities SET status=?,provider_updated_at=?,updated_at=? "
+                "WHERE provider='aura' AND environment=? AND entity_type='qr_payment' "
+                "AND local_id=?",
+                (status, payment["provider_updated_at"], time.time(), environment,
+                 entity["local_id"]),
+            )
+            return True
+        return False
+    managed = not ledger.db.in_transaction
+    if managed:
+        ledger.begin("aura_qr_" + status, "aura", payment_id)
+    try:
+        uid = entity["user_id"]
+        available, reserved = ledger.balance(uid, "USDT")
+        event_amount = None
+        if status == "completed":
+            ledger.put_balance(uid, "USDT", available, reserved - held)
+            stored["settled_amount"], stored["held_amount"] = str(held), "0"
+            event_amount = -held
+        elif status == "failed":
+            ledger.put_balance(uid, "USDT", available + held, reserved - held)
+            _position_adjust(ledger, environment, uid, "USDT", held, Decimal(0))
+            stored["settled_amount"], stored["held_amount"] = str(held), "0"
+        elif status == "refunded":
+            amount = settled if old == "completed" else held
+            ledger.put_balance(
+                uid, "USDT", available + amount,
+                reserved if old == "completed" else reserved - held,
+            )
+            _position_adjust(ledger, environment, uid, "USDT", amount, Decimal(0))
+            stored["settled_amount"], stored["held_amount"] = str(amount), "0"
+            event_amount = amount
+        ledger.db.execute(
+            "UPDATE wallet_provider_entities SET status=?,request_body=?,provider_updated_at=?,"
+            "updated_at=? WHERE provider='aura' AND environment=? "
+            "AND entity_type='qr_payment' AND local_id=?",
+            (status, json.dumps(stored, sort_keys=True, separators=(",", ":")),
+             payment["provider_updated_at"], time.time(), environment, entity["local_id"]),
+        )
+        if event_amount is not None:
+            ledger.db.execute(
+                "INSERT OR IGNORE INTO wallet_events VALUES (?,?,?,?,?,?,?)",
+                ("aura:qr:" + payment_id + ":" + status, uid, "USDT",
+                 str(event_amount), "qr_" + status, datetime.now(timezone.utc).isoformat(),
+                 json.dumps({"provider": "aura", "payment_id": payment_id,
+                             "status": status}, separators=(",", ":"))),
+            )
+        if managed:
+            ledger.commit()
+        return True
+    except Exception:
+        if managed:
+            ledger.rollback()
+        raise
+
+
+def _settle_sbp_order(ledger, environment, order_id, status):
+    entity = ledger.db.execute(
+        "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+        "AND entity_type='sbp_order' AND remote_id=?", (environment, order_id),
+    ).fetchone()
+    order = ledger.db.execute(
+        "SELECT usdt_amount,provider_updated_at FROM aura_sbp_orders "
+        "WHERE order_id=? AND environment=?", (order_id, environment),
+    ).fetchone()
+    if not entity or not order or entity["status"] in {
+        "completed", "failed", "expired", "cancelled", "rejected"
+    }:
+        return False
+    if status not in {"completed", "failed", "expired", "cancelled"}:
+        return False
+    managed = not ledger.db.in_transaction
+    if managed:
+        ledger.begin("aura_sbp_" + status, "aura", order_id)
+    try:
+        if status == "completed":
+            amount = _decimal(order["usdt_amount"])
+            uid = entity["user_id"]
+            available, reserved = ledger.balance(uid, "USDT")
+            ledger.put_balance(uid, "USDT", available + amount, reserved)
+            _position_add(ledger, environment, uid, "USDT", amount)
+            ledger.db.execute(
+                "INSERT OR IGNORE INTO wallet_events VALUES (?,?,?,?,?,?,?)",
+                ("aura:sbp:" + order_id + ":completed", uid, "USDT", str(amount),
+                 "sbp_completed", datetime.now(timezone.utc).isoformat(),
+                 json.dumps({"provider": "aura", "order_id": order_id,
+                             "status": status}, separators=(",", ":"))),
+            )
+        ledger.db.execute(
+            "UPDATE wallet_provider_entities SET status=?,provider_updated_at=?,updated_at=? "
+            "WHERE provider='aura' AND environment=? AND entity_type='sbp_order' "
+            "AND local_id=?",
+            (status, order["provider_updated_at"], time.time(), environment,
+             entity["local_id"]),
+        )
+        if managed:
+            ledger.commit()
+        return True
+    except Exception:
+        if managed:
+            ledger.rollback()
+        raise
+
+
 def _store_card_event(ledger, environment, kind, data, occurred_at=None):
     if not isinstance(data, dict):
         raise ValueError("Aura card event data must be an object")
@@ -2604,6 +2976,7 @@ def _store_sbp_order(ledger, environment, kind, data):
          usdt_amount, fee, incoming_updated or None,
          json.dumps(safe_body, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
     )
+    _settle_sbp_order(ledger, environment, order_id, status)
 
 
 def _store_qr_payment(ledger, environment, kind, data):
@@ -2661,6 +3034,7 @@ def _store_qr_payment(ledger, environment, kind, data):
          updated or None, json.dumps(safe, separators=(",", ":")), stamp, stamp,
          user_id, customer_id, payment_type),
     )
+    _settle_qr_payment(ledger, environment, payment_id, status)
 
 
 def _store_withdrawal(ledger, environment, kind, data):
