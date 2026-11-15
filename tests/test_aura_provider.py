@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import socket
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -860,6 +861,40 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(before))
 
 
+    async def test_contacts_survive_restart_and_partial_updates(self):
+        uid = "tg:saved-contact"
+        ref = self.ledger.account(uid)
+        await self.service.ensure_customer(uid, ref, email=" hello@example.com ", phone=" +79991234567 ")
+        await self.service.ensure_customer(uid, ref, email="new@example.com")
+        await self.service.start_kyc(uid, ref)
+        self.ledger.db.close()
+        self.ledger = Ledger(self.tmp.name + "/db")
+        prepare(self.ledger)
+        self.service = AuraService(self.ledger, self.client, "test")
+        self.assertEqual(self.service.saved_contacts(uid), {"email": "new@example.com", "phone": "+79991234567"})
+        self.assertIsNone(self.service.saved_contacts("tg:another"))
+        other_environment = AuraService(self.ledger, self.client, "live")
+        self.assertIsNone(other_environment.saved_contacts(uid))
+
+    async def test_customer_and_contact_write_roll_back_together(self):
+        uid = "tg:contact-atomic"
+        ref = self.ledger.account(uid)
+        self.ledger.db.execute("CREATE TRIGGER contact_write_failure BEFORE INSERT ON wallet_profile_contacts BEGIN SELECT RAISE(ABORT, 'test failure'); END")
+        with self.assertRaises(sqlite3.IntegrityError):
+            await self.service.ensure_customer(uid, ref, email="hello@example.com", phone="+79991234567")
+        self.assertIsNone(self.ledger.db.execute("SELECT user_id FROM aura_customers WHERE user_id=?", (uid,)).fetchone())
+        self.assertIsNone(self.service.saved_contacts(uid))
+        self.assertFalse(self.ledger.db.in_transaction)
+
+    async def test_rejected_contact_update_preserves_last_successful_values(self):
+        uid = "tg:contact-failure"
+        ref = self.ledger.account(uid)
+        await self.service.ensure_customer(uid, ref, email="hello@example.com", phone="+79991234567")
+        with patch.object(self.client, "upsert_customer", new_callable=AsyncMock, side_effect=ApiError("unavailable", "Temporary failure", 503)):
+            with self.assertRaises(ApiError):
+                await self.service.ensure_customer(uid, ref, email="new@example.com", phone="+79997654321")
+        self.assertEqual(self.service.saved_contacts(uid), {"email": "hello@example.com", "phone": "+79991234567"})
+
     async def test_aura_transport_uses_allowlisted_ipv4(self):
         await self.client.get_me()
         self.assertEqual(self.client.session.connector.family, socket.AF_INET)
@@ -1444,6 +1479,29 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             headers={"X-Telegram-Init-Data": init_data(323)},
         )
         self.assertEqual(foreign.status, 404)
+
+    async def test_profile_contacts_are_owner_scoped_when_provider_omits_them(self):
+        headers = {"X-Telegram-Init-Data": init_data(123)}
+        saved = await self.wpay.post("/api/wallet/aura-customer", headers=headers,
+            json={"email": "hello@example.com", "phone": "+79991234567"})
+        self.assertEqual(saved.status, 200)
+        client = self.app['wpay_aura_provider']
+        with patch.object(client, 'get_customer', new_callable=AsyncMock, return_value={'id': 'minimal', 'cards': []}) as get_customer:
+            for _ in range(2):
+                response = await self.wpay.get('/api/wallet/aura-customer', headers=headers)
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.headers['Cache-Control'], 'private, no-store')
+                profile = await response.json()
+                self.assertEqual(profile['email'], 'hello@example.com')
+                self.assertEqual(profile['phone'], '+79991234567')
+            get_customer.assert_not_called()
+        foreign = await self.wpay.get('/api/wallet/aura-customer?user_id=tg:123',
+            headers={"X-Telegram-Init-Data": init_data(456)})
+        self.assertEqual(foreign.status, 404)
+        self.assertNotIn('hello@example.com', await foreign.text())
+        injected = await self.wpay.post('/api/wallet/aura-customer', headers=headers,
+            json={'user_id':'tg:456', 'email':'wrong@example.com', 'phone':'+79997654321'})
+        self.assertEqual(injected.status, 400)
 
     async def test_admin_identity_import_is_secret_free(self):
         registered = await self.wpay.post(

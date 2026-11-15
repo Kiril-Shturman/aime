@@ -80,6 +80,11 @@ def prepare(ledger):
         PRIMARY KEY(provider,environment,entity_type,local_id),
         UNIQUE(provider,environment,entity_type,remote_id)
       );
+      CREATE TABLE IF NOT EXISTS wallet_profile_contacts (
+        user_id TEXT NOT NULL, environment TEXT NOT NULL,
+        email TEXT, phone TEXT, updated_at REAL NOT NULL,
+        PRIMARY KEY(user_id,environment)
+      );
       CREATE TABLE IF NOT EXISTS aura_customers (
         user_id TEXT PRIMARY KEY, customer_id TEXT UNIQUE NOT NULL,
         environment TEXT NOT NULL, state TEXT NOT NULL, email_hash TEXT, phone_hash TEXT,
@@ -1672,20 +1677,50 @@ class AuraService:
             raise ValueError("Aura customer environment mismatch")
         if row and email is None and phone is None:
             return customer_id
+        if email is not None:
+            if not isinstance(email, str) or not email.strip():
+                raise ValueError("Invalid customer email")
+            email = email.strip()
+        if phone is not None:
+            if not isinstance(phone, str) or not phone.strip():
+                raise ValueError("Invalid customer phone")
+            phone = phone.strip()
         result = await self.client.upsert_customer(customer_id, email=email, phone=phone)
         provider_id = str(result.get("id") or result.get("customer_id") or customer_id)
         if provider_id != customer_id:
             raise ValueError("Aura customer identity mismatch")
         stamp = time.time()
         digest = lambda value: hashlib.sha256(str(value).encode()).hexdigest() if value else None
-        self.ledger.db.execute(
-            "INSERT INTO aura_customers VALUES (?,?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(user_id) DO UPDATE SET state=excluded.state,email_hash=COALESCE(excluded.email_hash,aura_customers.email_hash),"
-            "phone_hash=COALESCE(excluded.phone_hash,aura_customers.phone_hash),provider_updated_at=excluded.provider_updated_at,updated_at=excluded.updated_at",
-            (uid, customer_id, self.environment, str(result.get("status") or "registered"),
-             digest(email), digest(phone), result.get("updated_at"), stamp, stamp),
-        )
+        self.ledger.db.execute("SAVEPOINT aura_profile_save")
+        try:
+            self.ledger.db.execute(
+                "INSERT INTO aura_customers VALUES (?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(user_id) DO UPDATE SET state=excluded.state,email_hash=COALESCE(excluded.email_hash,aura_customers.email_hash),"
+                "phone_hash=COALESCE(excluded.phone_hash,aura_customers.phone_hash),provider_updated_at=excluded.provider_updated_at,updated_at=excluded.updated_at",
+                (uid, customer_id, self.environment, str(result.get("status") or "registered"),
+                 digest(email), digest(phone), result.get("updated_at"), stamp, stamp),
+            )
+            if email is not None or phone is not None:
+                self.ledger.db.execute(
+                    "INSERT INTO wallet_profile_contacts VALUES (?,?,?,?,?) "
+                    "ON CONFLICT(user_id,environment) DO UPDATE SET "
+                    "email=COALESCE(excluded.email,wallet_profile_contacts.email),"
+                    "phone=COALESCE(excluded.phone,wallet_profile_contacts.phone),updated_at=excluded.updated_at",
+                    (uid, self.environment, email, phone, stamp),
+                )
+        except Exception:
+            self.ledger.db.execute("ROLLBACK TO aura_profile_save")
+            self.ledger.db.execute("RELEASE aura_profile_save")
+            raise
+        self.ledger.db.execute("RELEASE aura_profile_save")
         return customer_id
+
+    def saved_contacts(self, uid):
+        row = self.ledger.db.execute(
+            "SELECT email,phone FROM wallet_profile_contacts WHERE user_id=? AND environment=?",
+            (uid, self.environment),
+        ).fetchone()
+        return dict(row) if row else None
 
     def _store_kyc(self, uid, customer_id, payload):
         if not isinstance(payload, dict):

@@ -1398,8 +1398,15 @@ def install_wallet(app, root, owner_check):
                 ).fetchone()
                 if not row:
                     raise ApiError('CUSTOMER_NOT_REGISTERED', 'Aura customer is not registered', 404)
-                result = await aura_client.get_customer(row['customer_id'])
-                return web.json_response(result, headers={'Cache-Control': 'no-store'})
+                contacts = aura_service.saved_contacts(uid)
+                if contacts and contacts.get('email') and contacts.get('phone'):
+                    result = {'id': row['customer_id'], **contacts}
+                else:
+                    result = dict(await aura_client.get_customer(row['customer_id']))
+                    for field in ('email', 'phone'):
+                        if contacts and contacts.get(field):
+                            result[field] = contacts[field]
+                return web.json_response(result, headers={'Cache-Control': 'private, no-store'})
             if action == 'aura-kyc' and request.method == 'GET':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)

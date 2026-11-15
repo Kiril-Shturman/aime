@@ -16,3 +16,10 @@ production build, lint (warnings only), and git diff --check.
 Deployment copies the existing production release, replaces only built static
 assets plus wallet_backend.py/wallet_aura.py, preserves private configuration and
 shared database path, and saves a SQLite backup and previous service unit.
+
+Contact persistence: `wallet_profile_contacts` stores the last successfully saved
+email and phone by authenticated user and Aura environment. Provider upsert must
+succeed before local data changes; customer mapping and contacts commit together.
+The profile GET returns these contacts with `private, no-store`, independent of
+Aura's minimal customer response. Browser storage is not used. Legacy hashes
+cannot restore previously entered contacts; existing users must save them once.
