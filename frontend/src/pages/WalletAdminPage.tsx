@@ -487,6 +487,8 @@ function Aura({ data, reload }: { data: AuraData; reload: () => Promise<void> })
         </article>
       </section>
 
+      <AuraConsole data={data.console} />
+
       <div className="wpay-admin-dashboard-grid">
         <section className={card}>
           <div className="wpay-admin-section-title">
@@ -560,7 +562,6 @@ function Aura({ data, reload }: { data: AuraData; reload: () => Promise<void> })
         </section>
       </div>
 
-      <AuraConsole data={data.console} />
     </div>
   );
 }
@@ -569,7 +570,7 @@ function AuraConsole({ data }: { data: AuraConsoleData }) {
   const [selected, setSelected] = useState(data.methods[0]?.method ?? "");
   const [draft, setDraft] = useState(() => json(data.methods[0]?.example ?? {}));
   const [confirmation, setConfirmation] = useState("");
-  const [idempotencyKey, setIdempotencyKey] = useState(() =>
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() =>
     globalThis.crypto?.randomUUID?.() || "",
   );
   const [filter, setFilter] = useState("");

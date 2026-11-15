@@ -63,6 +63,7 @@ import hashlib
 import hmac
 import json
 import os
+import pathlib
 import re
 import secrets
 import urllib.error
@@ -1778,7 +1779,15 @@ async def wpay_telegram_webhook(request):
             payload = {"chat_id": chat_id, "text": "Нет доступа к админке WPay."}
         else:
             parsed = urllib.parse.urlsplit(app_url)
-            admin_url = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "/admin", "", ""))
+            index_path = pathlib.Path(__file__).resolve().parent / "static" / "index.html"
+            try:
+                admin_version = hashlib.sha256(index_path.read_bytes()).hexdigest()[:12]
+            except OSError:
+                admin_version = "current"
+            admin_url = urllib.parse.urlunsplit((
+                parsed.scheme, parsed.netloc, "/admin",
+                urllib.parse.urlencode({"v": admin_version}), "",
+            ))
             payload = {
                 "chat_id": chat_id,
                 "text": "Админка WPay",
