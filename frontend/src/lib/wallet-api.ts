@@ -4,7 +4,12 @@ export class WalletApiError extends Error {
   code: string;
   retryAfter: string | null;
   httpStatus: number;
-  constructor(code: string, message: string, retryAfter: string | null = null, httpStatus = 0) {
+  constructor(
+    code: string,
+    message: string,
+    retryAfter: string | null = null,
+    httpStatus = 0,
+  ) {
     super(message);
     this.code = code;
     this.retryAfter = retryAfter;
@@ -63,23 +68,47 @@ async function requestOnce<T>(
     );
   return data as T;
 }
-export async function walletRequest<T>(action:string,body?:unknown,signal?:AbortSignal):Promise<T>{
-  for(let attempt=0;attempt<3;attempt++){
-    try{return await requestOnce<T>(action,body,signal)}
-    catch(error){
-      if(!(error instanceof WalletApiError)||action!=='address'||attempt===2||!error.retryAfter||(error.httpStatus!==503&&error.code!=='RETRY_LATER'))throw error
-      const seconds=Number(error.retryAfter)
-      const delay=Number.isFinite(seconds)?seconds*1000:Date.parse(error.retryAfter)-Date.now()
-      if(!Number.isFinite(delay)||delay<=0)throw error
-      await new Promise<void>((resolve,reject)=>{
-        if(signal?.aborted){reject(new DOMException('Cancelled','AbortError'));return}
-        const abort=()=>{window.clearTimeout(timer);signal?.removeEventListener('abort',abort);reject(new DOMException('Cancelled','AbortError'))}
-        const timer=window.setTimeout(()=>{signal?.removeEventListener('abort',abort);resolve()},delay)
-        signal?.addEventListener('abort',abort,{once:true})
-      })
+export async function walletRequest<T>(
+  action: string,
+  body?: unknown,
+  signal?: AbortSignal,
+): Promise<T> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await requestOnce<T>(action, body, signal);
+    } catch (error) {
+      if (
+        !(error instanceof WalletApiError) ||
+        action !== "address" ||
+        attempt === 2 ||
+        !error.retryAfter ||
+        (error.httpStatus !== 503 && error.code !== "RETRY_LATER")
+      )
+        throw error;
+      const seconds = Number(error.retryAfter);
+      const delay = Number.isFinite(seconds)
+        ? seconds * 1000
+        : Date.parse(error.retryAfter) - Date.now();
+      if (!Number.isFinite(delay) || delay <= 0) throw error;
+      await new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) {
+          reject(new DOMException("Cancelled", "AbortError"));
+          return;
+        }
+        const abort = () => {
+          window.clearTimeout(timer);
+          signal?.removeEventListener("abort", abort);
+          reject(new DOMException("Cancelled", "AbortError"));
+        };
+        const timer = window.setTimeout(() => {
+          signal?.removeEventListener("abort", abort);
+          resolve();
+        }, delay);
+        signal?.addEventListener("abort", abort, { once: true });
+      });
     }
   }
-  throw new WalletApiError('PROVIDER_UNAVAILABLE','Не удалось получить адрес')
+  throw new WalletApiError("PROVIDER_UNAVAILABLE", "Не удалось получить адрес");
 }
 
 export interface WalletTransaction {

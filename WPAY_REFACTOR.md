@@ -1,6 +1,6 @@
 # WPay architecture and checks
 
-The current source checkout is `wpay-git-export`, branch `wpay/refactor-wallet-flows`.
+The current source checkout is `wpay-git-export`, branch `wpay/fix-withdrawal-model`, based on `5278ec8`.
 The production preview on Sites is a static demo; the Python server remains a separate deployment.
 
 ## Boundaries
@@ -10,7 +10,7 @@ The production preview on Sites is a static demo; the Python server remains a se
 - `WalletLive.tsx`: wallet state and market rates. Refresh aborts previous wallet requests and aborts when unmounted.
 - `WalletCurrencyRow.tsx`, `WalletAssetAvatar.tsx`: shared rows, skeletons and network badges.
 - `WalletNavigation.tsx`, `WalletScroll.tsx`: navbar/popover ownership, page shells and pull-to-refresh.
-- `WalletWithdrawal.tsx`: withdrawal source selection and recipient entry. The selected source owns the network; changing the source resets the recipient.
+- `WalletWithdrawal.tsx`: independent withdrawal-network selection, external recipient and amount. No deposit-address selection is required. Changing the withdrawal network resets the recipient.
 - `WalletPrograms.tsx`: referral screen.
 - `WalletPage.tsx`: page composition and remaining cards/profile features. These can be extracted incrementally after the current boundaries.
 

@@ -43,9 +43,8 @@ async function setup(
         json: { status: "processing", spend_id: "payout-one" },
       });
     if (path.endsWith("/addresses"))
-      return route.fulfill({
-        json: { items: [{ asset: "USDT", network: "TON", address }] },
-      });
+      return route.fulfill({ json: { items: [] } });
+
     return route.fulfill({ json: { items: [] } });
   });
   await page.route(
@@ -55,7 +54,7 @@ async function setup(
   await page.goto("/wallet");
 }
 for (const theme of ["light", "dark"]) {
-  test(`${theme}: source address owns network and amount persists`, async ({
+  test(`${theme}: withdrawal network is independent of deposit addresses`, async ({
     page,
   }) => {
     await setup(page, theme);
@@ -74,27 +73,22 @@ for (const theme of ["light", "dark"]) {
       .getByText("Tether", { exact: true })
       .last()
       .click();
-    const sources = page.getByRole("group", { name: "Адрес списания" });
-    await sources.getByRole("radio", { name: "USDT TON", exact: true }).check();
-    await page.getByLabel("Сумма вывода USDT", { exact: true }).fill("25.5");
-    const next = page.getByRole("button", { name: "Продолжить", exact: true });
-    const box = await next.boundingBox();
-    expect(Math.round(box!.y + box!.height)).toBe(836);
-    await next.click();
     await expect(
-      page.getByLabel("Сумма вывода USDT", { exact: true }),
-    ).toHaveValue("25.5");
-    await expect(page.locator("#withdraw-network")).toHaveCount(0);
+      page.getByRole("group", { name: "Адрес списания" }),
+    ).toHaveCount(0);
+    await page.getByLabel("Сеть вывода", { exact: true }).selectOption("TON");
     await page.getByLabel("Адрес кошелька", { exact: true }).fill(address);
-    await expect(
-      page.getByRole("button", { name: "Проверить реквизиты", exact: true }),
-    ).toBeEnabled();
+    await page.getByLabel("Сумма вывода USDT", { exact: true }).fill("25.5");
     await page
       .getByRole("button", { name: "Проверить реквизиты", exact: true })
       .click();
+    await expect(page.getByText("26.5 USDT", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Сеть вывода", { exact: true })).toHaveValue(
+      "TON",
+    );
     await expect(
-      page.getByText("С адреса: " + address + " · TON", { exact: true }),
-    ).toBeVisible();
+      page.getByLabel("Сумма вывода USDT", { exact: true }),
+    ).toHaveValue("25.5");
   });
   test(`${theme}: back closes asset menu`, async ({ page }) => {
     await setup(page, theme);
@@ -229,13 +223,9 @@ test("withdrawal is sent only after accepting the server fee", async ({
     .getByText("Tether", { exact: true })
     .last()
     .click();
-  await page
-    .getByRole("group", { name: "Адрес списания" })
-    .getByRole("radio", { name: "USDT TON", exact: true })
-    .check();
-  await page.getByLabel("Сумма вывода USDT", { exact: true }).fill("25.5");
-  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await page.getByLabel("Сеть вывода", { exact: true }).selectOption("TON");
   await page.getByLabel("Адрес кошелька", { exact: true }).fill(address);
+  await page.getByLabel("Сумма вывода USDT", { exact: true }).fill("25.5");
   await page
     .getByRole("button", { name: "Проверить реквизиты", exact: true })
     .click();
@@ -283,4 +273,63 @@ test("TRON displays the exact amount returned by the provider", async ({
     .getByRole("button", { name: "Получить реквизиты", exact: true })
     .click();
   await expect(flow.getByText("10.3725 USDT", { exact: true })).toBeVisible();
+});
+
+test("TRC20 withdrawal works with no deposit address and sends no source_address", async ({
+  page,
+}) => {
+  await setup(page, "light");
+  let allocations = 0,
+    estimateBody: Record<string, unknown> | null = null;
+  await page.route("**/api/wallet/address", (route) => {
+    allocations++;
+    return route.fulfill({
+      status: 400,
+      json: { detail: "Address allocation is not needed" },
+    });
+  });
+  await page.route("**/api/wallet/withdrawal-estimate", (route) => {
+    estimateBody = route.request().postDataJSON();
+    return route.fulfill({
+      json: {
+        intent_id: "tron-one",
+        fee: "1",
+        total: "26.5",
+        expires_at: Date.now() / 1000 + 120,
+      },
+    });
+  });
+  await page
+    .locator(".wpay-wallet-home span.font-semibold")
+    .filter({ hasText: /^Tether$/ })
+    .first()
+    .click();
+  await page
+    .locator('[data-wallet-surface="asset"]')
+    .getByRole("button", { name: "Вывести", exact: true })
+    .click();
+  await page
+    .locator('[aria-hidden="false"]')
+    .last()
+    .getByText("Tether", { exact: true })
+    .last()
+    .click();
+  await page.getByLabel("Сеть вывода", { exact: true }).selectOption("TRON");
+  await page
+    .getByLabel("Адрес кошелька", { exact: true })
+    .fill("T" + "a".repeat(33));
+  await page.getByLabel("Сумма вывода USDT", { exact: true }).fill("25.5");
+  await page
+    .getByRole("button", { name: "Проверить реквизиты", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Подтвердить вывод", exact: true }),
+  ).toBeEnabled();
+  expect(estimateBody).toEqual({
+    asset: "USDT",
+    network: "TRON",
+    address: "T" + "a".repeat(33),
+    amount: "25.5",
+  });
+  expect(allocations).toBe(0);
 });

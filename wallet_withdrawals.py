@@ -116,6 +116,8 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
         raise ApiError('METHOD_NOT_ALLOWED', 'Метод не поддерживается', 405)
     body = await request.json()
     if action == 'withdrawal-estimate':
+        if set(body)-{'asset','network','address','amount','memo'}:
+            raise ValueError('Неизвестный параметр вывода')
         asset, network = str(body.get('asset', '')).upper(), str(body.get('network', '')).upper()
         if asset == 'BTC':
             raise ValueError('BTC по API пока не выводится')
@@ -131,10 +133,6 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
         memo = body.get('memo') or None
         if not address or len(address) > 256 or network not in {'BSC', 'ETH', 'TON', 'SOL', 'TRON'} or (memo is not None and (not isinstance(memo, str) or len(memo) > 256)):
             raise ValueError('Некорректные реквизиты')
-        # Source is a client-owned selection, not a provider debit address.
-        source = ledger.db.execute('SELECT 1 FROM wallet_addresses WHERE user_id=? AND network=? AND json_extract(body,\'$.address\')=?', (uid, network, body.get('source_address'))).fetchone()
-        if not source:
-            raise ApiError('SOURCE_NOT_FOUND', 'Выберите свой адрес списания', 400)
         params = {'asset': asset, 'network': network, 'address': address, 'amount': str(amount)}
         if memo:
             params['memo'] = memo
@@ -145,7 +143,7 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
             total = amount + fee
         if fee < 0 or money(estimate['amount']) != amount or money(estimate['total']) != total or any(estimate.get(key) != params[key] for key in ('asset', 'network', 'address')) or (estimate.get('memo') or None) != memo:
             raise ValueError('Некорректный расчёт комиссии')
-        canonical = {**params, 'fee': str(fee), 'total': str(total), 'source_address': body['source_address']}
+        canonical = {**params, 'fee': str(fee), 'total': str(total)}
         intent_id, spend_id = uuid.uuid4().hex, 'wpay-w-'+uuid.uuid4().hex
         ledger.db.execute('INSERT INTO wallet_withdrawal_intents(intent_id,user_id,spend_id,body,state,held,expires_at) VALUES (?,?,?,?,?,?,?)', (intent_id, uid, spend_id, json.dumps(canonical), 'estimated', str(total), time.time()+120))
         return web.json_response({**canonical, 'intent_id': intent_id, 'expires_at': time.time()+120})

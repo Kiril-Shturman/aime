@@ -381,7 +381,7 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         response = await self.client.get('/api/wallet/operations-deposits?client_ref=other', headers={'X-Telegram-Init-Data': init_data(123)})
         self.assertEqual([row['deposit_id'] for row in (await response.json())['items']], ['mine'])
 
-    async def withdrawal_fixture(self):
+    async def withdrawal_fixture(self, network='BSC'):
         original = self.provider.call
         self.withdrawal_rows = {}
         self.withdrawal_timeout = False
@@ -403,9 +403,8 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
             return await original(method, data, post)
         self.provider.call = scripted
         user = {'X-Telegram-Init-Data': init_data(123)}
-        await self.client.post('/api/wallet/address', json={'network': 'BSC'}, headers=user)
         self.ledger.deposit({'client_ref': self.ledger.account('tg:123'), 'deposit_id': 'funds', 'asset': 'USDT', 'credited': '100'})
-        response = await self.client.post('/api/wallet/withdrawal-estimate', json={'asset':'USDT', 'network':'BSC', 'address':'0x'+'a'*40, 'source_address':'test-address', 'amount':'10'}, headers=user)
+        response = await self.client.post('/api/wallet/withdrawal-estimate', json={'asset':'USDT', 'network':network, 'address':('T'+'a'*33) if network=='TRON' else ('0x'+'a'*40), 'amount':'10'}, headers=user)
         self.assertEqual(response.status, 200, await response.text())
         return user, await response.json()
 
@@ -445,7 +444,7 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(debt(self.ledger,'tg:123','USDT'),Decimal('4'))
         self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('0'),Decimal('0')))
 
-    async def test_withdrawal_intents_are_owned_and_reject_source_spoofing(self):
+    async def test_withdrawal_intents_are_owned_and_reject_obsolete_source_parameter(self):
         user, quote=await self.withdrawal_fixture()
         foreign={'X-Telegram-Init-Data':init_data(999)}
         response=await self.client.post('/api/wallet/withdrawal-create',json={'intent_id':quote['intent_id']},headers=foreign)
@@ -527,6 +526,28 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue((await response.json())['sync_complete'])
         self.assertEqual(seen,[0,1000,2000])
         self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('7'),Decimal('0')))
+
+    async def test_tron_withdrawal_uses_global_balance_without_any_deposit_address(self):
+        user,quote=await self.withdrawal_fixture('TRON')
+        self.assertEqual(self.ledger.db.execute('SELECT COUNT(*) FROM wallet_addresses').fetchone()[0],0)
+        self.assertFalse(any(call[0]=='getClientAddress' for call in self.provider.calls))
+        canonical=json.loads(self.ledger.db.execute('SELECT body FROM wallet_withdrawal_intents WHERE intent_id=?',(quote['intent_id'],)).fetchone()[0])
+        self.assertNotIn('source_address',canonical)
+        response=await self.client.post('/api/wallet/withdrawal-create',json={'intent_id':quote['intent_id']},headers=user)
+        result=await response.json()
+        self.assertEqual(response.status,200,result)
+        self.assertEqual(result['network'],'TRON')
+        self.assertEqual(self.withdrawal_create_calls[0]['amount'],'10')
+        self.assertEqual(self.withdrawal_create_calls[0]['max_fee'],'1')
+        self.assertNotIn('source_address',self.withdrawal_create_calls[0])
+        self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('89'),Decimal('11')))
+
+    async def test_can_withdraw_on_another_network_without_allocating_addresses(self):
+        user,quote=await self.withdrawal_fixture('ETH')
+        response=await self.client.post('/api/wallet/withdrawal-create',json={'intent_id':quote['intent_id']},headers=user)
+        self.assertEqual(response.status,200)
+        self.assertEqual(self.ledger.db.execute('SELECT COUNT(*) FROM wallet_addresses').fetchone()[0],0)
+        self.assertEqual(self.withdrawal_create_calls[0]['network'],'ETH')
 
 
 if __name__ == '__main__':
