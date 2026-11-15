@@ -13,6 +13,7 @@ from unittest.mock import patch
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from wallet_backend import ApiError, Ledger, install_wallet, telegram_user
+from wallet_operations import prepare_operations, save_address
 
 TOKEN = 'unit-test-provider-key'
 BOT = 'unit-test-telegram-key'
@@ -100,6 +101,19 @@ class AuthenticationTests(unittest.TestCase):
             ledger.deposit(payload)
             ledger.deposit({**payload, 'deposit_id': 'b', 'credited': '0.000000000000000001'})
             self.assertEqual(str(ledger.balance('one', 'ETH')[0]), '123456789012.123456789012345679')
+            ledger.db.close()
+
+    def test_address_migration_preserves_legacy_usdt_and_separates_assets(self):
+        with tempfile.TemporaryDirectory() as path:
+            ledger = Ledger(path + '/db')
+            ledger.db.execute('CREATE TABLE wallet_addresses (user_id TEXT, network TEXT, body TEXT, PRIMARY KEY(user_id,network))')
+            ledger.db.execute('INSERT INTO wallet_addresses VALUES (?,?,?)', ('tg:1', 'ETH', json.dumps({'network': 'ETH', 'address': 'legacy'})))
+            prepare_operations(ledger)
+            save_address(ledger, 'tg:1', {'network': 'ETH', 'address': 'ether'}, 'ETH')
+            rows = ledger.db.execute('SELECT asset,body FROM wallet_addresses WHERE user_id=? ORDER BY asset', ('tg:1',)).fetchall()
+            self.assertEqual([(row['asset'], json.loads(row['body'])['address']) for row in rows], [('ETH', 'ether'), ('USDT', 'legacy')])
+            prepare_operations(ledger)  # Restart is idempotent.
+            self.assertEqual(ledger.db.execute('SELECT COUNT(*) FROM wallet_addresses').fetchone()[0], 2)
             ledger.db.close()
 
     def test_legacy_accounts_are_migrated_and_rich_profiles_are_kept(self):
@@ -317,6 +331,14 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         foreign = await (await self.client.get('/api/wallet/addresses', headers={'X-Telegram-Init-Data': init_data(999)})).json()
         self.assertEqual(foreign['items'], [])
         self.assertEqual((await self.client.post('/api/wallet/address', json={'network': 'TRON'}, headers=user)).status, 400)
+
+    async def test_permanent_address_does_not_silently_use_another_asset(self):
+        user = {'X-Telegram-Init-Data': init_data(123)}
+        response = await self.client.post('/api/wallet/address', json={'network': 'ETH', 'asset': 'ETH'}, headers=user)
+        self.assertEqual(response.status, 400)
+        await self.client.post('/api/wallet/address', json={'network': 'ETH', 'asset': 'USDT'}, headers=user)
+        rows = await (await self.client.get('/api/wallet/addresses', headers=user)).json()
+        self.assertEqual(rows['items'][0]['asset'], 'USDT')
 
     async def test_full_audit_is_owner_only_and_compares_exact_net(self):
         self.assertEqual((await self.client.get('/api/wallet/provider-audit', headers={'X-Telegram-Init-Data': init_data(123)})).status, 403)
