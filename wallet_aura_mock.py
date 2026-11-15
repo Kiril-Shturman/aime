@@ -28,6 +28,8 @@ class State:
         self.orders = {}
         self.qr_payments = {}
         self.withdrawals = {}
+        self.events = {}
+        self.event_redeliveries = {}
         self.products = {"crypto_processing": True, "cards": True,
                          "sbp_buy": True, "qr_pay": True}
         self.addresses = {}
@@ -503,6 +505,77 @@ def make_app():
         item = state.withdrawals.get(request.match_info["withdrawal_id"])
         return web.json_response(item) if item else envelope("not_found", "Withdrawal not found", 404)
 
+    async def list_events(request):
+        items = list(state.events.values())
+        items.sort(key=lambda item: item["created_at"], reverse=True)
+        requested_types = []
+        for raw_type in request.query.getall("type", []):
+            requested_types.extend(part for part in raw_type.split(",") if part)
+        if requested_types:
+            items = [item for item in items if item["type"] in requested_types]
+        created_after = request.query.get("created_after")
+        created_before = request.query.get("created_before")
+        if created_after:
+            items = [item for item in items if item["created_at"] > created_after]
+        if created_before:
+            items = [item for item in items if item["created_at"] < created_before]
+        limit = min(max(int(request.query.get("limit", "25")), 1), 100)
+        return web.json_response({"data": items[:limit], "next_cursor": None})
+
+    async def get_event(request):
+        item = state.events.get(request.match_info["event_id"])
+        return web.json_response(item) if item else envelope(
+            "not_found", "Event not found", 404
+        )
+
+    async def redeliver_event(request):
+        event_id = request.match_info["event_id"]
+        item = state.events.get(event_id)
+        if not item:
+            return envelope("not_found", "Event not found", 404)
+        key = request.headers.get("Idempotency-Key")
+        if not key:
+            return envelope(
+                "idempotency_key_required", "Idempotency-Key is required", 400
+            )
+        previous = state.event_redeliveries.get(key)
+        if previous:
+            if previous[0] != event_id:
+                return envelope(
+                    "idempotency_key_reused", "Idempotency-Key was reused", 409
+                )
+            return web.json_response(previous[1], headers={"Idempotency-Key": key})
+        if item["delivery"]["status"] == "pending":
+            return envelope("failed_precondition", "Event is already pending", 412)
+        result = json.loads(json.dumps(item))
+        result["delivery"].update({
+            "status": "pending", "attempts": 0,
+            "next_attempt_at": "2026-11-15T15:00:00Z",
+            "delivered_at": None, "failed_at": None,
+        })
+        state.events[event_id] = result
+        state.event_redeliveries[key] = (event_id, result)
+        return web.json_response(result, headers={"Idempotency-Key": key})
+
+    async def create_event(request):
+        body = await request.json()
+        event_id = str(body.get("id") or uuid.uuid4())
+        item = {
+            "api_version": body.get("api_version", "3.17.0"),
+            "created_at": body.get("created_at", "2026-11-15T14:00:00Z"),
+            "data": body.get("data", {}),
+            "delivery": body.get("delivery", {
+                "status": "failed", "attempts": 3,
+                "next_attempt_at": None, "delivered_at": None,
+                "failed_at": "2026-11-15T14:01:00Z", "last_status_code": 410,
+            }),
+            "id": event_id,
+            "occurred_at": body.get("occurred_at", "2026-11-15T13:59:59Z"),
+            "type": body.get("type", "card.operation"),
+        }
+        state.events[event_id] = item
+        return web.json_response(item)
+
     async def create_deposit(request):
         body = await request.json()
         customer_id = str(body.get("customer_id") or "")
@@ -569,11 +642,15 @@ def make_app():
     app.router.add_get("/v1/partner/qr-payments/{payment_id}", qr_payment)
     app.router.add_get("/v1/partner/withdrawals", list_withdrawals)
     app.router.add_get("/v1/partner/withdrawals/{withdrawal_id}", withdrawal)
+    app.router.add_get("/v1/partner/events", list_events)
+    app.router.add_get("/v1/partner/events/{event_id}", get_event)
+    app.router.add_post("/v1/partner/events/{event_id}/redeliver", redeliver_event)
     app.router.add_post("/mock/deposits", create_deposit)
     app.router.add_post("/mock/kyc", set_kyc)
     app.router.add_post("/mock/cards", create_card)
     app.router.add_post("/mock/card-operations", create_card_operation)
     app.router.add_post("/mock/orders", create_order_event)
+    app.router.add_post("/mock/events", create_event)
     return app
 
 

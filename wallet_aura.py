@@ -10,6 +10,7 @@ import hmac
 import json
 import re
 import time
+import uuid
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import quote, urlsplit
@@ -39,6 +40,15 @@ LATER_ERROR_CODES = {
     "sbp_buy_temporarily_unavailable", "sbp_buy_daily_qr_limit",
     "sbp_buy_daily_paid_qr_limit", "sbp_buy_fiat_daily_limit",
     "sbp_buy_fiat_monthly_limit",
+}
+WEBHOOK_EVENT_TYPES = {
+    "card.opened", "card.failed", "card.status_changed", "card.operation",
+    "card.cancelled", "card.otp", "order.completed", "order.expired",
+    "order.failed", "order.cancelled", "customer.kyc.updated",
+    "deposit.confirmed", "withdraw.sent", "withdraw.confirmed",
+    "withdraw.failed", "customer.deposit.pending",
+    "customer.deposit.confirmed", "customer.deposit.rejected",
+    "qr_payment.completed", "qr_payment.failed", "qr_payment.refunded",
 }
 
 
@@ -333,6 +343,60 @@ def _aura_datetime(value, label):
     if parsed.tzinfo is None:
         raise ValueError("Invalid Aura " + label)
     return parsed
+
+
+def _event_result(payload, expected_event_id=None):
+    required = {
+        "api_version", "created_at", "data", "delivery", "id",
+        "occurred_at", "type",
+    }
+    if not isinstance(payload, dict) or set(payload) != required:
+        raise ValueError("Invalid Aura event response")
+    event_id = str(payload.get("id") or "")
+    try:
+        uuid.UUID(event_id)
+    except (ValueError, TypeError, AttributeError):
+        raise ValueError("Invalid Aura event id")
+    if expected_event_id is not None and event_id != expected_event_id:
+        raise ValueError("Aura event id mismatch")
+    event_type = payload.get("type")
+    if event_type not in WEBHOOK_EVENT_TYPES:
+        raise ValueError("Invalid Aura event type")
+    api_version = payload.get("api_version")
+    if api_version is not None and (not isinstance(api_version, str) or not api_version):
+        raise ValueError("Invalid Aura event api_version")
+    _aura_datetime(payload.get("created_at"), "event created_at")
+    occurred_at = payload.get("occurred_at")
+    if occurred_at is not None:
+        _aura_datetime(occurred_at, "event occurred_at")
+    if not isinstance(payload.get("data"), dict):
+        raise ValueError("Invalid Aura event data")
+    delivery = payload.get("delivery")
+    delivery_required = {
+        "attempts", "delivered_at", "failed_at", "last_status_code",
+        "next_attempt_at", "status",
+    }
+    if not isinstance(delivery, dict) or set(delivery) != delivery_required:
+        raise ValueError("Invalid Aura event delivery")
+    attempts = delivery.get("attempts")
+    if isinstance(attempts, bool) or not isinstance(attempts, int) or attempts < 0:
+        raise ValueError("Invalid Aura event delivery attempts")
+    if delivery.get("status") not in {"pending", "delivered", "failed"}:
+        raise ValueError("Invalid Aura event delivery status")
+    last_status = delivery.get("last_status_code")
+    if last_status is not None and (
+        isinstance(last_status, bool) or not isinstance(last_status, int)
+    ):
+        raise ValueError("Invalid Aura event delivery status code")
+    for key in ("delivered_at", "failed_at", "next_attempt_at"):
+        value = delivery.get(key)
+        if value is not None:
+            _aura_datetime(value, "event delivery " + key)
+    return {
+        "api_version": api_version, "created_at": payload["created_at"],
+        "data": payload["data"], "delivery": dict(delivery), "id": event_id,
+        "occurred_at": occurred_at, "type": event_type,
+    }
 
 
 def _card_otp_result(payload, expected_card_id):
@@ -731,6 +795,70 @@ class AuraClient:
             card_id = quote(_safe_identifier(card_id, "card id"), safe="")
             path = "/cards/" + card_id + "/operations"
         return await self.request("GET", path, params=params)
+
+    async def list_events(self, *, event_types=None, created_after=None,
+                          created_before=None, cursor=None, limit=25):
+        try:
+            limit = int(limit)
+        except (TypeError, ValueError):
+            raise ValueError("Invalid Aura events limit")
+        if not 1 <= limit <= 100:
+            raise ValueError("Invalid Aura events limit")
+        params = [("limit", str(limit))]
+        if event_types is not None:
+            if isinstance(event_types, str):
+                event_types = [event_types]
+            if not isinstance(event_types, (list, tuple)) or not event_types:
+                raise ValueError("Invalid Aura event types")
+            for event_type in event_types:
+                event_type = str(event_type)
+                if event_type not in WEBHOOK_EVENT_TYPES:
+                    raise ValueError("Invalid Aura event type")
+                params.append(("type", event_type))
+        for name, value in (
+            ("created_after", created_after), ("created_before", created_before),
+        ):
+            if value is not None:
+                _aura_datetime(value, "events " + name)
+                params.append((name, value))
+        if cursor:
+            params.append(("cursor", str(cursor)))
+        payload = await self.request("GET", "/events", params=params)
+        if not isinstance(payload, dict) or set(payload) != {"data", "next_cursor"}:
+            raise ValueError("Invalid Aura event list")
+        if not isinstance(payload["data"], list):
+            raise ValueError("Invalid Aura event list data")
+        next_cursor = payload["next_cursor"]
+        if next_cursor is not None and not isinstance(next_cursor, str):
+            raise ValueError("Invalid Aura event cursor")
+        return {
+            "data": [_event_result(item) for item in payload["data"]],
+            "next_cursor": next_cursor,
+        }
+
+    async def get_event(self, event_id):
+        event_id = str(event_id)
+        try:
+            uuid.UUID(event_id)
+        except (ValueError, TypeError, AttributeError):
+            raise ValueError("Invalid Aura event id")
+        payload = await self.request("GET", "/events/" + quote(event_id, safe=""))
+        return _event_result(payload, event_id)
+
+    async def redeliver_event(self, event_id, *, idempotency_key):
+        event_id = str(event_id)
+        try:
+            uuid.UUID(event_id)
+        except (ValueError, TypeError, AttributeError):
+            raise ValueError("Invalid Aura event id")
+        payload = await self.request(
+            "POST", "/events/" + quote(event_id, safe="") + "/redeliver",
+            idempotency_key=idempotency_key,
+        )
+        result = _event_result(payload, event_id)
+        if result["delivery"]["status"] != "pending":
+            raise ValueError("Aura event redelivery is not pending")
+        return result
 
     async def get_sbp_rate(self):
         return await self.request("GET", "/rate")

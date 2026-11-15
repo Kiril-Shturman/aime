@@ -83,6 +83,15 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def safe_aura_event_for_admin(event):
+    """Return an event without exposing short-lived card secrets to the UI."""
+    result = json.loads(json.dumps(event))
+    if result.get('type') == 'card.otp' and isinstance(result.get('data'), dict):
+        if 'code' in result['data']:
+            result['data']['code'] = '[REDACTED]'
+    return result
+
+
 def telegram_payload(raw, token):
     if not raw or not token:
         return None
@@ -768,6 +777,48 @@ def install_wallet(app, root, owner_check):
                         ledger, aura_client, aura_environment
                     )
                 return web.json_response(result)
+            if action == 'admin-aura-events' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                event_types = []
+                for value in request.query.getall('type', []):
+                    event_types.extend(part for part in value.split(',') if part)
+                result = await aura_client.list_events(
+                    event_types=event_types or None,
+                    created_after=request.query.get('created_after'),
+                    created_before=request.query.get('created_before'),
+                    cursor=request.query.get('cursor'),
+                    limit=request.query.get('limit', '25'),
+                )
+                return web.json_response({
+                    'data': [safe_aura_event_for_admin(item) for item in result['data']],
+                    'next_cursor': result['next_cursor'],
+                })
+            if action == 'admin-aura-event' and request.method == 'GET':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                event_id = request.query.get('event_id')
+                if not event_id:
+                    raise ValueError('event_id is required')
+                return web.json_response(safe_aura_event_for_admin(
+                    await aura_client.get_event(event_id)
+                ))
+            if action == 'admin-aura-event-redeliver' and request.method == 'POST':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'event_id'}:
+                    raise ValueError('event_id is required')
+                key = request.headers.get('Idempotency-Key', '')
+                if not 1 <= len(key) <= 200:
+                    raise ApiError(
+                        'idempotency_key_required', 'Idempotency-Key is required', 400
+                    )
+                return web.json_response(safe_aura_event_for_admin(
+                    await aura_client.redeliver_event(
+                        str(body['event_id']), idempotency_key=key
+                    )
+                ))
             if action == 'admin-aura-qr-payments' and request.method == 'GET':
                 return web.json_response({'data': [dict(row) for row in ledger.db.execute(
                     'SELECT payment_id,status,amount_rub,rate,total_usdt,merchant,provider_updated_at '

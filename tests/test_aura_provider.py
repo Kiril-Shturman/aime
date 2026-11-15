@@ -919,6 +919,34 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.client.list_withdrawals())["data"][0]["id"], "wd_one")
         self.assertEqual((await self.client.get_withdrawal("wd_one"))["status"], "confirmed")
 
+    async def test_event_feed_get_and_idempotent_redelivery(self):
+        event_id = "c1f0a9b8-7d6e-4c5b-9a8f-0e1d2c3b4a59"
+        created = await self.mock.post(
+            "/mock/events", json={
+                "id": event_id, "type": "card.otp",
+                "data": {"card_id": "9b5f3c2a-1d4e-4f60-8a7b-2c3d4e5f6a7b",
+                         "code": "582130"},
+            },
+        )
+        self.assertEqual(created.status, 200)
+        listed = await self.client.list_events(event_types=["card.otp"], limit=25)
+        self.assertEqual([item["id"] for item in listed["data"]], [event_id])
+        fetched = await self.client.get_event(event_id)
+        self.assertEqual(fetched["data"]["code"], "582130")
+        redelivered = await self.client.redeliver_event(
+            event_id, idempotency_key="redeliver-event-one"
+        )
+        self.assertEqual(redelivered["delivery"]["status"], "pending")
+        self.assertEqual(redelivered["delivery"]["attempts"], 0)
+        repeated = await self.client.redeliver_event(
+            event_id, idempotency_key="redeliver-event-one"
+        )
+        self.assertEqual(repeated, redelivered)
+        with self.assertRaises(ValueError):
+            await self.client.list_events(event_types=["unknown.event"])
+        with self.assertRaises(ValueError):
+            await self.client.get_event("not-a-uuid")
+
     async def test_product_capability_is_authoritative(self):
         self.assertTrue(await self.client.product_enabled("sbp_buy"))
         self.mock.app["state"].products["sbp_buy"] = False
@@ -1422,6 +1450,42 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await kyc.json())["error"]["name"], "sbp_buy_not_enabled")
         rate = await self.wpay.get("/api/wallet/aura-sbp-rate", headers=self.owner)
         self.assertEqual(rate.status, 403, await rate.text())
+
+    async def test_admin_event_recovery_redacts_otp_and_requires_admin(self):
+        event_id = "e7d6c5b4-a392-4817-8f6e-5d4c3b2a1908"
+        created = await self.mock.post(
+            "/mock/events", json={
+                "id": event_id, "type": "card.otp",
+                "data": {"card_id": "9b5f3c2a-1d4e-4f60-8a7b-2c3d4e5f6a7b",
+                         "code": "901245"},
+            },
+        )
+        self.assertEqual(created.status, 200)
+        forbidden = await self.wpay.get(
+            "/api/wallet/admin-aura-events",
+            headers={"X-Telegram-Init-Data": init_data(323)},
+        )
+        self.assertEqual(forbidden.status, 403)
+        listed = await self.wpay.get(
+            "/api/wallet/admin-aura-events?type=card.otp&limit=25",
+            headers=self.owner,
+        )
+        self.assertEqual(listed.status, 200, await listed.text())
+        self.assertEqual((await listed.json())["data"][0]["data"]["code"], "[REDACTED]")
+        fetched = await self.wpay.get(
+            "/api/wallet/admin-aura-event?event_id=" + event_id,
+            headers=self.owner,
+        )
+        self.assertEqual(fetched.status, 200, await fetched.text())
+        self.assertEqual((await fetched.json())["data"]["code"], "[REDACTED]")
+        redelivered = await self.wpay.post(
+            "/api/wallet/admin-aura-event-redeliver", headers={
+                **self.owner, "Idempotency-Key": "admin-redeliver-one",
+            }, json={"event_id": event_id},
+        )
+        self.assertEqual(redelivered.status, 200, await redelivered.text())
+        delivery = (await redelivered.json())["delivery"]
+        self.assertEqual((delivery["status"], delivery["attempts"]), ("pending", 0))
 
 
 if __name__ == "__main__":
