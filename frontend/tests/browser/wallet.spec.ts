@@ -756,6 +756,7 @@ const custodyNetworks = [
   { network: "ETH", name: "Ethereum", asset: "ETH" },
   { network: "BSC", name: "BNB Smart Chain", asset: "BNB" },
   { network: "TON", name: "TON", asset: "TON" },
+  { network: "SOL", name: "Solana", asset: "SOL" },
 ];
 const custodyStatus = {
   configured: true,
@@ -774,9 +775,11 @@ const publicCustodyWallet = (network = "BTC") => ({
   address:
     network === "BTC"
       ? "tb1q05fktjrqrr5ze7ntzukj0g0wrj5he0xmdk7a5j"
-      : network === "TON"
-        ? "0QDTcUOcJvwtMx4R6Vbb-uYCtJELCzAAvdD439fc2Y0UNiNG"
-        : "0x919538116b4F25f1CE01429fd9Ed7964556bf565",
+      : network === "SOL"
+        ? "FAe4sisG95oZ42w7buUn5qEE4TAnfTTFPiguZUHmhiF"
+        : network === "TON"
+          ? "0QDTcUOcJvwtMx4R6Vbb-uYCtJELCzAAvdD439fc2Y0UNiNG"
+          : "0x919538116b4F25f1CE01429fd9Ed7964556bf565",
   provider: "wpay",
   deposit_enabled: false,
   withdraw_enabled: false,
@@ -841,7 +844,7 @@ for (const theme of ["light", "dark"])
     expect(creates).toBe(1);
   });
 
-test("wallet creation supports all four networks without secret parameters", async ({
+test("wallet creation supports all five networks without secret parameters", async ({
   page,
 }) => {
   await setup(page, "light");
@@ -870,7 +873,7 @@ test("wallet creation supports all four networks without secret parameters", asy
       panel.getByLabel("Адрес " + network.name, { exact: true }),
     ).toBeVisible();
   }
-  expect(requested).toEqual(["BTC", "ETH", "BSC", "TON"]);
+  expect(requested).toEqual(["BTC", "ETH", "BSC", "TON", "SOL"]);
 });
 
 test("wallet generation failure never displays a fake address", async ({

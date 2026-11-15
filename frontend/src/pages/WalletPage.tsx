@@ -2792,7 +2792,7 @@ function ProfileSection({
           <ProfileListItem
             link
             title="Мои кошельки"
-            subtitle="Адреса BTC, ETH, BNB и TON"
+            subtitle="Адреса BTC, ETH, BNB, TON и SOL"
             onClick={() => setProfilePage("wallets")}
           />
           <ProfileListItem

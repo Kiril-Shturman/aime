@@ -48,7 +48,7 @@ class CustodyTests(unittest.TestCase):
     def test_each_network_is_recoverable_and_no_plaintext_seed_is_stored(self):
         seed = bytes(range(32))
         with patch("wallet_custody.secrets.token_bytes", return_value=seed):
-            for network in ["BTC", "ETH", "BSC", "TON"]:
+            for network in ["BTC", "ETH", "BSC", "TON", "SOL"]:
                 wallet = self.custody.create("tg:123", network)
                 row = self.row(wallet)
                 self.assertEqual(
@@ -96,10 +96,10 @@ class CustodyTests(unittest.TestCase):
         wallets = [
             self.custody.create(uid, net)
             for uid in ["tg:123", "tg:999"]
-            for net in ["BTC", "ETH", "BSC", "TON"]
+            for net in ["BTC", "ETH", "BSC", "TON", "SOL"]
         ]
-        self.assertEqual(len({item["address"] for item in wallets}), 8)
-        self.assertEqual(len(self.custody.wallets("tg:123")), 4)
+        self.assertEqual(len({item["address"] for item in wallets}), 10)
+        self.assertEqual(len(self.custody.wallets("tg:123")), 5)
         self.assertFalse(
             set(item["id"] for item in self.custody.wallets("tg:123"))
             & set(item["id"] for item in self.custody.wallets("tg:999"))
@@ -109,7 +109,7 @@ class CustodyTests(unittest.TestCase):
         main = Custody(
             self.ledger, ApiError, True, self.files["public_file"], "mainnet"
         )
-        for network in ["BTC", "ETH", "BSC", "TON"]:
+        for network in ["BTC", "ETH", "BSC", "TON", "SOL"]:
             test = self.custody.create("tg:123", network)
             real = main.create("tg:123", network)
             self.assertNotEqual(test["id"], real["id"])
@@ -192,6 +192,42 @@ class CustodyTests(unittest.TestCase):
             derive(seed, "BSC", "mainnet")["address"],
             "0x9858EfFD232B4033E47d90003D41EC34EcaEda94",
         )
+
+    def test_solana_seed_vector_cluster_and_recovery(self):
+        # Checked independently with @solana/web3.js Keypair.fromSeed.
+        seed = bytes(range(32))
+        vector = derive(seed, "SOL", "testnet")
+        self.assertEqual(
+            vector["address"], "FAe4sisG95oZ42w7buUn5qEE4TAnfTTFPiguZUHmhiF"
+        )
+        self.assertEqual(
+            vector["public_key"],
+            "03a107bff3ce10be1d70dd18e74bc09967e4d6309ba50d5f1ddc8664125531b8",
+        )
+        self.assertEqual(
+            vector["specification"],
+            {"recipe": "solana-ed25519-seed-v1", "cluster": "devnet"},
+        )
+        main = derive(seed, "SOL", "mainnet")
+        self.assertEqual(main["address"], vector["address"])
+        self.assertEqual(main["specification"]["cluster"], "mainnet-beta")
+        with self.assertRaises(ValueError):
+            derive(bytes(64), "SOL", "testnet")
+        first = self.custody.create("tg:123", "SOL")
+        self.assertEqual(
+            verify_wallet(self.row(first), self.private)["address"], first["address"]
+        )
+        other = Ledger(str(self.root / "db"))
+        try:
+            prepare(other)
+            self.assertEqual(
+                Custody(
+                    other, ApiError, True, self.files["public_file"], "testnet"
+                ).create("tg:123", "SOL"),
+                first,
+            )
+        finally:
+            other.db.close()
 
     def test_ton_v4r2_vector_and_recipe(self):
         vector = derive(bytes(range(32)), "TON", "mainnet")
@@ -408,7 +444,7 @@ class CustodyRouteTests(unittest.IsolatedAsyncioTestCase):
             {"network": "BTC", "user_id": "tg:999"},
             {"network": "BTC", "chain_env": "mainnet"},
             {"network": "ETH", "seed": "00" * 32},
-            {"network": "SOL"},
+            {"network": "XRP"},
             {"network": "https://attacker"},
             {"network": []},
             {"network": "BTC", "private_key": "bad"},

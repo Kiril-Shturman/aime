@@ -12,8 +12,17 @@ import uuid
 from pathlib import Path
 
 from aiohttp import web
-from bip_utils import Bip44, Bip44Coins, Bip84, Bip84Coins, Ton, TonAddrVersions
+from bip_utils import (
+    Base58Encoder,
+    Bip44,
+    Bip44Coins,
+    Bip84,
+    Bip84Coins,
+    Ton,
+    TonAddrVersions,
+)
 from nacl.public import PublicKey, SealedBox
+from nacl.signing import SigningKey
 from nacl.exceptions import CryptoError
 from pytoniq_core import Address as TonAddress
 
@@ -22,6 +31,7 @@ NETWORKS = {
     "ETH": {"name": "Ethereum", "asset": "ETH"},
     "BSC": {"name": "BNB Smart Chain", "asset": "BNB"},
     "TON": {"name": "TON", "asset": "TON"},
+    "SOL": {"name": "Solana", "asset": "SOL"},
 }
 PUBLIC_KEY_KIND = "wpay.custody.public.v1"
 PRIVATE_KEY_KIND = "wpay.custody.private.v1"
@@ -47,7 +57,18 @@ def derive(seed, network, chain_env):
         or len(seed) not in {32, 64}
     ):
         raise ValueError("Unsupported wallet derivation")
-    if network == "TON":
+    if network == "SOL":
+        # Solana Keypair.fromSeed-compatible Ed25519 key, not a mnemonic/HD path.
+        if len(seed) != 32:
+            raise ValueError("Solana requires a 32-byte Ed25519 seed")
+        public_bytes = bytes(SigningKey(seed).verify_key)
+        address = Base58Encoder.Encode(public_bytes)
+        public_key = public_bytes.hex()
+        specification = {
+            "recipe": "solana-ed25519-seed-v1",
+            "cluster": "mainnet-beta" if chain_env == "mainnet" else "devnet",
+        }
+    elif network == "TON":
         # A raw Ed25519 seed, not a TON/BIP39 mnemonic. Recovery uses these exact bytes.
         if len(seed) != 32:
             raise ValueError("TON requires a 32-byte Ed25519 seed")

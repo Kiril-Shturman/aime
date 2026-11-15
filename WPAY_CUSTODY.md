@@ -1,11 +1,11 @@
 # Own wallet address generation
 
 Branch: `wpay/self-hosted-crypto`. Implements the address-generation portion of
-custody for BTC, Ethereum, BNB Smart Chain and TON. No production/demo deployment.
+custody for BTC, Ethereum, BNB Smart Chain, TON and Solana. No production/demo deployment.
 
 ## User-visible behavior
 
-Profile → “Мои кошельки” lists the four networks. Creation is free; the API creates
+Profile → “Мои кошельки” lists the five networks. Creation is free; the API creates
 one permanent wallet per authenticated user/network/environment. Repeating a POST,
 including from concurrent processes, returns the existing address. Private keys
 and recovery seeds are never returned to the browser. Copy copies only an address.
@@ -35,6 +35,12 @@ in public metadata and inside the encrypted recovery envelope:
   wallet_id 698983191. Non-bounceable UQ mainnet or test-only 0Q form.
   No mnemonic is generated, and a binary recovery seed is not a Tonkeeper/BIP39
   recovery phrase. Future recovery/signing must use the recorded recipe.
+
+- SOL: raw 32-byte Ed25519 seed, compatible with Solana Keypair.fromSeed;
+  address is the Base58-encoded 32-byte public key. Recipe solana-ed25519-seed-v1.
+  Test environment uses devnet, production metadata uses mainnet-beta. Solana
+  addresses themselves have no cluster prefix; cluster is explicit metadata.
+  Independent random seeds are generated per user/network/environment.
 
 Pinned dependencies: bip-utils 2.12.3, PyNaCl 1.6.2, pytoniq-core-fork 0.1.48.
 The BTC recipe matches the official BIP84 vector. The TON vector was also checked
@@ -128,9 +134,9 @@ excluded from the existing admin database browser. Routes work without GoSwap.
 
 ## Validation and remaining scope
 
-105 backend tests (previous 85 plus 20 custody cases), 3 frontend unit tests and
+106 backend tests (previous 85 plus 21 custody cases), 3 frontend unit tests and
 26 Playwright tests pass. Production TypeScript/Vite build and frontend lint pass;
-existing repository warnings remain. Tests cover recovery on all four networks,
+existing repository warnings remain. Tests cover recovery on all five networks,
 known vectors, encrypted-only storage, wrong keys, swapped/tampered envelopes,
 rotation, immutable rows, restart, two independent SQLite connections creating
 concurrently, HTTP retries, ownership, no monetary changes, private-file
@@ -147,3 +153,5 @@ References:
 - https://github.com/ebellocchia/bip_utils
 - https://github.com/ton-org/ton/blob/master/src/wallets/v4/WalletContractV4.ts
 - https://pynacl.readthedocs.io/en/latest/public/#nacl-public-sealedbox
+
+Solana seed vector checked with the official SDK: https://solana-foundation.github.io/solana-web3.js/classes/Keypair.html#fromSeed
