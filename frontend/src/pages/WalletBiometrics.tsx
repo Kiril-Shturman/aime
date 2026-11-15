@@ -104,6 +104,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     [label, setLabel] = useState("Face ID"),
     [locked, setLocked] = useState(false),
     [allowed, setAllowed] = useState(false),
+    [approved, setApproved] = useState(false),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const alive = useRef(true),
@@ -144,6 +145,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
         enabledRef.current &&
         (background.current || document.visibilityState === "hidden")
       ) {
+        setApproved(false);
         obscured(true);
         setLocked(true);
       }
@@ -211,9 +213,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
           !background.current &&
           document.visibilityState !== "hidden"
         ) {
-          obscured(false);
-          setLocked(false);
-          setAllowed(true);
+          setApproved(true);
           haptic("success");
         }
       } catch (reason) {
@@ -223,6 +223,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
               ? reason.message
               : "Не удалось подтвердить вход",
           );
+          setApproved(false);
           setLocked(true);
           obscured(true);
         }
@@ -312,6 +313,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
       } catch {
         if (!cancelled) {
           setReady(true);
+          setApproved(false);
           setLocked(true);
           obscured(true);
           setError(
@@ -323,7 +325,9 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     void initialize();
     const deactivate = () => {
       background.current = true;
+      setApproved(false);
       if (enabledRef.current && !busyRef.current) {
+        setApproved(false);
         obscured(true);
         setLocked(true);
       }
@@ -331,6 +335,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     const activate = () => {
       background.current = false;
       if (enabledRef.current && !busyRef.current) {
+        setApproved(false);
         obscured(true);
         setLocked(true);
         void unlock(false);
@@ -349,6 +354,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
         bio &&
         !bio.isAccessGranted
       ) {
+        setApproved(false);
         obscured(true);
         setLocked(true);
         setError("Разрешите биометрию для WPay в настройках Telegram.");
@@ -410,9 +416,9 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
           </div>
           {ready && locked && <WalletLockBadge />}
           <div className="wpay-lock-copy">
-            <h1>{ready ? "WPay заблокирован" : "WPay"}</h1>
+            <h1>{approved ? "Можно открыть WPay" : ready ? "WPay заблокирован" : "WPay"}</h1>
             <p>
-              {ready
+              {approved ? "Вход подтверждён" : ready
                 ? `Подтвердите вход с помощью ${label}`
                 : "Проверяем защиту устройства…"}
             </p>
@@ -429,11 +435,18 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
                 rounded
                 disabled={busy}
                 className="!m-0 !w-full"
-                onClick={() => void unlock(true)}
+                onClick={() => {
+                  if (!approved) { void unlock(true); return; }
+                  if (background.current || document.visibilityState === "hidden" || busyRef.current) return;
+                  setApproved(false);
+                  obscured(false);
+                  setLocked(false);
+                  setAllowed(true);
+                }}
               >
                 <span className="wpay-unlock-label">
                   <FaceIdIcon />
-                  <span>{busy ? "Подтверждение…" : "Разблокировать"}</span>
+                  <span>{busy ? "Подтверждение…" : approved ? "Открыть" : "Разблокировать"}</span>
                 </span>
               </Button>
             )}
