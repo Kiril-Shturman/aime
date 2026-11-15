@@ -1,0 +1,97 @@
+.wpay-admin-f7 {
+  --f7-theme-color: #0a7aff;
+  --f7-theme-color-rgb: 10, 122, 255;
+  --admin-bg: #f3f5f9;
+  --admin-surface: #fff;
+  --admin-surface-muted: #f7f8fb;
+  --admin-border: #e6e9f0;
+  --admin-text: #151922;
+  --admin-muted: #778093;
+  --admin-sidebar: #101522;
+  --admin-sidebar-text: #f7f9ff;
+  --admin-sidebar-muted: #8993a8;
+  color: var(--admin-text);
+  background: var(--admin-bg);
+}
+
+.dark.wpay-admin-f7 {
+  --admin-bg: #090b10;
+  --admin-surface: #141821;
+  --admin-surface-muted: #191e28;
+  --admin-border: #252b37;
+  --admin-text: #f4f6fb;
+  --admin-muted: #929bad;
+  --admin-sidebar: #0c0f16;
+}
+
+.wpay-admin-f7 .framework7-root { overflow: hidden; }
+.wpay-admin-layout { display: grid; grid-template-columns: 272px minmax(0,1fr); width: 100%; height: 100%; min-height: 0; background: var(--admin-bg); }
+.wpay-admin-sidebar { position: relative; z-index: 20; display: flex; min-height: 0; flex-direction: column; padding: 24px 18px 20px; color: var(--admin-sidebar-text); background: linear-gradient(180deg,#121827 0%,var(--admin-sidebar) 100%); box-shadow: 10px 0 32px rgba(12,20,35,.09); }
+.wpay-admin-brand { display: flex; align-items: center; gap: 12px; padding: 0 8px 22px; }
+.wpay-admin-brandmark { display: grid; width: 40px; height: 40px; place-items: center; border-radius: 13px; color: #fff; font-size: 20px; font-weight: 800; background: linear-gradient(145deg,#278cff,#065bd8); box-shadow: 0 9px 24px rgba(10,122,255,.28),inset 0 1px rgba(255,255,255,.35); }
+.wpay-admin-brand b,.wpay-admin-brand small { display:block; }
+.wpay-admin-brand b { font-size: 18px; letter-spacing: -.02em; }
+.wpay-admin-brand small { margin-top: 1px; color: var(--admin-sidebar-muted); font-size: 11px; letter-spacing: .04em; }
+.wpay-admin-f7 .wpay-admin-back.button,.wpay-admin-f7 .wpay-admin-navitem.button { justify-content: flex-start; gap: 12px; height: 46px; min-height: 46px; padding: 0 14px; border-radius: 13px; text-transform: none; letter-spacing: 0; font-size: 14px; font-weight: 600; }
+.wpay-admin-f7 .wpay-admin-back.button { margin: 0 0 18px; color: #c1c8d8; background: rgba(255,255,255,.055); }
+.wpay-admin-nav { display: flex; flex-direction: column; gap: 5px; }
+.wpay-admin-f7 .wpay-admin-navitem.button { margin: 0; color: var(--admin-sidebar-muted); background: transparent; }
+.wpay-admin-f7 .wpay-admin-navitem.button:hover { color: #fff; background: rgba(255,255,255,.055); }
+.wpay-admin-f7 .wpay-admin-navitem.button.is-active { color:#fff; background: linear-gradient(135deg,#1684ff,#0867e3); box-shadow: 0 10px 24px rgba(10,105,225,.25); }
+.wpay-admin-secure { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 13px; border: 1px solid rgba(61,220,151,.14); border-radius: 14px; color: #79e7b5; background: rgba(46,204,135,.075); }
+.wpay-admin-secure b,.wpay-admin-secure small { display:block; }
+.wpay-admin-secure b { font-size: 12px; }
+.wpay-admin-secure small { margin-top:2px; color:#719888; font-size:10px; }
+
+.wpay-admin-workspace { display: grid; min-width: 0; min-height: 0; grid-template-rows: 82px minmax(0,1fr); }
+.wpay-admin-topbar { display:flex; align-items:center; justify-content:space-between; gap:24px; padding: 0 32px; border-bottom:1px solid var(--admin-border); background: color-mix(in srgb,var(--admin-surface) 92%,transparent); backdrop-filter: blur(20px); }
+.wpay-admin-topbar h1 { margin:2px 0 0; color:var(--admin-text); font-size:25px; line-height:1.2; letter-spacing:-.03em; }
+.wpay-admin-kicker { color:var(--admin-muted); font-size:11px; font-weight:650; letter-spacing:.06em; text-transform:uppercase; }
+.wpay-admin-topactions { display:flex; align-items:center; gap:14px; }
+.wpay-admin-online { display:flex; align-items:center; gap:7px; padding:7px 11px; border:1px solid #cdeedc; border-radius:999px; color:#188451; background:#effaf4; font-size:11px; font-weight:650; }
+.dark .wpay-admin-online { border-color:#204938; color:#70d9a8; background:#12291f; }
+.wpay-admin-online i { width:7px; height:7px; border-radius:50%; background:#25b46d; box-shadow:0 0 0 4px rgba(37,180,109,.12); }
+.wpay-admin-f7 .wpay-admin-refresh.button { width:40px; height:40px; margin:0; color:var(--admin-text); background:var(--admin-surface-muted); border:1px solid var(--admin-border); }
+.wpay-admin-content { min-width:0; min-height:0; overflow:auto; padding:28px 32px 48px; }
+.wpay-admin-content>div,.wpay-admin-content>section { max-width:1500px; margin-left:auto; margin-right:auto; }
+.wpay-admin-loading { display:flex; min-height:320px; align-items:center; justify-content:center; flex-direction:column; gap:14px; color:var(--admin-muted); font-size:13px; }
+.wpay-admin-error { max-width:1500px; margin:0 auto 18px; padding:13px 16px; border:1px solid #ffd0d4; border-radius:12px; color:#b4232f; background:#fff2f3; font-size:13px; }
+.dark .wpay-admin-error { border-color:#5f2930; color:#ff9ba3; background:#2a1519; }
+
+.wpay-admin-card { padding:20px; border:1px solid var(--admin-border); border-radius:16px; color:var(--admin-text); background:var(--admin-surface); box-shadow:0 2px 7px rgba(25,35,55,.025),0 12px 32px rgba(25,35,55,.035); }
+.wpay-admin-card h2 { margin:0; font-size:15px; letter-spacing:-.01em; }
+.wpay-admin-input { box-sizing:border-box; width:100%; min-height:44px; padding:10px 13px; border:1px solid var(--admin-border); border-radius:11px; outline:0; color:var(--admin-text); background:var(--admin-surface); font:inherit; font-size:13px; transition:border .15s,box-shadow .15s; }
+.wpay-admin-input:focus { border-color:#64a9ff; box-shadow:0 0 0 3px rgba(10,122,255,.12); }
+.wpay-admin-input::placeholder { color:var(--admin-muted); }
+.wpay-admin-table-wrap { overflow:auto; border:1px solid var(--admin-border); border-radius:14px; background:var(--admin-surface); }
+.wpay-admin-table { width:100%; min-width:900px; border-collapse:collapse; font-size:12px; }
+.wpay-admin-table th { position:sticky; top:0; z-index:2; padding:11px 13px; border-bottom:1px solid var(--admin-border); color:var(--admin-muted); background:var(--admin-surface-muted); text-align:left; font-size:10px; font-weight:700; letter-spacing:.055em; text-transform:uppercase; }
+.wpay-admin-table td { max-width:320px; padding:12px 13px; border-bottom:1px solid var(--admin-border); vertical-align:middle; color:var(--admin-text); }
+.wpay-admin-table tr:last-child td { border-bottom:0; }
+.wpay-admin-table tbody tr:hover { background:color-mix(in srgb,var(--f7-theme-color) 4%,transparent); }
+.wpay-admin-table-cell { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wpay-admin-table details summary { color:var(--f7-theme-color); cursor:pointer; }
+.wpay-admin-table pre { max-width:520px; max-height:280px; overflow:auto; white-space:pre-wrap; word-break:break-all; }
+.wpay-admin-desktop-only { display:block; }
+.wpay-admin-mobile-only { display:none; }
+
+@media (max-width: 900px) {
+  .wpay-admin-layout { grid-template-columns:78px minmax(0,1fr); }
+  .wpay-admin-sidebar { padding:14px 9px; }
+  .wpay-admin-brand { justify-content:center; padding:0 0 18px; }
+  .wpay-admin-brand>span:last-child,.wpay-admin-back span,.wpay-admin-navitem span,.wpay-admin-secure { display:none; }
+  .wpay-admin-f7 .wpay-admin-back.button,.wpay-admin-f7 .wpay-admin-navitem.button { justify-content:center; width:52px; padding:0; margin-left:auto; margin-right:auto; }
+  .wpay-admin-workspace { grid-template-rows:70px minmax(0,1fr); }
+  .wpay-admin-topbar { padding:0 16px; }
+  .wpay-admin-topbar h1 { font-size:21px; }
+  .wpay-admin-kicker,.wpay-admin-online { display:none; }
+  .wpay-admin-content { padding:18px 12px 34px; }
+  .wpay-admin-card { padding:15px; border-radius:15px; }
+  .wpay-admin-desktop-only { display:none; }
+  .wpay-admin-mobile-only { display:block; }
+}
+
+@media (min-width: 1500px) {
+  .wpay-admin-layout { grid-template-columns:292px minmax(0,1fr); }
+  .wpay-admin-content { padding-left:42px; padding-right:42px; }
+}
