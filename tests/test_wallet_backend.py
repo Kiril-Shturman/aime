@@ -283,6 +283,32 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await confirmed.json())['result']['status'], 'processing')
         self.assertEqual(self.provider.calls[-1], ('createWithdrawal', params, True))
 
+    async def test_admin_can_leave_only_usdt_trc20_and_server_enforces_it(self):
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        member = {'X-Telegram-Init-Data': init_data(999)}
+        denied = await self.client.post(
+            '/api/wallet/admin-assets', json={'preset': 'usdt_trc20_only'},
+            headers=member,
+        )
+        self.assertEqual(denied.status, 403)
+        before = await self.client.get('/api/wallet/admin-crypto', headers=admin)
+        self.assertGreater(len((await before.json())['asset_routes']), 1)
+        applied = await self.client.post(
+            '/api/wallet/admin-assets', json={'preset': 'usdt_trc20_only'},
+            headers=admin,
+        )
+        self.assertEqual(applied.status, 200, await applied.text())
+        enabled = (await applied.json())['enabled']
+        self.assertEqual(enabled, {'USDT': ['TRON']})
+        status = await self.client.get('/api/wallet/status')
+        self.assertEqual((await status.json())['asset_routes'], {'USDT': ['TRON']})
+        blocked = await self.client.post(
+            '/api/wallet/deposit', json={'asset': 'ETH', 'network': 'ETH'},
+            headers=member,
+        )
+        self.assertEqual(blocked.status, 403)
+        self.assertEqual((await blocked.json())['error']['name'], 'ASSET_DISABLED')
+
 
 class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = WalletRoutesTests.asyncSetUp

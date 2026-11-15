@@ -157,6 +157,7 @@ export interface WalletStatus {
   configured: boolean;
   capabilities: WalletCapabilities;
   routes: { qr_pay: "aura" | "goswap" | null };
+  asset_routes: Record<string, string[]>;
 }
 export interface QrQuote {
   quote_id: string;

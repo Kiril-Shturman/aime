@@ -46,7 +46,9 @@ export default function WalletDeposit({
   const wallet = useLiveWallet(),
     asset = defaultAsset;
   const meta = options.find((item) => item.code === asset);
-  const supported = networks[asset] ?? [];
+  const supported = (wallet.assetRoutes[asset] ?? []).filter((network) =>
+    (networks[asset] ?? []).includes(network),
+  );
   const [retryAt, setRetryAt] = useState(0);
   useEffect(() => {
     if (!retryAt) return;

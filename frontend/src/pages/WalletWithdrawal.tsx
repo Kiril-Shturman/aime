@@ -306,7 +306,9 @@ function CoreWithdrawalForm({ method }: { method: WithdrawalMethod }) {
             <option value="" disabled>
               Выберите сеть
             </option>
-            {assetNetworks.USDT.map((code) => (
+            {(wallet.assetRoutes.USDT ?? []).filter((code) =>
+              assetNetworks.USDT.includes(code),
+            ).map((code) => (
               <option key={code} value={code}>
                 {networkNames[code]} · {networkStandards[code]}
               </option>

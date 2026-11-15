@@ -1,6 +1,5 @@
 import WalletAssetAvatar from "./WalletAssetAvatar";
 import {
-  assetNetworks as previewNetworks,
   permanentAddressNetworks as addressNetworks,
   addressesForAsset,
   type WalletAddress,
@@ -149,7 +148,9 @@ export default function WalletAssetPanel({
           const result = await walletRequest<{ items?: WalletAddress[] }>(
             "addresses",
           );
-          const networks = addressNetworks[code] ?? [];
+          const networks = (addressNetworks[code] ?? []).filter((network) =>
+            (wallet.assetRoutes[code] ?? []).includes(network),
+          );
           const saved = addressesForAsset(result.items ?? [], code).filter(
             (item) => item.address && networks.includes(item.network),
           );
@@ -335,7 +336,7 @@ export default function WalletAssetPanel({
             </p>
           )}
           <div className="wpay-portfolio-networks">
-            {(previewNetworks[code] ?? []).map((network) => {
+            {(wallet.assetRoutes[code] ?? []).map((network) => {
               const item = demoPortfolio
                 ? portfolioExamples[network]
                 : addresses.find((row) => row.network === network);
@@ -596,11 +597,11 @@ export default function WalletAssetPanel({
               <WalletCreateAddress
                 key={creatingAddress ? "open-" + code : "closed-" + code}
                 code={code}
-                networks={(
-                  addressNetworks[code] ??
-                  previewNetworks[code] ??
-                  []
-                ).filter((network) => network !== "TRON")}
+                networks={(addressNetworks[code] ?? [])
+                  .filter((network) =>
+                    (wallet.assetRoutes[code] ?? []).includes(network),
+                  )
+                  .filter((network) => network !== "TRON")}
                 icon={icon}
                 color={color}
                 iconColor={iconColor}
