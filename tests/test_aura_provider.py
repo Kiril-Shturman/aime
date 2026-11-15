@@ -573,6 +573,13 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         card_operations = await self.client.list_card_operations(card["id"])
         self.assertEqual(len(all_operations["data"]), 1)
         self.assertEqual(len(card_operations["data"]), 1)
+        frozen = await self.client.freeze_card(card["id"])
+        self.assertEqual(frozen, {
+            "balance": "25", "card_id": card["id"],
+            "card_number_masked": "**** 4242", "currency": "USDT",
+            "frozen": True, "operations_count": 1, "operations_value": "3",
+            "owner_id": customer_id, "status": "opened",
+        })
 
     async def test_card_create_and_recharge_contracts_are_idempotent(self):
         uid = "tg:card-money"
@@ -1069,6 +1076,44 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(await response.json(), otp)
         persisted = "\n".join(self.app["wpay_ledger"].db.iterdump())
         self.assertNotIn(otp["code"], persisted)
+
+    async def test_card_freeze_is_owner_scoped_and_updates_safe_local_state(self):
+        registered = await self.wpay.post(
+            "/api/wallet/aura-customer", headers=self.owner, json={}
+        )
+        customer_id = (await registered.json())["customer_id"]
+        created = await self.mock.post(
+            "/mock/cards", json={"customer_id": customer_id, "kind": "virtual"}
+        )
+        card_payload = await created.json()
+        raw, signature = signed(card_payload["webhook"])
+        await self.wpay.post(
+            "/api/wallet/aura-webhook", data=raw,
+            headers={"X-Aura-Signature-V2": signature},
+        )
+        await self.wpay.post("/api/wallet/admin-aura-process", headers=self.owner)
+        card_id = card_payload["card"]["id"]
+        foreign = await self.wpay.post(
+            "/api/wallet/aura-card-freeze",
+            headers={"X-Telegram-Init-Data": init_data(323)},
+            json={"card_id": card_id},
+        )
+        self.assertEqual(foreign.status, 404)
+        provider_balance = self.mock.app["state"].balance
+        response = await self.wpay.post(
+            "/api/wallet/aura-card-freeze", headers=self.owner,
+            json={"card_id": card_id},
+        )
+        self.assertEqual(response.status, 200, await response.text())
+        result = await response.json()
+        self.assertTrue(result["frozen"])
+        self.assertEqual(result["owner_id"], customer_id)
+        self.assertEqual(result["status"], "opened")
+        self.assertEqual(self.mock.app["state"].balance, provider_balance)
+        local = self.app["wpay_ledger"].db.execute(
+            "SELECT frozen,status FROM aura_cards WHERE card_id=?", (card_id,)
+        ).fetchone()
+        self.assertEqual((local["frozen"], local["status"]), (1, "opened"))
 
     async def test_card_issue_route_reserves_spends_and_failed_event_refunds_once(self):
         ledger = self.app["wpay_ledger"]

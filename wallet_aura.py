@@ -371,6 +371,39 @@ def _card_otp_result(payload, expected_card_id):
     }
 
 
+def _card_control_result(payload, expected_card_id, expected_frozen):
+    required = {
+        "balance", "card_id", "card_number_masked", "currency", "frozen",
+        "operations_count", "operations_value", "owner_id", "status",
+    }
+    if not isinstance(payload, dict) or not required.issubset(payload):
+        raise ValueError("Invalid Aura card control response")
+    card_id = _safe_identifier(payload.get("card_id"), "card id")
+    if card_id != expected_card_id:
+        raise ValueError("Aura card control card_id mismatch")
+    owner_id = _safe_identifier(payload.get("owner_id"), "card owner id")
+    if payload.get("currency") != "USDT" or payload.get("frozen") is not expected_frozen:
+        raise ValueError("Invalid Aura card control state")
+    status = str(payload.get("status") or "")
+    if status not in {"processing", "opened", "failed_to_open", "cancelled"}:
+        raise ValueError("Invalid Aura card status")
+    balance = str(_decimal(payload.get("balance"), allow_zero=True))
+    operations_value = str(_decimal(payload.get("operations_value"), allow_zero=True))
+    operations_count = payload.get("operations_count")
+    if (isinstance(operations_count, bool) or not isinstance(operations_count, int)
+            or operations_count < 0):
+        raise ValueError("Invalid Aura card operations_count")
+    masked = payload.get("card_number_masked")
+    if masked is not None and (not isinstance(masked, str) or len(masked) > 64):
+        raise ValueError("Invalid Aura masked card number")
+    return {
+        "balance": balance, "card_id": card_id, "card_number_masked": masked,
+        "currency": "USDT", "frozen": expected_frozen,
+        "operations_count": operations_count, "operations_value": operations_value,
+        "owner_id": owner_id, "status": status,
+    }
+
+
 def _retry_policy(code, status):
     if code in FINAL_ERROR_CODES:
         return "no"
@@ -557,6 +590,12 @@ class AuraClient:
     async def cancel_card(self, card_id):
         card_id = quote(_safe_identifier(card_id, "card id"), safe="")
         return await self.request("POST", "/cards/" + card_id + "/cancel")
+
+    async def freeze_card(self, card_id):
+        card_id = _safe_identifier(card_id, "card id")
+        path_id = quote(card_id, safe="")
+        payload = await self.request("POST", "/cards/" + path_id + "/freeze")
+        return _card_control_result(payload, card_id, True)
 
     async def list_cards(self, *, cursor=None, limit=100):
         params = {"limit": min(max(int(limit), 1), 100)}

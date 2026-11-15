@@ -315,6 +315,28 @@ def make_app():
         state.balance += Decimal("70" if item["kind"] == "physical" else "20")
         return web.json_response(item)
 
+    async def freeze_card(request):
+        card_id = request.match_info["card_id"]
+        item = state.cards.get(card_id)
+        if not item:
+            return envelope("card_not_found", "Card not found", 404)
+        if item.get("status") != "opened":
+            return envelope("card_not_active", "Card is not active", 409)
+        if item.get("frozen") is True:
+            return envelope("card_already_frozen", "Card is already frozen", 409)
+        item["frozen"] = True
+        operations = [row for row in state.card_operations if row["card_id"] == card_id]
+        return web.json_response({
+            "balance": "25", "card_id": card_id,
+            "card_number_masked": item.get("masked_pan"), "currency": "USDT",
+            "frozen": True, "operations_count": len(operations),
+            "operations_value": str(sum(
+                (Decimal(row["amount"]) for row in operations), Decimal("0")
+            )),
+            "owner_id": item.get("owner_id") or item.get("customer_id"),
+            "status": item["status"],
+        })
+
     async def create_card(request):
         body = await request.json()
         customer_id = str(body.get("customer_id") or "")
@@ -485,6 +507,7 @@ def make_app():
     app.router.add_get("/v1/partner/cards/{card_id}", card)
     app.router.add_post("/v1/partner/cards/{card_id}/recharge", recharge_card)
     app.router.add_post("/v1/partner/cards/{card_id}/cancel", cancel_card)
+    app.router.add_post("/v1/partner/cards/{card_id}/freeze", freeze_card)
     app.router.add_get("/v1/partner/rate", sbp_rate)
     app.router.add_get("/v1/partner/orders", orders)
     app.router.add_get("/v1/partner/orders/{order_id}", order)
