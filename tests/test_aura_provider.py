@@ -380,6 +380,43 @@ class AuraUnitTests(unittest.TestCase):
         )
         self.assertFalse(valid)
 
+    def test_documented_card_status_changed_sets_frozen_without_replacing_lifecycle_status(self):
+        opened = {
+            "api_version": "2.5.0", "event": "card.opened",
+            "event_id": "b1f0a9b8-7d6e-4c5b-9a8f-0e1d2c3b4a58",
+            "occurred_at": "2026-09-11T09:59:00.000Z",
+            "partner_id": MOCK_PARTNER,
+            "data": {
+                "card_id": "9b5f3c2a-1d4e-4f60-8a7b-2c3d4e5f6a7b",
+                "card_number_masked": "411111••••••1234",
+                "owner_id": self.customer, "status": "opened",
+            },
+        }
+        raw, signature = signed(opened)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        changed = {
+            "api_version": "2.5.0", "event": "card.status_changed",
+            "event_id": "c1f0a9b8-7d6e-4c5b-9a8f-0e1d2c3b4a59",
+            "occurred_at": "2026-09-11T10:00:00.000Z",
+            "partner_id": MOCK_PARTNER,
+            "data": {
+                "card_id": opened["data"]["card_id"], "status": "frozen",
+            },
+        }
+        raw, signature = signed(changed)
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        self.assertEqual(process_inbox(self.ledger, "test"), 0)
+        card = self.ledger.db.execute(
+            "SELECT * FROM aura_cards WHERE card_id=?", (opened["data"]["card_id"],)
+        ).fetchone()
+        self.assertEqual(card["status"], "opened")
+        self.assertEqual(card["frozen"], 1)
+        self.assertEqual(card["masked_pan"], "411111••••••1234")
+        self.assertEqual(card["provider_updated_at"], changed["occurred_at"])
+        self.assertTrue(json.loads(card["body"])["frozen"])
+
     def test_documented_card_failed_is_terminal_without_masked_number(self):
         event = {
             "api_version": "2.5.0", "event": "card.failed",

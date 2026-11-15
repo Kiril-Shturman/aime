@@ -1368,11 +1368,18 @@ def _settle_card_recharge(ledger, environment, operation_id, status):
 
 
 def _store_card_event(ledger, environment, kind, data, occurred_at=None):
+    if not isinstance(data, dict):
+        raise ValueError("Aura card event data must be an object")
     card_id = _safe_identifier(data.get("card_id") or data.get("id"), "card id")
     existing = ledger.db.execute(
         "SELECT * FROM aura_cards WHERE card_id=? AND environment=?",
         (card_id, environment),
     ).fetchone()
+    if kind == "card.status_changed":
+        if set(data) != {"card_id", "status"} or data.get("status") != "frozen":
+            raise ValueError("Invalid Aura card.status_changed data")
+        if not existing:
+            raise ValueError("Unknown Aura card for status change")
     # Webhook customer_id is Aura's internal UUID. Ownership is deliberately
     # resolved through owner_id, which is the partner's own customer id.
     customer_id = data.get("owner_id") or (existing["customer_id"] if existing else None)
@@ -1394,8 +1401,14 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
         "card.opened": "opened", "card.failed": "failed_to_open",
         "card.cancelled": "cancelled",
     }.get(kind)
-    status = str(data.get("status") or event_status or "unknown")[:100]
-    frozen = data.get("frozen") is True or status == "frozen"
+    if kind == "card.status_changed":
+        # `frozen` is a control flag, not a lifecycle status. Aura explicitly
+        # says the card otherwise remains the same (normally status=opened).
+        status = existing["status"]
+        frozen = True
+    else:
+        status = str(data.get("status") or event_status or "unknown")[:100]
+        frozen = data.get("frozen") is True or status == "frozen"
     kind_value = data.get("kind") or data.get("card_type") or data.get("type")
     kind_value = str(kind_value)[:100] if kind_value is not None else None
     masked_pan = data.get("card_number_masked") or data.get("masked_pan") or data.get("last4")
@@ -1416,6 +1429,12 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
     else:
         tracking = None
     safe = _redact_card_data(data)
+    if kind == "card.status_changed":
+        try:
+            prior = json.loads(existing["body"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            prior = {}
+        safe = {**prior, "card_id": card_id, "status": status, "frozen": True}
     stamp = time.time()
     ledger.db.execute(
         "INSERT INTO aura_cards "
@@ -1717,6 +1736,12 @@ def process_inbox(ledger, environment, limit=20):
             elif kind in {"order.completed", "order.failed", "order.expired", "order.cancelled"}:
                 _store_sbp_order(ledger, environment, kind, data)
             elif kind in {"card.opened", "card.failed", "card.cancelled", "card.status_changed", "card.delivery_updated"}:
+                if kind == "card.status_changed":
+                    if not isinstance(event.get("api_version"), str) or not event["api_version"]:
+                        raise ValueError("Invalid Aura card.status_changed api_version")
+                    _aura_datetime(
+                        event.get("occurred_at"), "card.status_changed occurred_at"
+                    )
                 _store_card_event(
                     ledger, environment, kind, data, event.get("occurred_at")
                 )

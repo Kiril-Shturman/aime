@@ -964,8 +964,9 @@ def install_wallet(app, root, owner_check):
                     raise ValueError('Aura card owner mismatch')
                 ledger.db.execute(
                     'UPDATE aura_cards SET frozen=?,status=?,masked_pan=COALESCE(?,masked_pan),'
-                    'updated_at=? WHERE card_id=? AND user_id=? AND environment=?',
-                    (1 if freeze else 0, result['status'], result['card_number_masked'], time.time(),
+                    'provider_updated_at=?,updated_at=? '
+                    'WHERE card_id=? AND user_id=? AND environment=?',
+                    (1 if freeze else 0, result['status'], result['card_number_masked'], now(), time.time(),
                      card_id, uid, aura_environment),
                 )
                 return web.json_response(result)
