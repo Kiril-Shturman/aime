@@ -104,17 +104,17 @@ ordinary support messages.
   `Retry-After`, then retry the identical request (and the identical
   idempotency key for monetary POSTs).
 - `resource_exhausted` means a volume/state quota such as a daily allowance, not
-  a transient request rate. Do not schedule blind retries; wait for an explicit
-  state change/new period and surface the condition to user/admin.
+  a transient request rate. Its catalogue policy is `wait`: do not schedule
+  blind retries; wait for an explicit state change/new period and surface the
+  condition to user/admin. A received `Retry-After` is a service hint (default
+  60 seconds), not permission to turn this into a generic timed retry loop.
 - `unavailable` (503) is transient and is documented with a default five-second
   `Retry-After`; retries still need bounded exponential backoff and the same
   idempotency key for monetary operations.
-- The supplied text is internally inconsistent: one header table says
-  `resource_exhausted` can carry its own Retry-After (or 60 seconds), while the
-  following section says Retry-After comes only with `rate_limited`. Implement
-  the conservative rule until the error catalogue resolves it: never blindly
-  retry `resource_exhausted`, even if a header is present; record the suggested
-  time only as operator metadata.
+- The earlier rate-limit prose was internally inconsistent about Retry-After on
+  `resource_exhausted`. The generated error catalogue resolves the operational
+  behavior: keep the `wait` classification, never blindly retry, and record any
+  suggested delay as operator/scheduler metadata only.
 - `GET /cards/{card_id}/credentials` has a separate, much smaller bucket. It is
   never called by background sync/prefetch; only an authenticated owner action
   may consume this budget.
@@ -321,9 +321,12 @@ ordinary support messages.
 - The first `GET /customers/{id}/deposit-addresses` has a side effect: it creates
   the default permanent address. WPay must call it only after the customer asks
   to deposit, not during registration.
-- Additional permanent addresses can be issued with optional `label`; there is
-  currently no address count limit, though `deposit_address_limit_reached` is
-  reserved for a future limit.
+- Additional permanent addresses can be issued with optional `label`. An
+  earlier guide section says there is currently no limit and the limit error is
+  reserved, but the generated error catalogue says the maximum is 100. Treat
+  100 as the conservative current cap, reuse an existing address on
+  `deposit_address_limit_reached`, and confirm the authoritative schema before
+  exposing unlimited address creation.
 - Fee is either fixed USDT per deposit or percentage. `GET /deposits-fees` is the
   source of truth. A fixed fee can consume a small deposit entirely.
 - Credit the user only after `confirmed`, using the provider's exact
@@ -420,6 +423,62 @@ protobuf/service contract and operational requirements first.
   before releasing a reservation or sending another money-moving request.
 - Admin health should group failures by code/type and show request IDs so an
   operator can contact Aura without searching application logs.
+
+## Error catalogue received so far
+
+The supplied catalogue reports 66 total codes. The first received fragment
+contains 42; keep the generated OpenAPI catalogue authoritative and append the
+remaining 24 before implementation is considered contract-complete.
+
+- **Fix and retry (`after_fix`)**: `invalid_argument` (400), `amount_required`
+  (400), `amount_out_of_range` (400; `details.min/max`), `insufficient_funds`
+  (412), `kyc_required` (412), `card_fee_changed` (412), `card_frozen` (409),
+  `address_invalid` (400), `customer_not_found` (404),
+  `deposit_address_not_found` (404), `deposit_not_found` (404),
+  `deposit_address_limit_reached` (409), `not_found` (404), `already_exists`
+  (409), `failed_precondition` (412), `idempotency_key_required` (400),
+  `idempotency_key_reused` (409), `payload_too_large` (413),
+  `method_not_allowed` (405), `unsupported_media_type` (415),
+  `feature_not_enabled` (400), `quote_expired` (400) and
+  `sbp_buy_amount_unavailable` (412).
+- **Wait for state (`wait`)**: `kyc_pending` (412), `card_paused` (412),
+  `pin_change_rate_limited` (429; same PIN after Retry-After),
+  `withdrawal_limit_exceeded` (412; rolling window details), and
+  `resource_exhausted` (429; capacity/state quota, Retry-After is a hint).
+- **Retry later (`later`)**: `card_float_exhausted` (412; nothing debited,
+  retry later or use a smaller amount), `unavailable` (503; ambiguous outcome,
+  same request/key after 5-second Retry-After then backoff), `internal` (500),
+  `rate_unavailable` (503; retry after roughly one minute), and
+  `sbp_buy_temporarily_unavailable` (503; honor Retry-After).
+- **Retry after exact delay (`after_delay`)**: `rate_limited` (429), using the
+  same request after Retry-After. Known `details.scope` values are
+  `credentials_reveal` (5 credential reveals/minute/partner), `pin_change`
+  (one successful change/card/60 seconds) and `pin_change_partner` (60 PIN
+  attempts/minute/partner).
+- **Do not retry (`no`)**: `kyc_rejected` (normally 412; identity import uses
+  422 `kyc_error` with reason/terminal/status), `card_kind_unavailable` (412),
+  `card_already_requested` (412), `card_request_not_cancelable` (409),
+  `card_not_active` (409), `card_controls_unavailable` (409),
+  `unauthenticated` (401) and `ip_not_allowed` (403).
+
+Route-specific actions captured from this fragment:
+
+- `card_fee_changed` requires rereading `GET /cards-fees` and explicit user
+  acceptance/recalculation before a new issuance request.
+- `card_frozen` requires successful unfreeze before recharge. `card_not_active`
+  includes `processing`, `failed_to_open` and `cancelled` in `details.status`.
+- `card_controls_unavailable` is a support case with `request_id`; a temporary
+  provider control failure is instead 503 `unavailable` with `details.reason`.
+- `address_invalid` includes malformed TRON addresses and addresses owned by
+  Aura itself; never bypass this validation locally.
+- `customer_not_found` may be repaired by idempotent customer registration.
+  Resource-not-found codes must still enforce partner ownership.
+- Unknown paths/methods return 401 before routing when the API key is invalid,
+  so authentication failures must not be misdiagnosed as missing endpoints.
+- `quote_expired` requires a fresh quote and presentation of the changed price;
+  never silently substitute a new quote into an accepted intent.
+- `feature_not_enabled` applies to preview request fields, distinct from a
+  product capability being unavailable for the partner key.
 
 ## Sandbox facts
 
@@ -540,8 +599,8 @@ card-details contract and PCI implications must be reviewed before implementatio
 - Remaining details: exact response schemas for every recorded route; SBP
   quote/rate/order fields and authoritative REST-versus-gRPC availability;
   complete card-operation schemas/types; QR-payment route schemas; rate-limit
-  error-code contradiction for `resource_exhausted`; full error catalogue; AML
-  review fields; and the
+  semantics for route-specific scopes; the remaining 24 of 66 error codes; AML
+  review fields; the authoritative deposit-address cap; and the
   authoritative withdrawal contract resolving the v3.5-removal versus v3.17
   route-list contradiction.
 - Partner-specific fee/limit responses or redacted examples.
