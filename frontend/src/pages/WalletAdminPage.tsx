@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
-import { Activity, ArrowLeft, Coins, Database, LayoutDashboard, Megaphone, RefreshCw, Search, Send, Server, ShieldCheck, Users } from 'lucide-react'
+import { Activity, ArrowLeft, Coins, Database, LayoutDashboard, Megaphone, Menu, RefreshCw, Search, Send, Server, ShieldCheck, Users, X } from 'lucide-react'
 import Framework7 from 'framework7/lite-bundle'
 import Framework7React, { App as F7App, Button as F7Button, Preloader as F7Preloader } from 'framework7-react'
 import { walletRequest } from '../lib/wallet-api'
@@ -45,6 +45,7 @@ export default function WalletAdminPage() {
   const [error,setError]=useState('')
   const [table,setTable]=useState('')
   const [query,setQuery]=useState('')
+  const [mobileNavOpen,setMobileNavOpen]=useState(false)
 
   const load=useCallback(async()=>{
     setLoading(true);setError('')
@@ -69,15 +70,17 @@ export default function WalletAdminPage() {
   const ready=payloadTab===tab
   return <F7App name="WPay Admin" theme="ios" darkMode={theme==='dark'} className={`wpay-f7-root wpay-admin-f7 ios ${theme==='dark'?'dark':''}`} style={{height:'100%'} as CSSProperties}>
     <div className="wpay-admin-layout">
-      <aside className="wpay-admin-sidebar">
+      <button aria-label="Закрыть меню" className={`wpay-admin-nav-backdrop ${mobileNavOpen?'is-open':''}`} onClick={()=>setMobileNavOpen(false)}/>
+      <aside className={`wpay-admin-sidebar ${mobileNavOpen?'is-open':''}`}>
+        <button aria-label="Закрыть меню" className="wpay-admin-nav-close" onClick={()=>setMobileNavOpen(false)}><X size={21}/></button>
         <div className="wpay-admin-brand"><span className="wpay-admin-brandmark">W</span><span><b>WPay</b><small>Admin Console</small></span></div>
         <F7Button large className="wpay-admin-back" onClick={()=>{window.location.href='/wallet'}}><ArrowLeft size={19}/><span>В кошелёк</span></F7Button>
-        <nav className="wpay-admin-nav">{tabs.map(item=><F7Button large fill={tab===item.id} key={item.id} onClick={()=>setTab(item.id)} className={`wpay-admin-navitem ${tab===item.id?'is-active':''}`}><item.icon size={20}/><span>{item.label}</span></F7Button>)}</nav>
+        <nav className="wpay-admin-nav">{tabs.map(item=><F7Button large fill={tab===item.id} key={item.id} onClick={()=>{setTab(item.id);setMobileNavOpen(false)}} className={`wpay-admin-navitem ${tab===item.id?'is-active':''}`}><item.icon size={20}/><span>{item.label}</span></F7Button>)}</nav>
         <div className="wpay-admin-secure"><ShieldCheck size={18}/><span><b>Защищённый вход</b><small>Telegram Admin ID</small></span></div>
       </aside>
       <section className="wpay-admin-workspace">
         <header className="wpay-admin-topbar">
-          <div><div className="wpay-admin-kicker">WPay / Панель управления</div><h1>{tabs.find(item=>item.id===tab)?.label}</h1></div>
+          <div className="wpay-admin-heading"><F7Button round className="wpay-admin-menu" aria-label="Открыть меню" onClick={()=>setMobileNavOpen(true)}><Menu size={21}/></F7Button><div><div className="wpay-admin-kicker">WPay / Панель управления</div><h1>{tabs.find(item=>item.id===tab)?.label}</h1></div></div>
           <div className="wpay-admin-topactions"><span className="wpay-admin-online"><i/> Система работает</span><F7Button round className="wpay-admin-refresh" onClick={()=>void load()} disabled={loading}>{loading?<F7Preloader size={18}/>:<RefreshCw size={18}/>}</F7Button></div>
         </header>
         <div className="wpay-admin-content">
@@ -118,7 +121,7 @@ function DataView({data,table,query,setTable,setQuery}:{data:{users:UsersData;da
   const dbColumns=data.database.columns.filter(key=>key!=='detail'&&key!=='body').slice(0,8).map(key=>({key,label:key}))
   return <div className="space-y-4">
     <div className="inline-grid grid-cols-2 gap-1 rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface-muted)] p-1">{(['users','tables'] as const).map(value=><button key={value} onClick={()=>setMode(value)} className={`rounded-lg px-5 py-2 text-xs font-semibold ${mode===value?'bg-blue-500 text-white shadow-sm':'text-[var(--admin-muted)]'}`}>{value==='users'?'Пользователи':'Таблицы БД'}</button>)}</div>
-    {mode==='users'?<section className="space-y-3"><div className="text-xs text-[var(--admin-muted)]">Всего пользователей: {data.users.total}</div><div className="wpay-admin-desktop-only"><AdminTable rows={data.users.items} columns={userColumns}/></div><div className="wpay-admin-mobile-only space-y-3">{data.users.items.map((user,index)=><article key={index} className={card}><div className="flex justify-between gap-3"><div><b>{user.first_name?text(user.first_name):text(user.user_id)}</b><div className="text-sm opacity-50">{user.telegram_username?`@${text(user.telegram_username)} · `:''}{text(user.user_id)}</div></div><span className="text-xs text-emerald-600">{text(user.status)}</span></div><div className="mt-3 grid grid-cols-2 gap-2 text-xs"><span>Последний вход<br/><b>{date(user.last_seen)}</b></span><span>Бот запущен<br/><b>{date(user.bot_started_at)}</b></span><span>Операций: <b>{text(user.event_count)}</b></span><span>Адресов: <b>{text(user.address_count)}</b></span></div>{details(user)}</article>)}</div></section>:
+    {mode==='users'?<section className="space-y-3"><div className="text-xs text-[var(--admin-muted)]">Всего пользователей: {data.users.total}</div><div className="wpay-admin-desktop-only"><AdminTable rows={data.users.items} columns={userColumns}/></div><div className="wpay-admin-mobile-only wpay-admin-mobile-list">{data.users.items.map((user,index)=><article key={index} className="wpay-admin-mobile-item"><div className="wpay-admin-user-main"><span className="wpay-admin-avatar">{text(user.first_name||user.telegram_username||user.user_id).slice(0,1).toUpperCase()}</span><div className="min-w-0"><b className="block truncate">{user.first_name?text(user.first_name):text(user.user_id)}</b><div className="truncate text-xs opacity-45">{user.telegram_username?`@${text(user.telegram_username)} · `:''}{text(user.user_id)}</div></div><span className="wpay-admin-status">{text(user.status)}</span></div><div className="wpay-admin-user-stats"><span><small>Последний вход</small><b>{date(user.last_seen)}</b></span><span><small>Активность</small><b>{text(user.event_count)} оп. · {text(user.address_count)} адр.</b></span></div>{details(user)}</article>)}</div></section>:
     <section className="space-y-3"><div className="grid gap-2 md:grid-cols-[280px_minmax(260px,1fr)_100px]"><select value={table} onChange={event=>setTable(event.target.value)} className={input}>{Object.entries(data.database.tables).map(([name,count])=><option key={name} value={name}>{name} ({count})</option>)}</select><div className="relative"><Search className="absolute left-3 top-3.5 opacity-35" size={17}/><input value={draft} onChange={event=>setDraft(event.target.value)} className={`${input} !pl-10`} placeholder="Поиск по всей таблице"/></div><button onClick={()=>setQuery(draft)} className="rounded-xl bg-blue-500 px-5 py-3 text-xs font-semibold text-white">Найти</button></div><div className="wpay-admin-desktop-only"><AdminTable rows={data.database.items} columns={dbColumns}/></div><div className="wpay-admin-mobile-only space-y-3">{data.database.items.map((row,index)=><article key={index} className={card}><b className="text-xs text-blue-500">rowid {text(row.rowid)}</b>{Object.entries(row).filter(([key])=>key!=='rowid').slice(0,5).map(([key,value])=><div key={key} className="mt-2 grid grid-cols-[90px_1fr] gap-2 text-xs"><span className="truncate opacity-45">{key}</span><span className="break-all">{typeof value==='object'?json(value):text(value)}</span></div>)}{details(row)}</article>)}</div></section>}
   </div>
 }
