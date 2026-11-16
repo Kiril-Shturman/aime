@@ -916,10 +916,10 @@
   margin: 16px 24px;
   border-radius: 20px;
   overflow: hidden;
-  background: #e7ebf2;
+  background: #fff;
 }
 .dark .wpay-passport-photo-review {
-  background: #202c40;
+  background: #252b36;
 }
 .wpay-passport-photo-review > img {
   display: block;
@@ -927,7 +927,7 @@
   height: 155px;
   object-fit: contain;
 }
-.wpay-passport-photo-review > button {
+.wpay-passport-photo-review > button:not(.wpay-passport-recognize) {
   position: absolute;
   right: 8px;
   top: 8px;
@@ -941,7 +941,7 @@
   color: #263653;
   cursor: pointer;
 }
-.dark .wpay-passport-photo-review > button {
+.dark .wpay-passport-photo-review > button:not(.wpay-passport-recognize) {
   background: #354359;
   color: #fff;
 }
@@ -978,13 +978,13 @@
   margin: 16px 24px;
   padding: 14px 16px;
   border-radius: 18px;
-  background: #eaf1fc;
+  background: #fff;
   color: var(--verify-ink);
   font-size: 13px;
   line-height: 1.5;
 }
 .dark .wpay-passport-notice {
-  background: #243148;
+  background: #252b36;
 }
 .wpay-passport-fields-heading {
   margin: 20px 24px 8px;
@@ -1140,4 +1140,50 @@
 }
 .wpay-passport-orbit {
   z-index: 2;
+}
+
+.wpay-passport-crop-hint {
+  margin: 0;
+  padding: 16px 42px 14px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--verify-ink);
+}
+.wpay-passport-photo-review .ReactCrop {
+  display: block;
+  max-width: 100%;
+  margin: 0 auto;
+  width: fit-content;
+}
+.wpay-passport-photo-review .ReactCrop img {
+  display: block;
+  max-width: 100%;
+  max-height: 350px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+.wpay-passport-photo-review .ReactCrop__crop-selection {
+  border-color: #fff;
+}
+.wpay-passport-photo-review .ReactCrop__drag-handle::after {
+  background: #007aff;
+  border-color: #fff;
+}
+.wpay-passport-photo-review .wpay-passport-recognize {
+  position: relative;
+  display: flex;
+  gap: 7px;
+  margin: 10px auto 12px !important;
+  width: auto;
+  min-height: 42px;
+  color: #007aff;
+}
+.wpay-passport-loading {
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  margin-top: 14px;
+}
+.wpay-passport-loading .preloader {
+  --f7-preloader-color: #007aff;
 }

@@ -39,3 +39,12 @@ test("no guessing names, ambiguous passport numbers, or impossible dates", () =>
     undefined,
   );
 });
+
+test("separated date labels and printed date spacing are supported", () => {
+  const data = parsePassportText(
+    "ФАМИЛИЯ / Surname\nИВАНОВ\nДата\nрождения\n01 . 02 . 1990\nДата выдачи 03.04.2010\n1234567890",
+  );
+  assert.equal(data.last_name, "ИВАНОВ");
+  assert.equal(data.birth_date, "1990-02-01");
+  assert.equal(data.passport, "1234567890");
+});

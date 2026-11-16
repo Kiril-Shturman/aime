@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { List, ListInput } from "framework7-react";
+import { List, ListInput, Preloader } from "framework7-react";
 import { Button } from "konsta/react";
 import {
   FileText,
@@ -15,6 +15,9 @@ import type { useAuraProfile } from "../wallet/useAuraProfile";
 
 import passportArtwork from "../assets/verification/passport.webp";
 import kycArtwork from "../assets/verification/kyc-document.webp";
+import ReactCrop, { type PercentCrop } from "react-image-crop";
+import "react-image-crop/dist/ReactCrop.css";
+import "framework7/components/preloader/css";
 import { recognizePassport } from "../wallet/recognize-passport";
 
 const fields = [
@@ -37,6 +40,17 @@ export default function WalletVerificationIdentity({
   const [progress, setProgress] = useState(0);
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState("");
+  const [crop, setCrop] = useState<PercentCrop>({
+    unit: "%",
+    x: 0,
+    y: 0,
+    width: 100,
+    height: 100,
+  });
+  const [cropping, setCropping] = useState(false);
+  const [photoReady, setPhotoReady] = useState(false);
+  const photoFile = useRef<File | null>(null);
+
   const [reviewed, setReviewed] = useState(false);
   const canSubmit =
     reviewed &&
@@ -75,9 +89,23 @@ export default function WalletVerificationIdentity({
       return;
     }
     job.current?.abort();
+    photoFile.current = file;
+    setPreview(URL.createObjectURL(file));
+    setCrop({ unit: "%", x: 0, y: 0, width: 100, height: 100 });
+    setPhotoReady(false);
+    setCropping(true);
+    setScanning(false);
+    setNotice("");
+    setError("");
+    setReviewed(false);
+  }
+  async function startRecognition() {
+    const file = photoFile.current;
+    if (!file || !photoReady || scanning) return;
+    job.current?.abort();
     const controller = new AbortController();
     job.current = controller;
-    setPreview(URL.createObjectURL(file));
+    setCropping(false);
     setError("");
     setNotice("");
     setProgress(0);
@@ -97,6 +125,7 @@ export default function WalletVerificationIdentity({
         file,
         controller.signal,
         setProgress,
+        crop,
       );
       if (controller.signal.aborted || job.current !== controller) return;
       // Preserve edits: a new photo only fills fields that are still empty.
@@ -265,19 +294,71 @@ export default function WalletVerificationIdentity({
             Ввести вручную
           </button>
           {preview && (
-            <div className="wpay-passport-photo-review">
-              <img src={preview} alt="Выбранное фото паспорта" />
+            <div
+              className="wpay-passport-photo-review"
+              data-wpay-gesture-lock=""
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              {cropping ? (
+                <>
+                  <p className="wpay-passport-crop-hint">
+                    Выделите разворот паспорта, убрав фон по краям
+                  </p>
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(_, percent) => setCrop(percent)}
+                    keepSelection
+                    minWidth={35}
+                    minHeight={35}
+                    ruleOfThirds
+                  >
+                    <img
+                      src={preview}
+                      alt="Выбранное фото паспорта"
+                      onLoad={() => setPhotoReady(true)}
+                      onError={() => {
+                        setPhotoReady(false);
+                        setError(
+                          "Не удалось открыть фото. Попробуйте JPG или PNG.",
+                        );
+                      }}
+                    />
+                  </ReactCrop>
+                  <Button
+                    type="button"
+                    clear
+                    disabled={!photoReady || crop.width < 5 || crop.height < 5}
+                    onClick={() => void startRecognition()}
+                    className="wpay-passport-recognize"
+                  >
+                    <ScanLine size={18} /> Распознать паспорт
+                  </Button>
+                </>
+              ) : (
+                <img src={preview} alt="Выбранное фото паспорта" />
+              )}
               <button
                 type="button"
                 aria-label="Удалить фото"
                 onClick={() => {
                   if (scanning) cancelScan();
                   setPreview("");
+                  photoFile.current = null;
+                  setCropping(false);
                 }}
               >
                 <X size={18} />
               </button>
             </div>
+          )}
+          {preview && !cropping && !scanning && (
+            <button
+              type="button"
+              className="wpay-passport-manual"
+              onClick={() => setCropping(true)}
+            >
+              Изменить область и повторить
+            </button>
           )}
           {scanning && (
             <div className="wpay-passport-progress" role="status">
@@ -287,11 +368,10 @@ export default function WalletVerificationIdentity({
                   Отмена
                 </button>
               </div>
-              <progress
-                max={100}
-                value={progress}
-                aria-label="Распознавание паспорта"
-              />
+              <div className="wpay-passport-loading">
+                <Preloader size={24} />
+                <span>{progress}%</span>
+              </div>
             </div>
           )}
           {notice && (

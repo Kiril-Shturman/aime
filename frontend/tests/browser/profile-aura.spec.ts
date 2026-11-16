@@ -290,6 +290,12 @@ test("local OCR fills photo fields without uploading an image or submitting iden
       mimeType: "image/png",
       buffer: Buffer.from(image, "base64"),
     });
+  await expect(
+    page.getByRole("button", { name: "Распознать паспорт", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Распознать паспорт", exact: true })
+    .click();
   await expect(page.getByText(/Найдено полей:/)).toBeVisible({
     timeout: 60000,
   });
@@ -356,6 +362,13 @@ test("cancelling OCR leaves manual fields usable without a delayed overwrite", a
       mimeType: "image/png",
       buffer: Buffer.from(image, "base64"),
     });
+  await expect(
+    page.getByRole("button", { name: "Распознать паспорт", exact: true }),
+  ).toBeEnabled();
+  await page
+    .getByRole("button", { name: "Распознать паспорт", exact: true })
+    .click();
+  await expect(page.locator(".wpay-passport-loading .preloader")).toBeVisible();
   await page.getByRole("button", { name: "Отмена", exact: true }).click();
   await expect(
     page.getByText("Распознавание отменено. Можно заполнить данные вручную."),
@@ -393,4 +406,107 @@ test("passport photo actions retain wallet shape with taller height and submit r
   await expect(
     page.getByRole("button", { name: "Отправить на проверку" }),
   ).toHaveCount(0);
+});
+
+test("photo and OCR notice use the same surface as the passport fields", async ({
+  page,
+}) => {
+  await contacts(page);
+  await openDocuments(page);
+  const image = await page.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = 500;
+    c.height = 500;
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  await page
+    .getByLabel("Загрузить фото паспорта", { exact: true })
+    .setInputFiles({
+      name: "empty.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(image, "base64"),
+    });
+  const colors = await page.evaluate(() =>
+    [".wpay-passport-photo-review", ".wpay-verification-contact-inputs"].map(
+      (selector) =>
+        getComputedStyle(document.querySelector(selector)!).backgroundColor,
+    ),
+  );
+  expect(colors[0]).toBe(colors[1]);
+  await page
+    .getByRole("button", { name: "Распознать паспорт", exact: true })
+    .click();
+  await expect(page.locator(".wpay-passport-loading .preloader")).toBeVisible();
+  await page.getByRole("button", { name: "Отмена", exact: true }).click();
+  expect(
+    await page
+      .locator(".wpay-passport-notice")
+      .evaluate((el) => getComputedStyle(el).backgroundColor),
+  ).toBe(colors[1]);
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  const darkColors = await page.evaluate(() =>
+    [
+      ".wpay-passport-photo-review",
+      ".wpay-passport-notice",
+      ".wpay-verification-contact-inputs",
+    ].map(
+      (selector) =>
+        getComputedStyle(document.querySelector(selector)!).backgroundColor,
+    ),
+  );
+  expect(new Set(darkColors).size).toBe(1);
+});
+
+test("cropping removes background numbers before local OCR", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const state = await contacts(page);
+  await openDocuments(page);
+  const image = await page.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = 2000;
+    c.height = 1200;
+    const x = c.getContext("2d")!;
+    x.fillStyle = "#999";
+    x.fillRect(0, 0, 2000, 1200);
+    x.fillStyle = "#eee";
+    x.fillRect(0, 0, 1250, 1200);
+    x.fillStyle = "#555";
+    x.font = "42px Arial";
+    [
+      "Фамилия ИВАНОВ",
+      "Имя ИВАН",
+      "Дата рождения 01.02.1990",
+      "12 34 567890",
+    ].forEach((s, i) => x.fillText(s, 80, 140 + i * 200));
+    x.fillText("98 76 543210", 1400, 200);
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  await page
+    .getByLabel("Загрузить фото паспорта", { exact: true })
+    .setInputFiles({
+      name: "photo-with-background.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(image, "base64"),
+    });
+  const imageBox = await page.locator(".ReactCrop img").boundingBox();
+  const handle = page.locator(".ReactCrop__drag-handle.ord-e");
+  const box = await handle.boundingBox();
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(
+    imageBox!.x + imageBox!.width * 0.62,
+    box!.y + box!.height / 2,
+    { steps: 10 },
+  );
+  await page.mouse.up();
+  await page
+    .getByRole("button", { name: "Распознать паспорт", exact: true })
+    .click();
+  await expect(page.getByText(/Найдено полей:/)).toBeVisible({
+    timeout: 60000,
+  });
+  await expect(page.locator("#identity-passport")).toHaveValue("1234567890");
+  expect(state.posts).toHaveLength(1);
 });

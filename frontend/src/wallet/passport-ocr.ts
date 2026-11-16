@@ -8,7 +8,7 @@ export type PassportField =
 export type PassportFields = Partial<Record<PassportField, string>>;
 
 function isoDate(value: string): string | undefined {
-  const match = /\b(\d{2})[.\-/](\d{2})[.\-/](\d{4})\b/.exec(value);
+  const match = /\b(\d{2})\s*[.\-/]\s*(\d{2})\s*[.\-/]\s*(\d{4})\b/.exec(value);
   if (!match) return;
   const [, day, month, year] = match;
   const iso = `${year}-${month}-${day}`;
@@ -38,7 +38,12 @@ export function parsePassportText(text: string): PassportFields {
       if (!match) continue;
       const rest = lines[i]
         .slice(match.index + match[0].length)
-        .replace(/^[\s:;.,—-]+/, "");
+        .replace(
+          /\/\s*(?:SURNAME|GIVEN NAMES?|PATRONYMIC|DATE OF BIRTH|DATE OF ISSUE)/g,
+          "",
+        )
+        .replace(/^[\s:;.,—-]+/, "")
+        .trim();
       return rest || lines[i + 1] || "";
     }
     return "";
@@ -56,12 +61,19 @@ export function parsePassportText(text: string): PassportFields {
     )
       result[field] = value;
   }
-  const birth = isoDate(labelled(/ДАТА\s+РОЖДЕНИЯ/));
-  const issued = isoDate(labelled(/ДАТА\s+ВЫДАЧИ/));
+  const dateText = lines.join("\n");
+  const birth = isoDate(
+    /ДАТА\s+РОЖДЕНИЯ[\s:]*([0-9.\/\- ]+)/.exec(dateText)?.[1] ||
+      labelled(/ДАТА\s+РОЖДЕНИЯ/),
+  );
+  const issued = isoDate(
+    /ДАТА\s+ВЫДАЧИ[\s:]*([0-9.\/\- ]+)/.exec(dateText)?.[1] ||
+      labelled(/ДАТА\s+ВЫДАЧИ/),
+  );
   if (birth) result.birth_date = birth;
   if (issued && (!birth || issued > birth)) result.passport_issue_date = issued;
   const numbers = [
-    ...text.matchAll(/(?:^|[^\d])(\d{2})[ \t]*(\d{2})[ \t]+(\d{6})(?!\d)/gm),
+    ...text.matchAll(/(?:^|[^\d])(\d{2})[ \t]*(\d{2})\s*(\d{6})(?!\d)/gm),
   ].map((match) => match[1] + match[2] + match[3]);
   const unique = [...new Set(numbers)];
   if (unique.length === 1) result.passport = unique[0];
