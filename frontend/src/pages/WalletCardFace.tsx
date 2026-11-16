@@ -145,7 +145,7 @@ export default function WalletCardFace({
                 ? kind === "physical"
                   ? skin === "ice"
                     ? "Премиальная"
-                    : "Карта с доставкой"
+                    : "Платина"
                   : skin === "navy"
                     ? "Для путешествий"
                     : "Для подписок"

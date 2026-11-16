@@ -333,7 +333,7 @@ test("four offers are inline: two virtual and two physical without an appearance
   }
   await main.getByRole("button", { name: "Карта 4", exact: true }).click();
   await expect(
-    main.getByRole("heading", { name: "Карта с доставкой", exact: true }),
+    main.getByRole("heading", { name: "Платина", exact: true }),
   ).toBeVisible();
   expect(state.calls).toHaveLength(0);
 });

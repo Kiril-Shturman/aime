@@ -550,7 +550,7 @@ export default function WalletAuraCards({
               {currentKind === "physical"
                 ? premiumOffer
                   ? "Премиальная"
-                  : "Карта с доставкой"
+                  : "Платина"
                 : travelOffer
                   ? "Для путешествий"
                   : "Для подписок"}
