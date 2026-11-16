@@ -225,7 +225,7 @@ for (const theme of ["light", "dark"])
     ).toBeLessThanOrEqual(1);
     await expect(
       page.getByRole("button", { name: "Отправить на проверку" }),
-    ).toBeInViewport();
+    ).toHaveCount(0);
     await page.screenshot({
       path: test.info().outputPath(`passport-${theme}.png`),
       animations: "disabled",
@@ -282,7 +282,7 @@ test("local OCR fills photo fields without uploading an image or submitting iden
   });
   await expect(
     page.getByRole("button", { name: "Отправить на проверку" }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await page
     .getByLabel("Загрузить фото паспорта", { exact: true })
     .setInputFiles({
@@ -301,7 +301,7 @@ test("local OCR fills photo fields without uploading an image or submitting iden
   expect(state.posts).toHaveLength(1);
   await expect(
     page.getByRole("button", { name: "Отправить на проверку" }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await page
     .getByRole("checkbox", {
       name: "Я проверил(а) данные — всё совпадает с паспортом",
@@ -363,4 +363,34 @@ test("cancelling OCR leaves manual fields usable without a delayed overwrite", a
   await page.locator("#identity-first_name").fill("ИВАН");
   await expect(page.locator("#identity-first_name")).toHaveValue("ИВАН");
   expect(state.posts).toHaveLength(1);
+});
+
+test("passport photo actions match wallet size and submit requires every field", async ({
+  page,
+}) => {
+  await contacts(page);
+  await openDocuments(page);
+  for (const name of ["Сфотографировать", "Загрузить фото"]) {
+    const button = page.getByRole("button", { name, exact: true });
+    expect((await button.boundingBox())!.height).toBe(62);
+    expect(
+      await button.evaluate((el) => getComputedStyle(el).borderRadius),
+    ).toBe("22px");
+  }
+  await page
+    .getByRole("checkbox", {
+      name: "Я проверил(а) данные — всё совпадает с паспортом",
+    })
+    .check();
+  await expect(
+    page.getByRole("button", { name: "Отправить на проверку" }),
+  ).toHaveCount(0);
+  await fillDocuments(page);
+  await expect(
+    page.getByRole("button", { name: "Отправить на проверку" }),
+  ).toBeVisible();
+  await page.locator("#identity-first_name").fill("");
+  await expect(
+    page.getByRole("button", { name: "Отправить на проверку" }),
+  ).toHaveCount(0);
 });

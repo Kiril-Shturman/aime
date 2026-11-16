@@ -2,13 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { List, ListInput } from "framework7-react";
 import { Button } from "konsta/react";
 import {
-  Camera,
-  Check,
-  ImagePlus,
+  FileText,
+  Fingerprint,
+  ScanFace,
   LockKeyhole,
   ScanLine,
   X,
 } from "lucide-react";
+import CameraFill from "framework7-icons/react/esm/CameraFill.js";
+import PhotoFill from "framework7-icons/react/esm/PhotoFill.js";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
 
 import passportArtwork from "../assets/verification/passport.webp";
@@ -35,6 +37,11 @@ export default function WalletVerificationIdentity({
   const [notice, setNotice] = useState("");
   const [preview, setPreview] = useState("");
   const [reviewed, setReviewed] = useState(false);
+  const canSubmit =
+    reviewed &&
+    fields.every(
+      ([name]) => name === "patronymic" || Boolean(values[name]?.trim()),
+    );
   const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
@@ -154,11 +161,20 @@ export default function WalletVerificationIdentity({
             <span className="wpay-passport-halo" />
             <span className="wpay-passport-scan-frame" />
             <img src={passportArtwork} width={600} height={833} alt="" />
-            <span className="wpay-passport-verified">
-              <Check />
-            </span>
-            <span className="wpay-passport-float">
+            <span className="wpay-passport-orbit wpay-passport-orbit--one">
               <ScanLine />
+            </span>
+            <span className="wpay-passport-orbit wpay-passport-orbit--two">
+              <FileText />
+            </span>
+            <span className="wpay-passport-orbit wpay-passport-orbit--three">
+              <Fingerprint />
+            </span>
+            <span className="wpay-passport-orbit wpay-passport-orbit--four">
+              <ScanFace />
+            </span>
+            <span className="wpay-passport-orbit wpay-passport-orbit--five">
+              <FileText />
             </span>
           </div>
           <div className="wpay-verification-contact-copy">
@@ -192,22 +208,31 @@ export default function WalletVerificationIdentity({
             }}
           />
           <div className="wpay-passport-photo-actions">
-            <button
-              type="button"
-              disabled={scanning || aura.busy}
-              onClick={() => cameraRef.current?.click()}
-            >
-              <Camera />
-              <span>Сфотографировать</span>
-            </button>
-            <button
-              type="button"
-              disabled={scanning || aura.busy}
-              onClick={() => uploadRef.current?.click()}
-            >
-              <ImagePlus />
-              <span>Загрузить фото</span>
-            </button>
+            {[
+              {
+                label: "Сфотографировать",
+                icon: CameraFill,
+                target: cameraRef,
+              },
+              { label: "Загрузить фото", icon: PhotoFill, target: uploadRef },
+            ].map(({ label, icon: Icon, target }) => (
+              <Button
+                key={label}
+                type="button"
+                clear
+                rounded
+                disabled={scanning || aura.busy}
+                className="!m-0 !h-[62px] !min-w-0 !rounded-[22px] !bg-black/[.055] !px-1 !text-primary active:!bg-black/10 dark:!bg-white/[.10] dark:active:!bg-white/[.16]"
+                onClick={() => target.current?.click()}
+              >
+                <span className="flex min-w-0 flex-col items-center justify-center gap-1">
+                  <Icon className="text-[22px]" />
+                  <span className="w-full truncate text-[10px] font-medium leading-none normal-case">
+                    {label}
+                  </span>
+                </span>
+              </Button>
+            ))}
           </div>
           <button
             type="button"
@@ -318,17 +343,19 @@ export default function WalletVerificationIdentity({
             </p>
           )}
         </div>
-        <div className="wpay-verification-footer">
-          <Button
-            type="submit"
-            data-wpay-primary=""
-            rounded
-            className="!m-0 !w-full"
-            disabled={aura.busy || scanning || !reviewed || !aura.available}
-          >
-            {aura.busy ? "Отправляем…" : "Отправить на проверку"}
-          </Button>
-        </div>
+        {canSubmit && (
+          <div className="wpay-verification-footer">
+            <Button
+              type="submit"
+              data-wpay-primary=""
+              rounded
+              className="!m-0 !w-full"
+              disabled={aura.busy || scanning || !reviewed || !aura.available}
+            >
+              {aura.busy ? "Отправляем…" : "Отправить на проверку"}
+            </Button>
+          </div>
+        )}
       </form>
     </section>
   );

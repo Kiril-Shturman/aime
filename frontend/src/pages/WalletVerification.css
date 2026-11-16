@@ -891,76 +891,11 @@
   transform: rotate(9deg);
   background: linear-gradient(140deg, #70a7ff0f, transparent);
 }
-.wpay-passport-verified {
-  position: absolute;
-  left: calc(50% + 48px);
-  top: 117px;
-  width: 46px;
-  height: 46px;
-  display: grid;
-  place-items: center;
-  border-radius: 16px;
-  color: #fff;
-  background: linear-gradient(135deg, #69a7ff, #2566e8);
-  box-shadow: 0 8px 18px #3268db30;
-  transform: rotate(10deg);
-}
-.wpay-passport-float {
-  position: absolute;
-  left: calc(50% - 109px);
-  top: 32px;
-  width: 42px;
-  height: 42px;
-  display: grid;
-  place-items: center;
-  color: #568cec;
-  background: #d9e8ffb3;
-  border-radius: 14px;
-  transform: rotate(-12deg);
-}
-.dark .wpay-passport-float {
-  color: #a9c9ff;
-  background: #324665b3;
-}
 .wpay-passport-photo-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin: 24px 20px 10px;
-}
-.wpay-passport-photo-actions button {
-  border: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  min-height: 96px;
-  border-radius: 24px;
-  background: #e9f1ff;
-  color: #286ce7;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 0.2s,
-    transform 0.2s;
-}
-.wpay-passport-photo-actions button:active {
-  transform: scale(0.97);
-  background: #d8e6ff;
-}
-.dark .wpay-passport-photo-actions button {
-  background: #24334e;
-  color: #8bb8ff;
-}
-.dark .wpay-passport-photo-actions button:active {
-  background: #2e4262;
-}
-.wpay-passport-photo-actions button:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 .wpay-passport-manual {
   display: block;
@@ -1087,5 +1022,90 @@
 @media (prefers-reduced-motion: reduce) {
   .wpay-passport-scene > img {
     animation: none;
+  }
+}
+
+.wpay-passport-orbit {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 43px;
+  height: 43px;
+  border: 1px solid #7897c429;
+  border-radius: 14px;
+  color: #5278ac;
+  background: linear-gradient(145deg, #d9e7fbcc, #b6cce54d);
+  box-shadow:
+    inset 0 1px 0 #ffffff66,
+    0 8px 22px #34578312;
+  animation: wpay-passport-drift 5.8s ease-in-out infinite;
+}
+.dark .wpay-passport-orbit {
+  color: #a4bddf;
+  border-color: #7897c433;
+  background: linear-gradient(145deg, #384b67cc, #1b2b444d);
+  box-shadow:
+    inset 0 1px 0 #ffffff14,
+    0 8px 22px #00000026;
+}
+.wpay-passport-orbit > svg {
+  width: 23px;
+  height: 23px;
+}
+.wpay-passport-orbit--one {
+  left: 16%;
+  top: 20px;
+  --passport-tilt: -18deg;
+}
+.wpay-passport-orbit--two {
+  right: 12%;
+  top: 42px;
+  --passport-tilt: 16deg;
+  animation-delay: -1.5s;
+  width: 48px;
+  height: 48px;
+}
+.wpay-passport-orbit--three {
+  left: 11%;
+  top: 133px;
+  --passport-tilt: 13deg;
+  animation-delay: -3s;
+  width: 36px;
+  height: 36px;
+  opacity: 0.65;
+}
+.wpay-passport-orbit--four {
+  right: 19%;
+  top: 145px;
+  --passport-tilt: -15deg;
+  animation-delay: -4.5s;
+}
+.wpay-passport-orbit--five {
+  right: 5%;
+  top: 106px;
+  --passport-tilt: 22deg;
+  animation-delay: -2s;
+  width: 29px;
+  height: 29px;
+  opacity: 0.4;
+  filter: blur(0.5px);
+}
+.wpay-passport-orbit--five > svg {
+  width: 16px;
+  height: 16px;
+}
+@keyframes wpay-passport-drift {
+  0%,
+  100% {
+    transform: translateY(0) rotate(var(--passport-tilt));
+  }
+  50% {
+    transform: translateY(-10px) rotate(calc(var(--passport-tilt) + 7deg));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpay-passport-orbit {
+    animation: none;
+    transform: rotate(var(--passport-tilt));
   }
 }
