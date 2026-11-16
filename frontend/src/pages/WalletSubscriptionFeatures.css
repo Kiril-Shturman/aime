@@ -159,3 +159,32 @@
   right: -7px;
   bottom: -6px;
 }
+
+.wpay-card-benefit--topup .wpay-card-benefit-art {
+  right: 0;
+  width: 100%;
+}
+.wpay-card-benefit--topup .wpay-card-benefit-art > img {
+  position: absolute;
+  right: -15px;
+  bottom: 0;
+  width: 120px;
+  height: 116px;
+}
+.wpay-card-benefit--topup .wpay-card-benefit-sbp {
+  left: 12px;
+  bottom: 9px;
+  width: 56px;
+  height: 61px;
+}
+@media (min-width: 500px) {
+  .wpay-card-benefit--topup .wpay-card-benefit-art > img {
+    width: 140px;
+    height: 130px;
+  }
+  .wpay-card-benefit--topup .wpay-card-benefit-sbp {
+    left: 18px;
+    width: 62px;
+    height: 67px;
+  }
+}
