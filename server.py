@@ -81,6 +81,7 @@ from datetime import date
 from aiohttp import web
 from task_cycle import apply_review, return_for_retry, submit_candidate
 from wallet_backend import install_wallet
+from wallet_referrals import summary as referral_summary
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(ROOT, "data.json")
@@ -1781,7 +1782,7 @@ def _wpay_bot_snapshot(ledger, sender_id, environment):
     return balances, cards
 
 
-def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None):
+def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, referral=None):
     """Return rich HTML and a classic-message fallback for a bot screen."""
     first_name = html.escape(str(sender.get("first_name") or "друг")[:80])
     balance_rows = [
@@ -1852,6 +1853,17 @@ def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None):
             "<blockquote>WPay не запрашивает паспортные данные в чате бота.</blockquote>"
         )
         plain = "Верификация\n\nУкажите почту и телефон в Mini App, затем пройдите защищённую проверку Aura."
+    elif view == "referral":
+        invited = int((referral or {}).get("invited") or 0)
+        link = str((referral or {}).get("link") or "")
+        rich = (
+            "<h1>Приглашайте друзей</h1>"
+            f"<blockquote>Приглашено: <b>{invited}</b></blockquote>"
+            "<p>Отправьте персональную ссылку другу. Приглашение засчитается, "
+            "если он впервые запустит WPay по ней.</p>"
+            f"<code>{html.escape(link)}</code>"
+        )
+        plain = f"Приглашайте друзей\n\nПриглашено: {invited}\n\n{link}"
     elif view == "admin_denied":
         rich = "<h1>Нет доступа</h1><p>Админка WPay доступна только владельцу.</p>"
         plain = "Нет доступа к админке WPay."
@@ -1893,6 +1905,7 @@ def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None):
             "<tg-button type=\"callback_data\" style=\"success\" data=\"wpay:deposit\">Пополнить</tg-button>"
             "<tg-button type=\"callback_data\" data=\"wpay:verify\">Верификация</tg-button>"
             "</tg-button-row>"
+            "<tg-button-row><tg-button type=\"callback_data\" data=\"wpay:referral\">Пригласить друзей</tg-button></tg-button-row>"
         )
         keyboard = [
             [{"text": "Открыть WPay", "web_app": {"url": app_url}, "style": "primary"}],
@@ -1905,6 +1918,7 @@ def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None):
                 {"text": "Пополнить", "callback_data": "wpay:deposit", "style": "success"},
                 {"text": "Верификация", "callback_data": "wpay:verify"},
             ],
+            [{"text": "Пригласить друзей", "callback_data": "wpay:referral"}],
         ]
         if admin_url:
             rich += (
@@ -2103,6 +2117,7 @@ async def _configure_wpay_bot(app):
         {"command": "cards", "description": "Мои карты"},
         {"command": "deposit", "description": "Пополнить USDT TRC-20"},
         {"command": "verify", "description": "Пройти верификацию"},
+        {"command": "referral", "description": "Пригласить друзей"},
         {"command": "help", "description": "Возможности и помощь"},
     ]
 
@@ -2170,12 +2185,12 @@ async def wpay_telegram_webhook(request):
     view_by_command = {
         "/start": "home", "/wallet": "home", "/balance": "balance",
         "/cards": "cards", "/deposit": "deposit", "/verify": "verify",
-        "/help": "help", "/admin": "admin",
+        "/help": "help", "/referral": "referral", "/admin": "admin",
     }
     view_by_callback = {
         "wpay:home": "home", "wpay:balance": "balance",
         "wpay:cards": "cards", "wpay:deposit": "deposit",
-        "wpay:verify": "verify", "wpay:help": "help",
+        "wpay:verify": "verify", "wpay:help": "help", "wpay:referral": "referral",
     }
     view = view_by_command.get(command) or view_by_callback.get(callback_data)
     request["wpay_audit_detail"] = "bot:" + str(view or "ignored")
@@ -2196,8 +2211,12 @@ async def wpay_telegram_webhook(request):
     environment = os.environ.get("AURA_ENVIRONMENT", "test")
     balances, cards = _wpay_bot_snapshot(request.app["wpay_ledger"], sender_id, environment)
     admin_url = _wpay_admin_url(app_url) if is_admin else None
+    referral = referral_summary(
+        request.app["wpay_ledger"], f"tg:{sender_id}",
+        os.environ.get("WPAY_BOT_USERNAME", "Workingpaybot"),
+    )
     rich, plain, reply_markup = _wpay_bot_view(
-        view, sender, balances, cards, app_url, admin_url=admin_url,
+        view, sender, balances, cards, app_url, admin_url=admin_url, referral=referral,
     )
 
     def send_message():

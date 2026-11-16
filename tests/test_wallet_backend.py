@@ -199,6 +199,34 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(row['first_start_param'], 'partner-42')
         self.assertIsNotNone(row['last_miniapp_at'])
 
+    async def test_referral_link_attributes_only_a_new_account_once(self):
+        owner = {'X-Telegram-Init-Data': init_data(700, user={'first_name': 'Owner'})}
+        response = await self.client.get('/api/wallet/referrals', headers=owner)
+        self.assertEqual(response.status, 200)
+        program = await response.json()
+        self.assertRegex(program['link'], r'^https://t\.me/Workingpaybot\?start=ref_[A-Za-z0-9]{10,24}$')
+
+        invited = {'X-Telegram-Init-Data': init_data(
+            701, user={'first_name': 'Friend'}, start_param=program['start_param']
+        )}
+        self.assertEqual((await self.client.get('/api/wallet/access', headers=invited)).status, 200)
+        referral = self.ledger.db.execute(
+            "SELECT * FROM wallet_referrals WHERE referred_user_id='tg:701'"
+        ).fetchone()
+        self.assertEqual(referral['referrer_user_id'], 'tg:700')
+
+        other = {'X-Telegram-Init-Data': init_data(702)}
+        other_program = await (await self.client.get('/api/wallet/referrals', headers=other)).json()
+        replacement = {'X-Telegram-Init-Data': init_data(701, start_param=other_program['start_param'])}
+        await self.client.get('/api/wallet/access', headers=replacement)
+        referral = self.ledger.db.execute(
+            "SELECT * FROM wallet_referrals WHERE referred_user_id='tg:701'"
+        ).fetchone()
+        self.assertEqual(referral['referrer_user_id'], 'tg:700')
+        summary = await (await self.client.get('/api/wallet/referrals', headers=owner)).json()
+        self.assertEqual(summary['invited'], 1)
+        self.assertFalse(summary['rewards_enabled'])
+
     async def test_raw_signature_and_duplicate_deposit(self):
         payload = await self.fund()
         self.assertEqual((await self.webhook('deposit_received', payload)).status, 200)

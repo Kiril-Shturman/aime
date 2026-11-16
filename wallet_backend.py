@@ -31,6 +31,7 @@ from wallet_notifications import (
     prepare as prepare_notifications, snapshot as notification_snapshot,
     NotificationWorker,
 )
+from wallet_referrals import capture as capture_referral, ensure_code as ensure_referral_code, prepare as prepare_referrals, summary as referral_summary
 from wallet_operations import prepare_operations, operations_route, save_address
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
 from wallet_aura import (
@@ -449,17 +450,19 @@ class Ledger:
         self.db.execute("UPDATE wallet_accounts SET telegram_id=CAST(SUBSTR(user_id,4) AS INTEGER) WHERE user_id LIKE 'tg:%' AND telegram_id IS NULL")
         self.db.execute('CREATE UNIQUE INDEX IF NOT EXISTS wallet_accounts_telegram_id ON wallet_accounts(telegram_id) WHERE telegram_id IS NOT NULL')
         self.db.execute('CREATE INDEX IF NOT EXISTS wallet_accounts_last_seen ON wallet_accounts(last_seen)')
+        prepare_referrals(self)
 
     def account(self, uid, profile=None, bot_started=False, source='miniapp', start_param=None, touch=True):
         stamp = now()
         telegram_id = int(uid[3:]) if uid.startswith('tg:') and uid[3:].isdigit() else None
-        self.db.execute(
+        inserted = self.db.execute(
             'INSERT OR IGNORE INTO wallet_accounts(user_id,client_ref,telegram_id,created_at,updated_at,last_seen,last_miniapp_at) VALUES (?,?,?,?,?,?,?)',
             (uid, 'wpay-' + uuid.uuid4().hex, telegram_id, stamp, stamp,
              stamp if touch and source == 'miniapp' else None,
              stamp if touch and source == 'miniapp' else None),
         )
         if uid.startswith('tg:'):
+            ensure_referral_code(self, uid)
             updates, values = ['telegram_id=COALESCE(telegram_id,?)', 'updated_at=?'], [telegram_id, stamp]
             if touch and source == 'miniapp':
                 updates.extend(['last_seen=?', 'last_miniapp_at=?'])
@@ -498,6 +501,7 @@ class Ledger:
                 values.extend([value, value])
             values.append(uid)
             self.db.execute(f"UPDATE wallet_accounts SET {','.join(updates)} WHERE user_id=?", values)
+            capture_referral(self, uid, start_param, source, inserted.rowcount == 1)
         return self.db.execute('SELECT client_ref FROM wallet_accounts WHERE user_id=?', (uid,)).fetchone()[0]
 
     def profile_sync_result(self, uid, error=None):
@@ -824,10 +828,14 @@ def install_wallet(app, root, owner_check):
         rows = decoded_rows('''
           SELECT a.*,
                  COALESCE((SELECT COUNT(*) FROM wallet_events e WHERE e.user_id=a.user_id),0) event_count,
-                 COALESCE((SELECT COUNT(*) FROM wallet_addresses d WHERE d.user_id=a.user_id),0) address_count
+                 COALESCE((SELECT COUNT(*) FROM wallet_addresses d WHERE d.user_id=a.user_id),0) address_count,
+                 COALESCE((SELECT COUNT(*) FROM wallet_referrals r WHERE r.referrer_user_id=a.user_id),0) referral_count,
+                 (SELECT r.referrer_user_id FROM wallet_referrals r WHERE r.referred_user_id=a.user_id) referred_by
           FROM wallet_accounts a WHERE a.user_id LIKE 'tg:%' ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
         ''') if 'wallet_addresses' in tables() else decoded_rows('''
-          SELECT a.*, COALESCE((SELECT COUNT(*) FROM wallet_events e WHERE e.user_id=a.user_id),0) event_count, 0 address_count
+          SELECT a.*, COALESCE((SELECT COUNT(*) FROM wallet_events e WHERE e.user_id=a.user_id),0) event_count, 0 address_count,
+                 COALESCE((SELECT COUNT(*) FROM wallet_referrals r WHERE r.referrer_user_id=a.user_id),0) referral_count,
+                 (SELECT r.referrer_user_id FROM wallet_referrals r WHERE r.referred_user_id=a.user_id) referred_by
           FROM wallet_accounts a WHERE a.user_id LIKE 'tg:%' ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
         ''')
         balances = decoded_rows('SELECT user_id,asset,available,reserved FROM wallet_balances ORDER BY user_id,asset')
@@ -1179,6 +1187,10 @@ def install_wallet(app, root, owner_check):
                 ledger.db.execute("UPDATE wallet_accounts SET role='admin' WHERE user_id=?", (uid,))
             if action == 'access' and request.method == 'GET':
                 return web.json_response({'owner': admin})
+            if action == 'referrals' and request.method == 'GET':
+                return web.json_response(referral_summary(
+                    ledger, uid, os.environ.get('WPAY_BOT_USERNAME', 'Workingpaybot')
+                ))
             if action.startswith('admin-') and not admin:
                 raise ApiError('FORBIDDEN', 'Админка доступна только администраторам WPay', 403)
             if action == 'admin-overview' and request.method == 'GET':

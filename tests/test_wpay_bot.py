@@ -48,6 +48,19 @@ class WPayRichBotTests(unittest.TestCase):
         self.assertNotIn("CVV", rich.upper())
         self.assertNotIn("PIN", plain.upper())
 
+    def test_referral_view_exposes_only_personal_link_and_count(self):
+        rich, plain, markup = _wpay_bot_view(
+            "referral", {"first_name": "User"}, [], [],
+            "https://wallet.example/wallet",
+            referral={"invited": 3, "link": "https://t.me/Workingpaybot?start=ref_abc1234567"},
+        )
+        self.assertIn("Приглашено: <b>3</b>", rich)
+        self.assertIn("ref_abc1234567", plain)
+        self.assertTrue(any(
+            button.get("callback_data") == "wpay:referral"
+            for row in markup["inline_keyboard"] for button in row
+        ))
+
     def test_amount_keeps_precision_and_trims_only_zeroes(self):
         self.assertEqual(_wpay_amount("20.000000"), "20")
         self.assertEqual(_wpay_amount("0.0012300"), "0.00123")

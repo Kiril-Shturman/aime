@@ -847,7 +847,7 @@ function DataView({
       key: "event_count",
       label: "Активность",
       render: (_, row) =>
-        `${text(row.event_count)} оп. · ${text(row.address_count)} адр.`,
+        `${text(row.event_count)} оп. · ${text(row.address_count)} адр. · ${text(row.referral_count)} реф.`,
     },
     {
       key: "last_miniapp_at",
