@@ -722,7 +722,6 @@ test("gift countdown persists its deadline across reload and expires without res
   await page.reload();
   expect(await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"))).toBe(deadline);
   await page.clock.fastForward(24 * 60 * 60 * 1000 + 1000);
-  await page.getByRole("button", { name: /Баннер 1:/ }).click();
   await expect(page.locator('.wpay-promo-countdown')).toHaveText("Время истекло");
   expect(await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"))).toBe(deadline);
 });

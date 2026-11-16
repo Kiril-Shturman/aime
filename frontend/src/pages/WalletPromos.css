@@ -336,8 +336,3 @@
 .wpay-promo-sbp-symbol img { left: -14px; width: 234px; height: 105px; }
 .wpay-promo--sbp .wpay-promo-card { right: -29px; }
 .wpay-promo-sbp-symbol { right: 49px; }
-
-.wpay-promos-rail { overflow-x: clip; overflow-y: visible; }
-.wpay-promo { transition: none; }
-.wpay-promo-headline, .wpay-promo-subline, .wpay-promo--friends .wpay-promo-subline { font-size: 17px; }
-.wpay-promo-dots { bottom: -2px; }
