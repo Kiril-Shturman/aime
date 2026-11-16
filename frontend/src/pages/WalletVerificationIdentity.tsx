@@ -14,6 +14,7 @@ import PhotoFill from "framework7-icons/react/esm/PhotoFill.js";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
 
 import passportArtwork from "../assets/verification/passport.webp";
+import kycArtwork from "../assets/verification/kyc-document.webp";
 import { recognizePassport } from "../wallet/recognize-passport";
 
 const fields = [
@@ -160,16 +161,20 @@ export default function WalletVerificationIdentity({
           <div className="wpay-passport-scene" aria-hidden="true">
             <span className="wpay-passport-halo" />
             <span className="wpay-passport-scan-frame" />
-            <span className="wpay-passport-holder">
-              <span className="wpay-passport-holder-stitch" />
-              <img
-                src="/brands/wpay-wordmark-light.svg"
-                width={80}
-                height={33}
-                alt=""
-              />
-            </span>
-            <img src={passportArtwork} width={600} height={833} alt="" />
+            <img
+              className="wpay-passport-original"
+              src={passportArtwork}
+              width={600}
+              height={833}
+              alt=""
+            />
+            <img
+              className="wpay-passport-kyc-document"
+              src={kycArtwork}
+              width={1086}
+              height={1448}
+              alt=""
+            />
             <span className="wpay-passport-orbit wpay-passport-orbit--one">
               <ScanLine />
             </span>
