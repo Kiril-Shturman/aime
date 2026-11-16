@@ -195,7 +195,14 @@ test("invalid contacts never post; viewing KYC never registers a customer", asyn
   });
 
   expect(state.posts).toHaveLength(0);
-  await page.locator("#verification-phone").fill("123");
+  const phone = page.locator("#verification-phone");
+  await phone.fill("+7+7 (999) 123-45-67");
+  await expect(phone).toHaveValue("+79991234567");
+  await phone.fill("+78 (999) 123-45-67");
+  await expect(phone).toHaveValue("+79991234567");
+  await phone.fill("+7 999 123-45-67");
+  await expect(phone).toHaveValue("+7 999 123-45-67");
+  await phone.fill("123");
   await page.locator("#verification-email").fill("hello@example.com");
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   await expect(page.getByRole("alert")).toContainText("+7");

@@ -22,6 +22,13 @@ function message(error: unknown) {
     ? messages[error.code] || "Не удалось обновить профиль. Попробуйте позже."
     : "Нет связи с сервисом. Попробуйте ещё раз.";
 }
+// iOS contact suggestions can insert a complete number after our default +7.
+function phoneInput(value: string) {
+  const compact = value.replace(/[\s()\-]/g, "");
+  const inserted = /^\+7(\+?[78]\d{10})$/.exec(compact);
+  if (inserted) return "+7" + inserted[1].replace(/^\+/, "").slice(1);
+  return value;
+}
 export function useAuraProfile(page: string | null) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -139,7 +146,7 @@ export function useAuraProfile(page: string | null) {
   const save = async () => {
     if (working.current || !available) return false;
     const cleanEmail = email.trim();
-    let cleanPhone = phone.replace(/[\s()\-]/g, "");
+    let cleanPhone = phoneInput(phone).replace(/[\s()\-]/g, "");
     if (/^8\d{10}$/.test(cleanPhone)) cleanPhone = "+7" + cleanPhone.slice(1);
     if (!/^\+7\d{10}$/.test(cleanPhone)) {
       setError("Укажите российский номер в формате +7 999 123-45-67.");
@@ -211,7 +218,7 @@ export function useAuraProfile(page: string | null) {
   return {
     phone,
     email,
-    setPhone,
+    setPhone: (value: string) => setPhone(phoneInput(value)),
     setEmail,
     loading,
     busy,
