@@ -143,7 +143,9 @@ export default function WalletCardFace({
             <span className="wpay-card-face-number">
               {offer
                 ? kind === "physical"
-                  ? "Карта с доставкой"
+                  ? skin === "ice"
+                    ? "Премиальная"
+                    : "Карта с доставкой"
                   : skin === "navy"
                     ? "Для путешествий"
                     : "Для подписок"

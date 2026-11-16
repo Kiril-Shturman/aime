@@ -12,7 +12,7 @@ import "./WalletSubscriptionFeatures.css";
 export default function WalletSubscriptionFeatures({
   variant = "subscriptions",
 }: {
-  variant?: "subscriptions" | "travel";
+  variant?: "subscriptions" | "travel" | "premium";
 }) {
   const tiles = [
     {
@@ -78,16 +78,35 @@ export default function WalletSubscriptionFeatures({
     },
     tiles[5],
   ];
+  const premiumTiles = [
+    tiles[0],
+    {
+      ...tiles[3],
+      title: "Оплата картой офлайн",
+      description: "Физическая карта для покупок в магазинах.",
+    },
+    travelTiles[3],
+    tiles[4],
+    travelTiles[4],
+    tiles[5],
+  ];
   return (
     <section
       className="wpay-card-benefits"
       aria-label={
-        variant === "travel"
-          ? "Возможности карты для путешествий"
-          : "Возможности карты для подписок"
+        variant === "premium"
+          ? "Возможности премиальной карты"
+          : variant === "travel"
+            ? "Возможности карты для путешествий"
+            : "Возможности карты для подписок"
       }
     >
-      {(variant === "travel" ? travelTiles : tiles).map((tile) => (
+      {(variant === "premium"
+        ? premiumTiles
+        : variant === "travel"
+          ? travelTiles
+          : tiles
+      ).map((tile) => (
         <article
           key={tile.key}
           className={`wpay-card-benefit wpay-card-benefit--${tile.key}`}

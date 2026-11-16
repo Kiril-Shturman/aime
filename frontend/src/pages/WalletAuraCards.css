@@ -420,3 +420,21 @@
     margin: 0 auto;
   }
 }
+
+.wpay-premium-delivery {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 9px 12px;
+  border-radius: 15px;
+  background: #e8f1ff;
+  color: #2468c7;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
+}
+.dark .wpay-premium-delivery {
+  background: #20304b;
+  color: #9fc8ff;
+}

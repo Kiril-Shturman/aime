@@ -362,7 +362,7 @@ test("first card offer is named For subscriptions and shows provider-backed feat
   expect(state.calls).toHaveLength(0);
   await main.getByRole("button", { name: "Карта 3", exact: true }).click();
   await expect(
-    main.getByRole("heading", { name: "Карта с доставкой", exact: true }),
+    main.getByRole("heading", { name: "Премиальная", exact: true }),
   ).toBeVisible();
   await expect(features).toHaveCount(0);
 });
@@ -393,5 +393,38 @@ test("second virtual offer has its own travel content and preserves virtual issu
   await expect(
     popup.getByRole("button", { name: "Виртуальная", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
+  expect(state.calls).toHaveLength(0);
+});
+
+test("third offer is premium physical with free delivery in description and checkout", async ({
+  page,
+}) => {
+  const state = await setup(page, "dark", false, true);
+  const main = page.getByRole("main", { name: "Мои карты" });
+  await main.getByRole("button", { name: "Карта 3", exact: true }).click();
+  await expect(
+    main.getByRole("heading", { name: "Премиальная", exact: true }),
+  ).toBeVisible();
+  await expect(
+    main.getByText("Физическая карта · Бесплатная доставка", { exact: true }),
+  ).toBeVisible();
+  const features = main.getByRole("region", {
+    name: "Возможности премиальной карты",
+  });
+  await expect(features.getByRole("article")).toHaveCount(6);
+  await expect(
+    features.getByText("Оплата картой офлайн", { exact: true }),
+  ).toBeVisible();
+  await main
+    .getByRole("button", { name: "Оформить карту", exact: true })
+    .click();
+  const popup = page.locator(".popup.modal-in");
+  await expect(
+    popup.getByRole("button", { name: "Физическая", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(popup.getByText("Бесплатно", { exact: true })).toBeVisible();
+  await expect(
+    popup.locator('input[autocomplete="street-address"]'),
+  ).toBeVisible();
   expect(state.calls).toHaveLength(0);
 });

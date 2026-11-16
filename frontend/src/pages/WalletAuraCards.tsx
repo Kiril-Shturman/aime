@@ -134,6 +134,7 @@ export default function WalletAuraCards({
   const [displayPanel, setDisplayPanel] = useState("more");
   const [activeSlide, setActiveSlide] = useState(0);
   const carousel = useRef<HTMLDivElement>(null);
+  const scrollTarget = useRef<number | null>(null);
   const drag = useRef<{ x: number; scroll: number; moved: boolean } | null>(
     null,
   );
@@ -325,10 +326,13 @@ export default function WalletAuraCards({
   const showOffer = !loading && Boolean(offerKind || !cards.length);
   const currentKind = offerKind ?? issueKind;
   const travelOffer = currentKind === "virtual" && activeOffer?.skin === "navy";
+  const premiumOffer =
+    currentKind === "physical" && activeOffer?.skin === "ice";
   const physical = selected?.kind === "physical";
   const canUse = selected?.status === "opened";
   const jumpTo = (index: number) => {
     const el = carousel.current;
+    scrollTarget.current = index;
     if (el)
       el.scrollTo({ left: index * (el.clientWidth + 12), behavior: "smooth" });
     setActiveSlide(index);
@@ -430,6 +434,7 @@ export default function WalletAuraCards({
                 ref={carousel}
                 className="wpay-aura-carousel"
                 onPointerDown={(event) => {
+                  scrollTarget.current = null;
                   if (event.pointerType !== "mouse" || event.button !== 0)
                     return;
                   drag.current = {
@@ -474,6 +479,17 @@ export default function WalletAuraCards({
                     event.currentTarget.scrollLeft /
                       (event.currentTarget.clientWidth + 12),
                   );
+                  if (scrollTarget.current !== null) {
+                    const target = scrollTarget.current;
+                    if (
+                      Math.abs(
+                        event.currentTarget.scrollLeft -
+                          target * (event.currentTarget.clientWidth + 12),
+                      ) > 2
+                    )
+                      return;
+                    scrollTarget.current = null;
+                  }
                   setActiveSlide(index);
                   const card = cards[index];
                   if (card && card.card_id !== selectedId)
@@ -532,21 +548,37 @@ export default function WalletAuraCards({
           <section className="px-4 pt-2">
             <h2 className="text-[21px] font-semibold">
               {currentKind === "physical"
-                ? "Карта с доставкой"
+                ? premiumOffer
+                  ? "Премиальная"
+                  : "Карта с доставкой"
                 : travelOffer
                   ? "Для путешествий"
                   : "Для подписок"}
             </h2>
+            {premiumOffer && (
+              <div className="wpay-premium-delivery">
+                <Truck size={18} aria-hidden="true" />
+                <span>Физическая карта · Бесплатная доставка</span>
+              </div>
+            )}
             <p className="mt-2 text-[15px] leading-6 text-black/50 dark:text-white/50">
               {currentKind === "physical"
-                ? "Выберите физическую карту и укажите адрес получателя при оформлении."
+                ? premiumOffer
+                  ? "Физическая карта для повседневных покупок и путешествий. Укажите адрес получателя — доставим бесплатно."
+                  : "Выберите физическую карту и укажите адрес получателя при оформлении."
                 : travelOffer
                   ? "Виртуальная карта для поездок: бронирования, билеты и онлайн-сервисы в путешествии."
                   : "Виртуальная карта для подписок, цифровых сервисов и регулярных онлайн-оплат."}
             </p>
-            {currentKind === "virtual" && (
+            {(currentKind === "virtual" || premiumOffer) && (
               <WalletSubscriptionFeatures
-                variant={travelOffer ? "travel" : "subscriptions"}
+                variant={
+                  premiumOffer
+                    ? "premium"
+                    : travelOffer
+                      ? "travel"
+                      : "subscriptions"
+                }
               />
             )}
             <div className="wpay-aura-info mt-4">
@@ -556,6 +588,7 @@ export default function WalletAuraCards({
                   "Пополнение карты",
                   `От ${fees.minimum_recharge_amount} USDT · комиссия ${fees.recharge_fee_pct}%`,
                 )}
+              {premiumOffer && infoRow("Доставка", "Бесплатно")}
               {infoRow(
                 "Выпуск",
                 fees
@@ -828,6 +861,9 @@ export default function WalletAuraCards({
                       "Карта",
                       issueKind === "physical" ? "Физическая" : "Виртуальная",
                     )}
+                    {issueKind === "physical" &&
+                      skin === "ice" &&
+                      infoRow("Доставка", "Бесплатно")}
                     {infoRow(
                       "Спишется с кошелька",
                       fees
