@@ -42,7 +42,7 @@
     inset 0 1px 1px #fff,
     2px 3px 0 #a1a4ad,
     3px 5px 5px #0002;
-  transform: rotateX(6deg) rotateY(-9deg) rotateZ(-2deg);
+  transform: none;
   transform-style: preserve-3d;
   color: #a4a7b0;
   text-align: left;
