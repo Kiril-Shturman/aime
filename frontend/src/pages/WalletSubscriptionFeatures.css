@@ -1,0 +1,127 @@
+.wpay-card-benefits {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+.wpay-card-benefit {
+  position: relative;
+  min-width: 0;
+  min-height: 224px;
+  padding: 17px 16px 126px;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #fff;
+  border: 1px solid #00000004;
+  color: #000;
+}
+.dark .wpay-card-benefit {
+  background: #1c1c1e;
+  border-color: #ffffff04;
+  color: #fff;
+}
+.wpay-card-benefit h3 {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: 650;
+  letter-spacing: -0.25px;
+  text-wrap: balance;
+}
+.wpay-card-benefit p {
+  position: relative;
+  z-index: 2;
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: #0008;
+}
+.dark .wpay-card-benefit p {
+  color: #fff8;
+}
+.wpay-card-benefit-art {
+  position: absolute;
+  z-index: 1;
+  right: -7px;
+  bottom: -4px;
+  width: 153px;
+  height: 126px;
+  pointer-events: none;
+}
+.wpay-card-benefit-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center bottom;
+}
+.wpay-card-benefit--ai .wpay-card-benefit-art {
+  right: -12px;
+  width: 173px;
+}
+.wpay-card-benefit--subscriptions .wpay-card-benefit-art {
+  right: -12px;
+  width: 164px;
+  height: 134px;
+  bottom: -8px;
+}
+.wpay-card-benefit--shopping .wpay-card-benefit-art {
+  right: -12px;
+  width: 170px;
+}
+.wpay-card-benefit--control .wpay-card-benefit-art {
+  right: -10px;
+  bottom: 4px;
+  width: 162px;
+  height: 111px;
+  transform: rotate(-12deg);
+}
+.wpay-card-benefit-freeze {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  right: 15px;
+  bottom: 13px;
+  border-radius: 15px;
+  color: #fff;
+  background: linear-gradient(#78beff, #1975e8);
+  box-shadow:
+    0 4px 12px #124ec333,
+    inset 0 1px 0 #ffffff80;
+  transform: rotate(12deg);
+}
+.dark .wpay-card-benefit-freeze {
+  background: linear-gradient(#64a8f3, #1561c5);
+}
+@media (min-width: 500px) {
+  .wpay-card-benefit {
+    min-height: 242px;
+    padding: 20px 20px 138px;
+  }
+  .wpay-card-benefit h3 {
+    font-size: 18px;
+    line-height: 23px;
+  }
+  .wpay-card-benefit p {
+    font-size: 14px;
+    line-height: 19px;
+  }
+  .wpay-card-benefit-art {
+    width: 180px;
+    height: 138px;
+  }
+  .wpay-card-benefit--ai .wpay-card-benefit-art {
+    width: 205px;
+  }
+  .wpay-card-benefit--subscriptions .wpay-card-benefit-art {
+    width: 190px;
+    height: 145px;
+  }
+  .wpay-card-benefit--shopping .wpay-card-benefit-art {
+    width: 195px;
+  }
+}

@@ -1,3 +1,4 @@
+import WalletSubscriptionFeatures from "./WalletSubscriptionFeatures";
 import WalletCardFace, { cardSkins, type CardSkin } from "./WalletCardFace";
 import PlusCircleFill from "framework7-icons/react/esm/PlusCircleFill.js";
 import EyeFill from "framework7-icons/react/esm/EyeFill.js";
@@ -8,8 +9,6 @@ import { Button, List, ListItem } from "konsta/react";
 import { Popup, Page, Navbar, NavRight, Link } from "framework7-react";
 import {
   CreditCard,
-  Repeat2,
-  Wallet,
   Truck,
   KeyRound,
   ShieldCheck,
@@ -563,45 +562,10 @@ export default function WalletAuraCards({
                 : "Виртуальная карта для подписок, цифровых сервисов и регулярных онлайн-оплат."}
             </p>
             {currentKind === "virtual" && (
-              <section
-                className="wpay-subscription-features"
-                aria-label="Возможности карты для подписок"
-              >
-                {[
-                  {
-                    title: "Подписки и сервисы",
-                    description: "Реквизиты для регулярных онлайн-оплат.",
-                    Icon: Repeat2,
-                    tone: "purple",
-                  },
-                  {
-                    title: "Пополнение в USDT",
-                    description: fees
-                      ? `От ${fees.minimum_recharge_amount} USDT · комиссия ${fees.recharge_fee_pct}%`
-                      : "С баланса вашего кошелька.",
-                    Icon: Wallet,
-                    tone: "blue",
-                  },
-                  {
-                    title: "Всё под контролем",
-                    description: "Реквизиты, заморозка и коды 3DS.",
-                    Icon: ShieldCheck,
-                    tone: "mint",
-                  },
-                ].map(({ title, description, Icon, tone }) => (
-                  <div key={title} className="wpay-subscription-feature">
-                    <span
-                      className={`wpay-subscription-feature-icon wpay-subscription-feature-icon--${tone}`}
-                    >
-                      <Icon size={23} />
-                    </span>
-                    <span>
-                      <strong>{title}</strong>
-                      <span>{description}</span>
-                    </span>
-                  </div>
-                ))}
-              </section>
+              <WalletSubscriptionFeatures
+                minimum={fees?.minimum_recharge_amount}
+                rechargeFee={fees?.recharge_fee_pct}
+              />
             )}
             <div className="wpay-aura-info mt-4">
               {infoRow(

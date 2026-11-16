@@ -342,14 +342,15 @@ test("first card offer is named For subscriptions and shows provider-backed feat
     name: "Возможности карты для подписок",
   });
   await expect(
-    features.getByText("Подписки и сервисы", { exact: true }),
+    features.getByText("Оплата подписок", { exact: true }),
   ).toBeVisible();
   await expect(
-    features.getByText("От 5 USDT · комиссия 1%", { exact: true }),
+    features.getByText("От 5 USDT. Комиссия 1%.", { exact: true }),
   ).toBeVisible();
   await expect(
-    features.getByText("Всё под контролем", { exact: true }),
+    features.getByText("Карта под контролем", { exact: true }),
   ).toBeVisible();
+  await expect(features.getByRole("article")).toHaveCount(6);
   expect(state.calls).toHaveLength(0);
   await main.getByRole("button", { name: "Карта 2", exact: true }).click();
   await expect(
