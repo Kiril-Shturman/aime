@@ -241,3 +241,10 @@
     scroll-behavior: auto !important;
   }
 }
+.wpay-promo--sbp {
+  background: radial-gradient(ellipse at 92% 6%, #ffc776 0%, transparent 53%), linear-gradient(115deg, #9a32d8, #e64a9e 68%, #ff9665);
+}
+.wpay-promo--sbp .wpay-promo-art { right: 3px; top: 13px; }
+.wpay-promo--sbp .wpay-promo-card { width: 88px; height: 126px; right: 20px; top: -3px; transform: rotate(16deg); }
+.wpay-promo-sbp-logo { position: absolute; right: 1px; top: 72px; width: 116px; height: 56px; object-fit: contain; padding: 5px; border-radius: 12px; background: #fff; box-shadow: 0 7px 18px #67154b38; transform: rotate(-10deg); }
+.wpay-promo--sbp .wpay-promo-copy { width: 66%; }

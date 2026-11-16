@@ -644,7 +644,7 @@ function WalletScreen() {
             <WalletPromos
               onInvite={() => setHomeProfilePage("referral")}
               onDeposit={() => setCryptoFlow({ kind: "deposit" })}
-              onCards={live.capabilities.cards ? () => selectTab("cards") : undefined}
+              onSbp={live.capabilities.sbp_buy ? () => setCryptoFlow({ kind: "deposit", assetCode: "RUB" }) : undefined}
             />
             <List
               strong

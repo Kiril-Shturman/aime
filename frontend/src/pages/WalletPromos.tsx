@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { ArrowUpRight, Heart, Sparkles } from "lucide-react";
+import sbpArtwork from "../assets/verification/sbp-promo.jpg";
 import cardArtwork from "../assets/verification/wpay-card.webp";
 import { haptic } from "../lib/telegram";
 import "./WalletPromos.css";
@@ -7,11 +8,11 @@ import "./WalletPromos.css";
 export default function WalletPromos({
   onInvite,
   onDeposit,
-  onCards,
+  onSbp,
 }: {
   onInvite: () => void;
   onDeposit: () => void;
-  onCards?: () => void;
+  onSbp?: () => void;
 }) {
   const rail = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
@@ -30,14 +31,14 @@ export default function WalletPromos({
       action: "Пополнить кошелёк",
       click: onDeposit,
     },
-    ...(onCards
+    ...(onSbp
       ? [
           {
-            id: "cards",
-            title: "Ваша карта — всегда рядом",
-            text: "Управляйте картами в wPay",
-            action: "Перейти к картам",
-            click: onCards,
+            id: "sbp",
+            title: "Пополняйте через СБП",
+            text: "Рубли — в ваш кошелёк wPay",
+            action: "Пополнить рублями",
+            click: onSbp,
           },
         ]
       : []),
@@ -97,12 +98,11 @@ export default function WalletPromos({
                     <Sparkles className="wpay-promo-spark" />
                   </>
                 ) : (
-                  <img
-                    className="wpay-promo-card"
-                    src={cardArtwork}
-                    alt=""
-                    loading="lazy"
-                  />
+                  <>
+                    <img className="wpay-promo-card" src={cardArtwork} alt="" loading="lazy" />
+                    <img className="wpay-promo-sbp-logo" src={sbpArtwork} alt="" loading="lazy" />
+                    <Sparkles className="wpay-promo-spark" />
+                  </>
                 )}
               </span>
             </button>
