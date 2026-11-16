@@ -1111,16 +1111,16 @@
 }
 
 .wpay-passport-scene > .wpay-passport-original {
-  left: 38%;
-  height: 173px;
-  top: 16px;
-  z-index: 0;
-}
-.wpay-passport-scene > .wpay-passport-kyc-document {
-  left: 59%;
-  height: 203px;
+  left: 42%;
+  height: 205px;
   top: 0;
   z-index: 1;
+}
+.wpay-passport-scene > .wpay-passport-kyc-document {
+  left: 63%;
+  height: 182px;
+  top: 15px;
+  z-index: 0;
   animation: wpay-kyc-document-hover 6.5s ease-in-out infinite;
   transform: translateX(-50%) rotate(7deg);
 }
