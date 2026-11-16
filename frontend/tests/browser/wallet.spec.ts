@@ -17,6 +17,16 @@ async function setup(
         status: 503,
         json: { detail: "Сервис недоступен" },
       });
+    if (path.endsWith("/referrals"))
+      return route.fulfill({
+        json: {
+          link: "https://t.me/Workingpaybot?start=ref_test",
+          invited: 3,
+          rewards: { USDT: "0" },
+          activity: [{ day: new Date().toISOString().slice(0, 10), count: 3 }],
+          rewards_enabled: false,
+        },
+      });
     if (path.endsWith("/financial-capabilities"))
       return route.fulfill({
         json: { can_withdraw: true, can_transfer: true, currencies: [] },
@@ -675,157 +685,313 @@ test("Aura deposit choices exclude TRX and other unsupported coins while keeping
     .click();
   const flow = page.getByRole("main", { name: "Способы пополнения" });
   await expect(flow.getByText("Рубли", { exact: true })).toBeVisible();
-  await expect(flow.locator("span.block").filter({ hasText: /^Tether$/ })).toBeVisible();
+  await expect(
+    flow.locator("span.block").filter({ hasText: /^Tether$/ }),
+  ).toBeVisible();
   await expect(flow.locator("li").filter({ hasText: "TRX" })).toHaveCount(0);
   await expect(flow.locator("li").filter({ hasText: "BNB" })).toHaveCount(0);
   await expect(flow.locator("li").filter({ hasText: "BTC" })).toHaveCount(0);
 });
 
-test("home promo carousel switches slides and routes QR to scanner capability check", async ({ page }) => {
+test("home promo carousel switches slides and routes QR to scanner capability check", async ({
+  page,
+}) => {
   await setup(page, "dark");
   const carousel = page.getByRole("region", { name: "Возможности wPay" });
   await expect(carousel).toBeVisible();
   await carousel.getByRole("button", { name: /Баннер 2:/ }).click();
-  await expect(carousel.getByRole("button", { name: /Баннер 2:/ })).toHaveAttribute("aria-current", "true");
+  await expect(
+    carousel.getByRole("button", { name: /Баннер 2:/ }),
+  ).toHaveAttribute("aria-current", "true");
   await carousel.getByRole("button", { name: /Сканировать QR-код/ }).click();
-  await expect(page.getByText("Оплата QR сейчас не подключена", { exact: true })).toBeVisible();
-  await expect(page.getByRole("main", { name: "Способы пополнения" })).toHaveCount(0);
+  await expect(
+    page.getByText("Оплата QR сейчас не подключена", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("main", { name: "Способы пополнения" }),
+  ).toHaveCount(0);
   const bounds = await carousel.locator(".wpay-promos-rail").boundingBox();
   if (!bounds) throw new Error("Missing carousel bounds");
   await page.mouse.move(bounds.x + 70, bounds.y + 38);
   await page.mouse.down();
   await page.mouse.move(bounds.x + 195, bounds.y + 40, { steps: 10 });
   await page.mouse.up();
-  await expect(carousel.getByRole("button", { name: /Баннер 1:/ })).toHaveAttribute("aria-current", "true");
-  await expect(page.getByLabel("Реферальная ссылка", { exact: true })).toHaveCount(0);
-  await expect(carousel.locator(".wpay-promos-rail")).toHaveJSProperty("scrollLeft", 0);
+  await expect(
+    carousel.getByRole("button", { name: /Баннер 1:/ }),
+  ).toHaveAttribute("aria-current", "true");
+  await expect(
+    page.getByLabel("Реферальная ссылка", { exact: true }),
+  ).toHaveCount(0);
+  await expect(carousel.locator(".wpay-promos-rail")).toHaveJSProperty(
+    "scrollLeft",
+    0,
+  );
   await page.waitForTimeout(450);
-  await expect(carousel.getByRole("button", { name: /Баннер 1:/ })).toHaveAttribute("aria-current", "true");
+  await expect(
+    carousel.getByRole("button", { name: /Баннер 1:/ }),
+  ).toHaveAttribute("aria-current", "true");
   await carousel.getByRole("button", { name: /Пригласить друзей/ }).click();
-  await expect(page.getByLabel("Реферальная ссылка", { exact: true })).toBeVisible();
+  await expect(
+    page.getByLabel("Реферальная ссылка", { exact: true }),
+  ).toHaveValue("https://t.me/Workingpaybot?start=ref_test");
+  await expect(
+    page.getByRole("button", { name: "Поделиться", exact: true }),
+  ).toBeEnabled();
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.getByRole("button", { name: "Скопировать", exact: true }).click();
+  await expect(
+    page.getByRole("button", { name: "Скопировано", exact: true }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+    "https://t.me/Workingpaybot?start=ref_test",
+  );
 });
 
-test("home promo advances automatically without horizontal scrolling", async ({ page }) => {
+test("home promo advances automatically without horizontal scrolling", async ({
+  page,
+}) => {
   await setup(page, "dark");
   const carousel = page.getByRole("region", { name: "Возможности wPay" });
-  await expect(carousel.getByRole("button", { name: /Баннер 1:/ })).toHaveAttribute("aria-current", "true");
-  await expect(carousel.getByRole("button", { name: /Баннер 2:/ })).toHaveAttribute("aria-current", "true", { timeout: 8000 });
-  await expect(carousel.locator(".wpay-promos-rail")).toHaveJSProperty("scrollLeft", 0);
+  await expect(
+    carousel.getByRole("button", { name: /Баннер 1:/ }),
+  ).toHaveAttribute("aria-current", "true");
+  await expect(
+    carousel.getByRole("button", { name: /Баннер 2:/ }),
+  ).toHaveAttribute("aria-current", "true", { timeout: 8000 });
+  await expect(carousel.locator(".wpay-promos-rail")).toHaveJSProperty(
+    "scrollLeft",
+    0,
+  );
 });
 
-test("gift countdown persists its deadline across reload and expires without restarting", async ({ page }) => {
+test("gift countdown persists its deadline across reload and expires without restarting", async ({
+  page,
+}) => {
   await page.clock.install();
   await setup(page, "dark");
   await expect(page.locator(".wpay-promo-countdown")).toBeVisible();
-  const deadline = await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"));
+  const deadline = await page.evaluate(() =>
+    localStorage.getItem("wpay:gift-banner:deadline:v1"),
+  );
   expect(Number(deadline)).toBeGreaterThan(Date.now());
   await page.reload();
-  expect(await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"))).toBe(deadline);
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("wpay:gift-banner:deadline:v1"),
+    ),
+  ).toBe(deadline);
   await page.clock.fastForward(24 * 60 * 60 * 1000 + 1000);
   await page.getByRole("button", { name: /Баннер 1:/ }).click();
-  await expect(page.locator('.wpay-promo-countdown')).toHaveText("Время истекло");
-  expect(await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"))).toBe(deadline);
+  await expect(page.locator(".wpay-promo-countdown")).toHaveText(
+    "Время истекло",
+  );
+  expect(
+    await page.evaluate(() =>
+      localStorage.getItem("wpay:gift-banner:deadline:v1"),
+    ),
+  ).toBe(deadline);
 });
 
-test("oversized banner artwork does not create horizontal wallet scrolling", async ({ page }) => {
+test("oversized banner artwork does not create horizontal wallet scrolling", async ({
+  page,
+}) => {
   await setup(page, "dark");
-  await page.route("**/api/wallet/status", route => route.fulfill({ json: {
-    configured: true,
-    capabilities: { sbp_buy: true, qr_pay: true },
-    asset_routes: { USDT: ["TRON"] },
-    providers: { goswap: { configured: false } },
-    deposit_modes: { USDT: { TRON: "address" } },
-  } }));
+  await page.route("**/api/wallet/status", (route) =>
+    route.fulfill({
+      json: {
+        configured: true,
+        capabilities: { sbp_buy: true, qr_pay: true },
+        asset_routes: { USDT: ["TRON"] },
+        providers: { goswap: { configured: false } },
+        deposit_modes: { USDT: { TRON: "address" } },
+      },
+    }),
+  );
   await page.reload();
-  await expect(page.getByRole("region", { name: "Возможности wPay" })).toBeVisible();
+  await expect(
+    page.getByRole("region", { name: "Возможности wPay" }),
+  ).toBeVisible();
   for (const width of [375, 390, 768, 1440, 2560]) {
     await page.setViewportSize({ width, height: 844 });
-    await expect.poll(() => page.locator(".wpay-desktop-page").evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+    await expect
+      .poll(() =>
+        page
+          .locator(".wpay-desktop-page")
+          .evaluate((el) => el.scrollWidth - el.clientWidth),
+      )
+      .toBeLessThanOrEqual(0);
   }
 });
 
-test("promo slides leave left while the next enters from the right without stretching the page", async ({ page }) => {
+test("promo slides leave left while the next enters from the right without stretching the page", async ({
+  page,
+}) => {
   await setup(page, "light");
   const carousel = page.getByRole("region", { name: "Возможности wPay" });
   await expect(carousel).toBeVisible();
   await carousel.getByRole("button", { name: /Баннер 2:/ }).click();
-  await expect.poll(() => carousel.evaluate(el => {
-    const rail = el.querySelector('.wpay-promos-rail')!.getBoundingClientRect();
-    const previous = el.querySelector('.wpay-promo--friends')?.getBoundingClientRect();
-    const next = el.querySelector('.wpay-promo--qr')?.getBoundingClientRect();
-    return Boolean(previous && next && previous.x < rail.x - 1 && next.x > rail.x + 1);
-  }), { intervals: [10, 20, 30], timeout: 1000 }).toBe(true);
-  await expect.poll(() => carousel.evaluate(el => Math.abs(el.querySelector('.wpay-promo--qr')!.getBoundingClientRect().x - el.querySelector('.wpay-promos-rail')!.getBoundingClientRect().x))).toBeLessThan(1);
-  await expect(page.locator('.wpay-promo--friends')).toHaveCount(0);
-  await expect.poll(() => page.locator('.wpay-desktop-page').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  await expect
+    .poll(
+      () =>
+        carousel.evaluate((el) => {
+          const rail = el
+            .querySelector(".wpay-promos-rail")!
+            .getBoundingClientRect();
+          const previous = el
+            .querySelector(".wpay-promo--friends")
+            ?.getBoundingClientRect();
+          const next = el
+            .querySelector(".wpay-promo--qr")
+            ?.getBoundingClientRect();
+          return Boolean(
+            previous && next && previous.x < rail.x - 1 && next.x > rail.x + 1,
+          );
+        }),
+      { intervals: [10, 20, 30], timeout: 1000 },
+    )
+    .toBe(true);
+  await expect
+    .poll(() =>
+      carousel.evaluate((el) =>
+        Math.abs(
+          el.querySelector(".wpay-promo--qr")!.getBoundingClientRect().x -
+            el.querySelector(".wpay-promos-rail")!.getBoundingClientRect().x,
+        ),
+      ),
+    )
+    .toBeLessThan(1);
+  await expect(page.locator(".wpay-promo--friends")).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page
+        .locator(".wpay-desktop-page")
+        .evaluate((el) => el.scrollWidth - el.clientWidth),
+    )
+    .toBeLessThanOrEqual(0);
 });
 
-test("holding the promo locks vertical touch scrolling and pull refresh while horizontal swipe still works", async ({ page }) => {
+test("holding the promo locks vertical touch scrolling and pull refresh while horizontal swipe still works", async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 640 });
   await setup(page, "dark");
   const carousel = page.getByRole("region", { name: "Возможности wPay" });
   await expect(carousel).toBeVisible();
   let refreshes = 0;
-  await page.route("**/api/wallet/overview", route => { refreshes++; return route.fulfill({ json: { balances: [], rates: [], transactions: [] } }); });
+  await page.route("**/api/wallet/overview", (route) => {
+    refreshes++;
+    return route.fulfill({
+      json: { balances: [], rates: [], transactions: [] },
+    });
+  });
   const client = await page.context().newCDPSession(page);
   await client.send("Emulation.setTouchEmulationEnabled", { enabled: true });
   const dragTouch = async (x: number, y: number, dx: number, dy: number) => {
-    await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
-    for (let step = 1; step <= 10; step++) await client.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x + dx * step / 10, y: y + dy * step / 10 }] });
-    await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y }],
+    });
+    for (let step = 1; step <= 10; step++)
+      await client.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x: x + (dx * step) / 10, y: y + (dy * step) / 10 }],
+      });
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
   };
-  const box = await carousel.boundingBox(); if (!box) throw new Error("No banner");
+  const box = await carousel.boundingBox();
+  if (!box) throw new Error("No banner");
   await dragTouch(box.x + 100, box.y + 30, 0, 95);
   await page.waitForTimeout(1000);
-  expect(await page.locator('.wpay-desktop-page').evaluate(el => el.scrollTop)).toBe(0);
+  expect(
+    await page.locator(".wpay-desktop-page").evaluate((el) => el.scrollTop),
+  ).toBe(0);
   expect(refreshes).toBe(0);
-  await expect(page.getByRole("main", { name: "Способы пополнения" })).not.toBeVisible();
-  await page.locator('.wpay-desktop-page').evaluate(el => { el.scrollTop = 80; });
-  const moved = await carousel.boundingBox(); if (!moved) throw new Error("No banner after scroll");
+  await expect(
+    page.getByRole("main", { name: "Способы пополнения" }),
+  ).not.toBeVisible();
+  await page.locator(".wpay-desktop-page").evaluate((el) => {
+    el.scrollTop = 80;
+  });
+  const moved = await carousel.boundingBox();
+  if (!moved) throw new Error("No banner after scroll");
   await dragTouch(moved.x + 100, moved.y + 30, 0, -70);
-  expect(await page.locator('.wpay-desktop-page').evaluate(el => el.scrollTop)).toBe(80);
+  expect(
+    await page.locator(".wpay-desktop-page").evaluate((el) => el.scrollTop),
+  ).toBe(80);
   await dragTouch(moved.x + moved.width - 35, moved.y + 40, -170, 0);
-  await expect(carousel.getByRole("button", { name: /Баннер 2:/ })).toHaveAttribute("aria-current", "true");
+  await expect(
+    carousel.getByRole("button", { name: /Баннер 2:/ }),
+  ).toHaveAttribute("aria-current", "true");
 });
 
-test("first visit opens the wallet directly without automatic intro slides", async ({ page }) => {
-  await page.route("**/api/**", route => route.fulfill({ json: route.request().url().endsWith('/status')
-    ? { configured: true, asset_routes: { USDT: ['TRON'] }, capabilities: {} }
-    : { balances: [], rates: [], transactions: [], items: [] } }));
-  await page.goto('/wallet');
-  await expect(page.locator('.wpay-wallet-home')).toBeVisible();
-  expect(await page.evaluate(() => localStorage.getItem('wpay:intro:v1'))).toBeNull();
-  await expect(page.locator('dialog.wpay-intro')).toHaveCount(0);
+test("first visit opens the wallet directly without automatic intro slides", async ({
+  page,
+}) => {
+  await page.route("**/api/**", (route) =>
+    route.fulfill({
+      json: route.request().url().endsWith("/status")
+        ? {
+            configured: true,
+            asset_routes: { USDT: ["TRON"] },
+            capabilities: {},
+          }
+        : { balances: [], rates: [], transactions: [], items: [] },
+    }),
+  );
+  await page.goto("/wallet");
+  await expect(page.locator(".wpay-wallet-home")).toBeVisible();
+  expect(
+    await page.evaluate(() => localStorage.getItem("wpay:intro:v1")),
+  ).toBeNull();
+  await expect(page.locator("dialog.wpay-intro")).toHaveCount(0);
 });
 
-test("slow first load keeps Exchange in place and banners skeletonized until wallet data arrives", async ({ page }) => {
+test("slow first load keeps Exchange in place and banners skeletonized until wallet data arrives", async ({
+  page,
+}) => {
   await setup(page, "dark");
   let releaseStatus!: () => void;
-  const gate = new Promise<void>(resolve => { releaseStatus = resolve; });
-  await page.route("**/api/wallet/status", async route => {
+  const gate = new Promise<void>((resolve) => {
+    releaseStatus = resolve;
+  });
+  await page.route("**/api/wallet/status", async (route) => {
     await gate;
-    await route.fulfill({ json: { configured: true, asset_routes: { USDT: ["TRON"] }, capabilities: { qr_pay: true, sbp_buy: true } } });
+    await route.fulfill({
+      json: {
+        configured: true,
+        asset_routes: { USDT: ["TRON"] },
+        capabilities: { qr_pay: true, sbp_buy: true },
+      },
+    });
   });
   await page.reload();
-  const main = page.locator('.wpay-wallet-home');
-  const actions = main.getByRole('region', { name: 'Действия с кошельком' });
-  const exchange = actions.getByRole('button', { name: 'Обменять', exact: true });
-  await expect(actions.getByRole('button')).toHaveCount(4);
+  const main = page.locator(".wpay-wallet-home");
+  const actions = main.getByRole("region", { name: "Действия с кошельком" });
+  const exchange = actions.getByRole("button", {
+    name: "Обменять",
+    exact: true,
+  });
+  await expect(actions.getByRole("button")).toHaveCount(4);
   await expect(exchange).toBeVisible();
   await expect(exchange).toBeDisabled();
   const before = await exchange.boundingBox();
-  const placeholder = main.getByRole('region', { name: 'Загрузка баннеров' });
+  const placeholder = main.getByRole("region", { name: "Загрузка баннеров" });
   await expect(placeholder).toBeVisible();
   const bannerBefore = await placeholder.boundingBox();
   await page.waitForTimeout(1100);
   await expect(placeholder).toBeVisible();
-  await expect(main.getByRole('region', { name: 'Возможности wPay' })).toHaveCount(0);
+  await expect(
+    main.getByRole("region", { name: "Возможности wPay" }),
+  ).toHaveCount(0);
   releaseStatus();
   await expect(exchange).toBeEnabled();
   await expect(placeholder).toHaveCount(0);
-  const banner = main.getByRole('region', { name: 'Возможности wPay' });
+  const banner = main.getByRole("region", { name: "Возможности wPay" });
   await expect(banner).toBeVisible();
-  await expect(actions.getByRole('button')).toHaveCount(4);
+  await expect(actions.getByRole("button")).toHaveCount(4);
   const after = await exchange.boundingBox();
   const bannerAfter = await banner.boundingBox();
   expect(Math.abs(after!.x - before!.x)).toBeLessThan(1);

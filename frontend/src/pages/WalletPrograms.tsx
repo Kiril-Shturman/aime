@@ -1,7 +1,9 @@
 import ChevronRight from "framework7-icons/react/esm/ChevronRight.js";
 import WalletReferralHero from "./WalletReferralHero";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button, Card } from "konsta/react";
+import { walletRequest } from "../lib/wallet-api";
+import { haptic, tg } from "../lib/telegram";
 const surface = "!m-0 !rounded-[28px]";
 export {
   WithdrawalMethods,
@@ -9,16 +11,65 @@ export {
   withdrawalTitles,
 } from "./WalletWithdrawal";
 export type { WithdrawalMethod } from "./WalletWithdrawal";
+type ReferralData = {
+  link: string;
+  invited: number;
+  rewards: Record<string, string>;
+  activity: { day: string; count: number }[];
+  rewards_enabled: boolean;
+};
 export function ReferralProgram() {
   const [period, setPeriod] = useState(30),
-    [conditions, setConditions] = useState(false);
+    [conditions, setConditions] = useState(false),
+    [data, setData] = useState<ReferralData | null>(null),
+    [error, setError] = useState(""),
+    [copied, setCopied] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    walletRequest<ReferralData>("referrals", undefined, controller.signal)
+      .then(setData)
+      .catch((reason) => {
+        if (reason?.name !== "AbortError")
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Не удалось загрузить данные",
+          );
+      });
+    return () => controller.abort();
+  }, []);
+  const activity = useMemo(() => {
+    const cutoff = Date.now() - (period - 1) * 86400000;
+    return (data?.activity || []).filter(
+      (row) => Date.parse(row.day) >= cutoff,
+    );
+  }, [data, period]);
+  const maxActivity = Math.max(1, ...activity.map((row) => Number(row.count)));
+  async function copyLink() {
+    if (!data?.link) return;
+    await navigator.clipboard.writeText(data.link);
+    setCopied(true);
+    haptic("success");
+    window.setTimeout(() => setCopied(false), 1800);
+  }
+  function shareLink() {
+    if (!data?.link) return;
+    const url = `https://t.me/share/url?url=${encodeURIComponent(data.link)}&text=${encodeURIComponent("Присоединяйся ко мне в WPay")}`;
+    if (tg()?.openTelegramLink) tg()?.openTelegramLink?.(url);
+    else window.open(url, "_blank", "noopener,noreferrer");
+    haptic("light");
+  }
   return (
     <div className="flex flex-col gap-5 px-4 pt-3 pb-6">
       <WalletReferralHero />
       <div className="grid grid-cols-2 gap-3">
         {[
-          ["Приглашено", "—", "пользователей"],
-          ["Вознаграждения", "—", "USDT за всё время"],
+          ["Приглашено", data ? String(data.invited) : "—", "пользователей"],
+          [
+            "Вознаграждения",
+            data ? data.rewards.USDT || "0" : "—",
+            "USDT за всё время",
+          ],
         ].map(([label, value, caption]) => (
           <div
             key={label}
@@ -44,21 +95,33 @@ export function ReferralProgram() {
           <input
             aria-label="Реферальная ссылка"
             readOnly
-            value=""
+            value={data?.link || ""}
             placeholder="Ссылка появится после запуска"
             className="w-full bg-transparent text-[14px] text-black placeholder:text-black/35 dark:text-white dark:placeholder:text-white/35"
           />
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <Button data-wpay-primary="" rounded tonal disabled>
-            Скопировать
+          <Button
+            data-wpay-primary=""
+            rounded
+            tonal
+            disabled={!data?.link}
+            onClick={() => void copyLink()}
+          >
+            {copied ? "Скопировано" : "Скопировать"}
           </Button>
-          <Button data-wpay-primary="" rounded disabled>
+          <Button
+            data-wpay-primary=""
+            rounded
+            disabled={!data?.link}
+            onClick={shareLink}
+          >
             Поделиться
           </Button>
         </div>
         <p className="mt-3 text-[12px] leading-5 text-black/40 dark:text-white/40">
-          Персональные ссылки пока не выпускаются.
+          {error ||
+            "Друг должен впервые запустить бота именно по этой ссылке. Пригласивший закрепляется один раз."}
         </p>
       </Card>
       <Card className={surface} contentWrapPadding="p-5">
@@ -84,33 +147,26 @@ export function ReferralProgram() {
           ))}
         </div>
         <div
-          className="relative mt-5 h-40 overflow-hidden rounded-[16px]"
+          className="relative mt-5 flex h-40 items-end gap-1 overflow-hidden rounded-[16px] border-b border-black/10 px-2 pt-3 dark:border-white/10"
           role="img"
-          aria-label={`График приглашений за ${period} дней: данные пока недоступны`}
+          aria-label={`График приглашений за ${period} дней`}
         >
-          <svg
-            className="h-full w-full text-black/10 dark:text-white/10"
-            viewBox="0 0 300 160"
-            preserveAspectRatio="none"
-            aria-hidden="true"
-          >
-            {[20, 60, 100, 140].map((y) => (
-              <line
-                key={y}
-                x1="0"
-                y1={y}
-                x2="300"
-                y2={y}
-                stroke="currentColor"
-                strokeDasharray="3 5"
+          {activity.length ? (
+            activity.map((row) => (
+              <div
+                key={row.day}
+                title={`${row.day}: ${row.count}`}
+                className="min-w-2 flex-1 rounded-t-md bg-primary/70"
+                style={{
+                  height: `${Math.max(8, (Number(row.count) / maxActivity) * 100)}%`,
+                }}
               />
-            ))}
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="rounded-full bg-white px-4 py-2 text-[14px] font-medium text-black/45 dark:bg-[#1c1c1e] dark:text-white/45">
-              Статистика ещё не подключена
-            </span>
-          </div>
+            ))
+          ) : (
+            <div className="m-auto self-center text-[14px] text-black/40 dark:text-white/40">
+              За этот период приглашений пока нет
+            </div>
+          )}
         </div>
         <div className="mt-2 flex justify-between text-[11px] text-black/35 dark:text-white/35">
           <span>
@@ -140,17 +196,17 @@ export function ReferralProgram() {
               [
                 "01",
                 "Поделитесь ссылкой",
-                "После запуска программы здесь появится персональная ссылка.",
+                "Скопируйте персональную ссылку или отправьте её через Telegram.",
               ],
               [
                 "02",
                 "Приглашайте друзей",
-                "По ссылке будут учитываться новые участники программы.",
+                "Засчитывается новый пользователь, впервые запустивший бота по вашей ссылке.",
               ],
               [
                 "03",
                 "Следите за результатами",
-                "Начисления будут доступны по опубликованным условиям программы.",
+                "Количество приглашённых и активность обновляются автоматически.",
               ],
             ].map(([number, title, text]) => (
               <li key={number} className="flex gap-3">
@@ -170,8 +226,9 @@ export function ReferralProgram() {
           </ol>
         )}
         <p className="mt-4 text-[13px] leading-5 text-black/40 dark:text-white/40">
-          Программа готовится к запуску. Размер вознаграждений, условия
-          начисления и вывода пока не опубликованы.
+          Учёт приглашений уже работает. Денежные вознаграждения пока не
+          начисляются — ставка и условия будут включены только после публикации
+          правил.
         </p>
       </Card>
     </div>

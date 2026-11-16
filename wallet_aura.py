@@ -17,6 +17,7 @@ from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import quote, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
+from wallet_notifications import enqueue as enqueue_notification, prepare as prepare_notifications
 
 
 TEST_BASE_URL = "https://testnet-api.aurawallet.co/v1/partner"
@@ -65,6 +66,7 @@ SBP_ORDER_STATUSES = {
 
 def prepare(ledger):
     """Install additive tables. Existing GoSwap rows and routes stay untouched."""
+    prepare_notifications(ledger)
     ledger.db.executescript(
         """
       CREATE TABLE IF NOT EXISTS wallet_provider_routes (
@@ -1754,6 +1756,17 @@ class AuraService:
             (uid, customer_id, self.environment, status, int(verified), int(terminal),
              reason, updated, json.dumps(safe_body, separators=(",", ":")), stamp, stamp),
         )
+        title = "Верификация пройдена" if verified else "Верификация обновлена"
+        message = (
+            "Личность подтверждена. Теперь доступны функции, требующие KYC."
+            if verified else
+            ("Проверка отклонена. Откройте WPay, чтобы посмотреть статус и повторить действие."
+             if terminal else "Документы приняты, проверка продолжается.")
+        )
+        enqueue_notification(
+            self.ledger, f"aura:kyc:{customer_id}:{updated or status}:{status}",
+            uid, "kyc", title, message,
+        )
         return safe_body
 
     def kyc_state(self, uid):
@@ -2912,6 +2925,19 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
          json.dumps(safe, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
     )
     _settle_card_request(ledger, environment, card_id, status)
+    card_text = {
+        "opened": "Карта выпущена и появилась в WPay.",
+        "failed_to_open": "Выпустить карту не удалось. Средства будут обработаны по статусу заявки.",
+        "cancelled": "Карта закрыта.",
+    }.get(status, "Статус карты изменён: " + status + ".")
+    if kind == "card.delivery_updated" and delivery_status:
+        card_text = "Статус доставки физической карты: " + delivery_status + "."
+    if kind == "card.status_changed" and frozen:
+        card_text = "Карта заморожена."
+    enqueue_notification(
+        ledger, f"aura:card:{card_id}:{incoming_updated or kind}:{status}:{delivery_status or ''}",
+        owner[0], "card", "Обновление карты", card_text,
+    )
 
 
 def _store_card_operation(ledger, environment, data):
@@ -3045,6 +3071,17 @@ def _store_card_operation(ledger, environment, data):
          stamp, stamp),
     )
     _settle_card_recharge(ledger, environment, operation_id, status)
+    operation_name = {
+        "purchase": "Покупка", "refund": "Возврат", "reversal": "Отмена",
+        "fee": "Комиссия", "topup": "Пополнение карты", "other": "Операция",
+    }.get(operation_type, "Операция")
+    message = f"{operation_name}: {amount} USDT. Статус: {status}."
+    if merchant:
+        message += " Получатель: " + merchant + "."
+    enqueue_notification(
+        ledger, f"aura:card-operation:{operation_id}:{incoming_updated}:{status}",
+        card[0], "card_operation", "Операция по карте", message,
+    )
 
 
 def _store_sbp_order(ledger, environment, kind, data):
@@ -3095,6 +3132,13 @@ def _store_sbp_order(ledger, environment, kind, data):
          json.dumps(safe_body, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
     )
     _settle_sbp_order(ledger, environment, order_id, status)
+    message = "Статус покупки через СБП: " + status + "."
+    if rub_amount:
+        message += " Сумма: " + rub_amount + " RUB."
+    enqueue_notification(
+        ledger, f"aura:sbp:{order_id}:{incoming_updated or kind}:{status}",
+        owner[0], "sbp", "Покупка через СБП", message,
+    )
 
 
 def _store_qr_payment(ledger, environment, kind, data):
@@ -3153,6 +3197,14 @@ def _store_qr_payment(ledger, environment, kind, data):
          user_id, customer_id, payment_type),
     )
     _settle_qr_payment(ledger, environment, payment_id, status)
+    if user_id:
+        message = "Статус оплаты QR: " + status + "."
+        if amount_rub:
+            message += " Сумма: " + amount_rub + " RUB."
+        enqueue_notification(
+            ledger, f"aura:qr:{payment_id}:{updated or kind}:{status}",
+            user_id, "qr", "Оплата по QR", message,
+        )
 
 
 def _store_withdrawal(ledger, environment, kind, data):
@@ -3190,6 +3242,19 @@ def _store_withdrawal(ledger, environment, kind, data):
         (withdrawal_id, environment, status, amount, fee, recipient, transaction_hash,
          updated or None, json.dumps(safe, separators=(",", ":")), stamp, stamp),
     )
+    owner = ledger.db.execute(
+        "SELECT user_id FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+        "AND entity_type='withdrawal' AND (remote_id=? OR local_id=?) LIMIT 1",
+        (environment, withdrawal_id, withdrawal_id),
+    ).fetchone()
+    if owner:
+        message = "Статус вывода: " + status + "."
+        if amount:
+            message += " Сумма: " + amount + " USDT."
+        enqueue_notification(
+            ledger, f"aura:withdrawal:{withdrawal_id}:{updated or kind}:{status}",
+            owner[0], "withdrawal", "Вывод средств", message,
+        )
 
 
 def store_withdrawal_snapshot(ledger, environment, data):

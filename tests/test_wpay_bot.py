@@ -1,6 +1,17 @@
+import json
 import unittest
+from unittest import mock
 
-from server import _wpay_amount, _wpay_bot_view
+from server import (
+    _wpay_amount, _wpay_audit_line, _wpay_audit_response_detail,
+    _wpay_bot_view, _wpay_presence_payload,
+)
+
+
+class FakeRequest(dict):
+    path = "/api/wallet/aura-cards"
+    method = "POST"
+    headers = {"Authorization": "secret", "X-API-Key": "secret"}
 
 
 class WPayRichBotTests(unittest.TestCase):
@@ -37,10 +48,62 @@ class WPayRichBotTests(unittest.TestCase):
         self.assertNotIn("CVV", rich.upper())
         self.assertNotIn("PIN", plain.upper())
 
+    def test_referral_view_exposes_only_personal_link_and_count(self):
+        rich, plain, markup = _wpay_bot_view(
+            "referral", {"first_name": "User"}, [], [],
+            "https://wallet.example/wallet",
+            referral={"invited": 3, "link": "https://t.me/Workingpaybot?start=ref_abc1234567"},
+        )
+        self.assertIn("Приглашено: <b>3</b>", rich)
+        self.assertIn("ref_abc1234567", plain)
+        self.assertTrue(any(
+            button.get("callback_data") == "wpay:referral"
+            for row in markup["inline_keyboard"] for button in row
+        ))
+
     def test_amount_keeps_precision_and_trims_only_zeroes(self):
         self.assertEqual(_wpay_amount("20.000000"), "20")
         self.assertEqual(_wpay_amount("0.0012300"), "0.00123")
         self.assertEqual(_wpay_amount(None), "0")
+
+    def test_audit_line_contains_metadata_but_never_headers_or_body(self):
+        request = FakeRequest(
+            wpay_profile={"id": 123, "email": "private@example.com"},
+            wpay_audit_detail="card:create",
+        )
+        line = _wpay_audit_line(request, 201, 42)
+        self.assertIn("POST · aura-cards · 201 · tg:123 · 42ms · card:create", line)
+        self.assertNotIn("private@example.com", line)
+        self.assertNotIn("secret", line)
+
+    def test_audit_response_extracts_ids_but_not_personal_data(self):
+        class Response:
+            body = json.dumps({
+                "data": {"card_id": "card-1", "email": "private@example.com", "cvv": "123"},
+                "request_id": "request-1",
+            }).encode()
+        detail = _wpay_audit_response_detail(Response())
+        self.assertIn("card_id=card-1", detail)
+        self.assertIn("request_id=request-1", detail)
+        self.assertNotIn("private@example.com", detail)
+        self.assertNotIn("123", detail)
+
+    def test_presence_card_has_profile_and_open_chat_button(self):
+        with mock.patch.dict("os.environ", {"WPAY_LOG_CHAT_ID": "-5519457168"}):
+            payload = _wpay_presence_payload({
+                "id": 123, "username": "alice", "first_name": "Ali\nce",
+                "last_name": "Test", "language_code": "ru", "is_premium": True,
+                "allows_write_to_pm": True, "photo_url": "https://example.test/photo",
+            }, "Mini App", "campaign-one")
+        self.assertEqual(payload["chat_id"], -5519457168)
+        self.assertIn("Username: @alice", payload["text"])
+        self.assertIn("Имя: Ali ce", payload["text"])
+        self.assertIn("Premium: да", payload["text"])
+        self.assertIn("Start param: campaign-one", payload["text"])
+        self.assertEqual(
+            payload["reply_markup"]["inline_keyboard"][0][0]["url"],
+            "tg://user?id=123",
+        )
 
 
 if __name__ == "__main__":
