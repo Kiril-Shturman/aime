@@ -15,6 +15,27 @@ class FakeRequest(dict):
 
 
 class WPayRichBotTests(unittest.TestCase):
+    def test_start_has_description_and_only_open_button(self):
+        rich, plain, markup = _wpay_bot_view(
+            "start",
+            {"first_name": "Кирилл"},
+            [{"asset": "USDT", "available": "20", "reserved": "0"}],
+            [{"status": "active"}],
+            "https://wallet.example/wallet",
+            admin_url="https://wallet.example/admin?v=1",
+        )
+        self.assertIn("виртуальная карта", plain.lower())
+        self.assertNotIn("20 USDT", plain)
+        self.assertNotIn("Кирилл", plain)
+        self.assertIn('type="web_app"', rich)
+        self.assertEqual(len(markup["inline_keyboard"]), 1)
+        self.assertEqual(len(markup["inline_keyboard"][0]), 1)
+        self.assertEqual(markup["inline_keyboard"][0][0]["text"], "Открыть WPay")
+        self.assertEqual(
+            markup["inline_keyboard"][0][0]["web_app"]["url"],
+            "https://wallet.example/wallet",
+        )
+
     def test_home_is_rich_and_escapes_profile(self):
         rich, plain, markup = _wpay_bot_view(
             "home",

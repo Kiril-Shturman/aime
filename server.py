@@ -1797,6 +1797,27 @@ def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, refer
         for row in balances
     ] or ["USDT: 0 доступно"]
 
+    if view == "start":
+        rich = (
+            "<h1>WPay</h1>"
+            "<p>Виртуальная карта для оплаты по всему миру.</p>"
+            "<p>Пополняйте баланс в USDT, подключайте карту к Apple Pay "
+            "и Google Pay и оплачивайте покупки онлайн и офлайн.</p>"
+        )
+        plain = (
+            "WPay — виртуальная карта для оплаты по всему миру.\n\n"
+            "Пополняйте баланс в USDT, подключайте карту к Apple Pay и Google Pay "
+            "и оплачивайте покупки онлайн и офлайн."
+        )
+        rich += (
+            "<tg-button-row><tg-button type=\"web_app\" style=\"primary\" url=\""
+            + html.escape(app_url, quote=True) + "\">Открыть WPay</tg-button></tg-button-row>"
+        )
+        return rich, plain, {"inline_keyboard": [[{
+            "text": "Открыть WPay",
+            "web_app": {"url": app_url},
+            "style": "primary",
+        }]]}
     if view == "balance":
         rich = (
             "<h1>Баланс WPay</h1>"
@@ -2183,7 +2204,7 @@ async def wpay_telegram_webhook(request):
         )
     callback_data = str(callback.get("data") or "")
     view_by_command = {
-        "/start": "home", "/wallet": "home", "/balance": "balance",
+        "/start": "start", "/wallet": "home", "/balance": "balance",
         "/cards": "cards", "/deposit": "deposit", "/verify": "verify",
         "/help": "help", "/referral": "referral", "/admin": "admin",
     }
