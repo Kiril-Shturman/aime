@@ -520,3 +520,24 @@ test("demo owned card precedes offers and its controls never call provider", asy
   ).toBeVisible();
   expect(state.calls).toHaveLength(0);
 });
+
+test("bottom tabs always start at top after scrolling card details", async ({
+  page,
+}) => {
+  await setup(page, "dark", false, true);
+  const scroll = page.locator(".wpay-desktop-page");
+  for (const destination of ["Кошелёк", "История", "Профиль"]) {
+    await page.getByRole("link", { name: "Карты", exact: true }).click();
+    const main = page.getByRole("main", { name: "Мои карты" });
+    await main.getByRole("button", { name: "Карта 2", exact: true }).click();
+    await expect(
+      main.getByRole("heading", { name: "Для подписок", exact: true }),
+    ).toBeVisible();
+    await scroll.evaluate((el) => (el.scrollTop = 650));
+    await expect
+      .poll(() => scroll.evaluate((el) => el.scrollTop))
+      .toBeGreaterThan(100);
+    await page.getByRole("link", { name: destination, exact: true }).click();
+    await expect.poll(() => scroll.evaluate((el) => el.scrollTop)).toBe(0);
+  }
+});

@@ -61,6 +61,7 @@ import "./WalletCard.css";
 import {
   useId,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -357,6 +358,9 @@ function WalletScreen() {
   const menuButton = useRef<HTMLElement | null>(null);
   const pageRef = useRef<HTMLElement | null>(null);
   const [activeTab, setActiveTab] = useState<WalletTab>("wallet");
+  useLayoutEffect(() => {
+    pageRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }, [activeTab]);
   const [homeProfilePage, setHomeProfilePage] = useState<keyof typeof profilePageTitles | null>(null);
   const [selectedAssetCode, setSelectedAssetCode] = useState<string | null>(
     null,
@@ -439,7 +443,7 @@ function WalletScreen() {
     haptic("light");
     setSelectedAssetCode(null);
     setActiveTab(tab);
-    pageRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    pageRef.current?.scrollTo({ top: 0, behavior: "instant" });
   }
 
   function scanPaymentQr() {
