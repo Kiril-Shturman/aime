@@ -365,14 +365,14 @@ test("cancelling OCR leaves manual fields usable without a delayed overwrite", a
   expect(state.posts).toHaveLength(1);
 });
 
-test("passport photo actions match wallet size and submit requires every field", async ({
+test("passport photo actions retain wallet shape with taller height and submit requires every field", async ({
   page,
 }) => {
   await contacts(page);
   await openDocuments(page);
   for (const name of ["Сфотографировать", "Загрузить фото"]) {
     const button = page.getByRole("button", { name, exact: true });
-    expect((await button.boundingBox())!.height).toBe(62);
+    expect((await button.boundingBox())!.height).toBe(74);
     expect(
       await button.evaluate((el) => getComputedStyle(el).borderRadius),
     ).toBe("22px");

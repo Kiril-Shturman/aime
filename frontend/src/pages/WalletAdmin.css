@@ -1538,6 +1538,63 @@
   color: var(--admin-muted);
   font-size: 12px;
 }
+.wpay-admin-audit-note {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 11px;
+}
+.wpay-admin-operator-actions {
+  border-color: color-mix(in srgb, var(--f7-theme-color) 30%, var(--admin-border));
+}
+.wpay-admin-operator-buttons {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.wpay-admin-operator-buttons button,
+.wpay-admin-operator-send {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--admin-text);
+  background: var(--admin-surface-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.wpay-admin-operator-buttons button:disabled,
+.wpay-admin-operator-send:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.wpay-admin-operator-message {
+  width: 100%;
+  min-height: 88px;
+  margin-top: 9px;
+  padding: 12px;
+  resize: vertical;
+  border: 1px solid var(--admin-border);
+  border-radius: 13px;
+  color: var(--admin-text);
+  background: var(--admin-bg);
+  font: inherit;
+  font-size: 12px;
+}
+.wpay-admin-operator-send {
+  width: 100%;
+  margin-top: 8px;
+  color: #fff;
+  background: var(--f7-theme-color);
+}
+.wpay-admin-operator-notice {
+  margin: 9px 2px 0;
+  color: var(--admin-muted);
+  font-size: 11px;
+}
 
 @media (max-width: 900px) {
   .wpay-admin-problems {
@@ -1546,7 +1603,8 @@
 }
 @media (max-width: 560px) {
   .wpay-admin-problems-list,
-  .wpay-admin-user-facts {
+  .wpay-admin-user-facts,
+  .wpay-admin-operator-buttons {
     grid-template-columns: 1fr;
   }
   .wpay-admin-user-drawer {

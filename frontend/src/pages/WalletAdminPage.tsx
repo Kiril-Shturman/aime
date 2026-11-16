@@ -50,7 +50,8 @@ type Tab =
   | "crypto"
   | "aura"
   | "goswap"
-  | "notifications";
+  | "notifications"
+  | "audit";
 type AdminOverview = {
   users: number;
   events: number;
@@ -72,8 +73,10 @@ type AdminUserDetail = {
   addresses: Json[];
   events: Json[];
   notifications: Json[];
+  audit: Json[];
   referrals: { invited: Json[]; referred_by: Json | null };
 };
+type AuditData = { items: Json[]; total: number };
 type DatabaseData = {
   tables: Record<string, number>;
   table: string;
@@ -219,6 +222,7 @@ const tabs: { id: Tab; label: string; icon: typeof Database }[] = [
   { id: "aura", label: "Aura API", icon: ShieldCheck },
   { id: "goswap", label: "GoSwap API", icon: Server },
   { id: "notifications", label: "Уведомления", icon: Bell },
+  { id: "audit", label: "Аудит", icon: Users },
 ];
 
 export default function WalletAdminPage() {
@@ -293,6 +297,10 @@ export default function WalletAdminPage() {
           walletRequest<BroadcastData>("admin-broadcasts"),
         ]);
         setPayload({ ...notifications, broadcasts: broadcasts.items });
+        setPayloadTab(tab);
+      }
+      if (tab === "audit") {
+        setPayload(await walletRequest<AuditData>("admin-audit?count=250"));
         setPayloadTab(tab);
       }
       setUpdatedAt(new Date());
@@ -451,6 +459,7 @@ export default function WalletAdminPage() {
                       aura: "Подключение, методы и состояние Aura",
                       goswap: "Состояние интеграции и методы GoSwap",
                       notifications: "Системные события и рассылки",
+                      audit: "Кто, когда и что менял в системе",
                     } as Record<Tab, string>
                   )[tab]
                 }
@@ -541,7 +550,55 @@ function TabContent({
     );
   if (tab === "aura")
     return <Aura data={payload as AuraData} reload={reload} />;
+  if (tab === "audit") return <Audit data={payload as AuditData} />;
   return <Notifications data={payload as NotificationData} reload={reload} />;
+}
+
+function Audit({ data }: { data: AuditData }) {
+  const columns: AdminColumn[] = [
+    { key: "created_at", label: "Когда", render: date },
+    { key: "admin_id", label: "Администратор" },
+    { key: "action", label: "Действие" },
+    { key: "target_user_id", label: "Пользователь" },
+    { key: "outcome", label: "Результат" },
+    {
+      key: "detail",
+      label: "Детали",
+      render: (value) =>
+        value && typeof value === "object" ? JSON.stringify(value) : text(value),
+    },
+  ];
+  return (
+    <section className="space-y-3">
+      <div className="wpay-admin-data-toolbar">
+        <div>
+          <strong>{data.total}</strong>
+          <span>действий записано</span>
+        </div>
+        <p className="wpay-admin-audit-note">
+          Тексты сообщений и чувствительные данные не журналируются.
+        </p>
+      </div>
+      <div className="wpay-admin-desktop-only">
+        <AdminTable rows={data.items} columns={columns} />
+      </div>
+      <div className="wpay-admin-mobile-only wpay-admin-mobile-list">
+        {data.items.map((item, index) => (
+          <article key={index} className={card}>
+            <div className="flex items-center justify-between gap-3">
+              <b>{text(item.action)}</b>
+              <span className="wpay-admin-status">{text(item.outcome)}</span>
+            </div>
+            <p className="mt-2 text-xs opacity-50">
+              {date(item.created_at)} · {text(item.admin_id)}
+            </p>
+            <p className="mt-2 text-xs">{text(item.target_user_id)}</p>
+            {details(item.detail, "Безопасные детали")}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
 }
 
 function Aura({
@@ -1568,6 +1625,9 @@ function AdminUserDrawer({
   onClose: () => void;
   onRetry: () => void;
 }) {
+  const [actionWorking, setActionWorking] = useState("");
+  const [actionNotice, setActionNotice] = useState("");
+  const [messageText, setMessageText] = useState("");
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -1585,6 +1645,46 @@ function AdminUserDrawer({
   const copy = (value: unknown) => {
     if (value) void navigator.clipboard?.writeText(String(value));
   };
+  async function runUserAction(operation: string) {
+    if (actionWorking) return;
+    if (
+      operation === "send_message" &&
+      !window.confirm("Отправить это сообщение пользователю в Telegram?")
+    )
+      return;
+    setActionWorking(operation);
+    setActionNotice("");
+    try {
+      const result = await walletRequest<{
+        queued?: number;
+        sent?: boolean;
+        result?: Json;
+      }>("admin-user-action", {
+        user_id: userId,
+        operation,
+        ...(operation === "send_message"
+          ? { text: messageText, confirm: "send_message" }
+          : {}),
+      });
+      if (operation === "refresh_kyc")
+        setActionNotice(
+          `KYC обновлён: ${text(result.result?.status || "готово")}`,
+        );
+      if (operation === "retry_notifications")
+        setActionNotice(`В очередь возвращено: ${result.queued || 0}`);
+      if (operation === "send_message") {
+        setActionNotice("Сообщение отправлено");
+        setMessageText("");
+      }
+      onRetry();
+    } catch (reason) {
+      setActionNotice(
+        reason instanceof Error ? reason.message : "Команда не выполнена",
+      );
+    } finally {
+      setActionWorking("");
+    }
+  }
   return (
     <div className="wpay-admin-drawer-root" role="presentation">
       <button
@@ -1637,6 +1737,59 @@ function AdminUserDrawer({
                 </span>
                 <span>Карты: {detail.aura.cards.length}</span>
               </div>
+
+              <section className="wpay-admin-user-section wpay-admin-operator-actions">
+                <div className="wpay-admin-section-title">
+                  <div>
+                    <span>Оператор</span>
+                    <h3>Безопасные действия</h3>
+                  </div>
+                </div>
+                <div className="wpay-admin-operator-buttons">
+                  <button
+                    type="button"
+                    disabled={!customer || Boolean(actionWorking)}
+                    onClick={() => void runUserAction("refresh_kyc")}
+                  >
+                    <RefreshCw
+                      size={15}
+                      className={
+                        actionWorking === "refresh_kyc" ? "animate-spin" : ""
+                      }
+                    />
+                    Обновить KYC из Aura
+                  </button>
+                  <button
+                    type="button"
+                    disabled={Boolean(actionWorking)}
+                    onClick={() => void runUserAction("retry_notifications")}
+                  >
+                    <Bell size={15} />
+                    Повторить уведомления
+                  </button>
+                </div>
+                <textarea
+                  className="wpay-admin-operator-message"
+                  value={messageText}
+                  onChange={(event) => setMessageText(event.target.value)}
+                  maxLength={4096}
+                  placeholder="Личное сообщение пользователю в Telegram"
+                />
+                <button
+                  type="button"
+                  className="wpay-admin-operator-send"
+                  disabled={!messageText.trim() || Boolean(actionWorking)}
+                  onClick={() => void runUserAction("send_message")}
+                >
+                  <Send size={15} />
+                  {actionWorking === "send_message"
+                    ? "Отправляем…"
+                    : "Отправить сообщение"}
+                </button>
+                {actionNotice && (
+                  <p className="wpay-admin-operator-notice">{actionNotice}</p>
+                )}
+              </section>
 
               <section className="wpay-admin-user-section">
                 <h3>Профиль и контакты</h3>
@@ -1791,6 +1944,22 @@ function AdminUserDrawer({
                     <b>{detail.addresses.length}</b>
                   </div>
                 </div>
+              </section>
+
+              <section className="wpay-admin-user-section">
+                <h3>Последние действия операторов</h3>
+                {detail.audit.length ? (
+                  detail.audit.slice(0, 12).map((item, index) => (
+                    <Row
+                      key={index}
+                      title={text(item.action)}
+                      subtitle={`${date(item.created_at)} · ${text(item.admin_id)}`}
+                      right={text(item.outcome)}
+                    />
+                  ))
+                ) : (
+                  <p className="wpay-admin-user-empty">Действий пока нет.</p>
+                )}
               </section>
             </>
           ) : null}

@@ -160,6 +160,15 @@ export default function WalletVerificationIdentity({
           <div className="wpay-passport-scene" aria-hidden="true">
             <span className="wpay-passport-halo" />
             <span className="wpay-passport-scan-frame" />
+            <span className="wpay-passport-holder">
+              <span className="wpay-passport-holder-stitch" />
+              <img
+                src="/brands/wpay-wordmark-light.svg"
+                width={80}
+                height={33}
+                alt=""
+              />
+            </span>
             <img src={passportArtwork} width={600} height={833} alt="" />
             <span className="wpay-passport-orbit wpay-passport-orbit--one">
               <ScanLine />
@@ -222,7 +231,7 @@ export default function WalletVerificationIdentity({
                 clear
                 rounded
                 disabled={scanning || aura.busy}
-                className="!m-0 !h-[62px] !min-w-0 !rounded-[22px] !bg-black/[.055] !px-1 !text-primary active:!bg-black/10 dark:!bg-white/[.10] dark:active:!bg-white/[.16]"
+                className="!m-0 !h-[74px] !min-w-0 !rounded-[22px] !bg-black/[.055] !px-1 !text-primary active:!bg-black/10 dark:!bg-white/[.10] dark:active:!bg-white/[.16]"
                 onClick={() => target.current?.click()}
               >
                 <span className="flex min-w-0 flex-col items-center justify-center gap-1">
