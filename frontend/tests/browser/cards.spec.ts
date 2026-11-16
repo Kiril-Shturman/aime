@@ -335,6 +335,23 @@ test("four offers are inline: two virtual and two physical without an appearance
   await expect(
     main.getByRole("heading", { name: "Платина", exact: true }),
   ).toBeVisible();
+  const features = main.getByRole("region", {
+    name: "Возможности премиальной карты",
+  });
+  await expect(features.getByRole("article")).toHaveCount(6);
+  const illustrations = features.locator(".wpay-card-benefit-art > img");
+  await expect(illustrations).toHaveCount(6);
+  await expect
+    .poll(() =>
+      illustrations.evaluateAll((images) =>
+        images.every(
+          (image) =>
+            (image as HTMLImageElement).complete &&
+            (image as HTMLImageElement).naturalWidth > 0,
+        ),
+      ),
+    )
+    .toBe(true);
   expect(state.calls).toHaveLength(0);
 });
 

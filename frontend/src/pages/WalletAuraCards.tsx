@@ -570,10 +570,10 @@ export default function WalletAuraCards({
                   ? "Виртуальная карта для поездок: бронирования, билеты и онлайн-сервисы в путешествии."
                   : "Виртуальная карта для подписок, цифровых сервисов и регулярных онлайн-оплат."}
             </p>
-            {(currentKind === "virtual" || premiumOffer) && (
+            {(currentKind === "virtual" || currentKind === "physical") && (
               <WalletSubscriptionFeatures
                 variant={
-                  premiumOffer
+                  currentKind === "physical"
                     ? "premium"
                     : travelOffer
                       ? "travel"
