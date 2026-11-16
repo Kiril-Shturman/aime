@@ -1080,6 +1080,7 @@ function Overview({
   data: AdminOverview;
   onNavigate: (tab: Tab) => void;
 }) {
+  const problems = data.problems ?? { total: 0, items: [] };
   const metrics = [
     ["Пользователи", data.users, Users],
     ["Операции", data.events, Activity],
@@ -1136,12 +1137,12 @@ function Overview({
         ))}
       </section>
       <section
-        className={`wpay-admin-problems ${data.problems.total ? "has-problems" : "is-clear"}`}
+        className={`wpay-admin-problems ${problems.total ? "has-problems" : "is-clear"}`}
         aria-label="Контроль проблем"
       >
         <div className="wpay-admin-problems-heading">
           <span className="wpay-admin-problems-icon">
-            {data.problems.total ? (
+            {problems.total ? (
               <AlertTriangle size={20} />
             ) : (
               <ShieldCheck size={20} />
@@ -1150,14 +1151,14 @@ function Overview({
           <div>
             <small>Операционный контроль</small>
             <h2>
-              {data.problems.total
-                ? `Требуют внимания: ${data.problems.total}`
+              {problems.total
+                ? `Требуют внимания: ${problems.total}`
                 : "Критичных проблем нет"}
             </h2>
           </div>
         </div>
         <div className="wpay-admin-problems-list">
-          {data.problems.items.map((issue) => (
+          {problems.items.map((issue) => (
             <button
               type="button"
               key={issue.kind}
