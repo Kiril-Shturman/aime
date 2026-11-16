@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ArrowUpRight, Heart, Sparkles } from "lucide-react";
+import { Heart, Sparkles } from "lucide-react";
 import qrArtwork from "../assets/verification/qr-promo.png";
 import sbpArtwork from "../assets/verification/sbp-promo.png";
 import cardArtwork from "../assets/verification/wpay-card.webp";
@@ -20,15 +20,15 @@ export default function WalletPromos({
   const slides = [
     {
       id: "friends",
-      title: "С друзьями лучше",
-      text: "Приглашайте друзей в wPay",
+      title: "Приглашайте друзей в wPay",
+
       action: "Пригласить друзей",
       click: onInvite,
     },
     {
       id: "qr",
       title: "Платите по QR-коду",
-      text: "Сканируйте QR СБП и оплачивайте покупки",
+
       action: "Сканировать QR-код",
       click: onQr,
     },
@@ -37,7 +37,7 @@ export default function WalletPromos({
           {
             id: "sbp",
             title: "Пополняйте через СБП",
-            text: "Рубли — в ваш кошелёк wPay",
+
             action: "Пополнить рублями",
             click: onSbp,
           },
@@ -69,6 +69,7 @@ export default function WalletPromos({
             <button
               type="button"
               className="wpay-promo-link"
+              aria-label={slide.action}
               onClick={() => {
                 haptic("light");
                 slide.click();
@@ -76,11 +77,7 @@ export default function WalletPromos({
             >
               <span className="wpay-promo-copy">
                 <strong>{slide.title}</strong>
-                <span>{slide.text}</span>
-                <span className="wpay-promo-action">
-                  {slide.action}
-                  <ArrowUpRight size={15} />
-                </span>
+
               </span>
               <span className="wpay-promo-art" aria-hidden="true">
                 {slide.id === "friends" ? (

@@ -34,10 +34,11 @@
   position: relative;
   display: flex;
   width: 100%;
-  min-height: 166px;
+  height: 116px;
+  min-height: 116px;
   align-items: center;
   border: 0;
-  padding: 21px 18px 34px;
+  padding: 14px 18px 26px;
   text-align: left;
   color: inherit;
   background: transparent;
@@ -252,3 +253,8 @@
 .wpay-promo--qr .wpay-promo-copy { width: 65%; }
 .wpay-promo--qr .wpay-promo-art { right: -7px; top: 4px; width: 133px; height: 154px; }
 .wpay-promo-qr { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 8px 10px #1c25643d); transform: rotate(8deg); }
+
+.wpay-promo-copy strong { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.wpay-promo-art { scale: .76; transform-origin: top right; top: 0; right: 3px; }
+.wpay-promo--sbp .wpay-promo-art { top: 0; right: 3px; }
+.wpay-promo--qr .wpay-promo-art { scale: .71; top: 0; right: 0; }
