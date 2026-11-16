@@ -334,3 +334,5 @@
 .wpay-promo-sbp-symbol img { position: absolute; left: -12px; top: 0; width: 205px; height: 92px; max-width: none; object-fit: fill; }
 .wpay-promo-sbp-symbol { right: 25px; top: 51px; width: 83px; height: 105px; }
 .wpay-promo-sbp-symbol img { left: -14px; width: 234px; height: 105px; }
+.wpay-promo--sbp .wpay-promo-card { right: -29px; }
+.wpay-promo-sbp-symbol { right: 49px; }
