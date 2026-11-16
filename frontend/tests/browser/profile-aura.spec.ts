@@ -490,8 +490,9 @@ test("cropping removes background numbers before local OCR", async ({
       mimeType: "image/png",
       buffer: Buffer.from(image, "base64"),
     });
-  const imageBox = await page.locator(".ReactCrop img").boundingBox();
   const handle = page.locator(".ReactCrop__drag-handle.ord-e");
+  await handle.scrollIntoViewIfNeeded();
+  const imageBox = await page.locator(".ReactCrop img").boundingBox();
   const box = await handle.boundingBox();
   await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
   await page.mouse.down();
@@ -501,6 +502,10 @@ test("cropping removes background numbers before local OCR", async ({
     { steps: 10 },
   );
   await page.mouse.up();
+  const selected = await page
+    .locator(".ReactCrop__crop-selection")
+    .boundingBox();
+  expect(selected!.width / imageBox!.width).toBeLessThan(0.7);
   await page
     .getByRole("button", { name: "Распознать паспорт", exact: true })
     .click();
@@ -508,5 +513,58 @@ test("cropping removes background numbers before local OCR", async ({
     timeout: 60000,
   });
   await expect(page.locator("#identity-passport")).toHaveValue("1234567890");
+  expect(state.posts).toHaveLength(1);
+});
+
+test("PaddleOCR reads Cyrillic on a tilted document-style photo", async ({
+  page,
+}) => {
+  test.setTimeout(90000);
+  const state = await contacts(page);
+  await openDocuments(page);
+  const image = await page.evaluate(() => {
+    const c = document.createElement("canvas");
+    c.width = 1600;
+    c.height = 1400;
+    const x = c.getContext("2d")!;
+    x.fillStyle = "#777a80";
+    x.fillRect(0, 0, 1600, 1400);
+    x.translate(800, 700);
+    x.rotate(0.13);
+    x.fillStyle = "#e9e5da";
+    x.fillRect(-650, -550, 1300, 1100);
+    x.fillStyle = "#23334a";
+    x.font = "36px Arial";
+    [
+      "РОССИЙСКАЯ ФЕДЕРАЦИЯ",
+      "Фамилия ИВАНОВ",
+      "Имя ИВАН",
+      "Отчество ИВАНОВИЧ",
+      "Дата рождения 01.02.1990",
+      "Дата выдачи 03.04.2010",
+      "12 34 567890",
+    ].forEach((s, i) => x.fillText(s, -540, -410 + i * 130));
+    x.strokeStyle = "#ba7272";
+    x.lineWidth = 4;
+    x.beginPath();
+    x.arc(440, -300, 100, 0, Math.PI * 2);
+    x.stroke();
+    return c.toDataURL("image/png").split(",")[1];
+  });
+  await page
+    .getByLabel("Загрузить фото паспорта", { exact: true })
+    .setInputFiles({
+      name: "tilted-synthetic-document.png",
+      mimeType: "image/png",
+      buffer: Buffer.from(image, "base64"),
+    });
+  await page
+    .getByRole("button", { name: "Распознать паспорт", exact: true })
+    .click();
+  await expect(page.getByText(/Найдено полей:/)).toBeVisible({
+    timeout: 60000,
+  });
+  await expect(page.locator("#identity-last_name")).toHaveValue("ИВАНОВ");
+  await expect(page.locator("#identity-birth_date")).toHaveValue("1990-02-01");
   expect(state.posts).toHaveLength(1);
 });

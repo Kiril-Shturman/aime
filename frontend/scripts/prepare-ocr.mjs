@@ -25,3 +25,5 @@ copyFileSync(
   resolve(target, "TESSERACT-LICENSE.txt"),
 );
 copyFileSync(resolve(core, "LICENSE"), resolve(target, "CORE-LICENSE.txt"));
+
+await import("./prepare-paddle-ocr.mjs");

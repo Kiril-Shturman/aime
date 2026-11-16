@@ -22,6 +22,7 @@ import {
   Search,
   Send,
   Server,
+  Settings,
   ShieldCheck,
   Users,
   X,
@@ -53,7 +54,8 @@ type Tab =
   | "goswap"
   | "notifications"
   | "audit"
-  | "cards";
+  | "cards"
+  | "tariffs";
 type AdminOverview = {
   users: number;
   events: number;
@@ -80,6 +82,11 @@ type AdminUserDetail = {
 };
 type AuditData = { items: Json[]; total: number };
 type CardsData = { items: Json[]; operations: Json[]; total: number };
+type TariffsData = {
+  items: (Json & { product: string; label: string; enforced: boolean; enabled: boolean })[];
+  history: Json[];
+  provider: Json;
+};
 type DatabaseData = {
   tables: Record<string, number>;
   table: string;
@@ -223,6 +230,7 @@ const tabs: { id: Tab; label: string; icon: typeof Database }[] = [
   { id: "payments", label: "Операции", icon: Activity },
   { id: "crypto", label: "Криптовалюты", icon: Coins },
   { id: "cards", label: "Карты", icon: CreditCard },
+  { id: "tariffs", label: "Тарифы", icon: Settings },
   { id: "aura", label: "Aura API", icon: ShieldCheck },
   { id: "goswap", label: "GoSwap API", icon: Server },
   { id: "notifications", label: "Уведомления", icon: Bell },
@@ -309,6 +317,10 @@ export default function WalletAdminPage() {
       }
       if (tab === "cards") {
         setPayload(await walletRequest<CardsData>("admin-cards"));
+        setPayloadTab(tab);
+      }
+      if (tab === "tariffs") {
+        setPayload(await walletRequest<TariffsData>("admin-tariffs"));
         setPayloadTab(tab);
       }
       setUpdatedAt(new Date());
@@ -552,6 +564,8 @@ function TabContent({
     return <Crypto data={payload as CryptoData} reload={reload} />;
   if (tab === "cards")
     return <Cards data={payload as CardsData} reload={reload} />;
+  if (tab === "tariffs")
+    return <Tariffs data={payload as TariffsData} reload={reload} />;
   if (tab === "goswap")
     return (
       <>
@@ -609,6 +623,106 @@ function Audit({ data }: { data: AuditData }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<void> }) {
+  const [selected, setSelected] = useState(data.items[0]?.product || "");
+  const current = data.items.find((item) => item.product === selected) || data.items[0];
+  const [enabled, setEnabled] = useState(Boolean(current?.enabled));
+  const [fixed, setFixed] = useState(text(current?.fixed_fee || "0"));
+  const [percent, setPercent] = useState(text(current?.percent_fee || "0"));
+  const [minimum, setMinimum] = useState(text(current?.minimum_fee || "0"));
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  function choose(product: string) {
+    const item = data.items.find((row) => row.product === product);
+    if (!item) return;
+    setSelected(product);
+    setEnabled(Boolean(item.enabled));
+    setFixed(text(item.fixed_fee || "0"));
+    setPercent(text(item.percent_fee || "0"));
+    setMinimum(text(item.minimum_fee || "0"));
+    setNote("");
+    setNotice("");
+  }
+  async function save() {
+    if (!current || saving) return;
+    if (window.prompt(`Введите TARIFF ${current.product}`) !== `TARIFF ${current.product}`) return;
+    setSaving(true);
+    setNotice("");
+    try {
+      await walletRequest("admin-tariffs", {
+        product: current.product, enabled, fixed_fee: fixed,
+        percent_fee: percent, minimum_fee: minimum, note,
+        confirm: `TARIFF ${current.product}`,
+      });
+      setNotice("Новая версия тарифа сохранена");
+      await reload();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Тариф не сохранён");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <div className="space-y-4">
+      <section className={card}>
+        <div className="wpay-admin-section-title">
+          <div><span>Ценообразование</span><h2>Тарифы WPay</h2></div>
+          <i>Все суммы в USDT</i>
+        </div>
+        <p className="text-xs opacity-55">
+          Комиссия WPay считается отдельно от цены Aura. Новая версия действует только на новые операции; повторы используют сохранённую версию.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {data.items.map((item) => (
+            <button type="button" key={item.product} onClick={() => choose(item.product)}
+              className={`rounded-2xl border p-4 text-left ${selected === item.product ? "border-blue-500 bg-blue-500/5" : "border-[var(--admin-border)]"}`}>
+              <b className="block text-sm">{item.label}</b>
+              <small className="mt-1 block opacity-50">
+                {item.enforced ? (item.enabled ? "Включён" : "Выключен") : "Подключение расчёта готовится"}
+              </small>
+              {item.provider_fee !== undefined && item.provider_fee !== null && (
+                <small className="mt-2 block text-blue-500">
+                  База Aura: {amount(item.provider_fee)} {text(item.provider_fee_unit)}
+                  {item.provider_minimum ? ` · минимум ${amount(item.provider_minimum)} USDT` : ""}
+                </small>
+              )}
+              <span className="mt-3 block text-xs">
+                {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум {amount(item.minimum_fee)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+      {current && (
+        <section className={card}>
+          <div className="wpay-admin-section-title"><div><span>{current.product}</span><h2>{current.label}</h2></div></div>
+          {!current.enforced && <p className="mb-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-600">Параметры видны для планирования, но включение заблокировано до подключения безопасного расчёта к settlement.</p>}
+          <div className="grid gap-3 md:grid-cols-3">
+            <label><span className="text-xs font-semibold">Фиксированная комиссия</span><input className={`${input} mt-2`} value={fixed} onChange={(e) => setFixed(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">Процент</span><input className={`${input} mt-2`} value={percent} onChange={(e) => setPercent(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">Минимальная комиссия</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
+          </div>
+          <label className="mt-3 block"><span className="text-xs font-semibold">Комментарий к версии</span><input className={`${input} mt-2`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Причина изменения" /></label>
+          <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять к новым операциям</label>
+          <button type="button" disabled={saving} onClick={() => void save()} className="mt-4 rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{saving ? "Сохраняю…" : "Сохранить новую версию"}</button>
+          {notice && <p className="mt-3 text-xs">{notice}</p>}
+        </section>
+      )}
+      <section className={card}>
+        <div className="wpay-admin-section-title"><div><span>Аудит цен</span><h2>История версий</h2></div><b>{data.history.length}</b></div>
+        <AdminTable rows={data.history} columns={[
+          { key: "created_at", label: "Когда", render: date },
+          { key: "product", label: "Продукт" }, { key: "enabled", label: "Статус", render: (v) => v ? "Включён" : "Выключен" },
+          { key: "fixed_fee", label: "Фикс" }, { key: "percent_fee", label: "%" },
+          { key: "minimum_fee", label: "Минимум" }, { key: "created_by", label: "Автор" },
+        ]} />
+      </section>
+    </div>
   );
 }
 

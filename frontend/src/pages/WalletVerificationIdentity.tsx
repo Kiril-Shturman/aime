@@ -141,10 +141,13 @@ export default function WalletVerificationIdentity({
           ? `Найдено полей: ${count}. Сверьте все данные с паспортом и исправьте неточности.`
           : "Не удалось уверенно прочитать поля. Попробуйте фото без бликов или заполните их вручную.",
       );
-    } catch {
+    } catch (error) {
       if (!controller.signal.aborted && job.current === controller)
         setNotice(
-          "Не удалось прочитать фото. Попробуйте JPG или заполните поля вручную.",
+          error instanceof Error &&
+            error.message.startsWith("Не удалось запустить")
+            ? error.message
+            : "Не удалось прочитать фото. Попробуйте JPG или заполните поля вручную.",
         );
     } finally {
       clearTimeout(timeout);
