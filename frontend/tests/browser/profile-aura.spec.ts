@@ -175,6 +175,15 @@ test("invalid contacts never post; viewing KYC never registers a customer", asyn
     page.getByRole("heading", { name: "Ваши контакты" }),
   ).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
+  const continueButton = page.getByRole("button", { name: "Продолжить", exact: true });
+  await expect(continueButton).toHaveCount(0);
+  await page.locator("#verification-email").fill("hello@");
+  await expect(continueButton).toHaveCount(0);
+  await page.locator("#verification-email").fill("hello@example.com");
+  await expect(continueButton).toBeVisible();
+  await page.locator("#verification-email").fill("");
+  await expect(continueButton).toHaveCount(0);
+  await page.locator("#verification-email").fill("hello@example.com");
   await page.setViewportSize({ width: 375, height: 667 });
   const next = await page
     .getByRole("button", { name: "Продолжить", exact: true })

@@ -334,17 +334,20 @@ export default function WalletVerification({
               </button>
             )}
           </div>
-          <div className="wpay-verification-footer">
-            <Button
-              type="submit"
-              data-wpay-primary=""
-              rounded
-              disabled={aura.busy || aura.loading || !aura.available}
-              className="!m-0 !w-full"
-            >
-              {aura.busy ? "Подготавливаем…" : "Продолжить"}
-            </Button>
-          </div>
+          {aura.email.trim().length <= 254 &&
+            /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(aura.email.trim()) && (
+              <div className="wpay-verification-footer">
+                <Button
+                  type="submit"
+                  data-wpay-primary=""
+                  rounded
+                  disabled={aura.busy || aura.loading || !aura.available}
+                  className="!m-0 !w-full"
+                >
+                  {aura.busy ? "Подготавливаем…" : "Продолжить"}
+                </Button>
+              </div>
+            )}
         </form>
       </section>
     );
