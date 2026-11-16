@@ -329,3 +329,31 @@ test("four card appearances are local and persist without issuing another card",
   ).toHaveAttribute("aria-pressed", "true");
   expect(state.calls).toHaveLength(0);
 });
+
+test("first card offer is named For subscriptions and shows provider-backed feature blocks", async ({
+  page,
+}) => {
+  const state = await setup(page, "dark", false, true);
+  const main = page.getByRole("main", { name: "Мои карты" });
+  await expect(
+    main.getByRole("heading", { name: "Для подписок", exact: true }),
+  ).toBeVisible();
+  const features = main.getByRole("region", {
+    name: "Возможности карты для подписок",
+  });
+  await expect(
+    features.getByText("Подписки и сервисы", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    features.getByText("От 5 USDT · комиссия 1%", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    features.getByText("Всё под контролем", { exact: true }),
+  ).toBeVisible();
+  expect(state.calls).toHaveLength(0);
+  await main.getByRole("button", { name: "Карта 2", exact: true }).click();
+  await expect(
+    main.getByRole("heading", { name: "Карта с доставкой", exact: true }),
+  ).toBeVisible();
+  await expect(features).toHaveCount(0);
+});

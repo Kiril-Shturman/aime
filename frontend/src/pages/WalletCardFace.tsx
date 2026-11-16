@@ -144,7 +144,7 @@ export default function WalletCardFace({
               {offer
                 ? kind === "physical"
                   ? "Карта с доставкой"
-                  : "Виртуальная карта"
+                  : "Для подписок"
                 : (maskedPan ?? "Номер появится после выпуска")}
             </span>
             <span className="wpay-card-face-kind">

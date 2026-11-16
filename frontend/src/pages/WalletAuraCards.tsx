@@ -8,6 +8,8 @@ import { Button, List, ListItem } from "konsta/react";
 import { Popup, Page, Navbar, NavRight, Link } from "framework7-react";
 import {
   CreditCard,
+  Repeat2,
+  Wallet,
   Truck,
   KeyRound,
   ShieldCheck,
@@ -553,13 +555,54 @@ export default function WalletAuraCards({
             <h2 className="text-[21px] font-semibold">
               {currentKind === "physical"
                 ? "Карта с доставкой"
-                : "Карта для онлайн-покупок"}
+                : "Для подписок"}
             </h2>
             <p className="mt-2 text-[15px] leading-6 text-black/50 dark:text-white/50">
               {currentKind === "physical"
                 ? "Выберите физическую карту и укажите адрес получателя при оформлении."
-                : "Выпустите виртуальную карту и управляйте ею прямо в кошельке."}
+                : "Виртуальная карта для подписок, цифровых сервисов и регулярных онлайн-оплат."}
             </p>
+            {currentKind === "virtual" && (
+              <section
+                className="wpay-subscription-features"
+                aria-label="Возможности карты для подписок"
+              >
+                {[
+                  {
+                    title: "Подписки и сервисы",
+                    description: "Реквизиты для регулярных онлайн-оплат.",
+                    Icon: Repeat2,
+                    tone: "purple",
+                  },
+                  {
+                    title: "Пополнение в USDT",
+                    description: fees
+                      ? `От ${fees.minimum_recharge_amount} USDT · комиссия ${fees.recharge_fee_pct}%`
+                      : "С баланса вашего кошелька.",
+                    Icon: Wallet,
+                    tone: "blue",
+                  },
+                  {
+                    title: "Всё под контролем",
+                    description: "Реквизиты, заморозка и коды 3DS.",
+                    Icon: ShieldCheck,
+                    tone: "mint",
+                  },
+                ].map(({ title, description, Icon, tone }) => (
+                  <div key={title} className="wpay-subscription-feature">
+                    <span
+                      className={`wpay-subscription-feature-icon wpay-subscription-feature-icon--${tone}`}
+                    >
+                      <Icon size={23} />
+                    </span>
+                    <span>
+                      <strong>{title}</strong>
+                      <span>{description}</span>
+                    </span>
+                  </div>
+                ))}
+              </section>
+            )}
             <div className="wpay-aura-info mt-4">
               {infoRow(
                 "Выпуск",
@@ -844,7 +887,7 @@ export default function WalletAuraCards({
                     large
                     rounded
                     data-wpay-primary=""
-              className="wpay-aura-primary !mt-5 !w-full"
+                    className="wpay-aura-primary !mt-5 !w-full"
                     disabled={
                       !fees ||
                       Boolean(busy) ||
@@ -948,7 +991,7 @@ export default function WalletAuraCards({
                     large
                     rounded
                     data-wpay-primary=""
-              className="wpay-aura-primary !mt-5 !w-full"
+                    className="wpay-aura-primary !mt-5 !w-full"
                     disabled={
                       Boolean(busy) ||
                       !fees ||
@@ -1195,7 +1238,7 @@ export default function WalletAuraCards({
                       large
                       rounded
                       data-wpay-primary=""
-              className="wpay-aura-primary !mt-5 !w-full"
+                      className="wpay-aura-primary !mt-5 !w-full"
                       onClick={() => openPanel("activation")}
                     >
                       Карта получена — активировать
