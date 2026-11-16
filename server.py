@@ -2225,6 +2225,18 @@ async def wpay_telegram_webhook(request):
                 _telegram_bot_api(token, "answerCallbackQuery", {"callback_query_id": callback["id"]})
             except Exception:
                 pass
+        start_video = os.environ.get("WPAY_START_VIDEO_FILE_ID", "").strip()
+        if command == "/start" and start_video:
+            try:
+                return _telegram_bot_api(token, "sendVideo", {
+                    "chat_id": chat_id,
+                    "video": start_video,
+                    "caption": plain,
+                    "reply_markup": reply_markup,
+                    "supports_streaming": True,
+                })
+            except Exception as exc:
+                print(f"[wpay-bot] start video failed: {exc}", flush=True)
         try:
             return _telegram_bot_api(token, "sendRichMessage", {
                 "chat_id": chat_id,
