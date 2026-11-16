@@ -856,7 +856,7 @@
 /* Passport capture and review, using the verification page's theme tokens. */
 .wpay-passport-scene {
   position: relative;
-  height: 210px;
+  height: 225px;
   margin: -12px 0 0;
   isolation: isolate;
   pointer-events: none;
@@ -1113,7 +1113,7 @@
 .wpay-passport-scene > .wpay-passport-original {
   left: 42%;
   height: 205px;
-  top: 0;
+  top: 8px;
   z-index: 1;
 }
 .wpay-passport-scene > .wpay-passport-kyc-document {
