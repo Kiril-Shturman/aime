@@ -236,6 +236,20 @@ const tabs: { id: Tab; label: string; icon: typeof Database }[] = [
   { id: "notifications", label: "Уведомления", icon: Bell },
   { id: "audit", label: "Аудит", icon: Users },
 ];
+const navGroups: { label: string; items: Tab[] }[] = [
+  {
+    label: "Управление",
+    items: ["overview", "data", "payments", "cards", "tariffs"],
+  },
+  {
+    label: "Инфраструктура",
+    items: ["crypto", "aura", "goswap"],
+  },
+  {
+    label: "Контроль",
+    items: ["notifications", "audit"],
+  },
+];
 
 export default function WalletAdminPage() {
   const { theme, toggle: toggleTheme } = useTheme();
@@ -393,25 +407,39 @@ export default function WalletAdminPage() {
             <ArrowLeft size={19} />
             <span>В кошелёк</span>
           </F7Button>
-          <div className="wpay-admin-nav-caption">Рабочее пространство</div>
-          <nav className="wpay-admin-nav" aria-label="Разделы админки">
-            {tabs.map((item) => (
-              <F7Button
-                large
-                fill={tab === item.id}
-                aria-current={tab === item.id ? "page" : undefined}
-                key={item.id}
-                onClick={() => {
-                  setTab(item.id);
-                  setMobileNavOpen(false);
-                }}
-                className={`wpay-admin-navitem ${tab === item.id ? "is-active" : ""}`}
-              >
-                <item.icon size={20} />
-                <span>{item.label}</span>
-              </F7Button>
-            ))}
-          </nav>
+          <div className="wpay-admin-nav-scroll">
+            <div className="wpay-admin-nav-caption">Рабочее пространство</div>
+            <nav className="wpay-admin-nav" aria-label="Разделы админки">
+              {navGroups.map((group) => (
+                <section className="wpay-admin-nav-group" key={group.label}>
+                  <div className="wpay-admin-nav-group-title">{group.label}</div>
+                  <div className="wpay-admin-nav-group-items">
+                    {group.items.map((id) => {
+                      const item = tabs.find((candidate) => candidate.id === id)!;
+                      return (
+                        <F7Button
+                          large
+                          fill={tab === item.id}
+                          aria-current={tab === item.id ? "page" : undefined}
+                          key={item.id}
+                          onClick={() => {
+                            setTab(item.id);
+                            setMobileNavOpen(false);
+                          }}
+                          className={`wpay-admin-navitem ${tab === item.id ? "is-active" : ""}`}
+                        >
+                          <span className="wpay-admin-nav-icon" aria-hidden="true">
+                            <item.icon size={18} />
+                          </span>
+                          <span>{item.label}</span>
+                        </F7Button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </nav>
+          </div>
           <div className="wpay-admin-secure">
             <ShieldCheck size={18} />
             <span>
