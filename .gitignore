@@ -56,3 +56,6 @@ dist/
 
 frontend/test-results/
 frontend/playwright-report/
+
+# OCR runtime is copied reproducibly from pinned npm dependencies at build time
+frontend/public/ocr/

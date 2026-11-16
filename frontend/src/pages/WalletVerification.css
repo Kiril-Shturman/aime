@@ -852,3 +852,240 @@
 .wpay-verification-identity-body .wpay-verification-contact-copy p {
   font-size: 15px;
 }
+
+/* Passport capture and review, using the verification page's theme tokens. */
+.wpay-passport-scene {
+  position: relative;
+  height: 210px;
+  margin: -12px 0 0;
+  isolation: isolate;
+  pointer-events: none;
+}
+.wpay-passport-scene > img {
+  position: absolute;
+  height: 188px;
+  width: auto;
+  left: 50%;
+  top: 5px;
+  transform: translateX(-50%) rotate(-12deg);
+  filter: drop-shadow(0 16px 20px #23498d26);
+  animation: wpay-passport-hover 6s ease-in-out infinite;
+}
+.wpay-passport-halo {
+  position: absolute;
+  inset: 15px 12%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, #94baff66, transparent 70%);
+}
+.dark .wpay-passport-halo {
+  background: radial-gradient(ellipse, #4576d34a, transparent 70%);
+}
+.wpay-passport-scan-frame {
+  position: absolute;
+  width: 180px;
+  height: 150px;
+  border: 1px solid #558cef40;
+  border-radius: 28px;
+  left: calc(50% - 90px);
+  top: 28px;
+  transform: rotate(9deg);
+  background: linear-gradient(140deg, #70a7ff0f, transparent);
+}
+.wpay-passport-verified {
+  position: absolute;
+  left: calc(50% + 48px);
+  top: 117px;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #69a7ff, #2566e8);
+  box-shadow: 0 8px 18px #3268db30;
+  transform: rotate(10deg);
+}
+.wpay-passport-float {
+  position: absolute;
+  left: calc(50% - 109px);
+  top: 32px;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: #568cec;
+  background: #d9e8ffb3;
+  border-radius: 14px;
+  transform: rotate(-12deg);
+}
+.dark .wpay-passport-float {
+  color: #a9c9ff;
+  background: #324665b3;
+}
+.wpay-passport-photo-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 24px 20px 10px;
+}
+.wpay-passport-photo-actions button {
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 96px;
+  border-radius: 24px;
+  background: #e9f1ff;
+  color: #286ce7;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+.wpay-passport-photo-actions button:active {
+  transform: scale(0.97);
+  background: #d8e6ff;
+}
+.dark .wpay-passport-photo-actions button {
+  background: #24334e;
+  color: #8bb8ff;
+}
+.dark .wpay-passport-photo-actions button:active {
+  background: #2e4262;
+}
+.wpay-passport-photo-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.wpay-passport-manual {
+  display: block;
+  border: 0;
+  margin: 0 auto 18px;
+  padding: 8px 14px;
+  background: transparent;
+  color: #347be9;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.dark .wpay-passport-manual {
+  color: #8bb8ff;
+}
+.wpay-passport-photo-review {
+  position: relative;
+  margin: 16px 24px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: #e7ebf2;
+}
+.dark .wpay-passport-photo-review {
+  background: #202c40;
+}
+.wpay-passport-photo-review > img {
+  display: block;
+  width: 100%;
+  height: 155px;
+  object-fit: contain;
+}
+.wpay-passport-photo-review > button {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  color: #263653;
+  cursor: pointer;
+}
+.dark .wpay-passport-photo-review > button {
+  background: #354359;
+  color: #fff;
+}
+.wpay-passport-progress {
+  margin: 16px 24px;
+  font-size: 13px;
+  color: var(--verify-ink);
+}
+.wpay-passport-progress > div {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.wpay-passport-progress button {
+  border: 0;
+  padding: 6px;
+  font: inherit;
+  background: transparent;
+  color: #347be9;
+  cursor: pointer;
+}
+.dark .wpay-passport-progress button {
+  color: #8bb8ff;
+}
+.wpay-passport-progress progress {
+  width: 100%;
+  height: 5px;
+  display: block;
+  margin-top: 10px;
+  accent-color: #3984ff;
+}
+.wpay-passport-notice {
+  margin: 16px 24px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #eaf1fc;
+  color: var(--verify-ink);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.dark .wpay-passport-notice {
+  background: #243148;
+}
+.wpay-passport-fields-heading {
+  margin: 20px 24px 8px;
+  color: var(--verify-muted);
+  font-size: 13px;
+  font-weight: 600;
+  scroll-margin-top: 20px;
+}
+.wpay-passport-confirm {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  margin: 20px 24px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--verify-ink);
+  cursor: pointer;
+}
+.wpay-passport-confirm > input {
+  width: 21px;
+  height: 21px;
+  flex-shrink: 0;
+  margin: 0;
+  accent-color: #3984ff;
+}
+@keyframes wpay-passport-hover {
+  0%,
+  100% {
+    transform: translateX(-50%) rotate(-12deg) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) rotate(-8deg) translateY(-7px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpay-passport-scene > img {
+    animation: none;
+  }
+}
