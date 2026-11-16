@@ -38,7 +38,7 @@ export default function WalletPromos({
   const slides = [
     {
       id: "friends",
-      title: "Подари 3 друзьям\nПо $5 на карту бесплатно!",
+      title: "Подари 3 друзьям\nПо $5 на карту\nбесплатно!",
 
       action: "Пригласить друзей",
       click: onInvite,

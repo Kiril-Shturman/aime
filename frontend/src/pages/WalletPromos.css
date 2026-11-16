@@ -321,3 +321,7 @@
 .wpay-promo-gift-wrap:before { left: 52px; width: 19px; }
 .wpay-promo-gift-wrap:after { top: 22px; height: 15px; }
 .wpay-promo-gift-bow { top: 7px; left: 27px; scale: 1; }
+.wpay-promo-subline,
+.wpay-promo--friends .wpay-promo-subline { font-size: 18px; font-weight: 750; line-height: 1.17; margin-top: 0; }
+.wpay-promo--friends .wpay-promo-link { padding-top: 6px; padding-bottom: 5px; }
+.wpay-promo--friends .wpay-promo-countdown { margin-top: 3px; padding-top: 2px; padding-bottom: 2px; }
