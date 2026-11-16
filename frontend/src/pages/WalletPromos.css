@@ -310,3 +310,14 @@
 .wpay-promo-receipts .wpay-promo-receipt--back { right: 5px; top: 48px; transform: rotate(19deg); opacity: .55; }
 .wpay-promo-art { z-index: 2; }
 .wpay-promo-copy { z-index: 3; }
+
+.wpay-promo--friends .wpay-promo-link { padding-top: 7px; padding-bottom: 18px; }
+.wpay-promo--friends .wpay-promo-copy { gap: 0; }
+.wpay-promo--friends .wpay-promo-subline { font-size: 14px; margin-top: 4px; }
+.wpay-promo-countdown { display: inline-flex; align-items: center; align-self: flex-start; gap: 6px; margin-top: 6px; padding: 3px 7px; border: 1px solid #ffffff30; border-radius: 6px; background: #0469b32a; font-size: 10px !important; line-height: 1.2 !important; color: #ffffffdf; }
+.wpay-promo-countdown>span { font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .5px; }
+.wpay-promo-gift { top: -2px; height: 126px; right: 1px; transform: rotate(8deg); }
+.wpay-promo-gift-wrap { inset: 25px 1px 5px 7px; border-radius: 8px 8px 12px 12px; }
+.wpay-promo-gift-wrap:before { left: 52px; width: 19px; }
+.wpay-promo-gift-wrap:after { top: 22px; height: 15px; }
+.wpay-promo-gift-bow { top: 7px; left: 27px; scale: 1; }

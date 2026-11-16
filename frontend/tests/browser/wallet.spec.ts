@@ -712,3 +712,16 @@ test("home promo advances automatically without horizontal scrolling", async ({ 
   await expect(carousel.getByRole("button", { name: /Баннер 2:/ })).toHaveAttribute("aria-current", "true", { timeout: 8000 });
   await expect(carousel.locator(".wpay-promos-rail")).toHaveJSProperty("scrollLeft", 0);
 });
+
+test("gift countdown persists its deadline across reload and expires without restarting", async ({ page }) => {
+  await page.clock.install();
+  await setup(page, "dark");
+  await expect(page.locator(".wpay-promo-countdown")).toBeVisible();
+  const deadline = await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"));
+  expect(Number(deadline)).toBeGreaterThan(Date.now());
+  await page.reload();
+  expect(await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"))).toBe(deadline);
+  await page.clock.fastForward(24 * 60 * 60 * 1000 + 1000);
+  await expect(page.locator('.wpay-promo-countdown')).toHaveText("Время истекло");
+  expect(await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"))).toBe(deadline);
+});

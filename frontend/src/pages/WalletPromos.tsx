@@ -18,10 +18,27 @@ export default function WalletPromos({
   const suppressClickUntil = useRef(0);
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [giftDeadline] = useState(() => {
+    const key = "wpay:gift-banner:deadline:v1";
+    const fallback = Date.now() + 24 * 60 * 60 * 1000;
+    try {
+      const saved = Number(localStorage.getItem(key));
+      if (Number.isFinite(saved) && saved > 0) return saved;
+      localStorage.setItem(key, String(fallback));
+    } catch { /* Keep the countdown for this session if storage is unavailable. */ }
+    return fallback;
+  });
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const remaining = Math.max(0, Math.ceil((giftDeadline - now) / 1000));
+  const countdown = [Math.floor(remaining / 3600), Math.floor(remaining / 60) % 60, remaining % 60].map((value) => String(value).padStart(2, "0")).join(":");
   const slides = [
     {
       id: "friends",
-      title: "Подари 3 друзьям\nПо $5 в wPay",
+      title: "Подари 3 друзьям\nПо $5 на карту бесплатно!",
 
       action: "Пригласить друзей",
       click: onInvite,
@@ -109,14 +126,14 @@ export default function WalletPromos({
               <span className="wpay-promo-details" aria-hidden="true" />
               {slide.id === "qr" && <span className="wpay-promo-receipts" aria-hidden="true"><span className="wpay-promo-receipt wpay-promo-receipt--back" /><span className="wpay-promo-receipt" /></span>}
               <span className="wpay-promo-copy">
-                <strong><span className="wpay-promo-headline">{slide.title.split("\n")[0]}</span><span className={`wpay-promo-subline ${slide.id === "friends" ? "wpay-promo-logo-line" : ""}`}>{slide.id === "friends" ? <>По $5 в <img src="/brands/wpay-wordmark-light.svg" alt="wPay" /></> : slide.title.split("\n").slice(1).join("\n")}</span></strong>
+                <strong><span className="wpay-promo-headline">{slide.title.split("\n")[0]}</span><span className="wpay-promo-subline">{slide.title.split("\n").slice(1).join("\n")}</span></strong>
+                {slide.id === "friends" && <span className="wpay-promo-countdown" role="timer" aria-label="Осталось времени">{remaining ? <>Осталось <span>{countdown}</span></> : "Время истекло"}</span>}
 
               </span>
               <span className="wpay-promo-art" aria-hidden="true">
                 {slide.id === "friends" ? (
                   <span className="wpay-promo-gift">
-                    <img className="wpay-promo-gift-card" src={cardArtwork} alt="" loading="lazy" />
-                    <span className="wpay-promo-gift-wrap"><span className="wpay-promo-gift-value">5$</span></span>
+                    <span className="wpay-promo-gift-wrap" />
                     <span className="wpay-promo-gift-bow"><span /><span /><i /></span>
                   </span>
                 ) : slide.id === "qr" ? (
