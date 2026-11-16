@@ -10,10 +10,7 @@
     "preview": "vite preview",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:e2e": "playwright test",
-    "format:wallet": "prettier --write \"src/wallet/**/*.{ts,tsx}\" \"src/pages/Wallet*.{ts,tsx,css}\"",
-    "prebuild": "node scripts/prepare-ocr.mjs",
-    "predev": "node scripts/prepare-ocr.mjs",
-    "test:ocr:webkit": "playwright test --config playwright.webkit.config.ts profile-aura.spec.ts --grep \"local OCR fills|cropping removes|tilted document\""
+    "format:wallet": "prettier --write \"src/wallet/**/*.{ts,tsx}\" \"src/pages/Wallet*.{ts,tsx,css}\""
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "^13.15.1",

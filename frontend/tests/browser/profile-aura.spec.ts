@@ -250,151 +250,24 @@ test("provider validation error keeps identity editable", async ({ page }) => {
   await expect(page.locator("#identity-first_name")).toHaveValue("Иван");
 });
 
-test("local OCR fills photo fields without uploading an image or submitting identity", async ({
+test("passport form has manual inputs only and never loads OCR models", async ({
   page,
 }) => {
-  test.setTimeout(90000);
-  const state = await contacts(page);
-  await openDocuments(page);
-  const image = await page.evaluate(() => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 1400;
-    canvas.height = 1000;
-    const ctx = canvas.getContext("2d")!;
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, 1400, 1000);
-    ctx.fillStyle = "#000";
-    ctx.font = "42px Arial";
-    [
-      "Фамилия ИВАНОВ",
-      "Имя ИВАН",
-      "Отчество ИВАНОВИЧ",
-      "Дата рождения 01.02.1990",
-      "Дата выдачи 03.04.2010",
-      "12 34 567890",
-    ].forEach((line, i) => ctx.fillText(line, 70, 100 + i * 120));
-    return canvas.toDataURL("image/png").split(",")[1];
-  });
-  await page.locator("#identity-patronymic").fill("ПЕТРОВИЧ");
-  const uploads: string[] = [];
-  page.on("request", (request) => {
-    if (request.method() !== "GET") uploads.push(request.url());
-  });
-  await expect(
-    page.getByRole("button", { name: "Отправить на проверку" }),
-  ).toHaveCount(0);
-  await page
-    .getByLabel("Загрузить фото паспорта", { exact: true })
-    .setInputFiles({
-      name: "synthetic-passport.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(image, "base64"),
-    });
-  await expect(
-    page.getByRole("button", { name: "Распознать паспорт", exact: true }),
-  ).toBeEnabled();
-  await page
-    .getByRole("button", { name: "Распознать паспорт", exact: true })
-    .click();
-  await expect(page.getByText(/Найдено полей:/)).toBeVisible({
-    timeout: 60000,
-  });
-  await expect(page.locator("#identity-last_name")).toHaveValue("ИВАНОВ");
-  await expect(page.locator("#identity-first_name")).toHaveValue("ИВАН");
-  await expect(page.locator("#identity-passport")).toHaveValue("1234567890");
-  await expect(page.locator("#identity-patronymic")).toHaveValue("ПЕТРОВИЧ");
-  expect(uploads).toEqual([]);
-  expect(state.posts).toHaveLength(1);
-  await expect(
-    page.getByRole("button", { name: "Отправить на проверку" }),
-  ).toHaveCount(0);
-  await page
-    .getByRole("checkbox", {
-      name: "Я проверил(а) данные — всё совпадает с паспортом",
-    })
-    .check();
-  await expect(
-    page.getByRole("button", { name: "Отправить на проверку" }),
-  ).toBeEnabled();
-  await page.getByRole("button", { name: "Удалить фото" }).click();
-  await expect(page.getByAltText("Выбранное фото паспорта")).toHaveCount(0);
-  await expect(page.locator("#identity-last_name")).toHaveValue("ИВАНОВ");
-});
-test("camera picker requests rear camera and invalid file keeps manual input available", async ({
-  page,
-}) => {
-  const state = await contacts(page);
-  await openDocuments(page);
-  await expect(
-    page.getByLabel("Сфотографировать паспорт", { exact: true }),
-  ).toHaveAttribute("capture", "environment");
-  await page
-    .getByLabel("Загрузить фото паспорта", { exact: true })
-    .setInputFiles({
-      name: "bad.svg",
-      mimeType: "image/svg+xml",
-      buffer: Buffer.from("<svg/>"),
-    });
-  await expect(page.getByRole("alert")).toContainText("JPG");
-  await page.getByRole("button", { name: "Ввести вручную" }).click();
-  await expect(page.locator("#identity-last_name")).toBeFocused();
-  expect(state.posts).toHaveLength(1);
-});
-
-test("cancelling OCR leaves manual fields usable without a delayed overwrite", async ({
-  page,
-}) => {
-  const state = await contacts(page);
-  await openDocuments(page);
-  const image = await page.evaluate(() => {
-    const c = document.createElement("canvas");
-    c.width = 800;
-    c.height = 600;
-    const x = c.getContext("2d")!;
-    x.fillStyle = "white";
-    x.fillRect(0, 0, 800, 600);
-    return c.toDataURL("image/png").split(",")[1];
-  });
-  await page
-    .getByLabel("Загрузить фото паспорта", { exact: true })
-    .setInputFiles({
-      name: "blank.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(image, "base64"),
-    });
-  await expect(
-    page.getByRole("button", { name: "Распознать паспорт", exact: true }),
-  ).toBeEnabled();
-  await page
-    .getByRole("button", { name: "Распознать паспорт", exact: true })
-    .click();
-  await expect(page.locator(".wpay-passport-loading .preloader")).toBeVisible();
-  await page.getByRole("button", { name: "Отмена", exact: true }).click();
-  await expect(
-    page.getByText("Распознавание отменено. Можно заполнить данные вручную."),
-  ).toBeVisible();
-  await page.locator("#identity-first_name").fill("ИВАН");
-  await expect(page.locator("#identity-first_name")).toHaveValue("ИВАН");
-  expect(state.posts).toHaveLength(1);
-});
-
-test("passport photo actions retain wallet shape with taller height and submit requires every field", async ({
-  page,
-}) => {
+  const requests: string[] = [];
+  page.on("request", (request) => requests.push(request.url()));
   await contacts(page);
   await openDocuments(page);
-  for (const name of ["Сфотографировать", "Загрузить фото"]) {
-    const button = page.getByRole("button", { name, exact: true });
-    expect((await button.boundingBox())!.height).toBe(74);
-    expect(
-      await button.evaluate((el) => getComputedStyle(el).borderRadius),
-    ).toBe("22px");
-  }
-  await page
-    .getByRole("checkbox", {
-      name: "Я проверил(а) данные — всё совпадает с паспортом",
-    })
-    .check();
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+  for (const name of [
+    "Сфотографировать",
+    "Загрузить фото",
+    "Ввести вручную",
+    "Распознать паспорт",
+  ])
+    await expect(page.getByRole("button", { name, exact: true })).toHaveCount(
+      0,
+    );
+  await expect(page.getByText(/Фото распознаётся/)).toHaveCount(0);
   await expect(
     page.getByRole("button", { name: "Отправить на проверку" }),
   ).toHaveCount(0);
@@ -402,169 +275,9 @@ test("passport photo actions retain wallet shape with taller height and submit r
   await expect(
     page.getByRole("button", { name: "Отправить на проверку" }),
   ).toBeVisible();
-  await page.locator("#identity-first_name").fill("");
-  await expect(
-    page.getByRole("button", { name: "Отправить на проверку" }),
-  ).toHaveCount(0);
-});
-
-test("photo and OCR notice use the same surface as the passport fields", async ({
-  page,
-}) => {
-  await contacts(page);
-  await openDocuments(page);
-  const image = await page.evaluate(() => {
-    const c = document.createElement("canvas");
-    c.width = 500;
-    c.height = 500;
-    return c.toDataURL("image/png").split(",")[1];
-  });
-  await page
-    .getByLabel("Загрузить фото паспорта", { exact: true })
-    .setInputFiles({
-      name: "empty.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(image, "base64"),
-    });
-  const colors = await page.evaluate(() =>
-    [".wpay-passport-photo-review", ".wpay-verification-contact-inputs"].map(
-      (selector) =>
-        getComputedStyle(document.querySelector(selector)!).backgroundColor,
-    ),
-  );
-  expect(colors[0]).toBe(colors[1]);
-  await page
-    .getByRole("button", { name: "Распознать паспорт", exact: true })
-    .click();
-  await expect(page.locator(".wpay-passport-loading .preloader")).toBeVisible();
-  await page.getByRole("button", { name: "Отмена", exact: true }).click();
   expect(
-    await page
-      .locator(".wpay-passport-notice")
-      .evaluate((el) => getComputedStyle(el).backgroundColor),
-  ).toBe(colors[1]);
-  await page.evaluate(() => document.documentElement.classList.add("dark"));
-  const darkColors = await page.evaluate(() =>
-    [
-      ".wpay-passport-photo-review",
-      ".wpay-passport-notice",
-      ".wpay-verification-contact-inputs",
-    ].map(
-      (selector) =>
-        getComputedStyle(document.querySelector(selector)!).backgroundColor,
+    requests.some(
+      (url) => url.includes("/ocr/") || url.includes("paddle-ocr.worker"),
     ),
-  );
-  expect(new Set(darkColors).size).toBe(1);
-});
-
-test("cropping removes background numbers before local OCR", async ({
-  page,
-}) => {
-  test.setTimeout(90000);
-  const state = await contacts(page);
-  await openDocuments(page);
-  const image = await page.evaluate(() => {
-    const c = document.createElement("canvas");
-    c.width = 2000;
-    c.height = 1200;
-    const x = c.getContext("2d")!;
-    x.fillStyle = "#999";
-    x.fillRect(0, 0, 2000, 1200);
-    x.fillStyle = "#eee";
-    x.fillRect(0, 0, 1250, 1200);
-    x.fillStyle = "#555";
-    x.font = "42px Arial";
-    [
-      "Фамилия ИВАНОВ",
-      "Имя ИВАН",
-      "Дата рождения 01.02.1990",
-      "12 34 567890",
-    ].forEach((s, i) => x.fillText(s, 80, 140 + i * 200));
-    x.fillText("98 76 543210", 1400, 200);
-    return c.toDataURL("image/png").split(",")[1];
-  });
-  await page
-    .getByLabel("Загрузить фото паспорта", { exact: true })
-    .setInputFiles({
-      name: "photo-with-background.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(image, "base64"),
-    });
-  const handle = page.locator(".ReactCrop__drag-handle.ord-e");
-  await handle.scrollIntoViewIfNeeded();
-  const imageBox = await page.locator(".ReactCrop img").boundingBox();
-  const box = await handle.boundingBox();
-  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(
-    imageBox!.x + imageBox!.width * 0.62,
-    box!.y + box!.height / 2,
-    { steps: 10 },
-  );
-  await page.mouse.up();
-  const selected = await page
-    .locator(".ReactCrop__crop-selection")
-    .boundingBox();
-  expect(selected!.width / imageBox!.width).toBeLessThan(0.7);
-  await page
-    .getByRole("button", { name: "Распознать паспорт", exact: true })
-    .click();
-  await expect(page.getByText(/Найдено полей:/)).toBeVisible({
-    timeout: 60000,
-  });
-  await expect(page.locator("#identity-passport")).toHaveValue("1234567890");
-  expect(state.posts).toHaveLength(1);
-});
-
-test("PaddleOCR reads Cyrillic on a tilted document-style photo", async ({
-  page,
-}) => {
-  test.setTimeout(90000);
-  const state = await contacts(page);
-  await openDocuments(page);
-  const image = await page.evaluate(() => {
-    const c = document.createElement("canvas");
-    c.width = 1600;
-    c.height = 1400;
-    const x = c.getContext("2d")!;
-    x.fillStyle = "#777a80";
-    x.fillRect(0, 0, 1600, 1400);
-    x.translate(800, 700);
-    x.rotate(0.13);
-    x.fillStyle = "#e9e5da";
-    x.fillRect(-650, -550, 1300, 1100);
-    x.fillStyle = "#23334a";
-    x.font = "36px Arial";
-    [
-      "РОССИЙСКАЯ ФЕДЕРАЦИЯ",
-      "Фамилия ИВАНОВ",
-      "Имя ИВАН",
-      "Отчество ИВАНОВИЧ",
-      "Дата рождения 01.02.1990",
-      "Дата выдачи 03.04.2010",
-      "12 34 567890",
-    ].forEach((s, i) => x.fillText(s, -540, -410 + i * 130));
-    x.strokeStyle = "#ba7272";
-    x.lineWidth = 4;
-    x.beginPath();
-    x.arc(440, -300, 100, 0, Math.PI * 2);
-    x.stroke();
-    return c.toDataURL("image/png").split(",")[1];
-  });
-  await page
-    .getByLabel("Загрузить фото паспорта", { exact: true })
-    .setInputFiles({
-      name: "tilted-synthetic-document.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(image, "base64"),
-    });
-  await page
-    .getByRole("button", { name: "Распознать паспорт", exact: true })
-    .click();
-  await expect(page.getByText(/Найдено полей:/)).toBeVisible({
-    timeout: 60000,
-  });
-  await expect(page.locator("#identity-last_name")).toHaveValue("ИВАНОВ");
-  await expect(page.locator("#identity-birth_date")).toHaveValue("1990-02-01");
-  expect(state.posts).toHaveLength(1);
+  ).toBe(false);
 });
