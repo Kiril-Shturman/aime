@@ -146,6 +146,16 @@ export default function WalletAuraCards({
   const issueKey = useRef("");
   const rechargeKey = useRef("");
   useEffect(() => () => revealRequest.current?.abort(), []);
+  useEffect(() => {
+    const hide = () => {
+      if (document.hidden) {
+        revealRequest.current?.abort();
+        setCredentials(null);
+      }
+    };
+    document.addEventListener("visibilitychange", hide);
+    return () => document.removeEventListener("visibilitychange", hide);
+  }, []);
 
   const loadCards = useCallback(async () => {
     setError("");
@@ -312,7 +322,18 @@ export default function WalletAuraCards({
   };
   const reveal = async (kind: "credentials" | "otp") => {
     if (!selected || busyRef.current) return;
-    openPanel(kind);
+    if (kind === "credentials") {
+      if (credentials?.card_id === selected.card_id) {
+        setCredentials(null);
+        return;
+      }
+      setPanel(null);
+      carousel.current?.scrollIntoView({
+        block: "center",
+        inline: "nearest",
+        behavior: "smooth",
+      });
+    } else openPanel(kind);
     if (selected.demo) {
       if (kind === "credentials")
         setCredentials({
@@ -378,6 +399,10 @@ export default function WalletAuraCards({
       el.scrollTo({ left: index * (el.clientWidth + 12), behavior: "smooth" });
     setActiveSlide(index);
     if (cards[index]) selectCard(cards[index].card_id);
+    else {
+      revealRequest.current?.abort();
+      setCredentials(null);
+    }
   };
   const order = (
     kind: "virtual" | "physical",
@@ -410,9 +435,12 @@ export default function WalletAuraCards({
       run: () => openPanel("recharge"),
     },
     {
-      label: "Реквизиты",
+      label:
+        credentials?.card_id === selected?.card_id && credentials
+          ? "Скрыть"
+          : "Реквизиты",
       Icon: EyeFill,
-      disabled: !canUse,
+      disabled: !canUse || busy === "credentials",
       run: () => void reveal("credentials"),
     },
     {
@@ -540,6 +568,10 @@ export default function WalletAuraCards({
                   const card = cards[index];
                   if (card && card.card_id !== selectedId)
                     selectCard(card.card_id);
+                  else if (!card) {
+                    revealRequest.current?.abort();
+                    setCredentials(null);
+                  }
                 }}
               >
                 {cards.map((card) => (
@@ -547,13 +579,78 @@ export default function WalletAuraCards({
                     key={card.card_id}
                     type="button"
                     className="wpay-aura-carousel-item"
-                    aria-label={`Открыть ${card.kind === "physical" ? "физическую" : "виртуальную"} карту ${card.masked_pan ?? ""}`}
+                    aria-label={
+                      credentials?.card_id === card.card_id
+                        ? "Скрыть реквизиты карты"
+                        : `Открыть ${card.kind === "physical" ? "физическую" : "виртуальную"} карту ${card.masked_pan ?? ""}`
+                    }
                     onClick={() => {
+                      if (credentials?.card_id === card.card_id) {
+                        setCredentials(null);
+                        return;
+                      }
                       selectCard(card.card_id);
                       openPanel("details");
                     }}
                   >
-                    <LiveCardArtwork card={card} skin="silver" />
+                    <span
+                      className={`wpay-card-flip ${credentials?.card_id === card.card_id ? "wpay-card-flip--revealed" : ""}`}
+                    >
+                      <span className="wpay-card-flip-inner">
+                        <span
+                          className="wpay-card-flip-front"
+                          aria-hidden={credentials?.card_id === card.card_id}
+                        >
+                          <LiveCardArtwork card={card} skin="silver" />
+                        </span>
+                        <span
+                          className="wpay-card-flip-back"
+                          aria-hidden={credentials?.card_id !== card.card_id}
+                          role="group"
+                          aria-label="Реквизиты карты"
+                        >
+                          <span className="wpay-card-back-stripe" />
+                          <img
+                            className="wpay-card-back-logo"
+                            src="/brands/wpay-wordmark.svg"
+                            alt="wPay"
+                          />
+                          <span className="wpay-card-back-number">
+                            <small>НОМЕР КАРТЫ</small>
+                            <span>
+                              {credentials?.card_id === card.card_id
+                                ? credentials.number
+                                    .replace(/\s/g, "")
+                                    .match(/.{1,4}/g)
+                                    ?.join(" ")
+                                : card.masked_pan}
+                            </span>
+                          </span>
+                          <span className="wpay-card-back-fields">
+                            <span>
+                              <small>ДЕЙСТВУЕТ ДО</small>
+                              <b>
+                                {credentials?.card_id === card.card_id
+                                  ? credentials.expiry
+                                  : "••/••"}
+                              </b>
+                            </span>
+                            <span>
+                              <small>CVV</small>
+                              <b>
+                                {credentials?.card_id === card.card_id
+                                  ? credentials.cvv
+                                  : "•••"}
+                              </b>
+                            </span>
+                          </span>
+                          <span className="wpay-card-back-hint">
+                            {card.demo ? "Демо-карта · " : ""}Нажмите, чтобы
+                            скрыть
+                          </span>
+                        </span>
+                      </span>
+                    </span>
                   </button>
                 ))}
                 {offers.map(({ kind, skin: appearance }) => (

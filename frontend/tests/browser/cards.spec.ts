@@ -187,11 +187,14 @@ for (const theme of ["light", "dark"])
     expect(state.calls).toHaveLength(0);
     await main.getByRole("button", { name: "Реквизиты", exact: true }).click();
     await expect(
-      popup(page).getByText("4111111111111234", { exact: true }),
+      main
+        .getByRole("group", { name: "Реквизиты карты" })
+        .getByText("4111 1111 1111 1234", { exact: true }),
     ).toBeVisible();
-    await close(page);
+    await expect(popup(page)).not.toBeVisible();
+    await main.getByRole("button", { name: "Скрыть", exact: true }).click();
     await expect(
-      page.getByText("4111111111111234", { exact: true }),
+      page.getByText("4111 1111 1111 1234", { exact: true }),
     ).toHaveCount(0);
     await main.getByRole("button", { name: "Заморозить", exact: true }).click();
     await expect(
@@ -516,7 +519,9 @@ test("demo owned card precedes offers and its controls never call provider", asy
   ).toBeVisible();
   await main.getByRole("button", { name: "Реквизиты", exact: true }).click();
   await expect(
-    popup(page).getByText("0000 0000 0000 4242", { exact: true }),
+    main
+      .getByRole("group", { name: "Реквизиты карты" })
+      .getByText("0000 0000 0000 4242", { exact: true }),
   ).toBeVisible();
   expect(state.calls).toHaveLength(0);
 });
