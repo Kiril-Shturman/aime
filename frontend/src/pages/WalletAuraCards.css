@@ -5,6 +5,7 @@
   overflow-y: hidden;
   overscroll-behavior-y: none;
   scroll-snap-type: x mandatory;
+  overflow-anchor: none;
   scrollbar-width: none;
   cursor: grab;
   overscroll-behavior-x: contain;
@@ -22,7 +23,7 @@
   border-radius: 30px;
   background: transparent;
   text-align: left;
-  scroll-snap-align: center;
+  scroll-snap-align: start;
   scroll-snap-stop: always;
   cursor: inherit;
 }

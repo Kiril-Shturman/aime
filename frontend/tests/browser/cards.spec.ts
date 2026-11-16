@@ -715,3 +715,52 @@ test("demo card has withdrawal preview and confirmed local deletion", async ({
   await expect(main.locator(".wpay-aura-carousel-item")).toHaveCount(4);
   expect(state.calls).toHaveLength(0);
 });
+
+test("touch swipes settle cards exactly into place in both directions", async ({
+  page,
+}) => {
+  await setup(page, "dark", false, true);
+  const main = page.getByRole("main", { name: "Мои карты" }),
+    rail = main.locator(".wpay-aura-carousel");
+  const client = await page.context().newCDPSession(page);
+  await client.send("Emulation.setTouchEmulationEnabled", { enabled: true });
+  const swipe = async (direction: number) => {
+    const b = (await rail.boundingBox())!,
+      x = direction < 0 ? b.x + b.width - 30 : b.x + 30,
+      y = b.y + 55;
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x, y }],
+    });
+    for (let i = 1; i <= 12; i++)
+      await client.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [
+          { x: x + (direction * 220 * i) / 12, y: y + (3 * i) / 12 },
+        ],
+      });
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+  };
+  const aligned = async (index: number) =>
+    rail.evaluate(
+      (el, index) =>
+        Math.abs(
+          el.children[index].getBoundingClientRect().left -
+            el.getBoundingClientRect().left,
+        ),
+      index,
+    );
+  await swipe(-1);
+  await expect.poll(() => aligned(2)).toBeLessThan(1.5);
+  await expect(
+    main.getByRole("heading", { name: "Для путешествий", exact: true }),
+  ).toBeVisible();
+  await swipe(1);
+  await expect.poll(() => aligned(1)).toBeLessThan(1.5);
+  await expect(
+    main.getByRole("heading", { name: "Для подписок", exact: true }),
+  ).toBeVisible();
+});

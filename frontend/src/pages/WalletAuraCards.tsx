@@ -141,6 +141,14 @@ export default function WalletAuraCards({
   const [activeSlide, setActiveSlide] = useState(0);
   const carousel = useRef<HTMLDivElement>(null);
   const scrollTarget = useRef<number | null>(null);
+  const touchingCarousel = useRef(false);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+    },
+    [],
+  );
   const drag = useRef<{ x: number; scroll: number; moved: boolean } | null>(
     null,
   );
@@ -412,11 +420,43 @@ export default function WalletAuraCards({
     currentKind === "physical" && activeOffer?.skin === "ice";
   const physical = selected?.kind === "physical";
   const canUse = selected?.status === "opened";
+  const slideLeft = (el: HTMLDivElement, index: number) => {
+    const slide = el.children[index] as HTMLElement | undefined;
+    return slide
+      ? slide.getBoundingClientRect().left -
+          el.getBoundingClientRect().left +
+          el.scrollLeft
+      : 0;
+  };
+  const nearestSlide = (el: HTMLDivElement) => {
+    let nearest = 0,
+      distance = Infinity;
+    Array.from(el.children).forEach((_, index) => {
+      const next = Math.abs(el.scrollLeft - slideLeft(el, index));
+      if (next < distance) {
+        nearest = index;
+        distance = next;
+      }
+    });
+    return nearest;
+  };
+  const settleCarousel = () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      const el = carousel.current;
+      if (!el || touchingCarousel.current || drag.current) return;
+      const index = scrollTarget.current ?? nearestSlide(el);
+      const left = slideLeft(el, index);
+      if (Math.abs(el.scrollLeft - left) > 1.5) {
+        scrollTarget.current = index;
+        el.scrollTo({ left, behavior: "smooth" });
+      } else scrollTarget.current = null;
+    }, 140);
+  };
   const jumpTo = (index: number) => {
     const el = carousel.current;
     scrollTarget.current = index;
-    if (el)
-      el.scrollTo({ left: index * (el.clientWidth + 12), behavior: "smooth" });
+    if (el) el.scrollTo({ left: slideLeft(el, index), behavior: "smooth" });
     setActiveSlide(index);
     if (cards[index]) selectCard(cards[index].card_id);
     else {
@@ -450,7 +490,8 @@ export default function WalletAuraCards({
   const actionClass =
     "!m-0 !h-[62px] !min-w-0 !rounded-[22px] !bg-black/[.055] !px-1 !text-primary active:!bg-black/10 dark:!bg-white/[.10] dark:active:!bg-white/[.16]";
   const confirmFreeze = () => {
-    if (!selected || busyRef.current || freezeConfirmation.current) return;
+    if (!selected || busyRef.current || freezeConfirmation.current?.opened)
+      return;
     const unfreeze = selected.frozen;
     freezeConfirmation.current = f7.dialog.create({
       cssClass: "wpay-card-freeze-confirm",
@@ -475,14 +516,16 @@ export default function WalletAuraCards({
       ],
       on: {
         closed: () => {
-          freezeConfirmation.current = null;
+          if (!freezeConfirmation.current?.opened)
+            freezeConfirmation.current = null;
         },
       },
     });
     freezeConfirmation.current.open();
   };
   const confirmDeleteCard = () => {
-    if (!selected || freezeConfirmation.current) return;
+    if (!selected || busyRef.current || freezeConfirmation.current?.opened)
+      return;
     freezeConfirmation.current = f7.dialog.create({
       cssClass: "wpay-card-freeze-confirm",
       title: selected.demo ? "Удалить демо-карту?" : "Закрытие карты",
@@ -514,7 +557,8 @@ export default function WalletAuraCards({
         : [{ text: "Понятно", strong: true }],
       on: {
         closed: () => {
-          freezeConfirmation.current = null;
+          if (!freezeConfirmation.current?.opened)
+            freezeConfirmation.current = null;
         },
       },
     });
@@ -594,6 +638,19 @@ export default function WalletAuraCards({
               <div
                 ref={carousel}
                 className="wpay-aura-carousel"
+                onTouchStart={() => {
+                  touchingCarousel.current = true;
+                  scrollTarget.current = null;
+                  if (settleTimer.current) clearTimeout(settleTimer.current);
+                }}
+                onTouchEnd={() => {
+                  touchingCarousel.current = false;
+                  settleCarousel();
+                }}
+                onTouchCancel={() => {
+                  touchingCarousel.current = false;
+                  settleCarousel();
+                }}
                 onPointerDown={(event) => {
                   scrollTarget.current = null;
                   if (event.pointerType !== "mouse" || event.button !== 0)
@@ -620,6 +677,7 @@ export default function WalletAuraCards({
                 onPointerUp={(event) => {
                   drag.current = null;
                   event.currentTarget.style.scrollSnapType = "";
+                  settleCarousel();
                   if (event.currentTarget.hasPointerCapture(event.pointerId))
                     event.currentTarget.releasePointerCapture(event.pointerId);
                 }}
@@ -627,6 +685,7 @@ export default function WalletAuraCards({
                   drag.current = null;
                   if (carousel.current)
                     carousel.current.style.scrollSnapType = "";
+                  settleCarousel();
                 }}
                 onClickCapture={(event) => {
                   if (suppressClick.current) {
@@ -637,16 +696,14 @@ export default function WalletAuraCards({
                 }}
                 onScroll={(event) => {
                   if (event.target !== event.currentTarget) return;
-                  const index = Math.round(
-                    event.currentTarget.scrollLeft /
-                      (event.currentTarget.clientWidth + 12),
-                  );
+                  settleCarousel();
+                  const index = nearestSlide(event.currentTarget);
                   if (scrollTarget.current !== null) {
                     const target = scrollTarget.current;
                     if (
                       Math.abs(
                         event.currentTarget.scrollLeft -
-                          target * (event.currentTarget.clientWidth + 12),
+                          slideLeft(event.currentTarget, target),
                       ) > 2
                     )
                       return;
