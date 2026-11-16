@@ -7,7 +7,7 @@
 .wpay-promos-rail {
   display: grid;
   overflow: visible;
-  touch-action: pan-y;
+  touch-action: none;
   border-radius: 28px;
   overscroll-behavior-x: contain;
 }
@@ -340,3 +340,5 @@
 /* Clip at the page edges, keeping the raised artwork above the banners visible. */
 .wpay-promos-rail { overflow: visible; }
 .wpay-promo { transition: none; }
+
+.wpay-promos { touch-action: none; overscroll-behavior: none; }

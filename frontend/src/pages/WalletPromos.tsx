@@ -94,6 +94,15 @@ export default function WalletPromos({
   return (
     <section
       className="wpay-promos"
+      data-wpay-gesture-lock=""
+      onPointerDown={(event) => { event.stopPropagation(); if (event.pointerType === "touch") setPaused(true); }}
+      onPointerMove={(event) => {
+        event.stopPropagation();
+        const start = gesture.current;
+        if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 6) suppressClickUntil.current = performance.now() + 400;
+      }}
+      onPointerUp={(event) => { event.stopPropagation(); if (event.pointerType === "touch") setPaused(false); }}
+      onPointerCancel={(event) => { event.stopPropagation(); gesture.current = null; if (event.pointerType === "touch") setPaused(false); }}
       aria-label="Возможности wPay"
       aria-roledescription="карусель"
       onPointerEnter={(event) => { if (event.pointerType === "mouse") setPaused(true); }}

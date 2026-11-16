@@ -97,6 +97,7 @@ export function usePullToRefresh<T extends HTMLElement>(
     if (!node) return;
 
     const handleTouchStart = (event: TouchEvent) => {
+      if ((event.target as Element | null)?.closest?.("[data-wpay-gesture-lock]")) return;
       if (
         event.touches.length !== 1 ||
         refreshingRef.current ||

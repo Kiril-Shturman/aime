@@ -759,3 +759,31 @@ test("promo slides leave left while the next enters from the right without stret
   await expect(page.locator('.wpay-promo--friends')).toHaveCount(0);
   await expect.poll(() => page.locator('.wpay-desktop-page').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
 });
+
+test("holding the promo locks vertical touch scrolling and pull refresh while horizontal swipe still works", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 640 });
+  await setup(page, "dark");
+  const carousel = page.getByRole("region", { name: "Возможности wPay" });
+  await expect(carousel).toBeVisible();
+  let refreshes = 0;
+  await page.route("**/api/wallet/overview", route => { refreshes++; return route.fulfill({ json: { balances: [], rates: [], transactions: [] } }); });
+  const client = await page.context().newCDPSession(page);
+  await client.send("Emulation.setTouchEmulationEnabled", { enabled: true });
+  const dragTouch = async (x: number, y: number, dx: number, dy: number) => {
+    await client.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+    for (let step = 1; step <= 10; step++) await client.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: x + dx * step / 10, y: y + dy * step / 10 }] });
+    await client.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  };
+  const box = await carousel.boundingBox(); if (!box) throw new Error("No banner");
+  await dragTouch(box.x + 100, box.y + 30, 0, 95);
+  await page.waitForTimeout(1000);
+  expect(await page.locator('.wpay-desktop-page').evaluate(el => el.scrollTop)).toBe(0);
+  expect(refreshes).toBe(0);
+  await expect(page.getByRole("main", { name: "Способы пополнения" })).not.toBeVisible();
+  await page.locator('.wpay-desktop-page').evaluate(el => { el.scrollTop = 80; });
+  const moved = await carousel.boundingBox(); if (!moved) throw new Error("No banner after scroll");
+  await dragTouch(moved.x + 100, moved.y + 30, 0, -70);
+  expect(await page.locator('.wpay-desktop-page').evaluate(el => el.scrollTop)).toBe(80);
+  await dragTouch(moved.x + moved.width - 35, moved.y + 40, -170, 0);
+  await expect(carousel.getByRole("button", { name: /Баннер 2:/ })).toHaveAttribute("aria-current", "true");
+});
