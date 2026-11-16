@@ -546,3 +546,24 @@ test("bottom tabs always start at top after scrolling card details", async ({
     await expect.poll(() => scroll.evaluate((el) => el.scrollTop)).toBe(0);
   }
 });
+
+for (const theme of ["dark", "light"])
+  test(`${theme}: titleless card popup keeps close button round`, async ({
+    page,
+  }) => {
+    await setup(page, theme);
+    await page
+      .getByRole("main", { name: "Мои карты" })
+      .locator(".wpay-aura-carousel-item")
+      .first()
+      .click();
+    await expect(popup(page)).toBeVisible();
+    const closeButton = popup(page).getByLabel("Закрыть окно карты");
+    const bounds = await closeButton.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.width).toBeCloseTo(44, 0);
+    expect(bounds!.height).toBeCloseTo(44, 0);
+    const glass = await popup(page).locator(".navbar .right").boundingBox();
+    expect(glass!.height).toBeCloseTo(44, 0);
+    await close(page);
+  });

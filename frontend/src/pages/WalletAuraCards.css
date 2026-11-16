@@ -669,3 +669,22 @@
     transition: none;
   }
 }
+
+.wpay-f7-root .wpay-aura-card-popup .navbar .right {
+  height: 44px;
+  min-height: 0;
+  align-self: center;
+  display: flex;
+  align-items: center;
+}
+.wpay-f7-root .wpay-aura-card-popup .navbar .right .link.popup-close {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border-radius: 50%;
+  align-self: center;
+  flex: 0 0 44px;
+  justify-content: center;
+}
