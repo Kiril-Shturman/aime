@@ -178,6 +178,15 @@ for (const theme of ["light", "dark"])
   }) => {
     const state = await setup(page, theme);
     const main = page.getByRole("main", { name: "Мои карты" });
+    await expect(
+      main.getByRole("heading", { name: "Мои карты", exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      main.getByText("Выпустить карту", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      main.getByRole("heading", { name: "Платежи по карте", exact: true }),
+    ).toBeVisible();
     await expect(main.locator(".wpay-bank-card")).toHaveCount(6);
     await expect(
       main.getByText("Онлайн-сервис", { exact: true }),

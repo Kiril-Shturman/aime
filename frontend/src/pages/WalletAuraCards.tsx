@@ -16,8 +16,6 @@ import {
   MessageSquareLock,
   ChevronRight,
   History,
-  RefreshCw,
-  Plus,
   Eye,
   EyeOff,
 } from "lucide-react";
@@ -886,61 +884,6 @@ export default function WalletAuraCards({
                   </Button>
                 ))}
               </section>
-              <div className="wpay-aura-section-head">
-                <h2>Мои карты</h2>
-                <button
-                  type="button"
-                  aria-label="Обновить карты"
-                  disabled={Boolean(busy)}
-                  onClick={() => void loadCards()}
-                >
-                  <RefreshCw size={17} />
-                </button>
-              </div>
-              <List strong inset dividers className="wpay-aura-list !my-0">
-                {cards.map((card, index) => (
-                  <ListItem
-                    key={card.card_id}
-                    link
-                    chevron={false}
-                    contentClassName="!h-16"
-                    innerClassName="!h-16 !py-2 after:!opacity-30"
-                    onClick={() => {
-                      jumpTo(index);
-                      openPanel("details");
-                    }}
-                    innerChildren={
-                      <span className="flex w-full min-w-0 items-center justify-between gap-3">
-                        <span className="min-w-0">
-                          <strong className="block truncate text-[17px] font-semibold">
-                            {card.kind === "physical"
-                              ? "Физическая карта"
-                              : "Виртуальная карта"}
-                          </strong>
-                          <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
-                            {card.masked_pan ?? "Номер появится после выпуска"}
-                          </span>
-                        </span>
-                        <span className="text-right text-[12px] text-black/45 dark:text-white/45">
-                          {card.frozen
-                            ? "Заморожена"
-                            : (statusText[card.status] ?? card.status)}
-                          <ChevronRight className="ml-auto mt-1" size={17} />
-                        </span>
-                      </span>
-                    }
-                  />
-                ))}
-                <ListItem
-                  link
-                  title="Выпустить карту"
-                  subtitle="Виртуальная или с доставкой"
-                  contentClassName="!h-16"
-                  innerClassName="!h-16 !py-2 after:!opacity-30"
-                  onClick={() => order("virtual")}
-                  media={<Plus className="text-primary" size={25} />}
-                />
-              </List>
               {physical && (
                 <>
                   <div className="wpay-aura-section-head">
