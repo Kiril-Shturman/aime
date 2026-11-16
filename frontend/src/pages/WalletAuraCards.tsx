@@ -1307,24 +1307,31 @@ export default function WalletAuraCards({
               {["details", "more"].includes(displayPanel) && selected && (
                 <>
                   {displayPanel === "details" && (
-                    <div className="mb-5">
-                      <LiveCardArtwork card={selected} skin={skin} />
+                    <div className="wpay-card-detail-hero">
+                      <LiveCardArtwork card={selected} skin="silver" />
                     </div>
                   )}
-                  <div className="wpay-aura-info">
-                    {infoRow(
-                      "Тип карты",
-                      physical ? "Физическая" : "Виртуальная",
-                    )}
-                    {infoRow(
-                      "Статус",
-                      selected.frozen
+                  <div className="wpay-card-detail-summary">
+                    <span>
+                      <h2>
+                        {physical ? "Физическая карта" : "Виртуальная карта"}
+                      </h2>
+                      <span className="wpay-card-detail-pan">
+                        {selected.masked_pan ?? "Номер появится после выпуска"}
+                      </span>
+                    </span>
+                    <span
+                      className={`wpay-card-status-badge ${selected.frozen ? "is-frozen" : selected.status === "opened" ? "is-active" : ""}`}
+                    >
+                      <i />
+                      {selected.frozen
                         ? "Заморожена"
-                        : (statusText[selected.status] ?? selected.status),
-                    )}
-                    {infoRow("Номер", selected.masked_pan ?? "Ещё не присвоен")}
+                        : (statusText[selected.status] ?? selected.status)}
+                    </span>
                   </div>
-                  <h2 className="wpay-aura-panel-heading">Управление</h2>
+                  <h2 className="wpay-aura-panel-heading wpay-card-management-heading">
+                    Управление картой
+                  </h2>
                   <div className="wpay-aura-menu">
                     {canUse && (
                       <>
@@ -1458,11 +1465,37 @@ function PanelRow({
   Icon: React.ElementType;
   onClick: () => void;
 }) {
+  const details: Record<string, { description: string; tone: string }> = {
+    "Реквизиты карты": {
+      description: "Номер, срок действия и CVV",
+      tone: "blue",
+    },
+    "Код 3DS": { description: "Подтверждение онлайн-покупок", tone: "purple" },
+    "PIN держателя": { description: "Настройка PIN держателя", tone: "orange" },
+    "Доставка и активация": {
+      description: "Статус и получение карты",
+      tone: "blue",
+    },
+    Тарифы: { description: "Комиссии и условия карты", tone: "teal" },
+  };
+  const detail = details[title];
   return (
-    <button type="button" className="wpay-aura-panel-row" onClick={onClick}>
-      <Icon size={23} />
-      <span>{title}</span>
-      <ChevronRight size={18} />
+    <button
+      type="button"
+      aria-label={title}
+      className="wpay-aura-panel-row wpay-card-setting"
+      onClick={onClick}
+    >
+      <span
+        className={`wpay-card-setting-icon wpay-card-setting-icon--${detail?.tone ?? "blue"}`}
+      >
+        <Icon size={22} />
+      </span>
+      <span className="wpay-card-setting-label">
+        <strong>{title}</strong>
+        {detail && <small>{detail.description}</small>}
+      </span>
+      <ChevronRight size={17} />
     </button>
   );
 }

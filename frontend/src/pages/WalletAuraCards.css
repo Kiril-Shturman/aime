@@ -744,3 +744,148 @@
 .wpay-f7-root .dialog.wpay-card-freeze-confirm {
   z-index: 14000;
 }
+
+.wpay-card-detail-hero {
+  width: 88%;
+  max-width: 310px;
+  margin: 0 auto 22px;
+  padding-top: 4px;
+}
+.wpay-card-detail-hero .wpay-bank-card.wpay-card-scene {
+  min-height: 0;
+}
+.wpay-card-detail-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 4px 24px;
+}
+.wpay-card-detail-summary h2 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 25px;
+  font-weight: 650;
+  letter-spacing: -0.35px;
+}
+.wpay-card-detail-pan {
+  display: block;
+  margin-top: 4px;
+  color: #0007;
+  font-size: 14px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.dark .wpay-card-detail-pan {
+  color: #fff7;
+}
+.wpay-card-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  padding: 6px 9px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #00000008;
+  color: #687181;
+}
+.dark .wpay-card-status-badge {
+  background: #ffffff0d;
+  color: #adb6c6;
+}
+.wpay-card-status-badge i {
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.wpay-card-status-badge.is-active {
+  background: #29a57312;
+  color: #188b58;
+}
+.dark .wpay-card-status-badge.is-active {
+  background: #33d18f15;
+  color: #62daa3;
+}
+.wpay-card-status-badge.is-frozen {
+  background: #408cf018;
+  color: #3675c6;
+}
+.dark .wpay-card-status-badge.is-frozen {
+  background: #408cf022;
+  color: #87b9ff;
+}
+.wpay-card-management-heading {
+  margin: 0 4px 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #0007;
+}
+.dark .wpay-card-management-heading {
+  color: #fff7;
+}
+.wpay-card-setting {
+  min-height: 72px;
+  padding: 13px 15px;
+  gap: 12px;
+  border-bottom-color: #00000008;
+}
+.dark .wpay-card-setting {
+  border-bottom-color: #ffffff0b;
+}
+.wpay-aura-panel-row .wpay-card-setting-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 37px;
+  width: 37px;
+  height: 37px;
+  border-radius: 12px;
+  color: white;
+  box-shadow: inset 0 1px 1px #ffffff50;
+}
+.dark .wpay-aura-panel-row .wpay-card-setting-icon {
+  color: white;
+}
+.wpay-card-setting-icon--blue {
+  background: linear-gradient(#6cb0ff, #2a78eb);
+}
+.wpay-card-setting-icon--purple {
+  background: linear-gradient(#b19aff, #8055db);
+}
+.wpay-card-setting-icon--orange {
+  background: linear-gradient(#ffc16b, #ed963d);
+}
+.wpay-card-setting-icon--teal {
+  background: linear-gradient(#65d7bf, #259e91);
+}
+.dark .wpay-card-setting-icon--blue {
+  background: linear-gradient(#5a9de8, #2464c4);
+}
+.dark .wpay-card-setting-icon--purple {
+  background: linear-gradient(#a88ae8, #7046c4);
+}
+.dark .wpay-card-setting-icon--orange {
+  background: linear-gradient(#eeb464, #cd7b2a);
+}
+.dark .wpay-card-setting-icon--teal {
+  background: linear-gradient(#4fbba6, #218578);
+}
+.wpay-card-setting-label strong {
+  display: block;
+  font-size: 16px;
+  line-height: 22px;
+  font-weight: 550;
+}
+.wpay-card-setting-label small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 16px;
+  color: #0007;
+}
+.dark .wpay-card-setting-label small {
+  color: #fff7;
+}
