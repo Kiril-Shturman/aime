@@ -271,3 +271,6 @@
 .wpay-promo-details { position: absolute; inset: 0; overflow: hidden; border-radius: inherit; pointer-events: none; background: radial-gradient(circle at 63% 20%, #ffffffb0 0 1.5px, transparent 2px), radial-gradient(circle at 71% 75%, #ffffff60 0 2px, transparent 2.5px), radial-gradient(circle at 95% 20%, #ffffff80 0 2px, transparent 2.5px); }
 .wpay-promo-details:after { content: ""; position: absolute; right: -20px; top: -45px; width: 130px; height: 130px; border: 1px solid #ffffff30; border-radius: 50%; box-shadow: 0 0 0 15px #ffffff09, 0 0 0 30px #ffffff08; }
 .wpay-promo-link { border-radius: inherit; }
+
+.wpay-promo-copy strong { font-size: 16px; line-height: 1.18; }
+.wpay-promo--sbp .wpay-promo-card { width: 148px; height: 93px; right: -7px; top: -2px; transform: rotate(14deg); }
