@@ -1,0 +1,243 @@
+.wpay-promos {
+  position: relative;
+  margin: 24px 16px 0;
+  isolation: isolate;
+  color: #fff;
+}
+.wpay-promos-rail {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  border-radius: 28px;
+  overscroll-behavior-x: contain;
+}
+.wpay-promos-rail::-webkit-scrollbar {
+  display: none;
+}
+.wpay-promo {
+  flex: 0 0 100%;
+  min-width: 0;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+  background: linear-gradient(112deg, #0788f7, #47c9ed);
+  border-radius: 28px;
+}
+.wpay-promo--deposit {
+  background: linear-gradient(112deg, #6250e8, #9b85ef);
+}
+.wpay-promo--cards {
+  background: linear-gradient(112deg, #172a51, #527bb0);
+}
+.wpay-promo-link {
+  position: relative;
+  display: flex;
+  width: 100%;
+  min-height: 166px;
+  align-items: center;
+  border: 0;
+  padding: 21px 18px 34px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+}
+.wpay-promo-link:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: -6px;
+  border-radius: 28px;
+}
+.wpay-promo-link:active .wpay-promo-art {
+  transform: translateY(2px) rotate(4deg);
+}
+.wpay-promo-copy {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: 70%;
+  gap: 6px;
+  text-wrap: balance;
+}
+.wpay-promo-copy strong {
+  font-size: 21px;
+  line-height: 1.16;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  max-width: 245px;
+}
+.wpay-promo-copy > span {
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.9);
+}
+.wpay-promo-copy .wpay-promo-action {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: white;
+}
+.wpay-promo-art {
+  position: absolute;
+  right: -3px;
+  top: 14px;
+  width: 120px;
+  height: 128px;
+  transform: rotate(4deg);
+  transition: transform 0.2s;
+  pointer-events: none;
+}
+.wpay-promo-envelope {
+  position: absolute;
+  left: 8px;
+  top: 52px;
+  width: 103px;
+  height: 70px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #f7faff, #b3ccf4);
+  box-shadow:
+    0 7px 0 #6597d1,
+    0 15px 22px #0068aa38;
+  transform: rotate(-15deg);
+}
+.wpay-promo-envelope:after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  background:
+    linear-gradient(32deg, transparent 49%, #a5bfea 50%, transparent 52%),
+    linear-gradient(-32deg, transparent 49%, #b4cced 50%, transparent 52%);
+  clip-path: polygon(0 100%, 0 15%, 50% 66%, 100% 15%, 100% 100%);
+}
+.wpay-promo-letter {
+  position: absolute;
+  top: 18px;
+  left: 20px;
+  width: 80px;
+  height: 85px;
+  padding: 14px 9px;
+  border-radius: 8px;
+  background: #fff;
+  color: #2087e5;
+  font-size: 16px;
+  font-weight: 700;
+  transform: rotate(-20deg);
+  box-shadow: 0 0 0 2px #d4edff;
+}
+.wpay-promo-heart {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 70px;
+  height: 70px;
+  color: #57d3ff;
+  stroke: #168de8;
+  stroke-width: 1;
+  filter: drop-shadow(2px 5px 0 #1786d1);
+  transform: rotate(12deg);
+}
+.wpay-promo-spark {
+  position: absolute;
+  right: 4px;
+  top: 3px;
+  width: 24px;
+  height: 24px;
+  color: #fff;
+}
+.wpay-promo-coin {
+  position: absolute;
+  right: 6px;
+  top: 45px;
+  width: 78px;
+  height: 78px;
+  border: 2px solid #b8fae5;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 45px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #8ae6c6, #22aa8a);
+  box-shadow:
+    4px 5px 0 #397b82,
+    9px 12px 20px #31207630;
+  transform: rotate(13deg);
+}
+.wpay-promo-coin--back {
+  right: 45px;
+  top: 8px;
+  width: 66px;
+  height: 66px;
+  font-size: 37px;
+  border-color: #f8eac0;
+  background: linear-gradient(135deg, #ffeabe, #e6b159);
+  box-shadow: 4px 5px 0 #a9789b;
+  transform: rotate(-20deg);
+}
+.wpay-promo-card {
+  position: absolute;
+  right: 5px;
+  top: 0;
+  width: 103px;
+  height: 140px;
+  object-fit: contain;
+  transform: rotate(17deg);
+  filter: drop-shadow(0 8px 10px #10193355);
+}
+.wpay-promo-dots {
+  position: absolute;
+  z-index: 3;
+  bottom: 5px;
+  left: 50%;
+  display: flex;
+  transform: translateX(-50%);
+}
+.wpay-promo-dots button {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.wpay-promo-dots button span {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ffffff60;
+  transition:
+    background 0.2s,
+    transform 0.2s;
+}
+.wpay-promo-dots button[aria-current] span {
+  background: #fff;
+  transform: scale(1.3);
+}
+.wpay-promo-dots button:focus-visible {
+  outline: 2px solid white;
+}
+@media (min-width: 400px) {
+  .wpay-promo-copy strong {
+    font-size: 23px;
+  }
+  .wpay-promo-copy > span {
+    font-size: 14px;
+  }
+  .wpay-promo-art {
+    right: 8px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpay-promos * {
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,3 +1,4 @@
+import WalletPromos from "./WalletPromos";
 import WalletVerification, {
   preloadVerificationArtwork,
 } from "./WalletVerification";
@@ -355,6 +356,7 @@ function WalletScreen() {
   const menuButton = useRef<HTMLElement | null>(null);
   const pageRef = useRef<HTMLElement | null>(null);
   const [activeTab, setActiveTab] = useState<WalletTab>("wallet");
+  const [homeProfilePage, setHomeProfilePage] = useState<keyof typeof profilePageTitles | null>(null);
   const [selectedAssetCode, setSelectedAssetCode] = useState<string | null>(
     null,
   );
@@ -639,6 +641,11 @@ function WalletScreen() {
                   }))}
               />
             </div>
+            <WalletPromos
+              onInvite={() => setHomeProfilePage("referral")}
+              onDeposit={() => setCryptoFlow({ kind: "deposit" })}
+              onCards={live.capabilities.cards ? () => selectTab("cards") : undefined}
+            />
             <List
               strong
               inset
@@ -717,6 +724,12 @@ function WalletScreen() {
         )}
       </div>
 
+      {homeProfilePage && <ProfileSettingsPushView
+        page={homeProfilePage}
+        onClose={() => setHomeProfilePage(null)}
+        showNotice={showNotice}
+        onSaveName={() => {}}
+      />}
       <AssetPushView
         onScan={scanPaymentQr}
         asset={
