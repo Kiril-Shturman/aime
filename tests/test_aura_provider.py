@@ -1467,18 +1467,26 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for secret in ("4510123456", "123456789012", "Иван", "Петров"):
             self.assertNotIn(secret, persisted)
 
-    async def test_customer_kyc_session_status_and_webhook(self):
+    async def test_customer_direct_kyc_status_and_webhook(self):
         registered = await self.wpay.post(
             "/api/wallet/aura-customer", headers=self.owner,
             json={"email": "owner@example.com", "phone": "+79991234567"},
         )
         self.assertEqual(registered.status, 200, await registered.text())
         customer_id = (await registered.json())["customer_id"]
-        started = await self.wpay.post(
-            "/api/wallet/aura-kyc", headers=self.owner, json={}
+        submitted = await self.wpay.post(
+            "/api/wallet/aura-kyc", headers=self.owner, json={
+                "first_name": "Иван", "last_name": "Петров",
+                "birth_date": "1990-05-20", "passport": "4510 123456",
+                "passport_issue_date": "2010-06-01", "inn": "123456789012",
+            }
         )
-        self.assertEqual(started.status, 200, await started.text())
-        self.assertEqual((await started.json())["status"], "pending")
+        self.assertEqual(submitted.status, 200, await submitted.text())
+        self.assertEqual(submitted.headers.get("Cache-Control"), "no-store")
+        self.assertTrue((await submitted.json())["verified"])
+        persisted = "\n".join(self.app["wpay_ledger"].db.iterdump())
+        for secret in ("4510123456", "123456789012", "Иван", "Петров"):
+            self.assertNotIn(secret, persisted)
         changed = await self.mock.post(
             "/mock/kyc", json={"customer_id": customer_id, "status": "verified"}
         )
@@ -2009,7 +2017,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         events = (await overview.json())["transactions"]
         self.assertEqual(events[0]["type"], "qr_completed")
 
-    async def test_disabled_sbp_product_blocks_kyc_start_and_rate(self):
+    async def test_disabled_sbp_product_blocks_kyc_submission_and_rate(self):
         self.mock.app["state"].products["sbp_buy"] = False
         kyc = await self.wpay.post(
             "/api/wallet/aura-kyc", headers=self.owner,

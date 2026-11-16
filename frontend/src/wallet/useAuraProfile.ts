@@ -7,15 +7,29 @@ export type KycState = {
   terminal: boolean;
   reason?: string | null;
 };
+export type KycIdentityInput = {
+  first_name: string;
+  last_name: string;
+  patronymic?: string;
+  birth_date: string;
+  passport: string;
+  passport_issue_date: string;
+  inn?: string;
+  country_of_passport_issue: "RUS";
+};
 const messages: Record<string, string> = {
   NOT_CONFIGURED: "Подключение профиля пока недоступно. Попробуйте позже.",
   sbp_buy_not_enabled: "Проверка личности пока недоступна для этого сервиса.",
   kyc_email_required: "Сначала сохраните электронную почту в личных данных.",
   kyc_pending: "Документы уже на проверке.",
+  kyc_rejected: "Проверка не пройдена. Обратитесь в поддержку.",
+  kyc_passport_already_used:
+    "Этот паспорт уже использован для другой проверки. Обратитесь в поддержку.",
   kyc_identity_locked: "Данные проверки заблокированы. Обратитесь в поддержку.",
   kyc_session_unavailable:
     "Сервис проверки временно недоступен. Попробуйте позже.",
-  INVALID_REQUEST: "Проверьте телефон и электронную почту.",
+  INVALID_REQUEST: "Проверьте заполненные данные.",
+  CUSTOMER_NOT_REGISTERED: "Сначала сохраните телефон и электронную почту.",
 };
 function message(error: unknown) {
   return error instanceof WalletApiError
@@ -31,7 +45,6 @@ export function useAuraProfile(page: string | null) {
   const [registered, setRegistered] = useState(false);
   const [error, setError] = useState("");
   const [kyc, setKyc] = useState<KycState | null>(null);
-  const [sessionUrl, setSessionUrl] = useState("");
   const working = useRef(false);
   const generation = useRef(0);
   const refresh = useCallback(async (signal?: AbortSignal) => {
@@ -41,14 +54,12 @@ export function useAuraProfile(page: string | null) {
   }, []);
   useEffect(() => {
     if (page !== "personal" && page !== "verification") {
-      setSessionUrl("");
       return;
     }
     const controller = new AbortController();
     const current = ++generation.current;
     setLoading(true);
     setError("");
-    setSessionUrl("");
     void (async () => {
       try {
         const status = await walletRequest<{
@@ -148,38 +159,29 @@ export function useAuraProfile(page: string | null) {
       setBusy(false);
     }
   };
-  const start = async () => {
-    if (working.current || !available) return;
+  const submitIdentity = async (identity: KycIdentityInput) => {
+    if (working.current || !available) return false;
     if (!email || !phone) {
       setError(
         "Сначала заполните и сохраните телефон и почту в личных данных.",
       );
-      return;
+      return false;
     }
     working.current = true;
     setBusy(true);
     setError("");
-    setSessionUrl("");
     try {
-      const result = await walletRequest<
-        KycState & { session_url?: string | null }
-      >("aura-kyc", {});
+      const result = await walletRequest<KycState>("aura-kyc", identity);
       setKyc({
         status: result.status,
         verified: result.verified,
         terminal: result.terminal,
         reason: result.reason,
       });
-      if (result.verified) return;
-      if (
-        !result.session_url ||
-        new URL(result.session_url).protocol !== "https:"
-      )
-        throw Error("No session URL");
-      setSessionUrl(result.session_url);
-      tg()?.openLink?.(result.session_url);
+      return true;
     } catch (e) {
       setError(message(e));
+      return false;
     } finally {
       working.current = false;
       setBusy(false);
@@ -196,9 +198,8 @@ export function useAuraProfile(page: string | null) {
     registered,
     error,
     kyc,
-    sessionUrl,
     save,
-    start,
+    submitIdentity,
     refresh: async () => {
       try {
         setError("");

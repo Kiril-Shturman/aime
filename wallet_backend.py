@@ -1481,12 +1481,21 @@ def install_wallet(app, root, owner_check):
                 if not await aura_client.product_enabled('sbp_buy'):
                     raise ApiError('sbp_buy_not_enabled', 'Aura SBP purchase is not enabled', 403)
                 body = await request.json()
-                allowed = {'email', 'phone'}
-                if not isinstance(body, dict) or set(body) - allowed:
-                    raise ValueError('Unsupported Aura KYC fields')
-                return web.json_response(await aura_service.start_kyc(
-                    uid, client_ref, email=body.get('email'), phone=body.get('phone')
-                ), headers={'Cache-Control': 'no-store'})
+                if not isinstance(body, dict):
+                    raise ValueError('Invalid Aura KYC identity')
+                row = ledger.db.execute(
+                    'SELECT customer_id FROM aura_customers WHERE user_id=? AND environment=?',
+                    (uid, aura_environment),
+                ).fetchone()
+                if not row:
+                    raise ApiError(
+                        'CUSTOMER_NOT_REGISTERED', 'Aura customer is not registered', 404
+                    )
+                response = web.json_response(await aura_service.submit_identity(
+                    uid, row['customer_id'], body
+                ))
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             if action == 'aura-card-fees' and request.method == 'GET':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)

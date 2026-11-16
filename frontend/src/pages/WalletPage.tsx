@@ -21,6 +21,7 @@ import "./WalletButtons.css";
 import WalletSheetClose from "./WalletSheetClose";
 import WalletAuraCards from "./WalletAuraCards";
 import WalletContactOnboarding from "./WalletContactOnboarding";
+import WalletKycIdentityForm from "./WalletKycIdentityForm";
 import { DesktopSidebar, DesktopOverview } from "./WalletDesktop";
 import "./WalletDesktop.css";
 import {
@@ -3245,7 +3246,7 @@ function ProfileSettingsPushView({
                 available={aura.available}
                 error={aura.error}
                 save={aura.save}
-                onComplete={() => void aura.start()}
+                onComplete={() => undefined}
               />
             ) : (
               <Card
@@ -3275,40 +3276,29 @@ function ProfileSettingsPushView({
                           ? "Проверка не пройдена. Обратитесь в поддержку, если нужна помощь."
                           : "Сохраните телефон и почту в личных данных, затем подтвердите документы в защищённой форме."}
                 </p>
-                {aura.error && (
-                  <p
-                    role="alert"
-                    className="mt-3 text-[13px] leading-5 text-red-600 dark:text-red-400"
-                  >
-                    {aura.error}
-                  </p>
-                )}
-                {!aura.kyc?.verified && (
-                  <Button
-                    data-wpay-primary=""
-                    rounded
-                    disabled={
-                      !aura.available ||
-                      aura.loading ||
-                      aura.busy ||
-                      Boolean(aura.kyc?.terminal)
-                    }
-                    className="!mb-0 !mt-6 !w-full"
-                    onClick={() => void aura.start()}
-                  >
-                    {aura.busy ? "Подготавливаем…" : "Пройти проверку"}
-                  </Button>
-                )}
-                {aura.sessionUrl && (
-                  <a
-                    className="mt-4 block text-[15px] text-primary"
-                    href={aura.sessionUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Продолжить проверку
-                  </a>
-                )}
+                {aura.error &&
+                  (aura.kyc?.verified ||
+                    aura.kyc?.terminal ||
+                    aura.kyc?.status === "pending" ||
+                    aura.kyc?.status === "in_review") && (
+                    <p
+                      role="alert"
+                      className="mt-3 text-[13px] leading-5 text-red-600 dark:text-red-400"
+                    >
+                      {aura.error}
+                    </p>
+                  )}
+                {!aura.kyc?.verified &&
+                  !aura.kyc?.terminal &&
+                  aura.kyc?.status !== "pending" &&
+                  aura.kyc?.status !== "in_review" && (
+                    <WalletKycIdentityForm
+                      busy={aura.busy}
+                      disabled={!aura.available || aura.loading}
+                      error={aura.error}
+                      submit={aura.submitIdentity}
+                    />
+                  )}
                 {aura.available && (
                   <button
                     type="button"

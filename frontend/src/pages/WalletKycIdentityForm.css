@@ -1,0 +1,135 @@
+.wpay-kyc-form {
+  margin-top: 24px;
+  text-align: left;
+}
+.wpay-kyc-section {
+  margin-bottom: 18px;
+  overflow: hidden;
+  border-radius: 20px;
+  background: rgb(0 0 0 / 0.035);
+}
+.dark .wpay-kyc-section {
+  background: rgb(255 255 255 / 0.075);
+}
+.wpay-kyc-section h3 {
+  margin: 0;
+  padding: 15px 16px 8px;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 600;
+  color: rgb(0 0 0 / 0.46);
+}
+.dark .wpay-kyc-section h3 {
+  color: rgb(255 255 255 / 0.5);
+}
+.wpay-kyc-field {
+  position: relative;
+  display: block;
+  padding: 10px 16px 12px;
+}
+.wpay-kyc-field:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 16px;
+  height: 0.5px;
+  background: rgb(60 60 67 / 0.16);
+}
+.dark .wpay-kyc-field:not(:last-child)::after {
+  background: rgb(235 235 245 / 0.16);
+}
+.wpay-kyc-field > span {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 12px;
+  line-height: 17px;
+  font-weight: 500;
+  color: rgb(0 0 0 / 0.43);
+}
+.dark .wpay-kyc-field > span {
+  color: rgb(255 255 255 / 0.46);
+}
+.wpay-kyc-field b {
+  color: #ff3b30;
+}
+.wpay-kyc-field input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #111;
+  font: inherit;
+  font-size: 16px;
+  line-height: 30px;
+}
+.dark .wpay-kyc-field input {
+  color: #fff;
+}
+.wpay-kyc-field input::placeholder {
+  color: rgb(60 60 67 / 0.35);
+}
+.dark .wpay-kyc-field input::placeholder {
+  color: rgb(235 235 245 / 0.35);
+}
+.wpay-kyc-field input:disabled {
+  opacity: 0.55;
+}
+.wpay-kyc-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  margin: 2px 2px 18px;
+  font-size: 13px;
+  line-height: 19px;
+  color: rgb(0 0 0 / 0.55);
+}
+.dark .wpay-kyc-consent {
+  color: rgb(255 255 255 / 0.58);
+}
+.wpay-kyc-consent input {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin: 0;
+  accent-color: #007aff;
+}
+.wpay-kyc-error {
+  margin: -2px 4px 16px;
+  text-align: center;
+  font-size: 13px;
+  line-height: 19px;
+  color: #d70015;
+}
+.dark .wpay-kyc-error {
+  color: #ff6961;
+}
+.wpay-kyc-secure {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 7px;
+  margin: 14px 4px 0;
+  text-align: left;
+  font-size: 12px;
+  line-height: 18px;
+  color: rgb(0 0 0 / 0.42);
+}
+.dark .wpay-kyc-secure {
+  color: rgb(255 255 255 / 0.44);
+}
+.wpay-kyc-secure svg {
+  margin-top: 1px;
+  flex: 0 0 auto;
+  color: #34c759;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpay-kyc-form * {
+    scroll-behavior: auto !important;
+  }
+}
