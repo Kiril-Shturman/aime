@@ -299,9 +299,7 @@ export default function WalletVerificationIdentity({
               {notice}
             </p>
           )}
-          <div ref={formRef} className="wpay-passport-fields-heading">
-            Проверьте данные
-          </div>
+          <div ref={formRef} className="scroll-mt-5" />
           <List
             strong
             inset
@@ -345,8 +343,8 @@ export default function WalletVerificationIdentity({
             <span>Я проверил(а) данные — всё совпадает с паспортом</span>
           </label>
           <p className="wpay-verification-contact-note">
-            <LockKeyhole size={16} /> Фото распознаётся на устройстве. В API
-            отправятся только проверенные вами поля.
+            <LockKeyhole size={16} /> Фото распознаётся на устройстве и нигде не
+            хранится.
           </p>
           {(error || aura.error) && (
             <p
