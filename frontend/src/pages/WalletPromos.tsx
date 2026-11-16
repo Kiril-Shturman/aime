@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import giftArtwork from "../assets/verification/gift-promo.png";
 import qrArtwork from "../assets/verification/qr-promo.png";
 import sbpArtwork from "../assets/verification/sbp-promo.png";
 import cardArtwork from "../assets/verification/wpay-card.webp";
@@ -132,10 +133,7 @@ export default function WalletPromos({
               </span>
               <span className="wpay-promo-art" aria-hidden="true">
                 {slide.id === "friends" ? (
-                  <span className="wpay-promo-gift">
-                    <span className="wpay-promo-gift-wrap" />
-                    <span className="wpay-promo-gift-bow"><span /><span /><i /></span>
-                  </span>
+                  <img className="wpay-promo-gift-artwork" src={giftArtwork} alt="" loading="lazy" />
                 ) : slide.id === "qr" ? (
                   <img className="wpay-promo-qr" src={qrArtwork} alt="" loading="lazy" />
                 ) : (
