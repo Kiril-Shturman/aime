@@ -311,6 +311,20 @@ test("Telegram back from contacts returns to verification start before closing",
   await expect(
     page.getByRole("heading", { name: "Ваши контакты" }),
   ).toBeVisible();
+  await page.evaluate(() => {
+    const w = window as any;
+    w.backVisibilityCalls = [];
+    const back = w.Telegram.WebApp.BackButton;
+    for (const method of ["show", "hide"]) {
+      const original = back[method].bind(back);
+      back[method] = () => {
+        w.backVisibilityCalls.push(method);
+        return original();
+      };
+    }
+  });
+  await page.locator("#verification-email").pressSequentially("test@example.com");
+  await expect.poll(() => page.evaluate(() => (window as any).backVisibilityCalls)).toEqual([]);
   await page.evaluate(() =>
     (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {}),
   );

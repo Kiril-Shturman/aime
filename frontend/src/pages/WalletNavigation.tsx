@@ -179,18 +179,22 @@ export function PushViewShell({
     }
   }, [open]);
 
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   useEffect(() => {
     if (!open || !nativeBack) return;
     const app = tg();
     const back = app?.BackButton;
     if (!back || app?.isVersionAtLeast?.("6.1") === false) return;
-    app?.onEvent?.("backButtonClicked", onClose);
+    const handleBack = () => onCloseRef.current();
+    app?.onEvent?.("backButtonClicked", handleBack);
     back.show();
     return () => {
-      app?.offEvent?.("backButtonClicked", onClose);
+      app?.offEvent?.("backButtonClicked", handleBack);
       back.hide();
     };
-  }, [open, nativeBack, onClose]);
+  }, [open, nativeBack]);
 
   const navbar = hideNavbar ? null : (
     <WalletNavbar
