@@ -39,7 +39,11 @@ import {
   type WalletOverview,
   type WalletStatus,
 } from "../lib/wallet-api";
-import { assetNetworks } from "../wallet/catalog";
+import {
+  assetNetworks,
+  depositNetworks,
+  availableDepositRoutes,
+} from "../wallet/catalog";
 
 const empty: WalletOverview = { balances: [], rates: [], transactions: [] };
 const usd = (n: number) =>
@@ -64,6 +68,7 @@ interface WalletContextValue {
   capabilities: WalletCapabilities;
   qrProvider: "aura" | "goswap" | null;
   assetRoutes: Record<string, string[]>;
+  depositRoutes: Record<string, string[]>;
   depositModes: Record<
     string,
     Record<string, "address" | "exact" | "disabled">
@@ -103,6 +108,9 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
     ),
     [assetRoutes, setAssetRoutes] = useState<Record<string, string[]>>(
       demo ? assetNetworks : {},
+    ),
+    [depositRoutes, setDepositRoutes] = useState<Record<string, string[]>>(
+      demo ? depositNetworks : {},
     ),
     [depositModes, setDepositModes] = useState<
       Record<string, Record<string, "address" | "exact" | "disabled">>
@@ -162,6 +170,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         setCapabilities(status.capabilities ?? noCapabilities);
         setQrProvider(status.routes?.qr_pay ?? null);
         setAssetRoutes(status.asset_routes ?? {});
+        setDepositRoutes(availableDepositRoutes(status));
         setDepositModes(status.deposit_modes ?? {});
         if (!status.configured) {
           setData(empty);
@@ -231,6 +240,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         capabilities,
         qrProvider,
         assetRoutes,
+        depositRoutes,
         depositModes,
         loading,
         error,

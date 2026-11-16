@@ -639,3 +639,44 @@ test("Aura TRON deposit opens permanent QR without requesting an exact amount", 
   ).toBeVisible();
   expect(calls).toBe(1);
 });
+
+test("Aura deposit choices exclude TRX and other unsupported coins while keeping holdings", async ({
+  page,
+}) => {
+  await setup(page, "dark");
+  await page.route("**/api/wallet/status", (route) =>
+    route.fulfill({
+      json: {
+        configured: true,
+        asset_routes: {
+          USDT: ["TRON", "BSC"],
+          TRX: ["TRON"],
+          BNB: ["BSC"],
+          BTC: ["BTC"],
+        },
+        providers: { goswap: { configured: false } },
+        deposit_modes: { USDT: { TRON: "address" } },
+        capabilities: {
+          sbp_buy: true,
+          crypto_processing: true,
+          cards: false,
+          qr_pay: false,
+        },
+      },
+    }),
+  );
+  await page.reload();
+  await expect(
+    page.locator(".wpay-wallet-home").getByText("TRON", { exact: true }),
+  ).toBeVisible();
+  await page
+    .locator(".wpay-wallet-home")
+    .getByRole("button", { name: "Пополнить", exact: true })
+    .click();
+  const flow = page.getByRole("main", { name: "Способы пополнения" });
+  await expect(flow.getByText("Рубли", { exact: true })).toBeVisible();
+  await expect(flow.locator("span.block").filter({ hasText: /^Tether$/ })).toBeVisible();
+  await expect(flow.locator("li").filter({ hasText: "TRX" })).toHaveCount(0);
+  await expect(flow.locator("li").filter({ hasText: "BNB" })).toHaveCount(0);
+  await expect(flow.locator("li").filter({ hasText: "BTC" })).toHaveCount(0);
+});

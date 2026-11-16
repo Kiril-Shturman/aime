@@ -48,7 +48,7 @@ export default function WalletDeposit({
   const wallet = useLiveWallet(),
     asset = defaultAsset;
   const meta = options.find((item) => item.code === asset);
-  const supported = (wallet.assetRoutes[asset] ?? []).filter((network) =>
+  const supported = (wallet.depositRoutes[asset] ?? []).filter((network) =>
     (networks[asset] ?? []).includes(network),
   );
   const [retryAt, setRetryAt] = useState(0);
@@ -573,42 +573,48 @@ export default function WalletDeposit({
           <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[max(20px,env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <List strong inset dividers className="!mx-0 !my-0 !bg-transparent">
               {picker === "asset"
-                ? options.map((item) => (
-                    <ListItem
-                      key={item.code}
-                      link
-                      chevron={false}
-                      onClick={() => {
-                        setPicker(null);
-                        onAssetChange?.(item.code);
-                      }}
-                      contentClassName="!h-[68px]"
-                      innerClassName="!h-[68px] !min-w-0 !py-2 after:!opacity-30"
-                      media={
-                        <span
-                          className="flex h-11 w-11 items-center justify-center rounded-full [&>svg]:!h-6 [&>svg]:!w-6"
-                          style={item.style}
-                        >
-                          {item.icon}
-                        </span>
-                      }
-                      innerChildren={
-                        <span className="flex h-full w-full min-w-0 items-center justify-between gap-4">
-                          <span className="min-w-0">
-                            <span className="block truncate text-[17px] font-semibold text-black dark:text-white">
-                              {item.name}
+                ? options
+                    .filter((item) =>
+                      item.code === "RUB"
+                        ? wallet.capabilities.sbp_buy
+                        : (wallet.depositRoutes[item.code]?.length ?? 0) > 0,
+                    )
+                    .map((item) => (
+                      <ListItem
+                        key={item.code}
+                        link
+                        chevron={false}
+                        onClick={() => {
+                          setPicker(null);
+                          onAssetChange?.(item.code);
+                        }}
+                        contentClassName="!h-[68px]"
+                        innerClassName="!h-[68px] !min-w-0 !py-2 after:!opacity-30"
+                        media={
+                          <span
+                            className="flex h-11 w-11 items-center justify-center rounded-full [&>svg]:!h-6 [&>svg]:!w-6"
+                            style={item.style}
+                          >
+                            {item.icon}
+                          </span>
+                        }
+                        innerChildren={
+                          <span className="flex h-full w-full min-w-0 items-center justify-between gap-4">
+                            <span className="min-w-0">
+                              <span className="block truncate text-[17px] font-semibold text-black dark:text-white">
+                                {item.name}
+                              </span>
+                              <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
+                                {item.code}
+                              </span>
                             </span>
-                            <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
-                              {item.code}
+                            <span className="flex h-full w-6 shrink-0 items-center justify-center text-primary">
+                              {item.code === asset && <Check size={20} />}
                             </span>
                           </span>
-                          <span className="flex h-full w-6 shrink-0 items-center justify-center text-primary">
-                            {item.code === asset && <Check size={20} />}
-                          </span>
-                        </span>
-                      }
-                    />
-                  ))
+                        }
+                      />
+                    ))
                 : supported.map((code) => (
                     <ListItem
                       key={code}

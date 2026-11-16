@@ -5,6 +5,7 @@ import {
   isRecipientAddress,
   depositNetworks,
   assetNetworks,
+  availableDepositRoutes,
 } from "../src/wallet/catalog.ts";
 
 test("same-network addresses never leak across assets or accept untyped data", () => {
@@ -33,4 +34,33 @@ test("displaying an asset does not imply provider deposit support", () => {
     assert.equal(depositNetworks[code], undefined);
   }
   assert.ok(depositNetworks.USDT.includes("TON"));
+});
+
+test("Aura-only deposits do not inherit unsupported holdings networks", () => {
+  assert.deepEqual(
+    availableDepositRoutes({
+      asset_routes: { USDT: ["TRON", "BSC"], TRX: ["TRON"], BNB: ["BSC"] },
+      providers: { goswap: { configured: false } },
+      deposit_modes: { USDT: { TRON: "address" } },
+      capabilities: { crypto_processing: true },
+    }),
+    { USDT: ["TRON"] },
+  );
+  assert.deepEqual(
+    availableDepositRoutes({
+      asset_routes: { USDT: ["TRON"] },
+      providers: { goswap: { configured: false } },
+      deposit_modes: { USDT: { TRON: "disabled" } },
+    }),
+    {},
+  );
+});
+test("legacy deposit support also excludes assets with no receiving API", () => {
+  assert.deepEqual(
+    availableDepositRoutes({
+      asset_routes: { TRX: ["TRON"], BTC: ["BTC"], ETH: ["ETH"] },
+      providers: { goswap: { configured: true } },
+    }),
+    { ETH: ["ETH"] },
+  );
 });

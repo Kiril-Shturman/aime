@@ -1019,47 +1019,53 @@ function AssetPushView({
               className={`!mx-0 !my-0 overflow-hidden ${allDepositNetworks ? "!rounded-[30px] [&>ul]:!rounded-[30px]" : "!rounded-full [&>ul]:!rounded-full"}`}
             >
               {(allDepositNetworks
-                ? (live.assetRoutes[displayAsset.code] ?? [])
+                ? (live.depositRoutes[displayAsset.code] ?? [])
                 : [
                     addressEntry?.network ??
-                      live.assetRoutes[displayAsset.code]?.[0] ??
+                      live.depositRoutes[displayAsset.code]?.[0] ??
                       "",
                   ]
-              ).map((network) => (
-                <ListItem
-                  key={network}
-                  link
-                  chevron={false}
-                  onClick={() => void chooseDeposit(displayAsset.code, network)}
-                  contentClassName="!h-[64px]"
-                  innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30"
-                  media={
-                    <WalletAssetAvatar
-                      icon={displayAsset.icon}
-                      color={displayAsset.color}
-                      iconColor={displayAsset.iconColor}
-                      network={network}
-                    />
-                  }
-                  innerChildren={
-                    <span className="flex h-full w-full items-center justify-between gap-3">
-                      <span className="min-w-0">
-                        <span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">
-                          {displayAsset.code}
-                          {!["BTC", "TRX"].includes(displayAsset.code)
-                            ? " · " +
-                              (addressNetworkStandards[network] ?? network)
-                            : ""}
+              )
+                .filter((network) =>
+                  live.depositRoutes[displayAsset.code]?.includes(network),
+                )
+                .map((network) => (
+                  <ListItem
+                    key={network}
+                    link
+                    chevron={false}
+                    onClick={() =>
+                      void chooseDeposit(displayAsset.code, network)
+                    }
+                    contentClassName="!h-[64px]"
+                    innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30"
+                    media={
+                      <WalletAssetAvatar
+                        icon={displayAsset.icon}
+                        color={displayAsset.color}
+                        iconColor={displayAsset.iconColor}
+                        network={network}
+                      />
+                    }
+                    innerChildren={
+                      <span className="flex h-full w-full items-center justify-between gap-3">
+                        <span className="min-w-0">
+                          <span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">
+                            {displayAsset.code}
+                            {!["BTC", "TRX"].includes(displayAsset.code)
+                              ? " · " +
+                                (addressNetworkStandards[network] ?? network)
+                              : ""}
+                          </span>
+                          <span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">
+                            {addressNetworkNames[network]}
+                          </span>
                         </span>
-                        <span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">
-                          {addressNetworkNames[network]}
-                        </span>
+                        <ChevronRight className="shrink-0 text-[19px] text-black/25 dark:text-white/30" />
                       </span>
-                      <ChevronRight className="shrink-0 text-[19px] text-black/25 dark:text-white/30" />
-                    </span>
-                  }
-                />
-              ))}
+                    }
+                  />
+                ))}
             </List>
             {choosingDeposit && (
               <p
@@ -1168,13 +1174,25 @@ function DepositMethodsView({
   const [entry, setEntry] = useState<WalletAddressSelection | null>(null);
   const [network, setNetwork] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const depositRouteKey = JSON.stringify(live.depositRoutes);
   useEffect(() => {
-    setSelected(flow?.assetCode ?? null);
-    setEntry(flow?.depositAddress ?? null);
-    setNetwork(flow?.network ?? null);
-  }, [flow]);
+    const routes: Record<string, string[]> = JSON.parse(depositRouteKey);
+    const code = flow?.assetCode;
+    const allowed =
+      code === "RUB"
+        ? live.capabilities.sbp_buy
+        : Boolean(code && routes[code]?.length);
+    setSelected(code && allowed ? code : null);
+    setEntry(allowed ? (flow?.depositAddress ?? null) : null);
+    setNetwork(allowed ? (flow?.network ?? null) : null);
+    setDepositError(
+      code && !allowed && live.ready
+        ? "Пополнение этой монеты пока не подключено. Выберите доступную валюту."
+        : "",
+    );
+  }, [flow, depositRouteKey, live.capabilities.sbp_buy, live.ready]);
   async function chooseNetwork(code: string, network: string) {
-    if (resolving) return;
+    if (resolving || !live.depositRoutes[code]?.includes(network)) return;
     controller.current?.abort();
     const request = new AbortController();
     controller.current = request;
@@ -1205,11 +1223,12 @@ function DepositMethodsView({
   }
   useEffect(() => () => controller.current?.abort(), [flow]);
   function chooseAsset(code: string) {
+    if (code !== "RUB" && !live.depositRoutes[code]?.length) return;
     setSelected(code);
     setEntry(null);
     setNetwork(null);
     if (code !== "RUB" && code !== "USDT") {
-      const first = live.assetRoutes[code]?.[0];
+      const first = live.depositRoutes[code]?.[0];
       if (first) chooseNetwork(code, first);
     }
   }
@@ -1230,7 +1249,7 @@ function DepositMethodsView({
     else onClose();
   }
   const depositAssets = assets.filter(
-    (item) => (live.assetRoutes[item.code] ?? []).length > 0,
+    (item) => (live.depositRoutes[item.code] ?? []).length > 0,
   );
   const selectedAsset = depositAssets.find((item) => item.code === selected);
   if (entry && selected && selectedAsset)
@@ -1284,7 +1303,7 @@ function DepositMethodsView({
             dividers
             className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]"
           >
-            {(live.assetRoutes.USDT ?? []).map((net) => (
+            {(live.depositRoutes.USDT ?? []).map((net) => (
               <ListItem
                 key={net}
                 link

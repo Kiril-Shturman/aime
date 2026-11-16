@@ -154,6 +154,7 @@ export interface WalletCapabilities {
   qr_pay: boolean;
 }
 export interface WalletStatus {
+  providers?: { goswap?: { configured?: boolean } };
   configured: boolean;
   capabilities: WalletCapabilities;
   routes: { qr_pay: "aura" | "goswap" | null };

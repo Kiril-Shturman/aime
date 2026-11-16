@@ -75,3 +75,32 @@ export function isRecipientAddress(network: string, raw: string): boolean {
     return /^0x[a-fA-F0-9]{40}$/.test(address);
   return false;
 }
+
+/** Holdings and admin visibility do not imply a provider can receive this asset. */
+export function availableDepositRoutes(status: {
+  asset_routes?: Record<string, string[]>;
+  deposit_modes?: Record<
+    string,
+    Record<string, "address" | "exact" | "disabled">
+  >;
+  providers?: { goswap?: { configured?: boolean } };
+  capabilities?: { crypto_processing?: boolean };
+}): Record<string, string[]> {
+  const legacy =
+    !status.providers || status.providers.goswap?.configured === true;
+  const result: Record<string, string[]> = {};
+  for (const [asset, networks] of Object.entries(status.asset_routes ?? {})) {
+    const active = networks.filter((network) => {
+      const mode = status.deposit_modes?.[asset]?.[network];
+      if (mode === "disabled") return false;
+      if (
+        mode === "address" &&
+        status.capabilities?.crypto_processing !== false
+      )
+        return true;
+      return legacy && (depositNetworks[asset] ?? []).includes(network);
+    });
+    if (active.length) result[asset] = active;
+  }
+  return result;
+}
