@@ -15,7 +15,8 @@ export default function WalletPromos({
   onQr: () => void;
   onSbp?: () => void;
 }) {
-  const rail = useRef<HTMLDivElement>(null);
+  const gesture = useRef<{ x: number; y: number } | null>(null);
+  const suppressClickUntil = useRef(0);
   const [active, setActive] = useState(0);
   const slides = [
     {
@@ -44,6 +45,7 @@ export default function WalletPromos({
         ]
       : []),
   ];
+  const selected = Math.min(active, slides.length - 1);
   return (
     <section
       className="wpay-promos"
@@ -51,17 +53,35 @@ export default function WalletPromos({
       aria-roledescription="карусель"
     >
       <div
-        ref={rail}
         className="wpay-promos-rail"
-        onScroll={() => {
-          const el = rail.current;
-          if (el) setActive(Math.round(el.scrollLeft / el.clientWidth));
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          gesture.current = { x: event.clientX, y: event.clientY };
+        }}
+        onPointerCancel={() => { gesture.current = null; }}
+        onPointerUp={(event) => {
+          const start = gesture.current;
+          gesture.current = null;
+          if (!start) return;
+          const dx = event.clientX - start.x;
+          const dy = event.clientY - start.y;
+          if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
+          suppressClickUntil.current = performance.now() + 400;
+          setActive((value) => (value + (dx < 0 ? 1 : -1) + slides.length) % slides.length);
+        }}
+        onClickCapture={(event) => {
+          if (performance.now() < suppressClickUntil.current) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
         }}
       >
         {slides.map((slide, index) => (
           <div
             key={slide.id}
-            className={`wpay-promo wpay-promo--${slide.id}`}
+            className={`wpay-promo wpay-promo--${slide.id} ${selected === index ? "is-active" : ""}`}
+            aria-hidden={selected !== index}
+            inert={selected !== index}
             role="group"
             aria-roledescription="слайд"
             aria-label={`${index + 1} из ${slides.length}`}
@@ -107,15 +127,8 @@ export default function WalletPromos({
             type="button"
             key={slide.id}
             aria-label={`Баннер ${index + 1}: ${slide.title}`}
-            aria-current={active === index ? "true" : undefined}
-            onClick={() =>
-              rail.current?.scrollTo({
-                left: index * rail.current.clientWidth,
-                behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
-                  ? "instant"
-                  : "smooth",
-              })
-            }
+            aria-current={selected === index ? "true" : undefined}
+            onClick={() => setActive(index)}
           >
             <span />
           </button>

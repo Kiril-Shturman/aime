@@ -690,7 +690,16 @@ test("home promo carousel switches slides and routes QR to scanner capability ch
   await carousel.getByRole("button", { name: /Сканировать QR-код/ }).click();
   await expect(page.getByText("Оплата QR сейчас не подключена", { exact: true })).toBeVisible();
   await expect(page.getByRole("main", { name: "Способы пополнения" })).toHaveCount(0);
-  await carousel.getByRole("button", { name: /Баннер 1:/ }).click();
+  const bounds = await carousel.locator(".wpay-promos-rail").boundingBox();
+  if (!bounds) throw new Error("Missing carousel bounds");
+  await page.mouse.move(bounds.x + 70, bounds.y + 38);
+  await page.mouse.down();
+  await page.mouse.move(bounds.x + 195, bounds.y + 40, { steps: 10 });
+  await page.mouse.up();
+  await expect(carousel.getByRole("button", { name: /Баннер 1:/ })).toHaveAttribute("aria-current", "true");
+  await expect(page.getByLabel("Реферальная ссылка", { exact: true })).toHaveCount(0);
+  await expect(carousel.locator(".wpay-promos-rail")).toHaveJSProperty("scrollLeft", 0);
+  await page.waitForTimeout(450);
   await expect(carousel.getByRole("button", { name: /Баннер 1:/ })).toHaveAttribute("aria-current", "true");
   await carousel.getByRole("button", { name: /Пригласить друзей/ }).click();
   await expect(page.getByLabel("Реферальная ссылка", { exact: true })).toBeVisible();

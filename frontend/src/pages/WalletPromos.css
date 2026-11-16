@@ -5,10 +5,9 @@
   color: #fff;
 }
 .wpay-promos-rail {
-  display: flex;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
+  display: grid;
+  overflow: hidden;
+  touch-action: pan-y;
   border-radius: 28px;
   overscroll-behavior-x: contain;
 }
@@ -16,10 +15,11 @@
   display: none;
 }
 .wpay-promo {
-  flex: 0 0 100%;
+  grid-area: 1 / 1;
   min-width: 0;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 240ms ease;
   overflow: hidden;
   background: linear-gradient(112deg, #0788f7, #47c9ed);
   border-radius: 28px;
@@ -258,3 +258,5 @@
 .wpay-promo-art { scale: .63; transform-origin: top right; top: 0; right: 3px; }
 .wpay-promo--sbp .wpay-promo-art { top: 0; right: 3px; }
 .wpay-promo--qr .wpay-promo-art { scale: .59; top: 0; right: 0; }
+
+.wpay-promo.is-active { opacity: 1; pointer-events: auto; z-index: 1; }
