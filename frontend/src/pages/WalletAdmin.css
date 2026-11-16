@@ -1303,3 +1303,253 @@
     );
   }
 }
+
+.wpay-admin-table tr.is-clickable,
+.wpay-admin-mobile-item.is-clickable {
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+.wpay-admin-table tr.is-clickable:hover,
+.wpay-admin-table tr.is-clickable:focus-visible,
+.wpay-admin-mobile-item.is-clickable:hover,
+.wpay-admin-mobile-item.is-clickable:focus-visible {
+  outline: none;
+  background: color-mix(in srgb, var(--f7-theme-color) 7%, transparent);
+}
+
+.wpay-admin-problems {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.65fr) minmax(0, 1.35fr);
+  gap: 18px;
+  align-items: center;
+  padding: 20px 22px;
+  border: 1px solid var(--admin-border);
+  border-radius: 24px;
+  background: var(--admin-surface);
+}
+.wpay-admin-problems.has-problems {
+  border-color: color-mix(in srgb, #ef4444 28%, var(--admin-border));
+  background: color-mix(in srgb, #ef4444 4%, var(--admin-surface));
+}
+.wpay-admin-problems-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wpay-admin-problems-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 14px;
+  color: #22a65b;
+  background: rgba(34, 166, 91, 0.1);
+}
+.wpay-admin-problems.has-problems .wpay-admin-problems-icon {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+.wpay-admin-problems-heading small,
+.wpay-admin-problems-heading h2 {
+  display: block;
+}
+.wpay-admin-problems-heading small {
+  color: var(--admin-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+.wpay-admin-problems-heading h2 {
+  margin: 3px 0 0;
+  font-size: 16px;
+}
+.wpay-admin-problems-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.wpay-admin-problems-list button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--admin-muted);
+  background: var(--admin-surface-muted);
+  font-size: 11px;
+  text-align: left;
+}
+.wpay-admin-problems-list button.is-active {
+  color: #d43838;
+  background: rgba(239, 68, 68, 0.08);
+}
+.wpay-admin-problems-list button b {
+  color: var(--admin-text);
+  font-size: 12px;
+}
+
+.wpay-admin-drawer-root {
+  position: fixed;
+  z-index: 1200;
+  inset: 0;
+}
+.wpay-admin-drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: rgba(8, 10, 18, 0.46);
+  backdrop-filter: blur(5px);
+}
+.wpay-admin-user-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  width: min(560px, 100%);
+  height: 100%;
+  grid-template-rows: auto minmax(0, 1fr);
+  color: var(--admin-text);
+  background: var(--admin-bg);
+  box-shadow: -24px 0 80px rgba(8, 10, 18, 0.22);
+}
+.wpay-admin-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: calc(22px + env(safe-area-inset-top)) 24px 20px;
+  border-bottom: 1px solid var(--admin-border);
+  background: var(--admin-surface);
+}
+.wpay-admin-drawer-header small,
+.wpay-admin-drawer-header span {
+  color: var(--admin-muted);
+  font-size: 11px;
+}
+.wpay-admin-drawer-header h2 {
+  margin: 4px 0;
+  font-size: 23px;
+  letter-spacing: -0.03em;
+}
+.wpay-admin-drawer-header > button {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  color: var(--admin-text);
+  background: var(--admin-surface-muted);
+}
+.wpay-admin-drawer-scroll {
+  overflow: auto;
+  padding: 18px 20px calc(34px + env(safe-area-inset-bottom));
+}
+.wpay-admin-drawer-state {
+  display: flex;
+  min-height: 240px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--admin-muted);
+}
+.wpay-admin-drawer-state.is-error {
+  flex-direction: column;
+  color: #ef4444;
+  text-align: center;
+}
+.wpay-admin-drawer-state button {
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 11px;
+  color: #fff;
+  background: var(--f7-theme-color);
+}
+.wpay-admin-user-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+.wpay-admin-user-badges span {
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: var(--admin-muted);
+  background: var(--admin-surface);
+  font-size: 11px;
+  font-weight: 650;
+}
+.wpay-admin-user-badges span.is-good {
+  color: #188451;
+  background: rgba(34, 166, 91, 0.1);
+}
+.wpay-admin-user-section {
+  margin-top: 12px;
+  padding: 17px;
+  border: 1px solid var(--admin-border);
+  border-radius: 20px;
+  background: var(--admin-surface);
+}
+.wpay-admin-user-section > h3,
+.wpay-admin-user-section .wpay-admin-section-title h3 {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+.wpay-admin-user-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
+}
+.wpay-admin-user-facts > div,
+.wpay-admin-user-facts > button {
+  min-width: 0;
+  padding: 11px;
+  border: 0;
+  border-radius: 13px;
+  color: var(--admin-text);
+  background: var(--admin-surface-muted);
+  text-align: left;
+}
+.wpay-admin-user-facts small,
+.wpay-admin-user-facts b {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.wpay-admin-user-facts small {
+  margin-bottom: 4px;
+  color: var(--admin-muted);
+  font-size: 9px;
+}
+.wpay-admin-user-facts b {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.wpay-admin-user-empty {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 900px) {
+  .wpay-admin-problems {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 560px) {
+  .wpay-admin-problems-list,
+  .wpay-admin-user-facts {
+    grid-template-columns: 1fr;
+  }
+  .wpay-admin-user-drawer {
+    width: 100%;
+  }
+}

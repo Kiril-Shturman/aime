@@ -57,9 +57,23 @@ type AdminOverview = {
   liabilities: Json[];
   states: Record<string, Record<string, number>>;
   recent: Json[];
+  problems: {
+    total: number;
+    items: { kind: string; label: string; count: number }[];
+  };
   provider: { balance: Json[] };
 };
 type UsersData = { items: Json[]; total: number };
+type AdminUserDetail = {
+  account: Json;
+  contacts: { email: string | null; phone: string | null; updated_at: unknown };
+  aura: { customer: Json | null; kyc: Json | null; cards: Json[] };
+  balances: Json[];
+  addresses: Json[];
+  events: Json[];
+  notifications: Json[];
+  referrals: { invited: Json[]; referred_by: Json | null };
+};
 type DatabaseData = {
   tables: Record<string, number>;
   table: string;
@@ -169,7 +183,11 @@ function amount(value: unknown) {
 }
 function date(value: unknown) {
   if (!value) return "—";
-  const parsed = new Date(String(value));
+  const numeric = Number(value);
+  const parsed =
+    Number.isFinite(numeric) && String(value).trim() !== ""
+      ? new Date(numeric < 10_000_000_000 ? numeric * 1000 : numeric)
+      : new Date(String(value));
   return Number.isNaN(parsed.getTime())
     ? String(value)
     : parsed.toLocaleString("ru-RU");
@@ -1062,6 +1080,7 @@ function Overview({
   data: AdminOverview;
   onNavigate: (tab: Tab) => void;
 }) {
+  const problems = data.problems ?? { total: 0, items: [] };
   const metrics = [
     ["Пользователи", data.users, Users],
     ["Операции", data.events, Activity],
@@ -1116,6 +1135,56 @@ function Overview({
             </div>
           </article>
         ))}
+      </section>
+      <section
+        className={`wpay-admin-problems ${problems.total ? "has-problems" : "is-clear"}`}
+        aria-label="Контроль проблем"
+      >
+        <div className="wpay-admin-problems-heading">
+          <span className="wpay-admin-problems-icon">
+            {problems.total ? (
+              <AlertTriangle size={20} />
+            ) : (
+              <ShieldCheck size={20} />
+            )}
+          </span>
+          <div>
+            <small>Операционный контроль</small>
+            <h2>
+              {problems.total
+                ? `Требуют внимания: ${problems.total}`
+                : "Критичных проблем нет"}
+            </h2>
+          </div>
+        </div>
+        <div className="wpay-admin-problems-list">
+          {problems.items.map((issue) => (
+            <button
+              type="button"
+              key={issue.kind}
+              className={issue.count ? "is-active" : ""}
+              onClick={() =>
+                onNavigate(
+                  issue.kind === "notifications"
+                    ? "notifications"
+                    : issue.kind === "debts"
+                      ? "data"
+                      : issue.kind === "webhooks" ||
+                          issue.kind === "reconciliation" ||
+                          issue.kind === "kyc" ||
+                          issue.kind === "sbp" ||
+                          issue.kind === "qr" ||
+                          issue.kind === "withdrawals"
+                        ? "aura"
+                        : "payments",
+                )
+              }
+            >
+              <span>{issue.label}</span>
+              <b>{issue.count}</b>
+            </button>
+          ))}
+        </div>
       </section>
       <div className="wpay-admin-dashboard-grid">
         <section className={card}>
@@ -1200,6 +1269,31 @@ function DataView({
   const [draft, setDraft] = useState(query);
   const [syncing, setSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState("");
+  const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [userDetail, setUserDetail] = useState<AdminUserDetail | null>(null);
+  const [userLoading, setUserLoading] = useState(false);
+  const [userError, setUserError] = useState("");
+  async function openUser(userId: string) {
+    setSelectedUser(userId);
+    setUserDetail(null);
+    setUserError("");
+    setUserLoading(true);
+    try {
+      setUserDetail(
+        await walletRequest<AdminUserDetail>(
+          `admin-user?${new URLSearchParams({ user_id: userId })}`,
+        ),
+      );
+    } catch (reason) {
+      setUserError(
+        reason instanceof Error
+          ? reason.message
+          : "Не удалось загрузить пользователя",
+      );
+    } finally {
+      setUserLoading(false);
+    }
+  }
   async function syncUsers() {
     setSyncing(true);
     setSyncNotice("");
@@ -1237,7 +1331,31 @@ function DataView({
       label: "Username",
       render: (value) => (value ? `@${value}` : "—"),
     },
-    { key: "role", label: "Роль" },
+    {
+      key: "aura_customer_id",
+      label: "Aura",
+      render: (value) => (value ? "Подключён" : "Нет клиента"),
+    },
+    {
+      key: "kyc_status",
+      label: "KYC",
+      render: (value, row) =>
+        row.kyc_verified ? "Подтверждён" : text(value || "Не начат"),
+    },
+    { key: "card_count", label: "Карты" },
+    {
+      key: "balances",
+      label: "Баланс",
+      render: (value) =>
+        Array.isArray(value) && value.length
+          ? value
+              .map(
+                (balance) =>
+                  `${amount((balance as Json).available)} ${text((balance as Json).asset)}`,
+              )
+              .join(" · ")
+          : "0",
+    },
     {
       key: "event_count",
       label: "Активность",
@@ -1287,11 +1405,25 @@ function DataView({
             </div>
           </div>
           <div className="wpay-admin-desktop-only">
-            <AdminTable rows={data.users.items} columns={userColumns} />
+            <AdminTable
+              rows={data.users.items}
+              columns={userColumns}
+              onRowClick={(row) => void openUser(text(row.user_id))}
+            />
           </div>
           <div className="wpay-admin-mobile-only wpay-admin-mobile-list">
             {data.users.items.map((user, index) => (
-              <article key={index} className="wpay-admin-mobile-item">
+              <article
+                key={index}
+                className="wpay-admin-mobile-item is-clickable"
+                role="button"
+                tabIndex={0}
+                onClick={() => void openUser(text(user.user_id))}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ")
+                    void openUser(text(user.user_id));
+                }}
+              >
                 <div className="wpay-admin-user-main">
                   <span className="wpay-admin-avatar">
                     {user.photo_url ? (
@@ -1333,10 +1465,12 @@ function DataView({
                     <b>{date(user.last_miniapp_at || user.last_seen)}</b>
                   </span>
                   <span>
-                    <small>Активность</small>
+                    <small>Aura / KYC</small>
                     <b>
-                      {text(user.event_count)} оп. · {text(user.address_count)}{" "}
-                      адр.
+                      {user.aura_customer_id ? "Подключён" : "Нет клиента"} ·{" "}
+                      {user.kyc_verified
+                        ? "verified"
+                        : text(user.kyc_status || "не начат")}
                     </b>
                   </span>
                 </div>
@@ -1405,6 +1539,263 @@ function DataView({
           </div>
         </section>
       )}
+      {selectedUser && (
+        <AdminUserDrawer
+          userId={selectedUser}
+          detail={userDetail}
+          loading={userLoading}
+          error={userError}
+          onClose={() => setSelectedUser(null)}
+          onRetry={() => void openUser(selectedUser)}
+        />
+      )}
+    </div>
+  );
+}
+
+function AdminUserDrawer({
+  userId,
+  detail,
+  loading,
+  error,
+  onClose,
+  onRetry,
+}: {
+  userId: string;
+  detail: AdminUserDetail | null;
+  loading: boolean;
+  error: string;
+  onClose: () => void;
+  onRetry: () => void;
+}) {
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [onClose]);
+  const account = detail?.account;
+  const customer = detail?.aura.customer;
+  const kyc = detail?.aura.kyc;
+  const name = account
+    ? [account.first_name, account.last_name].filter(Boolean).join(" ") ||
+      userId
+    : userId;
+  const copy = (value: unknown) => {
+    if (value) void navigator.clipboard?.writeText(String(value));
+  };
+  return (
+    <div className="wpay-admin-drawer-root" role="presentation">
+      <button
+        type="button"
+        className="wpay-admin-drawer-backdrop"
+        aria-label="Закрыть карточку пользователя"
+        onClick={onClose}
+      />
+      <aside
+        className="wpay-admin-user-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Карточка пользователя ${name}`}
+      >
+        <header className="wpay-admin-drawer-header">
+          <div>
+            <small>Карточка пользователя</small>
+            <h2>{name}</h2>
+            <span>
+              {account?.telegram_username
+                ? `@${text(account.telegram_username)} · `
+                : ""}
+              {userId}
+            </span>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Закрыть">
+            <X size={20} />
+          </button>
+        </header>
+        <div className="wpay-admin-drawer-scroll">
+          {loading ? (
+            <div className="wpay-admin-drawer-state">Загружаем профиль…</div>
+          ) : error ? (
+            <div className="wpay-admin-drawer-state is-error">
+              <AlertTriangle size={20} />
+              <span>{error}</span>
+              <button type="button" onClick={onRetry}>
+                Повторить
+              </button>
+            </div>
+          ) : detail ? (
+            <>
+              <div className="wpay-admin-user-badges">
+                <span className={customer ? "is-good" : ""}>
+                  Aura: {customer ? "подключён" : "нет клиента"}
+                </span>
+                <span className={kyc?.verified ? "is-good" : ""}>
+                  KYC:{" "}
+                  {kyc?.verified ? "verified" : text(kyc?.status || "не начат")}
+                </span>
+                <span>Карты: {detail.aura.cards.length}</span>
+              </div>
+
+              <section className="wpay-admin-user-section">
+                <h3>Профиль и контакты</h3>
+                <div className="wpay-admin-user-facts">
+                  <div>
+                    <small>Telegram ID</small>
+                    <b>{text(account?.telegram_id)}</b>
+                  </div>
+                  <div>
+                    <small>Роль</small>
+                    <b>{text(account?.role)}</b>
+                  </div>
+                  <div>
+                    <small>Email</small>
+                    <b>{text(detail.contacts.email)}</b>
+                  </div>
+                  <div>
+                    <small>Телефон</small>
+                    <b>{text(detail.contacts.phone)}</b>
+                  </div>
+                  <div>
+                    <small>Последний вход</small>
+                    <b>
+                      {date(account?.last_miniapp_at || account?.last_seen)}
+                    </b>
+                  </div>
+                  <div>
+                    <small>Бот запущен</small>
+                    <b>{date(account?.bot_started_at)}</b>
+                  </div>
+                </div>
+              </section>
+
+              <section className="wpay-admin-user-section">
+                <div className="wpay-admin-section-title">
+                  <div>
+                    <span>Aura</span>
+                    <h3>Клиент и KYC</h3>
+                  </div>
+                </div>
+                {customer ? (
+                  <div className="wpay-admin-user-facts">
+                    <button
+                      type="button"
+                      onClick={() => copy(customer.customer_id)}
+                    >
+                      <small>Customer ID · нажмите для копирования</small>
+                      <b>{text(customer.customer_id)}</b>
+                    </button>
+                    <div>
+                      <small>Среда</small>
+                      <b>{text(customer.environment)}</b>
+                    </div>
+                    <div>
+                      <small>Состояние клиента</small>
+                      <b>{text(customer.state)}</b>
+                    </div>
+                    <div>
+                      <small>Статус KYC</small>
+                      <b>{text(kyc?.status || "not_started")}</b>
+                    </div>
+                    <div>
+                      <small>Обновлено Aura</small>
+                      <b>
+                        {date(
+                          kyc?.provider_updated_at ||
+                            customer.provider_updated_at,
+                        )}
+                      </b>
+                    </div>
+                    <div>
+                      <small>Причина</small>
+                      <b>{text(kyc?.reason)}</b>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="wpay-admin-user-empty">
+                    Пользователь ещё не создавал профиль в Aura.
+                  </p>
+                )}
+              </section>
+
+              <section className="wpay-admin-user-section">
+                <h3>Балансы</h3>
+                {detail.balances.length ? (
+                  detail.balances.map((balance, index) => (
+                    <Row
+                      key={index}
+                      title={text(balance.asset)}
+                      subtitle={`Резерв: ${amount(balance.reserved)}`}
+                      right={amount(balance.available)}
+                    />
+                  ))
+                ) : (
+                  <p className="wpay-admin-user-empty">Балансов пока нет.</p>
+                )}
+              </section>
+
+              <section className="wpay-admin-user-section">
+                <h3>Карты Aura</h3>
+                {detail.aura.cards.length ? (
+                  detail.aura.cards.map((item, index) => (
+                    <Row
+                      key={index}
+                      title={`${text(item.kind)} · ${text(item.masked_pan)}`}
+                      subtitle={`${text(item.status)}${item.frozen ? " · заморожена" : ""}`}
+                      right={text(item.delivery_status)}
+                    />
+                  ))
+                ) : (
+                  <p className="wpay-admin-user-empty">Карт пока нет.</p>
+                )}
+              </section>
+
+              <section className="wpay-admin-user-section">
+                <h3>Последние операции</h3>
+                {detail.events.length ? (
+                  detail.events
+                    .slice(0, 12)
+                    .map((item, index) => (
+                      <Row
+                        key={index}
+                        title={text(item.type)}
+                        subtitle={date(item.created_at)}
+                        right={`${amount(item.amount)} ${text(item.asset)}`}
+                      />
+                    ))
+                ) : (
+                  <p className="wpay-admin-user-empty">Операций пока нет.</p>
+                )}
+              </section>
+
+              <section className="wpay-admin-user-section">
+                <h3>Уведомления и рефералы</h3>
+                <div className="wpay-admin-user-facts">
+                  <div>
+                    <small>Уведомлений</small>
+                    <b>{detail.notifications.length}</b>
+                  </div>
+                  <div>
+                    <small>Приглашено</small>
+                    <b>{detail.referrals.invited.length}</b>
+                  </div>
+                  <div>
+                    <small>Пригласил</small>
+                    <b>
+                      {text(detail.referrals.referred_by?.referrer_user_id)}
+                    </b>
+                  </div>
+                  <div>
+                    <small>Адресов</small>
+                    <b>{detail.addresses.length}</b>
+                  </div>
+                </div>
+              </section>
+            </>
+          ) : null}
+        </div>
+      </aside>
     </div>
   );
 }
@@ -2085,9 +2476,11 @@ function Notifications({
 function AdminTable({
   rows,
   columns,
+  onRowClick,
 }: {
   rows: Json[];
   columns: AdminColumn[];
+  onRowClick?: (row: Json) => void;
 }) {
   return (
     <div className="wpay-admin-table-wrap">
@@ -2102,7 +2495,16 @@ function AdminTable({
         </thead>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={String(row.rowid || row.event_id || row.user_id || index)}>
+            <tr
+              key={String(row.rowid || row.event_id || row.user_id || index)}
+              className={onRowClick ? "is-clickable" : undefined}
+              tabIndex={onRowClick ? 0 : undefined}
+              onClick={() => onRowClick?.(row)}
+              onKeyDown={(event) => {
+                if (onRowClick && (event.key === "Enter" || event.key === " "))
+                  onRowClick(row);
+              }}
+            >
               {columns.map((column) => {
                 const value = column.render
                   ? column.render(row[column.key], row)
@@ -2116,7 +2518,7 @@ function AdminTable({
                 );
               })}
               <td>
-                <details>
+                <details onClick={(event) => event.stopPropagation()}>
                   <summary>JSON</summary>
                   <pre>{json(row)}</pre>
                 </details>
