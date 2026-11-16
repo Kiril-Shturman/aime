@@ -592,3 +592,54 @@ test("CVV stays hidden until eye is pressed and resets after hiding card", async
   ).toBeVisible();
   await expect(back.getByText("123", { exact: true })).toHaveCount(0);
 });
+
+test("pulling cards moves the description with the carousel and keeps menu fixed", async ({
+  page,
+}) => {
+  await setup(page, "dark", false, true);
+  const main = page.getByRole("main", { name: "Мои карты" });
+  const carousel = main.locator(".wpay-aura-carousel");
+  const title = main.getByRole("heading", {
+    name: "Для подписок",
+    exact: true,
+  });
+  const menu = page.locator(".wpay-bottom-menu");
+  const before = await carousel.boundingBox(),
+    titleBefore = await title.boundingBox(),
+    menuBefore = await menu.boundingBox();
+  const client = await page.context().newCDPSession(page);
+  await client.send("Emulation.setTouchEmulationEnabled", { enabled: true });
+  const x = before!.x + before!.width / 2,
+    y = before!.y + 45;
+  await client.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x, y }],
+  });
+  try {
+    for (let step = 1; step <= 8; step++)
+      await client.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [{ x, y: y + step * 7 }],
+      });
+    const after = await carousel.boundingBox(),
+      titleAfter = await title.boundingBox(),
+      menuAfter = await menu.boundingBox();
+    const shift = after!.y - before!.y;
+    expect(shift).toBeGreaterThan(8);
+    expect(titleAfter!.y - titleBefore!.y).toBeCloseTo(shift, 0);
+    expect(menuAfter!.y).toBeCloseTo(menuBefore!.y, 0);
+    expect(await carousel.evaluate((el) => el.scrollTop)).toBe(0);
+  } finally {
+    await client.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+  }
+  await expect
+    .poll(() =>
+      carousel.evaluate(
+        (el) => el.closest(".wpay-desktop-body")!.getBoundingClientRect().top,
+      ),
+    )
+    .toBeGreaterThanOrEqual(0);
+});

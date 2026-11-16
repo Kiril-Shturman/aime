@@ -586,7 +586,12 @@ function WalletScreen() {
         dragging={pull.dragging}
       />
 
-      <div className="wpay-desktop-body" data-tab={activeTab}>
+      <div className="wpay-desktop-body" data-tab={activeTab}
+        style={activeTab === "cards" ? {
+          transform: pull.distance > 0 ? `translate3d(0, ${pull.distance}px, 0)` : undefined,
+          transition: pull.dragging ? "none" : "transform 240ms ease-out",
+        } : undefined}
+      >
         {activeTab === "wallet" && (
           <main
             className={`wpay-wallet-home mx-auto w-full max-w-[560px] transition-[transform,opacity] duration-300 ease-out ${selectedAssetCode ? "-translate-x-[22%] opacity-60" : "translate-x-0 opacity-100"}`}
