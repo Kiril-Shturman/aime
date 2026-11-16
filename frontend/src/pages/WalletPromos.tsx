@@ -14,7 +14,7 @@ function PromoSlide({ children, className, label, direction }: { children: React
     custom={direction}
     variants={{ enter: (sign: number) => ({ x: reduced ? 0 : `${sign * 108}%` }), exit: (sign: number) => ({ x: reduced ? 0 : `${sign * -108}%`, opacity: reduced ? 0 : 1 }) }}
     initial="enter" animate={{ x: 0, opacity: 1 }} exit="exit"
-    transition={{ duration: reduced ? 0 : .42, ease: [.22, 1, .36, 1] }}
+    transition={{ duration: reduced ? 0 : .58, ease: [.32, 0, .2, 1] }}
     style={{ pointerEvents: present ? "auto" : "none" }}>
     {children}
   </motion.div>;
