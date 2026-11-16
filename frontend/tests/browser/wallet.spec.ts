@@ -797,3 +797,39 @@ test("first visit opens the wallet directly without automatic intro slides", asy
   expect(await page.evaluate(() => localStorage.getItem('wpay:intro:v1'))).toBeNull();
   await expect(page.locator('dialog.wpay-intro')).toHaveCount(0);
 });
+
+test("slow first load keeps Exchange in place and banners skeletonized until wallet data arrives", async ({ page }) => {
+  await setup(page, "dark");
+  let releaseStatus!: () => void;
+  const gate = new Promise<void>(resolve => { releaseStatus = resolve; });
+  await page.route("**/api/wallet/status", async route => {
+    await gate;
+    await route.fulfill({ json: { configured: true, asset_routes: { USDT: ["TRON"] }, capabilities: { qr_pay: true, sbp_buy: true } } });
+  });
+  await page.reload();
+  const main = page.locator('.wpay-wallet-home');
+  const actions = main.getByRole('region', { name: 'Действия с кошельком' });
+  const exchange = actions.getByRole('button', { name: 'Обменять', exact: true });
+  await expect(actions.getByRole('button')).toHaveCount(4);
+  await expect(exchange).toBeVisible();
+  await expect(exchange).toBeDisabled();
+  const before = await exchange.boundingBox();
+  const placeholder = main.getByRole('region', { name: 'Загрузка баннеров' });
+  await expect(placeholder).toBeVisible();
+  const bannerBefore = await placeholder.boundingBox();
+  await page.waitForTimeout(1100);
+  await expect(placeholder).toBeVisible();
+  await expect(main.getByRole('region', { name: 'Возможности wPay' })).toHaveCount(0);
+  releaseStatus();
+  await expect(exchange).toBeEnabled();
+  await expect(placeholder).toHaveCount(0);
+  const banner = main.getByRole('region', { name: 'Возможности wPay' });
+  await expect(banner).toBeVisible();
+  await expect(actions.getByRole('button')).toHaveCount(4);
+  const after = await exchange.boundingBox();
+  const bannerAfter = await banner.boundingBox();
+  expect(Math.abs(after!.x - before!.x)).toBeLessThan(1);
+  expect(Math.abs(after!.y - before!.y)).toBeLessThan(1);
+  expect(Math.abs(bannerAfter!.y - bannerBefore!.y)).toBeLessThan(1);
+  expect(bannerAfter!.height).toBe(bannerBefore!.height);
+});

@@ -171,7 +171,7 @@ function WalletActionGrid({
   columns = 4,
 }: {
   columns?: 3 | 4;
-  items: { label: string; icon: Action["icon"]; onClick: () => void }[];
+  items: { label: string; icon: Action["icon"]; onClick: () => void; disabled?: boolean }[];
   label?: string;
 }) {
   return (
@@ -179,12 +179,13 @@ function WalletActionGrid({
       className={`grid ${columns === 3 ? "grid-cols-3" : "grid-cols-4"} gap-2 px-safe-4`}
       aria-label={label}
     >
-      {items.map(({ label, icon: Icon, onClick }) => (
+      {items.map(({ label, icon: Icon, onClick, disabled }) => (
         <Button
           key={label}
           rounded
           clear
           onClick={onClick}
+          disabled={disabled}
           className={walletActionClass}
         >
           <span className="flex min-w-0 flex-col items-center justify-center gap-1">
@@ -369,14 +370,15 @@ function WalletScreen() {
     } catch {}
     setIntroOpen(false);
   };
-  const [loading, setLoading] = useState(true);
+  const [initialDelay, setInitialDelay] = useState(true);
+  const loading = initialDelay || (live.loading && !live.ready);
   const [balanceHidden, setBalanceHidden] = useState(false);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
     const previousTitle = document.title;
     document.title = "WPay · Кошелёк";
-    const timer = window.setTimeout(() => setLoading(false), 850);
+    const timer = window.setTimeout(() => setInitialDelay(false), 850);
     return () => {
       document.title = previousTitle;
       window.clearTimeout(timer);
@@ -468,9 +470,7 @@ function WalletScreen() {
   const pull = usePullToRefresh(pageRef, {
     softPull: activeTab === "cards",
     delay: 900,
-    onRefreshStart: () => setLoading(true),
     onRefreshed: () => {
-      setLoading(false);
       void live.refresh(true);
       showNotice(
         `${tabMeta[activeTab].title} обновлен${activeTab === "history" ? "а" : activeTab === "cards" ? "ы" : ""}`,
@@ -596,7 +596,10 @@ function WalletScreen() {
                   Общий баланс
                 </div>
                 {loading ? (
-                  <div className="mx-auto mt-3 h-[52px] w-44 animate-pulse rounded-2xl bg-black/10 dark:bg-white/10" />
+                  <div className="mt-2" aria-label="Загрузка баланса" aria-busy="true">
+                    <div className="mx-auto h-[52px] w-44 animate-pulse rounded-2xl bg-black/10 dark:bg-white/10" />
+                    <div className="mt-3 flex h-[21px] items-center justify-center"><span className="h-3 w-36 animate-pulse rounded-full bg-black/[.06] dark:bg-white/[.08]" /></div>
+                  </div>
                 ) : (
                   <>
                     <div className="mt-2 text-[52px] font-semibold leading-none tracking-[-0.045em] tabular-nums text-black dark:text-white">
@@ -606,7 +609,7 @@ function WalletScreen() {
                           ? usd(live.total)
                           : "—"}
                     </div>
-                    <div className="mt-3 text-[14px] text-black/40 dark:text-white/40">
+                    <div className="mt-3 text-[14px] leading-[21px] text-black/40 dark:text-white/40">
                       {live.ready
                         ? "Доступно в криптовалюте"
                         : "Ожидает подключения"}
@@ -616,13 +619,9 @@ function WalletScreen() {
               </section>
 
               <WalletActionGrid
-                items={actions
-                  .filter(
-                    (action) =>
-                      action.label !== "QR-код" || live.capabilities.qr_pay,
-                  )
-                  .map((action) => ({
+                items={actions.map((action) => ({
                     ...action,
+                    disabled: loading || (action.label === "QR-код" && !live.capabilities.qr_pay),
                     onClick: () => {
                       if (action.label === "QR-код") scanPaymentQr();
                       else if (action.label === "Пополнить")
@@ -635,17 +634,23 @@ function WalletScreen() {
                   }))}
               />
             </div>
-            <WalletPromos
+            {loading ? <section className="wpay-promos" aria-label="Загрузка баннеров" aria-busy="true">
+              <div className="relative h-[96px] overflow-hidden rounded-[28px] bg-black/[.06] dark:bg-white/[.08] animate-pulse">
+                <span className="absolute left-[18px] top-1/2 -translate-y-1/2 space-y-2"><span className="block h-3.5 w-36 rounded-full bg-black/[.07] dark:bg-white/[.08]"/><span className="block h-3.5 w-28 rounded-full bg-black/[.07] dark:bg-white/[.08]"/><span className="block h-3.5 w-32 rounded-full bg-black/[.07] dark:bg-white/[.08]"/></span>
+                <span className="absolute right-5 top-3 h-[72px] w-20 -rotate-6 rounded-2xl bg-black/[.05] dark:bg-white/[.06]"/>
+              </div>
+            </section> : <WalletPromos
               onInvite={() => setHomeProfilePage("referral")}
               onQr={scanPaymentQr}
               onSbp={live.capabilities.sbp_buy ? () => setCryptoFlow({ kind: "deposit", assetCode: "RUB" }) : undefined}
-            />
+            />}
+
             <List
               strong
               inset
               className="!mb-0 !mt-6 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]"
             >
-              {live.capabilities.sbp_buy &&
+              {(loading || live.capabilities.sbp_buy) &&
                 (loading ? (
                   <CurrencySkeletonRow rubles />
                 ) : (
