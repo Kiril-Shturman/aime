@@ -1595,6 +1595,88 @@
   color: var(--admin-muted);
   font-size: 11px;
 }
+.wpay-admin-balance-adjustment {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--admin-border);
+}
+.wpay-admin-balance-fields {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 8px;
+}
+.wpay-admin-balance-adjustment select,
+.wpay-admin-balance-adjustment input,
+.wpay-admin-balance-adjustment textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  color: var(--admin-text);
+  background: var(--admin-bg);
+  font: inherit;
+  font-size: 12px;
+}
+.wpay-admin-balance-adjustment textarea {
+  min-height: 72px;
+  resize: vertical;
+}
+.wpay-admin-balance-adjustment > button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: var(--f7-theme-color);
+  font-size: 11px;
+  font-weight: 700;
+}
+.wpay-admin-balance-adjustment > button:disabled {
+  opacity: 0.45;
+}
+.wpay-admin-balance-adjustment > small {
+  color: var(--admin-muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+.wpay-admin-card-control .wpay-admin-section-title > button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 11px;
+  color: var(--admin-text);
+  background: var(--admin-surface-muted);
+}
+.wpay-admin-card-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+.wpay-admin-card-actions button {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 9px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--admin-text);
+  background: var(--admin-surface-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+.wpay-admin-card-actions button.is-danger {
+  color: #d43838;
+  background: rgba(239, 68, 68, 0.09);
+}
+.wpay-admin-card-actions button:disabled {
+  opacity: 0.4;
+}
 
 @media (max-width: 900px) {
   .wpay-admin-problems {
@@ -1604,7 +1686,9 @@
 @media (max-width: 560px) {
   .wpay-admin-problems-list,
   .wpay-admin-user-facts,
-  .wpay-admin-operator-buttons {
+  .wpay-admin-operator-buttons,
+  .wpay-admin-card-actions,
+  .wpay-admin-balance-fields {
     grid-template-columns: 1fr;
   }
   .wpay-admin-user-drawer {
