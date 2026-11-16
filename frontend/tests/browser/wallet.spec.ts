@@ -681,15 +681,15 @@ test("Aura deposit choices exclude TRX and other unsupported coins while keeping
   await expect(flow.locator("li").filter({ hasText: "BTC" })).toHaveCount(0);
 });
 
-test("home promo carousel switches slides and opens referral and deposit flows", async ({ page }) => {
+test("home promo carousel switches slides and routes QR to scanner capability check", async ({ page }) => {
   await setup(page, "dark");
   const carousel = page.getByRole("region", { name: "Возможности wPay" });
   await expect(carousel).toBeVisible();
   await carousel.getByRole("button", { name: /Баннер 2:/ }).click();
   await expect(carousel.getByRole("button", { name: /Баннер 2:/ })).toHaveAttribute("aria-current", "true");
-  await carousel.getByRole("button", { name: /Пополнить кошелёк/ }).click();
-  await expect(page.getByRole("main", { name: "Способы пополнения" })).toBeVisible();
-  await page.locator('[aria-label="Назад"]').last().click();
+  await carousel.getByRole("button", { name: /Сканировать QR-код/ }).click();
+  await expect(page.getByText("Оплата QR сейчас не подключена", { exact: true })).toBeVisible();
+  await expect(page.getByRole("main", { name: "Способы пополнения" })).toHaveCount(0);
   await carousel.getByRole("button", { name: /Баннер 1:/ }).click();
   await expect(carousel.getByRole("button", { name: /Баннер 1:/ })).toHaveAttribute("aria-current", "true");
   await carousel.getByRole("button", { name: /Пригласить друзей/ }).click();

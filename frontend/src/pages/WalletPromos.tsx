@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { ArrowUpRight, Heart, Sparkles } from "lucide-react";
+import qrArtwork from "../assets/verification/qr-promo.png";
 import sbpArtwork from "../assets/verification/sbp-promo.jpg";
 import cardArtwork from "../assets/verification/wpay-card.webp";
 import { haptic } from "../lib/telegram";
@@ -7,11 +8,11 @@ import "./WalletPromos.css";
 
 export default function WalletPromos({
   onInvite,
-  onDeposit,
+  onQr,
   onSbp,
 }: {
   onInvite: () => void;
-  onDeposit: () => void;
+  onQr: () => void;
   onSbp?: () => void;
 }) {
   const rail = useRef<HTMLDivElement>(null);
@@ -25,11 +26,11 @@ export default function WalletPromos({
       click: onInvite,
     },
     {
-      id: "deposit",
-      title: "Пополняйте как удобно",
-      text: "Выберите доступный способ",
-      action: "Пополнить кошелёк",
-      click: onDeposit,
+      id: "qr",
+      title: "Платите по QR-коду",
+      text: "Сканируйте QR СБП и оплачивайте покупки",
+      action: "Сканировать QR-код",
+      click: onQr,
     },
     ...(onSbp
       ? [
@@ -89,14 +90,8 @@ export default function WalletPromos({
                     <Heart className="wpay-promo-heart" fill="currentColor" />
                     <Sparkles className="wpay-promo-spark" />
                   </>
-                ) : slide.id === "deposit" ? (
-                  <>
-                    <span className="wpay-promo-coin wpay-promo-coin--back">
-                      ₽
-                    </span>
-                    <span className="wpay-promo-coin">₮</span>
-                    <Sparkles className="wpay-promo-spark" />
-                  </>
+                ) : slide.id === "qr" ? (
+                  <img className="wpay-promo-qr" src={qrArtwork} alt="" loading="lazy" />
                 ) : (
                   <>
                     <img className="wpay-promo-card" src={cardArtwork} alt="" loading="lazy" />

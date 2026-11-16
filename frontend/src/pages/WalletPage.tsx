@@ -643,7 +643,7 @@ function WalletScreen() {
             </div>
             <WalletPromos
               onInvite={() => setHomeProfilePage("referral")}
-              onDeposit={() => setCryptoFlow({ kind: "deposit" })}
+              onQr={scanPaymentQr}
               onSbp={live.capabilities.sbp_buy ? () => setCryptoFlow({ kind: "deposit", assetCode: "RUB" }) : undefined}
             />
             <List
