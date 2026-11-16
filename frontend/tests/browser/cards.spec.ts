@@ -156,6 +156,15 @@ async function setup(
   await page.getByRole("link", { name: "Карты", exact: true }).click();
   await expect(page.getByRole("main", { name: "Мои карты" })).toBeVisible();
   await expect(page.locator(".wpay-aura-card-skeleton")).toHaveCount(0);
+  if (noCards) {
+    await page
+      .getByRole("main", { name: "Мои карты" })
+      .getByRole("button", { name: "Карта 2", exact: true })
+      .click();
+    await expect(
+      page.getByRole("heading", { name: "Для подписок", exact: true }),
+    ).toBeVisible();
+  }
   return state;
 }
 const popup = (page: Page) => page.locator(".wpay-aura-card-popup");
@@ -330,10 +339,12 @@ test("four offers are inline: two virtual and two physical without an appearance
   ).toHaveCount(2);
   for (const appearance of ["silver", "navy", "ice", "graphite"]) {
     await expect(
-      main.locator(`.wpay-aura-carousel .wpay-card-skin--${appearance}`),
+      main.locator(
+        `.wpay-aura-carousel-item[aria-label^="Заказать"] .wpay-card-skin--${appearance}`,
+      ),
     ).toHaveCount(1);
   }
-  await main.getByRole("button", { name: "Карта 4", exact: true }).click();
+  await main.getByRole("button", { name: "Карта 5", exact: true }).click();
   await expect(
     main.getByRole("heading", { name: "Платина", exact: true }),
   ).toBeVisible();
@@ -388,7 +399,7 @@ test("first card offer is named For subscriptions and shows provider-backed feat
   ).toBeVisible();
   await expect(features.getByRole("article")).toHaveCount(6);
   expect(state.calls).toHaveLength(0);
-  await main.getByRole("button", { name: "Карта 3", exact: true }).click();
+  await main.getByRole("button", { name: "Карта 4", exact: true }).click();
   await expect(
     main.getByRole("heading", { name: "Премиальная", exact: true }),
   ).toBeVisible();
@@ -400,7 +411,7 @@ test("second virtual offer has its own travel content and preserves virtual issu
 }) => {
   const state = await setup(page, "light", false, true);
   const main = page.getByRole("main", { name: "Мои карты" });
-  await main.getByRole("button", { name: "Карта 2", exact: true }).click();
+  await main.getByRole("button", { name: "Карта 3", exact: true }).click();
   await expect(
     main.getByRole("heading", { name: "Для путешествий", exact: true }),
   ).toBeVisible();
@@ -429,7 +440,7 @@ test("third offer is premium physical with free delivery in description and chec
 }) => {
   const state = await setup(page, "dark", false, true);
   const main = page.getByRole("main", { name: "Мои карты" });
-  await main.getByRole("button", { name: "Карта 3", exact: true }).click();
+  await main.getByRole("button", { name: "Карта 4", exact: true }).click();
   await expect(
     main.getByRole("heading", { name: "Премиальная", exact: true }),
   ).toBeVisible();
@@ -484,6 +495,28 @@ test("slow card loading shows structured placeholders until data arrives", async
   }
   await expect(page.locator(".wpay-cards-loading")).toHaveCount(0);
   await expect(
-    page.getByRole("heading", { name: "Для подписок", exact: true }),
+    page.getByText("Демо-карта · Пример меню выпущенной карты", {
+      exact: true,
+    }),
   ).toBeVisible();
+});
+
+test("demo owned card precedes offers and its controls never call provider", async ({
+  page,
+}) => {
+  const state = await setup(page, "dark", false, true);
+  const main = page.getByRole("main", { name: "Мои карты" });
+  await main.getByRole("button", { name: "Карта 1", exact: true }).click();
+  await expect(
+    main.getByRole("region", { name: "Действия с картой" }).getByRole("button"),
+  ).toHaveCount(4);
+  await main.getByRole("button", { name: "Заморозить", exact: true }).click();
+  await expect(
+    main.getByRole("button", { name: "Разморозить", exact: true }),
+  ).toBeVisible();
+  await main.getByRole("button", { name: "Реквизиты", exact: true }).click();
+  await expect(
+    popup(page).getByText("0000 0000 0000 4242", { exact: true }),
+  ).toBeVisible();
+  expect(state.calls).toHaveLength(0);
 });

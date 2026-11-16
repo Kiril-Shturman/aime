@@ -29,7 +29,9 @@ import {
 } from "../lib/wallet-api";
 import { useLiveWallet } from "./WalletLive";
 
+const DEMO_CARD_ID = "wpay-ui-demo-card";
 type AuraCard = {
+  demo?: boolean;
   card_id: string;
   kind: "virtual" | "physical";
   status: "processing" | "opened" | "failed_to_open" | "cancelled";
@@ -152,12 +154,26 @@ export default function WalletAuraCards({
         walletRequest<{ data: AuraCard[] }>("aura-cards"),
         walletRequest<CardFees>("aura-card-fees"),
       ]);
-      setCards(cardResult.data);
+      const availableCards: AuraCard[] = cardResult.data.length
+        ? cardResult.data
+        : [
+            {
+              card_id: DEMO_CARD_ID,
+              kind: "virtual",
+              status: "opened",
+              frozen: false,
+              masked_pan: "•••• 4242",
+              delivery_status: null,
+              provider_updated_at: null,
+              demo: true,
+            },
+          ];
+      setCards(availableCards);
       setFees(feeResult);
       setSelectedId((current) =>
-        current && cardResult.data.some((card) => card.card_id === current)
+        current && availableCards.some((card) => card.card_id === current)
           ? current
-          : (cardResult.data[0]?.card_id ?? null),
+          : (availableCards[0]?.card_id ?? null),
       );
     } catch (requestError) {
       setError(errorText(requestError));
@@ -170,7 +186,7 @@ export default function WalletAuraCards({
     void loadCards();
   }, [loadCards]);
   useEffect(() => {
-    if (!selectedId) {
+    if (!selectedId || selectedId === DEMO_CARD_ID) {
       setOperations([]);
       setOperationsLoading(false);
       return;
@@ -215,6 +231,20 @@ export default function WalletAuraCards({
     success: string,
   ) => {
     if (busyRef.current) return;
+    if (selected?.demo && name !== "issue") {
+      if (name === "aura-card-freeze" || name === "aura-card-unfreeze") {
+        setCards((items) =>
+          items.map((card) =>
+            card.demo ? { ...card, frozen: !card.frozen } : card,
+          ),
+        );
+        showNotice(success);
+      } else
+        showNotice(
+          "Демо-карта: действие показано для примера, деньги не списываются",
+        );
+      return;
+    }
     busyRef.current = true;
     setBusy(name);
     setError("");
@@ -283,6 +313,17 @@ export default function WalletAuraCards({
   const reveal = async (kind: "credentials" | "otp") => {
     if (!selected || busyRef.current) return;
     openPanel(kind);
+    if (selected.demo) {
+      if (kind === "credentials")
+        setCredentials({
+          card_id: DEMO_CARD_ID,
+          number: "0000 0000 0000 4242",
+          expiry: "12/29",
+          cvv: "•••",
+        });
+      else setOtp(null);
+      return;
+    }
     const request = new AbortController();
     revealRequest.current = request;
     busyRef.current = true;
@@ -648,6 +689,11 @@ export default function WalletAuraCards({
         ) : (
           selected && (
             <>
+              {selected.demo && (
+                <p className="mx-4 mb-2 text-center text-[12px] text-black/45 dark:text-white/45">
+                  Демо-карта · Пример меню выпущенной карты
+                </p>
+              )}
               <section
                 className="grid grid-cols-4 gap-2 px-safe-4 pt-2"
                 aria-label="Действия с картой"
@@ -816,6 +862,11 @@ export default function WalletAuraCards({
               </NavRight>
             </Navbar>
             <main className="wpay-aura-panel mx-auto w-full max-w-[560px] px-4 pb-8 pt-4">
+              {selected?.demo && displayPanel !== "issue" && (
+                <p className="mb-4 text-center text-[12px] text-black/45 dark:text-white/45">
+                  Демо-карта · Без реальных операций
+                </p>
+              )}
               {error && (
                 <div role="alert" className="wpay-aura-error mb-4">
                   {error}
@@ -1319,11 +1370,15 @@ function LiveCardArtwork({
       skin={skin}
       kind={card?.kind ?? kind ?? "virtual"}
       status={
-        card
+        card?.demo
           ? card.frozen
-            ? "Заморожена"
-            : (statusText[card.status] ?? card.status)
-          : "Новая карта"
+            ? "Демо · Заморожена"
+            : "Демо · Активна"
+          : card
+            ? card.frozen
+              ? "Заморожена"
+              : (statusText[card.status] ?? card.status)
+            : "Новая карта"
       }
       maskedPan={card?.masked_pan}
       offer={!card}
