@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Heart, Sparkles } from "lucide-react";
 import qrArtwork from "../assets/verification/qr-promo.png";
 import sbpArtwork from "../assets/verification/sbp-promo.png";
@@ -18,17 +18,18 @@ export default function WalletPromos({
   const gesture = useRef<{ x: number; y: number } | null>(null);
   const suppressClickUntil = useRef(0);
   const [active, setActive] = useState(0);
+  const [paused, setPaused] = useState(false);
   const slides = [
     {
       id: "friends",
-      title: "Приглашайте друзей в wPay",
+      title: "Приглашайте\nдрузей\nв wPay",
 
       action: "Пригласить друзей",
       click: onInvite,
     },
     {
       id: "qr",
-      title: "Платите по QR-коду",
+      title: "Платите\nпо QR-коду\nСБП",
 
       action: "Сканировать QR-код",
       click: onQr,
@@ -37,7 +38,7 @@ export default function WalletPromos({
       ? [
           {
             id: "sbp",
-            title: "Пополняйте через СБП",
+            title: "Пополняйте\nкошелёк\nчерез СБП",
 
             action: "Пополнить рублями",
             click: onSbp,
@@ -46,11 +47,22 @@ export default function WalletPromos({
       : []),
   ];
   const selected = Math.min(active, slides.length - 1);
+  useEffect(() => {
+    if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(() => {
+      if (!document.hidden) setActive((value) => (value + 1) % slides.length);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [paused, selected, slides.length]);
   return (
     <section
       className="wpay-promos"
       aria-label="Возможности wPay"
       aria-roledescription="карусель"
+      onPointerEnter={(event) => { if (event.pointerType === "mouse") setPaused(true); }}
+      onPointerLeave={() => setPaused(false)}
+      onFocusCapture={() => setPaused(true)}
+      onBlurCapture={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setPaused(false); }}
     >
       <div
         className="wpay-promos-rail"
@@ -95,6 +107,7 @@ export default function WalletPromos({
                 slide.click();
               }}
             >
+              <span className="wpay-promo-details" aria-hidden="true" />
               <span className="wpay-promo-copy">
                 <strong>{slide.title}</strong>
 

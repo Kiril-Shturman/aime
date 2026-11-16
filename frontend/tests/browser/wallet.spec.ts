@@ -704,3 +704,11 @@ test("home promo carousel switches slides and routes QR to scanner capability ch
   await carousel.getByRole("button", { name: /Пригласить друзей/ }).click();
   await expect(page.getByLabel("Реферальная ссылка", { exact: true })).toBeVisible();
 });
+
+test("home promo advances automatically without horizontal scrolling", async ({ page }) => {
+  await setup(page, "dark");
+  const carousel = page.getByRole("region", { name: "Возможности wPay" });
+  await expect(carousel.getByRole("button", { name: /Баннер 1:/ })).toHaveAttribute("aria-current", "true");
+  await expect(carousel.getByRole("button", { name: /Баннер 2:/ })).toHaveAttribute("aria-current", "true", { timeout: 8000 });
+  await expect(carousel.locator(".wpay-promos-rail")).toHaveJSProperty("scrollLeft", 0);
+});
