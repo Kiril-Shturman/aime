@@ -139,7 +139,7 @@ export default function WalletPromos({
                 ) : (
                   <>
                     <img className="wpay-promo-card" src={cardArtwork} alt="" loading="lazy" />
-                    <img className="wpay-promo-sbp-logo" src={sbpArtwork} alt="" loading="lazy" />
+                    <span className="wpay-promo-sbp-symbol"><img src={sbpArtwork} alt="" loading="lazy" /></span>
                   </>
                 )}
               </span>
