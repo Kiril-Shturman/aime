@@ -139,7 +139,10 @@ test("contacts persist through server, hosted KYC updates from pending to verifi
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
 
   await page
-    .getByRole("button", { name: "Разрешить камеру", exact: true })
+    .getByRole("button", {
+      name: "Разрешить камеру",
+      exact: true,
+    })
     .click();
   await expect(page.getByTitle("Проверка личности Aura")).toHaveAttribute(
     "src",
@@ -338,7 +341,7 @@ test("embedded verification stays inside app, back resumes contacts, and polling
   await page.getByRole("button", { name: "Продолжить", exact: true }).click();
   expect(await page.evaluate(() => (window as any).cameraCalls)).toBe(0);
   await page
-    .getByRole("button", { name: "Разрешить камеру", exact: true })
+    .getByRole("button", { name: "Попробовать внутри Telegram", exact: true })
     .click();
   expect(await page.evaluate(() => (window as any).cameraStops)).toBe(1);
   const frame = page.getByTitle("Проверка личности Aura");
@@ -370,7 +373,7 @@ test("embedded verification stays inside app, back resumes contacts, and polling
     .getByRole("button", { name: "Продолжить проверку", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Разрешить камеру", exact: true })
+    .getByRole("button", { name: "Попробовать внутри Telegram", exact: true })
     .click();
   await expect(frame).toBeVisible();
   expect(state.posts.length).toBe(posts);
@@ -416,4 +419,57 @@ test("camera denial stays readable and retry stops the permission-check stream",
     .click();
   await expect(page.getByTitle("Проверка личности Aura")).toBeVisible();
   expect(await page.evaluate(() => (window as any).cameraStops)).toBe(1);
+});
+
+test("iPhone offers the same session in browser without pre-opening camera", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.evaluate(() =>
+    Object.defineProperty(navigator, "userAgent", {
+      configurable: true,
+      value:
+        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile Safari/604.1",
+    }),
+  );
+  await page
+    .getByRole("link", { name: "Верификация Подтверждение личности" })
+    .click();
+  await page.getByRole("button", { name: "Начать", exact: true }).click();
+  await page.locator("#verification-phone").fill("+79991234567");
+  await page.locator("#verification-email").fill("hello@example.com");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  const external = page.getByRole("button", {
+    name: "Открыть проверку в браузере",
+    exact: true,
+  });
+  await expect(external).toBeVisible();
+  await page.evaluate(() => {
+    (window as any).Telegram.WebApp.openLink = (url: string) => {
+      (window as any).openedKyc = url;
+    };
+  });
+  await external.click();
+  expect(await page.evaluate(() => (window as any).openedKyc)).toBe(
+    "https://verify.example/session-private",
+  );
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "Завершите проверку в браузере" }),
+  ).toBeVisible();
+  expect(await page.evaluate(() => (window as any).cameraCalls)).toBe(0);
+  await page
+    .getByRole("button", { name: "Попробовать внутри Telegram", exact: true })
+    .click();
+  const frame = page.getByTitle("Проверка личности Aura");
+  await expect(frame).toHaveAttribute(
+    "allow",
+    "camera *; microphone *; fullscreen *",
+  );
+  await page
+    .getByRole("button", { name: "Перезапустить камеру", exact: true })
+    .click();
+  await expect(frame).toHaveCount(0);
+  await expect(external).toBeVisible();
 });

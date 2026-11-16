@@ -831,3 +831,12 @@
   font-size: 12px;
   line-height: 1.5;
 }
+
+.wpay-verification-frame-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.wpay-verification-frame-header .wpay-verification-frame-actions {
+  font-weight: 500;
+}
