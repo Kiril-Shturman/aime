@@ -33,7 +33,7 @@
 }
 .wpay-card-face {
   position: absolute;
-  inset: 9px 8px 11px;
+  inset: 3px 0 5px;
   overflow: hidden;
   border-radius: 22px;
   background: linear-gradient(132deg, #fbfbfc, #e7e8ec 50%, #cbcdd3);
