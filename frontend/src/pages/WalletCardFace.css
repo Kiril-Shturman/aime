@@ -10,7 +10,7 @@
   background: transparent;
   box-shadow: none;
   overflow: visible;
-  perspective: 950px;
+  perspective: none;
   color: #242934;
 }
 .wpay-card-scene:before {
@@ -20,8 +20,8 @@
   content: "";
   position: absolute;
   z-index: -1;
-  left: 10%;
-  right: 5%;
+  left: 8%;
+  right: 8%;
   bottom: 3%;
   height: 6%;
   border-radius: 50%;
@@ -40,10 +40,10 @@
   border: 1px solid #ffffffb0;
   box-shadow:
     inset 0 1px 1px #fff,
-    2px 3px 0 #a1a4ad,
-    3px 5px 5px #0002;
+    0 2px 0 #a1a4ad,
+    0 7px 12px -6px #0004;
   transform: none;
-  transform-style: preserve-3d;
+  transform-style: flat;
   color: #a4a7b0;
   text-align: left;
   transition: background 0.2s;
@@ -58,8 +58,8 @@
   border-color: #4761a1;
   box-shadow:
     inset 0 1px 1px #829adf55,
-    2px 3px 0 #0754d9,
-    3px 5px 5px #0005;
+    0 2px 0 #24497d,
+    0 7px 12px -6px #0005;
   color: #337bd2;
 }
 .wpay-card-skin--ice .wpay-card-face {
@@ -69,8 +69,8 @@
   border-color: #e6f6ff;
   box-shadow:
     inset 0 1px 1px #fff,
-    2px 3px 0 #85a6c8,
-    3px 5px 5px #0003;
+    0 2px 0 #85a6c8,
+    0 7px 12px -6px #0004;
   color: #f3fbff;
 }
 .wpay-card-skin--graphite {
@@ -83,8 +83,8 @@
   border-color: #727477;
   box-shadow:
     inset 0 1px 1px #ffffff33,
-    2px 3px 0 #17191c,
-    3px 5px 5px #0005;
+    0 2px 0 #17191c,
+    0 7px 12px -6px #0005;
   color: #8e9195;
 }
 .wpay-card-face-logo {
