@@ -172,8 +172,8 @@
   height: 116px;
 }
 .wpay-card-benefit--topup .wpay-card-benefit-sbp {
-  left: 12px;
-  bottom: 9px;
+  left: 20px;
+  bottom: 23px;
   width: 56px;
   height: 61px;
 }
@@ -183,7 +183,7 @@
     height: 130px;
   }
   .wpay-card-benefit--topup .wpay-card-benefit-sbp {
-    left: 18px;
+    left: 26px;
     width: 62px;
     height: 67px;
   }
