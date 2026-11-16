@@ -197,6 +197,10 @@ for (const theme of ["light", "dark"])
       page.getByText("4111 1111 1111 1234", { exact: true }),
     ).toHaveCount(0);
     await main.getByRole("button", { name: "Заморозить", exact: true }).click();
+    await page
+      .locator(".dialog.modal-in")
+      .getByText("Заморозить", { exact: true })
+      .click();
     await expect(
       main.getByRole("button", { name: "Разморозить", exact: true }),
     ).toBeVisible();
@@ -514,6 +518,10 @@ test("demo owned card precedes offers and its controls never call provider", asy
     main.getByRole("region", { name: "Действия с картой" }).getByRole("button"),
   ).toHaveCount(4);
   await main.getByRole("button", { name: "Заморозить", exact: true }).click();
+  await page
+    .locator(".dialog.modal-in")
+    .getByText("Заморозить", { exact: true })
+    .click();
   await expect(
     main.getByRole("button", { name: "Разморозить", exact: true }),
   ).toBeVisible();
@@ -642,4 +650,23 @@ test("pulling cards moves the description with the carousel and keeps menu fixed
       ),
     )
     .toBeGreaterThanOrEqual(0);
+});
+
+test("native freeze confirmation cancels without calling provider", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  const main = page.getByRole("main", { name: "Мои карты" });
+  await main.getByRole("button", { name: "Заморозить", exact: true }).click();
+  const dialog = page.locator(".dialog.modal-in");
+  await expect(
+    dialog.getByText("Заморозить карту?", { exact: true }),
+  ).toBeVisible();
+  expect(state.calls).toHaveLength(0);
+  await dialog.getByText("Отмена", { exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    main.getByRole("button", { name: "Заморозить", exact: true }),
+  ).toBeVisible();
+  expect(state.calls).toHaveLength(0);
 });

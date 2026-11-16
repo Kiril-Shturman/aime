@@ -6,7 +6,8 @@ import Snow from "framework7-icons/react/esm/Snow.js";
 import Ellipsis from "framework7-icons/react/esm/Ellipsis.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, List, ListItem } from "konsta/react";
-import { Popup, Page, Navbar, NavRight, Link } from "framework7-react";
+import { f7, Popup, Page, Navbar, NavRight, Link } from "framework7-react";
+import "framework7/components/dialog/css";
 import {
   CreditCard,
   Truck,
@@ -144,6 +145,16 @@ export default function WalletAuraCards({
   );
   const suppressClick = useRef(false);
   const revealRequest = useRef<AbortController | null>(null);
+  const freezeConfirmation = useRef<ReturnType<typeof f7.dialog.create> | null>(
+    null,
+  );
+  useEffect(
+    () => () => {
+      freezeConfirmation.current?.close(false);
+      freezeConfirmation.current = null;
+    },
+    [selectedId],
+  );
   const busyRef = useRef(false);
   const issueKey = useRef("");
   const rechargeKey = useRef("");
@@ -436,6 +447,38 @@ export default function WalletAuraCards({
   };
   const actionClass =
     "!m-0 !h-[62px] !min-w-0 !rounded-[22px] !bg-black/[.055] !px-1 !text-primary active:!bg-black/10 dark:!bg-white/[.10] dark:active:!bg-white/[.16]";
+  const confirmFreeze = () => {
+    if (!selected || busyRef.current || freezeConfirmation.current) return;
+    const unfreeze = selected.frozen;
+    freezeConfirmation.current = f7.dialog.create({
+      cssClass: "wpay-card-freeze-confirm",
+      title: unfreeze ? "Разморозить карту?" : "Заморозить карту?",
+      text: unfreeze
+        ? "После разморозки картой снова можно будет оплачивать покупки."
+        : "Оплата картой будет временно недоступна. Вы сможете разморозить её в любой момент.",
+      destroyOnClose: true,
+      buttons: [
+        { text: "Отмена", keyCodes: [27] },
+        {
+          text: unfreeze ? "Разморозить" : "Заморозить",
+          strong: true,
+          keyCodes: [13],
+          onClick: () =>
+            void control(
+              unfreeze ? "aura-card-unfreeze" : "aura-card-freeze",
+              { card_id: selected.card_id },
+              unfreeze ? "Карта разморожена" : "Карта заморожена",
+            ),
+        },
+      ],
+      on: {
+        closed: () => {
+          freezeConfirmation.current = null;
+        },
+      },
+    });
+    freezeConfirmation.current.open();
+  };
   const actions = [
     {
       label: "Пополнить",
@@ -456,12 +499,7 @@ export default function WalletAuraCards({
       label: selected?.frozen ? "Разморозить" : "Заморозить",
       Icon: Snow,
       disabled: !canUse,
-      run: () =>
-        control(
-          selected?.frozen ? "aura-card-unfreeze" : "aura-card-freeze",
-          { card_id: selected!.card_id },
-          selected?.frozen ? "Карта разморожена" : "Карта заморожена",
-        ),
+      run: confirmFreeze,
     },
     {
       label: "Ещё",
