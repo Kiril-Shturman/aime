@@ -1640,6 +1640,8 @@ def install_wallet(app, root, owner_check):
                         for item in result['items']:
                             if item['product'] in provider_prices:
                                 item['provider_fee'], item['provider_fee_unit'] = provider_prices[item['product']]
+                            if item['product'] in {'card_virtual_recharge', 'card_physical_recharge'}:
+                                item['provider_minimum'] = card_fees.get('minimum_recharge_amount')
                     except (ApiError, ValueError, asyncio.TimeoutError, OSError) as error:
                         result['provider']['error'] = getattr(error, 'name', type(error).__name__)
                 return web.json_response(result, headers={'Cache-Control': 'private, no-store'})

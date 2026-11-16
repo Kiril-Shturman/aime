@@ -688,6 +688,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
               {item.provider_fee !== undefined && item.provider_fee !== null && (
                 <small className="mt-2 block text-blue-500">
                   База Aura: {amount(item.provider_fee)} {text(item.provider_fee_unit)}
+                  {item.provider_minimum ? ` · минимум ${amount(item.provider_minimum)} USDT` : ""}
                 </small>
               )}
               <span className="mt-3 block text-xs">
