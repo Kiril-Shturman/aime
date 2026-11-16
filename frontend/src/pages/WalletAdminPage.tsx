@@ -1,3 +1,4 @@
+import Aurora from "../components/reactbits/Aurora";
 import { WalletFinanceReport } from "./WalletUserFinance";
 import {
   useCallback,
@@ -23,6 +24,9 @@ import {
   ShieldCheck,
   Users,
   X,
+  ArrowUpRight,
+  Sun,
+  Moon,
 } from "lucide-react";
 import Framework7 from "framework7/lite-bundle";
 import Framework7React, {
@@ -160,7 +164,7 @@ function text(value: unknown) {
 function amount(value: unknown) {
   const number = Number(value);
   return Number.isFinite(number)
-    ? number.toLocaleString("ru-RU", { maximumFractionDigits: 8 })
+    ? number.toLocaleString("en-US", { maximumFractionDigits: 8 })
     : text(value);
 }
 function date(value: unknown) {
@@ -190,17 +194,18 @@ function stateTotal(value: Record<string, number> | undefined) {
 }
 
 const tabs: { id: Tab; label: string; icon: typeof Database }[] = [
-  { id: "overview", label: "Главная", icon: LayoutDashboard },
-  { id: "data", label: "БД", icon: Database },
-  { id: "payments", label: "Оплаты", icon: Activity },
-  { id: "crypto", label: "Крипта", icon: Coins },
-  { id: "aura", label: "Aura", icon: ShieldCheck },
-  { id: "goswap", label: "GoSwap", icon: Server },
+  { id: "overview", label: "Обзор", icon: LayoutDashboard },
+  { id: "data", label: "Пользователи", icon: Database },
+  { id: "payments", label: "Операции", icon: Activity },
+  { id: "crypto", label: "Криптовалюты", icon: Coins },
+  { id: "aura", label: "Aura API", icon: ShieldCheck },
+  { id: "goswap", label: "GoSwap API", icon: Server },
   { id: "notifications", label: "Уведомления", icon: Bell },
 ];
 
 export default function WalletAdminPage() {
-  const { theme } = useTheme();
+  const { theme, toggle: toggleTheme } = useTheme();
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [payload, setPayload] = useState<unknown>(null);
   const [payloadTab, setPayloadTab] = useState<Tab | null>(null);
@@ -272,6 +277,7 @@ export default function WalletAdminPage() {
         setPayload({ ...notifications, broadcasts: broadcasts.items });
         setPayloadTab(tab);
       }
+      setUpdatedAt(new Date());
     } catch (reason) {
       setError(
         reason instanceof Error
@@ -316,10 +322,19 @@ export default function WalletAdminPage() {
             <X size={21} />
           </button>
           <div className="wpay-admin-brand">
-            <span className="wpay-admin-brandmark">W</span>
-            <span>
-              <b>WPay</b>
-              <small>Admin Console</small>
+            <img
+              className="wpay-admin-wordmark"
+              src={
+                theme === "dark"
+                  ? "/brands/wpay-wordmark-light.svg"
+                  : "/brands/wpay-wordmark.svg"
+              }
+              alt="wPay"
+            />
+            <span className="wpay-admin-brand-label">
+              Панель
+              <br />
+              управления
             </span>
           </div>
           <F7Button
@@ -332,11 +347,13 @@ export default function WalletAdminPage() {
             <ArrowLeft size={19} />
             <span>В кошелёк</span>
           </F7Button>
-          <nav className="wpay-admin-nav">
+          <div className="wpay-admin-nav-caption">Рабочее пространство</div>
+          <nav className="wpay-admin-nav" aria-label="Разделы админки">
             {tabs.map((item) => (
               <F7Button
                 large
                 fill={tab === item.id}
+                aria-current={tab === item.id ? "page" : undefined}
                 key={item.id}
                 onClick={() => {
                   setTab(item.id);
@@ -352,8 +369,8 @@ export default function WalletAdminPage() {
           <div className="wpay-admin-secure">
             <ShieldCheck size={18} />
             <span>
-              <b>Защищённый вход</b>
-              <small>Telegram Admin ID</small>
+              <b>Доступ администратора</b>
+              <small>Права проверяются сервером</small>
             </span>
           </div>
         </aside>
@@ -369,19 +386,33 @@ export default function WalletAdminPage() {
                 <Menu size={21} />
               </F7Button>
               <div>
-                <div className="wpay-admin-kicker">
-                  WPay / Панель управления
-                </div>
+                <div className="wpay-admin-kicker">wPay / Управление</div>
                 <h1>{tabs.find((item) => item.id === tab)?.label}</h1>
               </div>
             </div>
             <div className="wpay-admin-topactions">
-              <span className="wpay-admin-online">
-                <i /> Система работает
+              <span className={`wpay-admin-online ${error ? "has-error" : ""}`}>
+                <i />
+                {loading
+                  ? "Обновление"
+                  : error
+                    ? "Ошибка загрузки"
+                    : updatedAt
+                      ? `Обновлено ${updatedAt.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })}`
+                      : "Нет данных"}
               </span>
               <F7Button
                 round
                 className="wpay-admin-refresh"
+                aria-label={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+                onClick={toggleTheme}
+              >
+                {theme === "dark" ? <Sun size={18} /> : <Moon size={18} />}
+              </F7Button>
+              <F7Button
+                round
+                className="wpay-admin-refresh"
+                aria-label="Обновить данные"
                 onClick={() => void load()}
                 disabled={loading}
               >
@@ -390,11 +421,43 @@ export default function WalletAdminPage() {
             </div>
           </header>
           <div className="wpay-admin-content">
-            {error && <div className="wpay-admin-error">{error}</div>}
+            <div className="wpay-admin-page-intro">
+              <span>
+                {
+                  (
+                    {
+                      overview: "Полная картина работы кошелька",
+                      data: "Клиенты, профили и записи базы данных",
+                      payments: "История платежей, переводов и выводов",
+                      crypto: "Адреса, поступления и доступные сети",
+                      aura: "Подключение, методы и состояние Aura",
+                      goswap: "Состояние интеграции и методы GoSwap",
+                      notifications: "Системные события и рассылки",
+                    } as Record<Tab, string>
+                  )[tab]
+                }
+              </span>
+            </div>
+            {error && (
+              <div role="alert" className="wpay-admin-error">
+                <AlertTriangle size={17} />
+                <span>{error}</span>
+              </div>
+            )}
             {!ready ? (
-              <div className="wpay-admin-loading">
-                <F7Preloader size={30} />
-                <span>Загружаю данные…</span>
+              <div className="wpay-admin-loading" role="status">
+                <span>Загружаем данные раздела…</span>
+                <div className="wpay-admin-loading-metrics">
+                  {[0, 1, 2, 3].map((key) => (
+                    <i key={key} />
+                  ))}
+                </div>
+                <div className="wpay-admin-loading-panel">
+                  <i />
+                  <i />
+                  <i />
+                  <i />
+                </div>
               </div>
             ) : (
               <TabContent
@@ -405,6 +468,7 @@ export default function WalletAdminPage() {
                 setTable={setTable}
                 setQuery={setQuery}
                 reload={load}
+                onNavigate={setTab}
               />
             )}
           </div>
@@ -415,6 +479,7 @@ export default function WalletAdminPage() {
 }
 
 function TabContent({
+  onNavigate,
   tab,
   payload,
   table,
@@ -423,6 +488,7 @@ function TabContent({
   setQuery,
   reload,
 }: {
+  onNavigate: (tab: Tab) => void;
   tab: Tab;
   payload: unknown;
   table: string;
@@ -432,7 +498,8 @@ function TabContent({
   reload: () => Promise<void>;
 }) {
   if (!payload) return null;
-  if (tab === "overview") return <Overview data={payload as AdminOverview} />;
+  if (tab === "overview")
+    return <Overview data={payload as AdminOverview} onNavigate={onNavigate} />;
   if (tab === "data")
     return (
       <DataView
@@ -988,7 +1055,13 @@ function AuraConsole({ data }: { data: AuraConsoleData }) {
   );
 }
 
-function Overview({ data }: { data: AdminOverview }) {
+function Overview({
+  data,
+  onNavigate,
+}: {
+  data: AdminOverview;
+  onNavigate: (tab: Tab) => void;
+}) {
   const metrics = [
     ["Пользователи", data.users, Users],
     ["Операции", data.events, Activity],
@@ -997,7 +1070,41 @@ function Overview({ data }: { data: AdminOverview }) {
   ] as const;
   return (
     <div className="wpay-admin-dashboard">
-      <section className="wpay-admin-metrics">
+      <section className="wpay-admin-hero">
+        <div className="wpay-admin-hero-aurora" aria-hidden="true">
+          <Aurora
+            colorStops={["#4269ed", "#9a79ff", "#6bc6e9"]}
+            amplitude={0.65}
+            speed={0.25}
+            mouseInteraction={false}
+            dpr={1}
+            opacity={0.65}
+          />
+        </div>
+        <div className="wpay-admin-hero-copy">
+          <span className="wpay-admin-hero-eyebrow">
+            <Activity size={14} /> Центр управления
+          </span>
+          <h2>Всё под контролем.</h2>
+          <p>
+            Пользователи, операции и интеграции.
+            <br />
+            Все данные — в одном пространстве.
+          </p>
+          <div className="wpay-admin-hero-actions">
+            <button type="button" onClick={() => onNavigate("data")}>
+              Пользователи <ArrowUpRight size={16} />
+            </button>
+            <button type="button" onClick={() => onNavigate("payments")}>
+              Все операции <ArrowUpRight size={16} />
+            </button>
+          </div>
+        </div>
+        <span className="wpay-admin-hero-monogram" aria-hidden="true">
+          <img src="/brands/wpay-wordmark-light.svg" alt="" />
+        </span>
+      </section>
+      <section className="wpay-admin-metrics" aria-label="Основные показатели">
         {metrics.map(([label, value, Icon]) => (
           <article key={label} className="wpay-admin-metric">
             <span className="wpay-admin-metric-icon">
@@ -1015,9 +1122,9 @@ function Overview({ data }: { data: AdminOverview }) {
           <div className="wpay-admin-section-title">
             <div>
               <span>Ликвидность</span>
-              <h2>Баланс GoSwap</h2>
+              <h2>Средства у провайдера</h2>
             </div>
-            <i className="is-online">Online</i>
+            <i className="wpay-admin-snapshot">Снимок API</i>
           </div>
           {data.provider.balance.map((row, index) => (
             <Row
@@ -2032,7 +2139,7 @@ function Row({
   right?: string;
 }) {
   return (
-    <div className="flex items-start justify-between gap-3 border-b border-black/[.05] py-3 last:border-0 dark:border-white/[.07]">
+    <div className="wpay-admin-data-row flex items-start justify-between gap-3 border-b border-black/[.05] py-3 last:border-0 dark:border-white/[.07]">
       <div className="min-w-0">
         <div className="break-words text-sm font-medium">{title}</div>
         {subtitle && (
@@ -2049,6 +2156,10 @@ function Row({
 }
 function Empty() {
   return (
-    <div className="py-5 text-center text-sm opacity-40">Данных пока нет</div>
+    <div className="wpay-admin-empty">
+      <Database size={23} />
+      <strong>Записей пока нет</strong>
+      <span>Данные появятся после первых операций</span>
+    </div>
   );
 }
