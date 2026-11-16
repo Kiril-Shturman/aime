@@ -7,9 +7,11 @@ import time
 from aiohttp import web
 from wallet_withdrawals import apply_outcome
 from wallet_user_ops import apply_transfer, bind_invoice, apply_journal
+from wallet_notifications import enqueue as enqueue_notification, prepare as prepare_notifications
 
 
 def prepare(ledger):
+    prepare_notifications(ledger)
     ledger.db.executescript(
         """
       CREATE TABLE IF NOT EXISTS wallet_webhook_inbox (id INTEGER PRIMARY KEY AUTOINCREMENT,event_key TEXT UNIQUE NOT NULL,raw_body BLOB NOT NULL,signature TEXT NOT NULL,signature_valid INTEGER NOT NULL,origin TEXT NOT NULL,update_type TEXT,entity_id TEXT,status TEXT,version INTEGER,received_at REAL NOT NULL,processed_at REAL,error TEXT,attempts INTEGER NOT NULL DEFAULT 0,next_attempt_at REAL NOT NULL DEFAULT 0);
@@ -236,7 +238,19 @@ async def process(ledger, provider, row, money, ApiError):
                 ledger.commit()
                 return False
             if kind == "deposit_received":
-                ledger.deposit(payload)
+                owner = ledger.db.execute(
+                    "SELECT user_id FROM wallet_accounts WHERE client_ref=?",
+                    (payload.get("client_ref"),),
+                ).fetchone()
+                credited = ledger.deposit(payload)
+                if credited and owner:
+                    amount = str(payload.get("credited") or payload.get("amount") or "")
+                    asset = str(payload.get("asset") or "USDT")
+                    enqueue_notification(
+                        ledger, "goswap:deposit:" + str(payload.get("deposit_id")),
+                        owner[0], "deposit", "Пополнение зачислено",
+                        f"На баланс зачислено {amount} {asset}.",
+                    )
             elif kind in {
                 "qr_payment_completed",
                 "qr_payment_failed",
@@ -245,9 +259,31 @@ async def process(ledger, provider, row, money, ApiError):
                 if payload.get("status") != kind.removeprefix("qr_payment_"):
                     raise ValueError("Mismatched QR status")
                 ledger.payment(payload)
+                quote = ledger.db.execute(
+                    "SELECT user_id FROM wallet_quotes WHERE spend_id=?",
+                    (payload.get("spend_id"),),
+                ).fetchone()
+                if quote:
+                    status = str(payload.get("status") or "")
+                    enqueue_notification(
+                        ledger, f"goswap:qr:{payload.get('payment_id')}:{status}",
+                        quote[0], "qr", "Оплата по QR", "Статус оплаты: " + status + ".",
+                    )
             elif kind.startswith("withdrawal_"):
                 for item in verified:
                     apply_outcome(ledger, item, money, ApiError)
+                    owner = ledger.db.execute(
+                        "SELECT user_id FROM wallet_withdrawal_intents WHERE spend_id=?",
+                        (item.get("spend_id"),),
+                    ).fetchone()
+                    if owner:
+                        status = str(item.get("status") or "")
+                        amount = str(item.get("amount") or "")
+                        enqueue_notification(
+                            ledger, f"goswap:withdrawal:{item.get('withdrawal_id')}:{item.get('version')}:{status}",
+                            owner[0], "withdrawal", "Вывод средств",
+                            f"Статус вывода {amount} {item.get('asset') or 'USDT'}: {status}.",
+                        )
             elif kind.startswith("transfer_"):
                 for item in verified:
                     apply_transfer(ledger, item, money, ApiError)

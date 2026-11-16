@@ -261,9 +261,29 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['provider']['balance'][0]['available'], '10')
         self.assertTrue((await (await self.client.get('/api/wallet/access', headers={'X-Telegram-Init-Data': init_data(321)})).json())['owner'])
         admin_headers = {'X-Telegram-Init-Data': init_data(321)}
-        for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts']:
+        for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts', 'admin-notifications']:
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers=admin_headers)).status, 200)
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers={'X-Telegram-Init-Data': init_data(999)})).status, 403)
+
+    async def test_notification_center_settings_and_deduped_deposit(self):
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        self.ledger.account('tg:123', bot_started=True, source='bot')
+        response = await self.client.post('/api/wallet/admin-notifications', json={
+            'operation': 'settings', 'settings': {'deposit': False},
+        }, headers=admin)
+        self.assertEqual(response.status, 200)
+        settings = {row['event_type']: row['enabled'] for row in (await response.json())['settings']}
+        self.assertEqual(settings['deposit'], 0)
+        response = await self.client.post('/api/wallet/admin-notifications', json={
+            'operation': 'settings', 'settings': {'deposit': True},
+        }, headers=admin)
+        self.assertEqual(response.status, 200)
+        from wallet_notifications import enqueue
+        self.assertTrue(enqueue(self.ledger, 'test:deposit:one', 'tg:123', 'deposit', 'Пополнение', 'Зачислено 1 USDT.'))
+        self.assertFalse(enqueue(self.ledger, 'test:deposit:one', 'tg:123', 'deposit', 'Пополнение', 'Зачислено 1 USDT.'))
+        center = await (await self.client.get('/api/wallet/admin-notifications', headers=admin)).json()
+        self.assertEqual(center['counts']['queued'], 1)
+        self.assertEqual(center['eligible_users'], 1)
 
     async def test_admin_goswap_console_is_allowlisted_and_confirmed(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}

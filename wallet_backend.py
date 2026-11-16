@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -19,12 +20,17 @@ from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import parse_qsl, quote, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, web
+from wallet_avatar import load_avatar, AvatarNotFound
 
 from wallet_book import Book
 from wallet_user_ops import prepare as prepare_user_ops, route as user_ops_route
 from wallet_inbox import prepare as prepare_inbox, receive as receive_webhook
 from wallet_finance_worker import prepare as prepare_finance_worker, Worker as FinanceWorker
 from wallet_finance import finance_route, require_coverage
+from wallet_notifications import (
+    prepare as prepare_notifications, snapshot as notification_snapshot,
+    NotificationWorker,
+)
 from wallet_operations import prepare_operations, operations_route, save_address
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
 from wallet_aura import (
@@ -652,6 +658,7 @@ def install_wallet(app, root, owner_check):
     prepare_inbox(ledger)
     prepare_aura(ledger)
     prepare_finance_worker(ledger)
+    prepare_notifications(ledger)
     ledger.db.executescript('''
       CREATE TABLE IF NOT EXISTS wallet_asset_routes (
         asset TEXT NOT NULL, network TEXT NOT NULL, enabled INTEGER NOT NULL,
@@ -676,6 +683,9 @@ def install_wallet(app, root, owner_check):
     app['wpay_aura_provider'] = aura_client
     app['wpay_ledger'] = ledger
     app['wpay_broadcast_tasks'] = set()
+    app['wpay_notification_worker'] = NotificationWorker(
+        ledger, bot_token, os.environ.get('WPAY_APP_URL', 'https://wallet.178-236-255-214.nip.io/wallet')
+    )
 
     def identity(request):
         payload = telegram_payload(request.headers.get('X-Telegram-Init-Data', ''), bot_token)
@@ -1041,6 +1051,41 @@ def install_wallet(app, root, owner_check):
         task.add_done_callback(app['wpay_broadcast_tasks'].discard)
         return {'broadcast_id': broadcast_id, 'status': 'queued', 'total': len(targets)}
 
+    async def admin_notifications(request, uid):
+        if request.method == 'GET':
+            return notification_snapshot(ledger)
+        body = await request.json()
+        operation = str(body.get('operation') or '')
+        if operation == 'settings':
+            values = body.get('settings')
+            if not isinstance(values, dict):
+                raise ValueError('Некорректные настройки уведомлений')
+            known = {row[0] for row in ledger.db.execute('SELECT event_type FROM notification_settings')}
+            if set(values) - known or any(type(value) is not bool for value in values.values()):
+                raise ValueError('Некорректные настройки уведомлений')
+            stamp = time.time()
+            ledger.db.executemany(
+                'UPDATE notification_settings SET enabled=?,updated_at=?,updated_by=? WHERE event_type=?',
+                [(int(value), stamp, uid, key) for key, value in values.items()],
+            )
+        elif operation == 'retry':
+            notification_id = str(body.get('notification_id') or '')
+            cursor = ledger.db.execute(
+                "UPDATE notification_outbox SET status='queued',next_attempt_at=0,last_error=NULL,updated_at=? "
+                "WHERE notification_id=? AND status IN ('failed','retry','skipped')",
+                (time.time(), notification_id),
+            )
+            if cursor.rowcount != 1:
+                raise ApiError('NOT_FOUND', 'Уведомление не найдено или уже доставлено', 404)
+        elif operation == 'retry_failed':
+            ledger.db.execute(
+                "UPDATE notification_outbox SET status='queued',next_attempt_at=0,last_error=NULL,updated_at=? "
+                "WHERE status IN ('failed','retry')", (time.time(),)
+            )
+        else:
+            raise ValueError('Неизвестная операция центра уведомлений')
+        return notification_snapshot(ledger)
+
     async def sync_payments(uid):
         rows = ledger.db.execute("SELECT spend_id FROM wallet_quotes WHERE user_id=? AND state IN ('reserved','processing') LIMIT 100", (uid,)).fetchall()
         if rows:
@@ -1071,10 +1116,17 @@ def install_wallet(app, root, owner_check):
                     'aura' if aura_available and aura_products['qr_pay']
                     else 'goswap' if bool(token) else None
                 )
+                deposit_route = ledger.db.execute(
+                    "SELECT enabled FROM wallet_provider_routes WHERE product='crypto_deposit' "
+                    "AND asset='USDT' AND network='TRON' AND environment=? AND provider='aura'",
+                    (aura_environment,),
+                ).fetchone()
+                aura_address = bool(aura_enabled and aura_client.configured and deposit_route and deposit_route['enabled'])
                 return web.json_response({
                     'configured': bool(token) or bool(aura_enabled and aura_client.configured),
                     'telegram_auth': bool(bot_token),
                     'asset_routes': enabled_asset_routes(),
+                    'deposit_modes': {'USDT': {'TRON': 'address' if aura_address else 'exact' if token else 'disabled'}},
                     'capabilities': {
                         'cards': aura_available and aura_products['cards'],
                         'sbp_buy': aura_available and aura_products['sbp_buy'],
@@ -1108,6 +1160,21 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            if action == 'profile-avatar' and request.method == 'GET':
+                if request.query:
+                    raise ValueError('Avatar query parameters are not supported')
+                if not uid.startswith('tg:'):
+                    raise ApiError('AVATAR_NOT_FOUND', 'Фото профиля не найдено', 404)
+                try:
+                    image, content_type = await load_avatar(bot_token, int(uid.removeprefix('tg:')))
+                except AvatarNotFound:
+                    raise ApiError('AVATAR_NOT_FOUND', 'Фото профиля не найдено', 404)
+                except ValueError:
+                    raise ApiError('AVATAR_UNAVAILABLE', 'Фото профиля временно недоступно', 502)
+                return web.Response(body=image, content_type=content_type, headers={
+                    'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff',
+                    'Content-Security-Policy': "sandbox; default-src 'none'; img-src data:",
+                })
             if admin and uid.startswith('tg:'):
                 ledger.db.execute("UPDATE wallet_accounts SET role='admin' WHERE user_id=?", (uid,))
             if action == 'access' and request.method == 'GET':
@@ -1361,6 +1428,8 @@ def install_wallet(app, root, owner_check):
                 }})
             if action == 'admin-broadcasts' and request.method in {'GET', 'POST'}:
                 return web.json_response(await admin_broadcasts(request, uid))
+            if action == 'admin-notifications' and request.method in {'GET', 'POST'}:
+                return web.json_response(await admin_notifications(request, uid))
             if action == 'aura-customer' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
@@ -1381,8 +1450,15 @@ def install_wallet(app, root, owner_check):
                 ).fetchone()
                 if not row:
                     raise ApiError('CUSTOMER_NOT_REGISTERED', 'Aura customer is not registered', 404)
-                result = await aura_client.get_customer(row['customer_id'])
-                return web.json_response(result, headers={'Cache-Control': 'no-store'})
+                contacts = aura_service.saved_contacts(uid)
+                if contacts and contacts.get('email') and contacts.get('phone'):
+                    result = {'id': row['customer_id'], **contacts}
+                else:
+                    result = dict(await aura_client.get_customer(row['customer_id']))
+                    for field in ('email', 'phone'):
+                        if contacts and contacts.get(field):
+                            result[field] = contacts[field]
+                return web.json_response(result, headers={'Cache-Control': 'private, no-store'})
             if action == 'aura-kyc' and request.method == 'GET':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
@@ -1648,7 +1724,12 @@ def install_wallet(app, root, owner_check):
                     'FROM aura_sbp_orders WHERE user_id=? AND environment=? '
                     'ORDER BY updated_at DESC LIMIT 200', (uid, aura_environment),
                 )]
-                return web.json_response({'data': orders})
+                pending = ledger.db.execute(
+                    "SELECT 1 FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+                    "AND entity_type='sbp_order' AND user_id=? AND status='submitting' LIMIT 1",
+                    (aura_environment, uid),
+                ).fetchone()
+                return web.json_response({'data': orders, 'pending_creation': bool(pending)}, headers={'Cache-Control': 'no-store'})
             if action == 'aura-qr-quote' and request.method == 'POST':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
@@ -1959,6 +2040,12 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(result)
             raise ApiError('NOT_FOUND', 'Метод не найден', 404)
         except ApiError as error:
+            if action in {'aura-customer', 'aura-kyc'}:
+                logging.getLogger('wpay.profile').warning(
+                    'Profile request failed action=%s method=%s status=%s code=%s request_id=%s',
+                    action, request.method, error.status, error.name,
+                    getattr(error, 'request_id', '') or '-',
+                )
             return web.json_response({'ok': False, 'error': {'name': error.name}, 'detail': error.detail}, status=error.status, headers={'Retry-After': str(error.retry_after)} if error.retry_after else None)
         except (ValueError, KeyError, TypeError):
             return web.json_response({'ok': False, 'error': {'name': 'INVALID_REQUEST'}, 'detail': 'Некорректные данные запроса или ответа провайдера'}, status=400)
@@ -1970,6 +2057,9 @@ def install_wallet(app, root, owner_check):
         aura_task = app.get('wpay_aura_task')
         if aura_task:
             aura_task.cancel();await asyncio.gather(aura_task,return_exceptions=True)
+        notification_task = app.get('wpay_notification_task')
+        if notification_task:
+            notification_task.cancel();await asyncio.gather(notification_task,return_exceptions=True)
         for task in app['wpay_broadcast_tasks']:
             task.cancel()
         if app['wpay_broadcast_tasks']:
@@ -1979,6 +2069,10 @@ def install_wallet(app, root, owner_check):
         ledger.db.close()
 
     async def startup(_):
+        if bot_token:
+            app['wpay_notification_task'] = asyncio.create_task(
+                app['wpay_notification_worker'].run()
+            )
         if token and os.environ.get('WPAY_FINANCE_WORKER','1')!='0':
             app['wpay_finance_task']=asyncio.create_task(FinanceWorker(ledger,provider,money,ApiError).run())
         if bot_token:

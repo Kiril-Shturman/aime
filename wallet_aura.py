@@ -17,6 +17,7 @@ from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import quote, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
+from wallet_notifications import enqueue as enqueue_notification, prepare as prepare_notifications
 
 
 TEST_BASE_URL = "https://testnet-api.aurawallet.co/v1/partner"
@@ -65,6 +66,7 @@ SBP_ORDER_STATUSES = {
 
 def prepare(ledger):
     """Install additive tables. Existing GoSwap rows and routes stay untouched."""
+    prepare_notifications(ledger)
     ledger.db.executescript(
         """
       CREATE TABLE IF NOT EXISTS wallet_provider_routes (
@@ -79,6 +81,11 @@ def prepare(ledger):
         created_at REAL NOT NULL, updated_at REAL NOT NULL,
         PRIMARY KEY(provider,environment,entity_type,local_id),
         UNIQUE(provider,environment,entity_type,remote_id)
+      );
+      CREATE TABLE IF NOT EXISTS wallet_profile_contacts (
+        user_id TEXT NOT NULL, environment TEXT NOT NULL,
+        email TEXT, phone TEXT, updated_at REAL NOT NULL,
+        PRIMARY KEY(user_id,environment)
       );
       CREATE TABLE IF NOT EXISTS aura_customers (
         user_id TEXT PRIMARY KEY, customer_id TEXT UNIQUE NOT NULL,
@@ -1150,7 +1157,7 @@ class AuraClient:
 
     async def start_kyc(self, customer_id):
         customer_id = quote(_safe_identifier(customer_id, "customer id"), safe="")
-        return await self.request("POST", "/customers/" + customer_id + "/kyc")
+        return await self.request("POST", "/customers/" + customer_id + "/kyc", body={})
 
     async def submit_customer_identity(self, customer_id, identity):
         customer_id = _safe_identifier(customer_id, "customer id")
@@ -1672,20 +1679,50 @@ class AuraService:
             raise ValueError("Aura customer environment mismatch")
         if row and email is None and phone is None:
             return customer_id
+        if email is not None:
+            if not isinstance(email, str) or not email.strip():
+                raise ValueError("Invalid customer email")
+            email = email.strip()
+        if phone is not None:
+            if not isinstance(phone, str) or not phone.strip():
+                raise ValueError("Invalid customer phone")
+            phone = phone.strip()
         result = await self.client.upsert_customer(customer_id, email=email, phone=phone)
         provider_id = str(result.get("id") or result.get("customer_id") or customer_id)
         if provider_id != customer_id:
             raise ValueError("Aura customer identity mismatch")
         stamp = time.time()
         digest = lambda value: hashlib.sha256(str(value).encode()).hexdigest() if value else None
-        self.ledger.db.execute(
-            "INSERT INTO aura_customers VALUES (?,?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(user_id) DO UPDATE SET state=excluded.state,email_hash=COALESCE(excluded.email_hash,aura_customers.email_hash),"
-            "phone_hash=COALESCE(excluded.phone_hash,aura_customers.phone_hash),provider_updated_at=excluded.provider_updated_at,updated_at=excluded.updated_at",
-            (uid, customer_id, self.environment, str(result.get("status") or "registered"),
-             digest(email), digest(phone), result.get("updated_at"), stamp, stamp),
-        )
+        self.ledger.db.execute("SAVEPOINT aura_profile_save")
+        try:
+            self.ledger.db.execute(
+                "INSERT INTO aura_customers VALUES (?,?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(user_id) DO UPDATE SET state=excluded.state,email_hash=COALESCE(excluded.email_hash,aura_customers.email_hash),"
+                "phone_hash=COALESCE(excluded.phone_hash,aura_customers.phone_hash),provider_updated_at=excluded.provider_updated_at,updated_at=excluded.updated_at",
+                (uid, customer_id, self.environment, str(result.get("status") or "registered"),
+                 digest(email), digest(phone), result.get("updated_at"), stamp, stamp),
+            )
+            if email is not None or phone is not None:
+                self.ledger.db.execute(
+                    "INSERT INTO wallet_profile_contacts VALUES (?,?,?,?,?) "
+                    "ON CONFLICT(user_id,environment) DO UPDATE SET "
+                    "email=COALESCE(excluded.email,wallet_profile_contacts.email),"
+                    "phone=COALESCE(excluded.phone,wallet_profile_contacts.phone),updated_at=excluded.updated_at",
+                    (uid, self.environment, email, phone, stamp),
+                )
+        except Exception:
+            self.ledger.db.execute("ROLLBACK TO aura_profile_save")
+            self.ledger.db.execute("RELEASE aura_profile_save")
+            raise
+        self.ledger.db.execute("RELEASE aura_profile_save")
         return customer_id
+
+    def saved_contacts(self, uid):
+        row = self.ledger.db.execute(
+            "SELECT email,phone FROM wallet_profile_contacts WHERE user_id=? AND environment=?",
+            (uid, self.environment),
+        ).fetchone()
+        return dict(row) if row else None
 
     def _store_kyc(self, uid, customer_id, payload):
         if not isinstance(payload, dict):
@@ -1719,6 +1756,17 @@ class AuraService:
             (uid, customer_id, self.environment, status, int(verified), int(terminal),
              reason, updated, json.dumps(safe_body, separators=(",", ":")), stamp, stamp),
         )
+        title = "Верификация пройдена" if verified else "Верификация обновлена"
+        message = (
+            "Личность подтверждена. Теперь доступны функции, требующие KYC."
+            if verified else
+            ("Проверка отклонена. Откройте WPay, чтобы посмотреть статус и повторить действие."
+             if terminal else "Документы приняты, проверка продолжается.")
+        )
+        enqueue_notification(
+            self.ledger, f"aura:kyc:{customer_id}:{updated or status}:{status}",
+            uid, "kyc", title, message,
+        )
         return safe_body
 
     def kyc_state(self, uid):
@@ -1747,7 +1795,7 @@ class AuraService:
         )
         result = await self.client.start_kyc(customer_id)
         state = self._store_kyc(uid, customer_id, result)
-        session_url = result.get("url") or result.get("session_url") or result.get("verification_url")
+        session_url = result.get("kyc_url") or result.get("url") or result.get("session_url") or result.get("verification_url")
         if session_url is not None:
             session_url = str(session_url)
             if not session_url.startswith("https://") or len(session_url) > 2048:
@@ -2877,6 +2925,19 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
          json.dumps(safe, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
     )
     _settle_card_request(ledger, environment, card_id, status)
+    card_text = {
+        "opened": "Карта выпущена и появилась в WPay.",
+        "failed_to_open": "Выпустить карту не удалось. Средства будут обработаны по статусу заявки.",
+        "cancelled": "Карта закрыта.",
+    }.get(status, "Статус карты изменён: " + status + ".")
+    if kind == "card.delivery_updated" and delivery_status:
+        card_text = "Статус доставки физической карты: " + delivery_status + "."
+    if kind == "card.status_changed" and frozen:
+        card_text = "Карта заморожена."
+    enqueue_notification(
+        ledger, f"aura:card:{card_id}:{incoming_updated or kind}:{status}:{delivery_status or ''}",
+        owner[0], "card", "Обновление карты", card_text,
+    )
 
 
 def _store_card_operation(ledger, environment, data):
@@ -3010,6 +3071,17 @@ def _store_card_operation(ledger, environment, data):
          stamp, stamp),
     )
     _settle_card_recharge(ledger, environment, operation_id, status)
+    operation_name = {
+        "purchase": "Покупка", "refund": "Возврат", "reversal": "Отмена",
+        "fee": "Комиссия", "topup": "Пополнение карты", "other": "Операция",
+    }.get(operation_type, "Операция")
+    message = f"{operation_name}: {amount} USDT. Статус: {status}."
+    if merchant:
+        message += " Получатель: " + merchant + "."
+    enqueue_notification(
+        ledger, f"aura:card-operation:{operation_id}:{incoming_updated}:{status}",
+        card[0], "card_operation", "Операция по карте", message,
+    )
 
 
 def _store_sbp_order(ledger, environment, kind, data):
@@ -3060,6 +3132,13 @@ def _store_sbp_order(ledger, environment, kind, data):
          json.dumps(safe_body, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
     )
     _settle_sbp_order(ledger, environment, order_id, status)
+    message = "Статус покупки через СБП: " + status + "."
+    if rub_amount:
+        message += " Сумма: " + rub_amount + " RUB."
+    enqueue_notification(
+        ledger, f"aura:sbp:{order_id}:{incoming_updated or kind}:{status}",
+        owner[0], "sbp", "Покупка через СБП", message,
+    )
 
 
 def _store_qr_payment(ledger, environment, kind, data):
@@ -3118,6 +3197,14 @@ def _store_qr_payment(ledger, environment, kind, data):
          user_id, customer_id, payment_type),
     )
     _settle_qr_payment(ledger, environment, payment_id, status)
+    if user_id:
+        message = "Статус оплаты QR: " + status + "."
+        if amount_rub:
+            message += " Сумма: " + amount_rub + " RUB."
+        enqueue_notification(
+            ledger, f"aura:qr:{payment_id}:{updated or kind}:{status}",
+            user_id, "qr", "Оплата по QR", message,
+        )
 
 
 def _store_withdrawal(ledger, environment, kind, data):
@@ -3155,6 +3242,19 @@ def _store_withdrawal(ledger, environment, kind, data):
         (withdrawal_id, environment, status, amount, fee, recipient, transaction_hash,
          updated or None, json.dumps(safe, separators=(",", ":")), stamp, stamp),
     )
+    owner = ledger.db.execute(
+        "SELECT user_id FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+        "AND entity_type='withdrawal' AND (remote_id=? OR local_id=?) LIMIT 1",
+        (environment, withdrawal_id, withdrawal_id),
+    ).fetchone()
+    if owner:
+        message = "Статус вывода: " + status + "."
+        if amount:
+            message += " Сумма: " + amount + " USDT."
+        enqueue_notification(
+            ledger, f"aura:withdrawal:{withdrawal_id}:{updated or kind}:{status}",
+            owner[0], "withdrawal", "Вывод средств", message,
+        )
 
 
 def store_withdrawal_snapshot(ledger, environment, data):

@@ -10,10 +10,10 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  Bell,
   Coins,
   Database,
   LayoutDashboard,
-  Megaphone,
   Menu,
   Play,
   RefreshCw,
@@ -46,7 +46,7 @@ type Tab =
   | "crypto"
   | "aura"
   | "goswap"
-  | "broadcasts";
+  | "notifications";
 type AdminOverview = {
   users: number;
   events: number;
@@ -117,6 +117,13 @@ type AuraConsoleData = {
   methods: AuraMethod[];
 };
 type BroadcastData = { items: Json[] };
+type NotificationData = {
+  settings: { event_type: string; label: string; enabled: number }[];
+  counts: Record<string, number>;
+  recent: Json[];
+  eligible_users: number;
+  broadcasts: Json[];
+};
 type AuraData = {
   provider: {
     enabled: boolean;
@@ -185,7 +192,7 @@ const tabs: { id: Tab; label: string; icon: typeof Database }[] = [
   { id: "crypto", label: "Крипта", icon: Coins },
   { id: "aura", label: "Aura", icon: ShieldCheck },
   { id: "goswap", label: "GoSwap", icon: Server },
-  { id: "broadcasts", label: "Рассылки", icon: Megaphone },
+  { id: "notifications", label: "Уведомления", icon: Bell },
 ];
 
 export default function WalletAdminPage() {
@@ -260,8 +267,12 @@ export default function WalletAdminPage() {
         } satisfies AuraData);
         setPayloadTab(tab);
       }
-      if (tab === "broadcasts") {
-        setPayload(await walletRequest<BroadcastData>("admin-broadcasts"));
+      if (tab === "notifications") {
+        const [notifications, broadcasts] = await Promise.all([
+          walletRequest<Omit<NotificationData, "broadcasts">>("admin-notifications"),
+          walletRequest<BroadcastData>("admin-broadcasts"),
+        ]);
+        setPayload({ ...notifications, broadcasts: broadcasts.items });
         setPayloadTab(tab);
       }
     } catch (reason) {
@@ -448,7 +459,7 @@ function TabContent({
     );
   if (tab === "aura")
     return <Aura data={payload as AuraData} reload={reload} />;
-  return <Broadcasts data={payload as BroadcastData} reload={reload} />;
+  return <Notifications data={payload as NotificationData} reload={reload} />;
 }
 
 function Aura({ data, reload }: { data: AuraData; reload: () => Promise<void> }) {
@@ -1381,11 +1392,11 @@ function GoSwap({ data }: { data: GoSwapData }) {
   );
 }
 
-function Broadcasts({
+function Notifications({
   data,
   reload,
 }: {
-  data: BroadcastData;
+  data: NotificationData;
   reload: () => Promise<void>;
 }) {
   const [message, setMessage] = useState("");
@@ -1394,6 +1405,7 @@ function Broadcasts({
   const [buttonUrl, setButtonUrl] = useState("");
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState("");
   const canSend = useMemo(
     () => message.trim().length > 0 && !sending,
     [message, sending],
@@ -1428,10 +1440,97 @@ function Broadcasts({
       setSending(false);
     }
   }
+  async function toggle(eventType: string, enabled: boolean) {
+    setSaving(eventType);
+    setNotice("");
+    try {
+      await walletRequest("admin-notifications", {
+        operation: "settings",
+        settings: { [eventType]: enabled },
+      });
+      await reload();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Ошибка сохранения");
+    } finally {
+      setSaving("");
+    }
+  }
+  async function retry(notificationId?: string) {
+    setSaving(notificationId || "all");
+    try {
+      await walletRequest("admin-notifications", {
+        operation: notificationId ? "retry" : "retry_failed",
+        ...(notificationId ? { notification_id: notificationId } : {}),
+      });
+      await reload();
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Ошибка повтора");
+    } finally {
+      setSaving("");
+    }
+  }
   return (
     <div className="space-y-4">
+      <section className="wpay-admin-metrics">
+        {[
+          ["Получателей", data.eligible_users],
+          ["В очереди", (data.counts.queued || 0) + (data.counts.retry || 0)],
+          ["Доставлено", data.counts.sent || 0],
+          ["Ошибки", data.counts.failed || 0],
+        ].map(([label, value]) => (
+          <div className="wpay-admin-metric" key={String(label)}>
+            <span>{label}</span><strong>{value}</strong>
+          </div>
+        ))}
+      </section>
       <section className={card}>
-        <h2 className="font-semibold">Новая рассылка</h2>
+        <div className="wpay-admin-section-title">
+          <div><span>Автоматика</span><h2>События для пользователей</h2></div>
+          <button
+            className="rounded-xl bg-black/[.05] px-3 py-2 text-xs font-semibold dark:bg-white/[.08]"
+            onClick={() => void retry()}
+            disabled={saving === "all"}
+          >Повторить ошибки</button>
+        </div>
+        <p className="mb-3 text-sm opacity-55">
+          Сообщения создаются из подтверждённых событий Aura и GoSwap, защищены от дублей и повторяются при временной ошибке Telegram.
+        </p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {data.settings.map((setting) => (
+            <label key={setting.event_type} className="flex items-center justify-between rounded-2xl bg-black/[.035] p-3 dark:bg-white/[.06]">
+              <span className="text-sm font-medium">{setting.label}</span>
+              <input
+                type="checkbox"
+                checked={Boolean(setting.enabled)}
+                disabled={saving === setting.event_type}
+                onChange={(event) => void toggle(setting.event_type, event.target.checked)}
+                className="h-5 w-5 accent-blue-500"
+              />
+            </label>
+          ))}
+        </div>
+      </section>
+      <section className={card}>
+        <div className="wpay-admin-section-title"><div><span>Outbox</span><h2>История доставки</h2></div></div>
+        {data.recent.length ? data.recent.map((row) => (
+          <div key={text(row.notification_id)} className="border-b border-black/[.06] py-3 last:border-0 dark:border-white/[.08]">
+            <Row
+              title={text(row.title)}
+              subtitle={`${date(row.created_at)} · ${text(row.event_type)} · ${text(row.user_id)}`}
+              right={text(row.status)}
+            />
+            <p className="mt-1 text-xs opacity-55">{text(row.message)}</p>
+            {row.last_error ? <p className="mt-1 text-xs text-red-500">{text(row.last_error)}</p> : null}
+            {["failed", "retry", "skipped"].includes(text(row.status)) ? (
+              <button className="mt-2 text-xs font-semibold text-blue-500" onClick={() => void retry(text(row.notification_id))}>
+                Повторить доставку
+              </button>
+            ) : null}
+          </div>
+        )) : <Empty />}
+      </section>
+      <section className={card}>
+        <div className="wpay-admin-section-title"><div><span>Ручная отправка</span><h2>Новая рассылка</h2></div></div>
         <textarea
           value={message}
           onChange={(event) => setMessage(event.target.value)}
@@ -1486,8 +1585,8 @@ function Broadcasts({
       </section>
       <section className={card}>
         <h2 className="font-semibold">История рассылок</h2>
-        {data.items.length ? (
-          data.items.map((row, index) => (
+        {data.broadcasts.length ? (
+          data.broadcasts.map((row, index) => (
             <div
               key={index}
               className="border-b border-black/[.06] py-3 last:border-0 dark:border-white/[.08]"
