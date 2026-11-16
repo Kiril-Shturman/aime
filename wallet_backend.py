@@ -807,6 +807,7 @@ def install_wallet(app, root, owner_check):
             },
             'recent': recent,
             'debts': decoded_rows('SELECT user_id,asset,amount FROM wallet_debts WHERE CAST(amount AS REAL)>0'),
+            'problems': admin_problems(),
             'provider': {'app': app_info, 'balance': organization_balance, 'currencies': currencies},
         }
 
@@ -830,13 +831,17 @@ def install_wallet(app, root, owner_check):
                  COALESCE((SELECT COUNT(*) FROM wallet_events e WHERE e.user_id=a.user_id),0) event_count,
                  COALESCE((SELECT COUNT(*) FROM wallet_addresses d WHERE d.user_id=a.user_id),0) address_count,
                  COALESCE((SELECT COUNT(*) FROM wallet_referrals r WHERE r.referrer_user_id=a.user_id),0) referral_count,
-                 (SELECT r.referrer_user_id FROM wallet_referrals r WHERE r.referred_user_id=a.user_id) referred_by
-          FROM wallet_accounts a WHERE a.user_id LIKE 'tg:%' ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
-        ''') if 'wallet_addresses' in tables() else decoded_rows('''
-          SELECT a.*, COALESCE((SELECT COUNT(*) FROM wallet_events e WHERE e.user_id=a.user_id),0) event_count, 0 address_count,
-                 COALESCE((SELECT COUNT(*) FROM wallet_referrals r WHERE r.referrer_user_id=a.user_id),0) referral_count,
-                 (SELECT r.referrer_user_id FROM wallet_referrals r WHERE r.referred_user_id=a.user_id) referred_by
-          FROM wallet_accounts a WHERE a.user_id LIKE 'tg:%' ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
+                 (SELECT r.referrer_user_id FROM wallet_referrals r WHERE r.referred_user_id=a.user_id) referred_by,
+                 ac.customer_id aura_customer_id, ac.state aura_customer_state,
+                 ac.environment aura_environment,
+                 COALESCE(k.status, CASE WHEN ac.customer_id IS NOT NULL THEN 'not_started' END) kyc_status,
+                 COALESCE(k.verified,0) kyc_verified, COALESCE(k.terminal,0) kyc_terminal,
+                 COALESCE((SELECT COUNT(*) FROM aura_cards c WHERE c.user_id=a.user_id),0) card_count
+          FROM wallet_accounts a
+          LEFT JOIN aura_customers ac ON ac.user_id=a.user_id
+          LEFT JOIN aura_kyc_cases k ON k.user_id=a.user_id
+          WHERE a.user_id LIKE 'tg:%'
+          ORDER BY COALESCE(a.last_seen,a.created_at) DESC, a.rowid DESC LIMIT 1000
         ''')
         balances = decoded_rows('SELECT user_id,asset,available,reserved FROM wallet_balances ORDER BY user_id,asset')
         by_user = {}
@@ -845,6 +850,139 @@ def install_wallet(app, root, owner_check):
         for row in rows:
             row['balances'] = by_user.get(row['user_id'], [])
         return {'items': rows, 'total': ledger.db.execute("SELECT COUNT(*) FROM wallet_accounts WHERE user_id LIKE 'tg:%'").fetchone()[0]}
+
+    def masked_email(value):
+        if not value or '@' not in str(value):
+            return None
+        local, domain = str(value).split('@', 1)
+        return (local[:2] if len(local) > 1 else local[:1]) + '***@' + domain
+
+    def masked_phone(value):
+        digits = ''.join(character for character in str(value or '') if character.isdigit())
+        if len(digits) < 4:
+            return None
+        prefix = '+' + digits[0] if str(value).strip().startswith('+') else digits[0]
+        return f'{prefix} *** ***-**-{digits[-2:]}'
+
+    def admin_user(request):
+        user_id = str(request.query.get('user_id') or '')
+        if not user_id.startswith('tg:') or not user_id[3:].isdigit():
+            raise ValueError('Некорректный идентификатор пользователя')
+        account = ledger.db.execute('SELECT * FROM wallet_accounts WHERE user_id=?', (user_id,)).fetchone()
+        if not account:
+            raise ApiError('NOT_FOUND', 'Пользователь не найден', 404)
+        contact = ledger.db.execute(
+            'SELECT email,phone,updated_at FROM wallet_profile_contacts WHERE user_id=? AND environment=?',
+            (user_id, aura_environment),
+        ).fetchone()
+        customer = ledger.db.execute(
+            'SELECT customer_id,environment,state,provider_updated_at,created_at,updated_at '
+            'FROM aura_customers WHERE user_id=?', (user_id,),
+        ).fetchone()
+        kyc = ledger.db.execute(
+            'SELECT status,verified,terminal,reason,provider_updated_at,created_at,updated_at '
+            'FROM aura_kyc_cases WHERE user_id=?', (user_id,),
+        ).fetchone()
+        return {
+            'account': dict(account),
+            'contacts': {
+                'email': masked_email(contact['email']) if contact else None,
+                'phone': masked_phone(contact['phone']) if contact else None,
+                'updated_at': contact['updated_at'] if contact else None,
+            },
+            'aura': {
+                'customer': dict(customer) if customer else None,
+                'kyc': dict(kyc) if kyc else None,
+                'cards': decoded_rows(
+                    'SELECT card_id,kind,status,frozen,masked_pan,delivery_status,tracking,'
+                    'provider_updated_at,created_at,updated_at FROM aura_cards WHERE user_id=? '
+                    'ORDER BY updated_at DESC LIMIT 50', (user_id,),
+                ),
+            },
+            'balances': decoded_rows(
+                'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=? ORDER BY asset',
+                (user_id,),
+            ),
+            'addresses': decoded_rows(
+                'SELECT network,body FROM wallet_addresses WHERE user_id=? LIMIT 50',
+                (user_id,),
+            ),
+            'events': decoded_rows(
+                'SELECT event_id,asset,amount,type,created_at,detail FROM wallet_events '
+                'WHERE user_id=? ORDER BY rowid DESC LIMIT 50', (user_id,),
+            ),
+            'notifications': decoded_rows(
+                'SELECT notification_id,event_type,title,status,attempts,last_error,created_at,sent_at '
+                'FROM notification_outbox WHERE user_id=? ORDER BY rowid DESC LIMIT 50', (user_id,),
+            ),
+            'referrals': {
+                'invited': decoded_rows(
+                    'SELECT referred_user_id,source,created_at FROM wallet_referrals '
+                    'WHERE referrer_user_id=? ORDER BY rowid DESC LIMIT 100', (user_id,),
+                ),
+                'referred_by': next((dict(row) for row in ledger.db.execute(
+                    'SELECT referrer_user_id,source,created_at FROM wallet_referrals '
+                    'WHERE referred_user_id=? LIMIT 1', (user_id,),
+                )), None),
+            },
+        }
+
+    def admin_problems():
+        present = tables()
+        issues = []
+        def count_issue(kind, label, sql, params=()):
+            count = int(ledger.db.execute(sql, params).fetchone()[0])
+            issues.append({'kind': kind, 'label': label, 'count': count})
+        cutoff_15m = time.time() - 900
+        cutoff_1h = time.time() - 3600
+        cutoff_24h = time.time() - 86400
+        if 'wallet_webhook_inbox' in present:
+            count_issue(
+                'webhooks', 'Вебхуки с ошибкой',
+                'SELECT COUNT(*) FROM wallet_webhook_inbox WHERE signature_valid=1 AND '
+                '(error IS NOT NULL OR (processed_at IS NULL AND received_at<?))',
+                (cutoff_15m,),
+            )
+        if 'notification_outbox' in present:
+            count_issue(
+                'notifications', 'Ошибки уведомлений',
+                "SELECT COUNT(*) FROM notification_outbox WHERE status IN ('failed','retry')",
+            )
+        if 'aura_kyc_cases' in present:
+            count_issue(
+                'kyc', 'KYC дольше 24 часов',
+                "SELECT COUNT(*) FROM aura_kyc_cases WHERE status IN ('pending','in_review') AND updated_at<?",
+                (cutoff_24h,),
+            )
+        if 'aura_sbp_orders' in present:
+            count_issue(
+                'sbp', 'Зависшие SBP-заявки',
+                "SELECT COUNT(*) FROM aura_sbp_orders WHERE status IN ('pending','processing','awaiting_payment') AND updated_at<?",
+                (cutoff_1h,),
+            )
+        if 'aura_qr_payments' in present:
+            count_issue(
+                'qr', 'Зависшие QR-платежи',
+                "SELECT COUNT(*) FROM aura_qr_payments WHERE status IN ('pending','processing','created') AND updated_at<?",
+                (cutoff_1h,),
+            )
+        if 'aura_withdrawals' in present:
+            count_issue(
+                'withdrawals', 'Зависшие выводы Aura',
+                "SELECT COUNT(*) FROM aura_withdrawals WHERE status IN ('pending','processing','created') AND updated_at<?",
+                (cutoff_1h,),
+            )
+        if 'wallet_debts' in present:
+            count_issue(
+                'debts', 'Долги пользователей',
+                'SELECT COUNT(*) FROM wallet_debts WHERE CAST(amount AS REAL)>0',
+            )
+        if 'wallet_provider_reconciliation' in present:
+            count_issue(
+                'reconciliation', 'Расхождения сверки',
+                "SELECT COUNT(*) FROM wallet_provider_reconciliation WHERE LOWER(state) NOT IN ('ok','balanced','matched','healthy')",
+            )
+        return {'total': sum(item['count'] for item in issues), 'items': issues}
 
     def admin_database(request):
         allowed = sorted(name for name in tables() if name.startswith(('wallet_', 'admin_')))
@@ -1199,6 +1337,8 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(await admin_overview())
             if action == 'admin-users' and request.method == 'GET':
                 return web.json_response(admin_users())
+            if action == 'admin-user' and request.method == 'GET':
+                return web.json_response(admin_user(request), headers={'Cache-Control': 'private, no-store'})
             if action == 'admin-sync-users' and request.method == 'POST':
                 return web.json_response(await sync_telegram_users())
             if action == 'admin-database' and request.method == 'GET':

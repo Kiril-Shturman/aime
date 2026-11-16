@@ -293,6 +293,57 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers=admin_headers)).status, 200)
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers={'X-Telegram-Init-Data': init_data(999)})).status, 403)
 
+    async def test_admin_user_detail_enriches_aura_and_masks_contacts(self):
+        uid = 'tg:555'
+        self.ledger.account(uid, {'first_name': 'Test', 'username': 'tester'})
+        stamp = time.time()
+        customer_id = 'wpay-admin-user-test'
+        self.ledger.db.execute(
+            'INSERT INTO wallet_profile_contacts VALUES (?,?,?,?,?)',
+            (uid, 'test', 'secret@example.com', '+79991234567', stamp),
+        )
+        self.ledger.db.execute(
+            'INSERT INTO aura_customers VALUES (?,?,?,?,?,?,?,?,?)',
+            (uid, customer_id, 'test', 'registered', None, None, None, stamp, stamp),
+        )
+        self.ledger.db.execute(
+            'INSERT INTO aura_kyc_cases VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            (uid, customer_id, 'test', 'pending', 0, 0, None, None, '{}', stamp, stamp - 90000),
+        )
+        self.ledger.db.execute(
+            'INSERT INTO aura_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            ('card-admin-test', uid, customer_id, 'test', 'virtual', 'opened', 0,
+             '411111******1234', None, None, None, '{}', stamp, stamp),
+        )
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        users = await self.client.get('/api/wallet/admin-users', headers=admin)
+        self.assertEqual(users.status, 200, await users.text())
+        item = next(row for row in (await users.json())['items'] if row['user_id'] == uid)
+        self.assertEqual(item['aura_customer_id'], customer_id)
+        self.assertEqual(item['kyc_status'], 'pending')
+        self.assertEqual(item['card_count'], 1)
+        detail = await self.client.get(
+            '/api/wallet/admin-user?user_id=' + uid, headers=admin,
+        )
+        self.assertEqual(detail.status, 200, await detail.text())
+        raw = await detail.text()
+        self.assertNotIn('secret@example.com', raw)
+        self.assertNotIn('+79991234567', raw)
+        body = json.loads(raw)
+        self.assertEqual(body['contacts']['email'], 'se***@example.com')
+        self.assertTrue(body['contacts']['phone'].endswith('67'))
+        self.assertEqual(body['aura']['cards'][0]['masked_pan'], '411111******1234')
+        denied = await self.client.get(
+            '/api/wallet/admin-user?user_id=' + uid,
+            headers={'X-Telegram-Init-Data': init_data(999)},
+        )
+        self.assertEqual(denied.status, 403)
+        overview = await (await self.client.get(
+            '/api/wallet/admin-overview', headers=admin,
+        )).json()
+        kyc_problem = next(row for row in overview['problems']['items'] if row['kind'] == 'kyc')
+        self.assertEqual(kyc_problem['count'], 1)
+
     async def test_notification_center_settings_and_deduped_deposit(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}
         self.ledger.account('tg:123', bot_started=True, source='bot')
