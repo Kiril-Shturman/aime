@@ -1,0 +1,13 @@
+{
+  "generator": "Built-in imagegen",
+  "assets": {
+    "taxi": {
+      "prompt": "Use case: stylized-concept. Asset type: isolated illustration for a premium fintech mobile feature tile. Subject: A beautiful modern yellow taxi car, compact three-quarter front view, no driver, white headlights, small taxi roof sign without lettering. Premium realistic soft 3D render, rounded bevels, blue-white studio reflections, clean materials, genuinely transparent background with subtle contact shadow. Entire object in frame, compact composition. No words, no brand marks, no UI frame, no watermark.",
+      "source": "Generated images are saved to /Users/openclaw/.openclaw/agents/main/agent/codex-home/generated_images/01a1c1f1-503f-74f2-b3e0-bebf92f4cae0 as /Users/openclaw/.openclaw/agents/main/agent/codex-home/generated_images/01a1c1f1-503f-74f2-b3e0-bebf92f4cae0/exec-f08abb9c-61ab-40f8-8b9c-4013237773eb.png by default.\nIf you need to use a generated image at another path, copy it and leave the original in place unless the user explicitly asks you to delete it.\nThe generated image is already displayed to the user. There is no need to render it in the final response as a Markdown image or file link."
+    },
+    "travel": {
+      "prompt": "Use case: stylized-concept. Asset type: isolated illustration for a premium fintech mobile feature tile. Subject: A polished silver ridged carry-on suitcase with extended handle and a small silver passenger airplane flying diagonally above it, compact grouped composition. Premium realistic soft 3D render, rounded bevels, blue-white studio reflections, clean materials, genuinely transparent background with subtle contact shadow. Entire object in frame, compact composition. No words, no brand marks, no UI frame, no watermark.",
+      "source": "Generated images are saved to /Users/openclaw/.openclaw/agents/main/agent/codex-home/generated_images/01a1c1f1-503f-74f2-b3e0-bebf92f4cae0 as /Users/openclaw/.openclaw/agents/main/agent/codex-home/generated_images/01a1c1f1-503f-74f2-b3e0-bebf92f4cae0/exec-bebea608-0439-41f5-ac8b-76b1698d51b8.png by default.\nIf you need to use a generated image at another path, copy it and leave the original in place unless the user explicitly asks you to delete it.\nThe generated image is already displayed to the user. There is no need to render it in the final response as a Markdown image or file link."
+    }
+  }
+}

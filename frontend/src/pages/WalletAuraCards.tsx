@@ -324,6 +324,7 @@ export default function WalletAuraCards({
   const offerKind = activeOffer?.kind;
   const showOffer = !loading && Boolean(offerKind || !cards.length);
   const currentKind = offerKind ?? issueKind;
+  const travelOffer = currentKind === "virtual" && activeOffer?.skin === "navy";
   const physical = selected?.kind === "physical";
   const canUse = selected?.status === "opened";
   const jumpTo = (index: number) => {
@@ -532,20 +533,29 @@ export default function WalletAuraCards({
             <h2 className="text-[21px] font-semibold">
               {currentKind === "physical"
                 ? "Карта с доставкой"
-                : "Для подписок"}
+                : travelOffer
+                  ? "Для путешествий"
+                  : "Для подписок"}
             </h2>
             <p className="mt-2 text-[15px] leading-6 text-black/50 dark:text-white/50">
               {currentKind === "physical"
                 ? "Выберите физическую карту и укажите адрес получателя при оформлении."
-                : "Виртуальная карта для подписок, цифровых сервисов и регулярных онлайн-оплат."}
+                : travelOffer
+                  ? "Виртуальная карта для поездок: бронирования, билеты и онлайн-сервисы в путешествии."
+                  : "Виртуальная карта для подписок, цифровых сервисов и регулярных онлайн-оплат."}
             </p>
             {currentKind === "virtual" && (
               <WalletSubscriptionFeatures
-                minimum={fees?.minimum_recharge_amount}
-                rechargeFee={fees?.recharge_fee_pct}
+                variant={travelOffer ? "travel" : "subscriptions"}
               />
             )}
             <div className="wpay-aura-info mt-4">
+              {currentKind === "virtual" &&
+                fees &&
+                infoRow(
+                  "Пополнение карты",
+                  `От ${fees.minimum_recharge_amount} USDT · комиссия ${fees.recharge_fee_pct}%`,
+                )}
               {infoRow(
                 "Выпуск",
                 fees

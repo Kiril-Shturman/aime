@@ -1,3 +1,5 @@
+import taxiArtwork from "../assets/card-benefits/taxi.webp";
+import travelArtwork from "../assets/card-benefits/travel.webp";
 import { Snowflake } from "lucide-react";
 import topupArtwork from "../assets/card-benefits/topup.webp";
 import aiArtwork from "../assets/card-benefits/ai.webp";
@@ -8,20 +10,15 @@ import cardArtwork from "../assets/verification/wpay-card.webp";
 import "./WalletSubscriptionFeatures.css";
 
 export default function WalletSubscriptionFeatures({
-  minimum,
-  rechargeFee,
+  variant = "subscriptions",
 }: {
-  minimum?: string;
-  rechargeFee?: string;
+  variant?: "subscriptions" | "travel";
 }) {
   const tiles = [
     {
       key: "topup",
-      title: "Пополнение в USDT",
-      description:
-        minimum && rechargeFee
-          ? `От ${minimum} USDT. Комиссия ${rechargeFee}%.`
-          : "С баланса вашего кошелька.",
+      title: "СБП и криптовалюта",
+      description: "Пополняйте кошелёк рублями, затем переводите на карту.",
       image: topupArtwork,
     },
     {
@@ -55,12 +52,42 @@ export default function WalletSubscriptionFeatures({
       image: securityArtwork,
     },
   ];
+  const travelTiles = [
+    tiles[0],
+    {
+      ...tiles[3],
+      title: "Карта в путешествии",
+      description: "Реквизиты и управление всегда в приложении.",
+    },
+    {
+      ...tiles[2],
+      title: "Сервисы в поездке",
+      description: "Для онлайн-оплат во время путешествий.",
+    },
+    {
+      key: "taxi",
+      title: "Такси и доставка",
+      description: "Для оплаты поездок и заказов в приложениях.",
+      image: taxiArtwork,
+    },
+    {
+      key: "travel",
+      title: "Отели и авиабилеты",
+      description: "Бронируйте проживание и билеты онлайн.",
+      image: travelArtwork,
+    },
+    tiles[5],
+  ];
   return (
     <section
       className="wpay-card-benefits"
-      aria-label="Возможности карты для подписок"
+      aria-label={
+        variant === "travel"
+          ? "Возможности карты для путешествий"
+          : "Возможности карты для подписок"
+      }
     >
-      {tiles.map((tile) => (
+      {(variant === "travel" ? travelTiles : tiles).map((tile) => (
         <article
           key={tile.key}
           className={`wpay-card-benefit wpay-card-benefit--${tile.key}`}
@@ -76,6 +103,11 @@ export default function WalletSubscriptionFeatures({
               decoding="async"
               draggable={false}
             />
+            {tile.key === "topup" && (
+              <span className="wpay-card-benefit-sbp">
+                <img src="/brands/sbp-symbol.svg" alt="" />
+              </span>
+            )}
             {tile.key === "control" && (
               <span className="wpay-card-benefit-freeze">
                 <Snowflake size={23} />
