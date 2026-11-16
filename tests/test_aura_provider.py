@@ -19,6 +19,7 @@ from wallet_aura import (
 from wallet_backend import ApiError, Ledger
 from wallet_inbox import prepare as prepare_inbox
 from wallet_aura_mock import MOCK_KEY, MOCK_PARTNER, make_app
+from wallet_tariffs import create_version
 from tests.test_wallet_backend import BOT, init_data
 
 
@@ -606,6 +607,12 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         listed = await self.client.deposit_addresses(result["customer_id"])
         self.assertEqual(len(listed["data"]), 2)
 
+    async def test_positive_reconciliation_difference_is_platform_reserve(self):
+        self.mock.app["state"].balance = Decimal("1000")
+        report = await reconcile(self.ledger, self.client, "test")
+        self.assertEqual(report["state"], "reserve")
+        self.assertEqual(report["difference"], "1000")
+
     async def test_customer_and_widget_kyc_contract(self):
         uid = "tg:778"
         ref = self.ledger.account(uid)
@@ -1020,6 +1027,10 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             (uid, time.time()),
         )
         self.ledger.commit()
+        create_version(
+            self.ledger, "card_virtual_issue", enabled=True, fixed_fee="2",
+            percent_fee="0", minimum_fee="0", note="test", created_by="tg:admin",
+        )
         result = await self.service.create_card_request(
             uid, ref, kind="virtual", idempotency_key="request-link-one"
         )
@@ -1033,11 +1044,14 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(card["user_id"], uid)
         self.assertEqual(card["status"], "processing")
         self.assertEqual(entity["remote_id"], result["card_id"])
-        self.assertEqual(self.ledger.balance(uid, "USDT"), (Decimal("80"), Decimal("0")))
+        self.assertEqual(self.ledger.balance(uid, "USDT"), (Decimal("78"), Decimal("0")))
+        stored = json.loads(entity["request_body"])
+        self.assertEqual(stored["provider_fee"], "20")
+        self.assertEqual(stored["service_fee"], "2")
         position = self.ledger.db.execute(
             "SELECT available,reserved FROM wallet_provider_positions WHERE user_id=?", (uid,)
         ).fetchone()
-        self.assertEqual((Decimal(position[0]), Decimal(position[1])), (Decimal("80"), Decimal("0")))
+        self.assertEqual((Decimal(position[0]), Decimal(position[1])), (Decimal("78"), Decimal("0")))
 
         failed = {
             "api_version": "3.17.0", "event": "card.failed",

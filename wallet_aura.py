@@ -18,6 +18,7 @@ from urllib.parse import quote, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
 from wallet_notifications import enqueue as enqueue_notification, prepare as prepare_notifications
+from wallet_tariffs import calculate as calculate_tariff
 
 
 TEST_BASE_URL = "https://testnet-api.aurawallet.co/v1/partner"
@@ -2102,7 +2103,9 @@ class AuraService:
         ).fetchone()
         if existing:
             stored = json.loads(existing["request_body"])
-            comparable = {key: value for key, value in stored.items() if key != "fee"}
+            comparable = {key: value for key, value in stored.items() if key not in {
+                "fee", "provider_fee", "service_fee", "tariff_version"
+            }}
             if comparable != request_fields:
                 raise ValueError("Aura idempotency key reused with another card request")
             if existing["remote_id"]:
@@ -2123,7 +2126,13 @@ class AuraService:
                 raise self.client.error_cls(
                     "card_kind_unavailable", "Aura card kind is unavailable", 412
                 )
-            fee = _decimal(fees[fee_field])
+            provider_fee = _decimal(fees[fee_field])
+            service_fee, tariff = calculate_tariff(
+                self.ledger,
+                "card_physical_issue" if kind == "physical" else "card_virtual_issue",
+                provider_fee,
+            )
+            fee = provider_fee + service_fee
             available, reserved = self.ledger.balance(uid, "USDT")
             self.ledger.begin("aura_card_reserve", uid, idempotency_key)
             try:
@@ -2132,7 +2141,11 @@ class AuraService:
                     self.ledger, self.environment, uid, "USDT", -fee, fee
                 )
                 stamp = time.time()
-                stored_body = {**request_fields, "fee": str(fee)}
+                stored_body = {
+                    **request_fields, "fee": str(fee),
+                    "provider_fee": str(provider_fee), "service_fee": str(service_fee),
+                    "tariff_version": tariff.get("version_id"),
+                }
                 self.ledger.db.execute(
                     "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                     ("aura", self.environment, "card_request", idempotency_key, None,
@@ -2226,11 +2239,14 @@ class AuraService:
                     409,
                 )
             reserve_amount = _decimal(stored["reserve_amount"])
+            service_fee = _decimal(stored.get("service_fee", "0"), allow_zero=True)
         else:
             if bool(card["frozen"]):
                 raise self.client.error_cls(
                     "card_frozen", "Frozen Aura card cannot be recharged", 409
                 )
+            tariff_base = _decimal(request_fields.get("amount_spend") or request_fields.get("amount"))
+            service_fee, tariff = calculate_tariff(self.ledger, "card_recharge", tariff_base)
             if "amount_spend" in request_fields:
                 reserve_amount = _decimal(request_fields["amount_spend"])
             else:
@@ -2255,6 +2271,7 @@ class AuraService:
                     # Aura says the percentage is an estimate. Keep a small six-decimal
                     # settlement cushion and release it as soon as the exact response arrives.
                     reserve_amount += Decimal("0.01")
+            reserve_amount += service_fee
             available, reserved = self.ledger.balance(uid, "USDT")
             self.ledger.begin("aura_card_recharge_reserve", uid, idempotency_key)
             try:
@@ -2268,6 +2285,8 @@ class AuraService:
                 stored = {
                     "card_id": card_id, "request": request_fields,
                     "reserve_amount": str(reserve_amount),
+                    "service_fee": str(service_fee),
+                    "tariff_version": tariff.get("version_id"),
                 }
                 self.ledger.db.execute(
                     "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -2309,7 +2328,11 @@ class AuraService:
                     raise
             raise
         result = _card_recharge_result(raw_result, request_fields)
-        charged = _decimal(result["charged_amount"])
+        provider_charged = _decimal(result["charged_amount"])
+        charged = provider_charged + service_fee
+        result["provider_charged_amount"] = str(provider_charged)
+        result["service_fee"] = str(service_fee)
+        result["charged_amount"] = str(charged)
         if charged > reserve_amount:
             stored["result"] = result
             self.ledger.db.execute(
@@ -3453,7 +3476,7 @@ async def reconcile(ledger, client, environment):
     detail = {
         "provider": "aura", "environment": environment, "asset": "USDT",
         "provider_available": str(external), "allocated": str(allocated),
-        "difference": str(difference), "state": "ok" if difference == 0 else "deficit" if difference < 0 else "mismatch",
+        "difference": str(difference), "state": "ok" if difference == 0 else "deficit" if difference < 0 else "reserve",
     }
     ledger.db.execute(
         "INSERT OR REPLACE INTO wallet_provider_reconciliation VALUES (?,?,?,?,?,?,?,?,?)",

@@ -34,6 +34,7 @@ from wallet_notifications import (
 from wallet_referrals import capture as capture_referral, ensure_code as ensure_referral_code, prepare as prepare_referrals, summary as referral_summary
 from wallet_operations import prepare_operations, operations_route, save_address
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
+from wallet_tariffs import prepare as prepare_tariffs, snapshot as tariff_snapshot, create_version as create_tariff_version
 from wallet_aura import (
     AuraClient, AuraService, prepare as prepare_aura,
     receive_webhook as receive_aura_webhook, process_inbox as process_aura_inbox,
@@ -428,6 +429,7 @@ class Ledger:
         ''')
 
         prepare_withdrawals(self)
+        prepare_tariffs(self)
         self.book = Book(self.db, ApiError)
         self.db.execute('CREATE TABLE IF NOT EXISTS wallet_deposit_owners (deposit_id TEXT PRIMARY KEY,user_id TEXT NOT NULL,asset TEXT NOT NULL)')
         for event in self.db.execute("SELECT event_id,user_id,asset FROM wallet_events WHERE type='deposit'").fetchall():
@@ -666,6 +668,7 @@ def install_wallet(app, root, owner_check):
     prepare_aura(ledger)
     prepare_finance_worker(ledger)
     prepare_notifications(ledger)
+    prepare_tariffs(ledger)
     ledger.db.executescript('''
       CREATE TABLE IF NOT EXISTS wallet_asset_routes (
         asset TEXT NOT NULL, network TEXT NOT NULL, enabled INTEGER NOT NULL,
@@ -1228,8 +1231,8 @@ def install_wallet(app, root, owner_check):
             )
         if 'wallet_provider_reconciliation' in present:
             count_issue(
-                'reconciliation', 'Расхождения сверки',
-                "SELECT COUNT(*) FROM wallet_provider_reconciliation WHERE LOWER(state) NOT IN ('ok','balanced','matched','healthy')",
+                'reconciliation', 'Дефицит обеспечения',
+                "SELECT COUNT(*) FROM wallet_provider_reconciliation WHERE LOWER(state) IN ('deficit','error','failed')",
             )
         return {'total': sum(item['count'] for item in issues), 'items': issues}
 
@@ -1621,6 +1624,34 @@ def install_wallet(app, root, owner_check):
                     await admin_card_action(request, uid),
                     headers={'Cache-Control': 'private, no-store'},
                 )
+            if action == 'admin-tariffs' and request.method == 'GET':
+                result = tariff_snapshot(ledger)
+                result['provider'] = {'currency': 'USDT'}
+                if aura_enabled and aura_client.configured:
+                    try:
+                        result['provider']['card_fees'] = await aura_client.get_card_fees()
+                    except (ApiError, ValueError, asyncio.TimeoutError, OSError) as error:
+                        result['provider']['error'] = getattr(error, 'name', type(error).__name__)
+                return web.json_response(result, headers={'Cache-Control': 'private, no-store'})
+            if action == 'admin-tariffs' and request.method == 'POST':
+                body = await request.json()
+                required = {'product','enabled','fixed_fee','percent_fee','minimum_fee','note','confirm'}
+                if not isinstance(body, dict) or set(body) != required:
+                    raise ValueError('Invalid tariff body')
+                product = str(body['product'])
+                if body['confirm'] != f'TARIFF {product}':
+                    raise ApiError('CONFIRMATION_REQUIRED', 'Неверная контрольная строка', 400)
+                item = create_tariff_version(
+                    ledger, product, enabled=body['enabled'],
+                    fixed_fee=body['fixed_fee'], percent_fee=body['percent_fee'],
+                    minimum_fee=body['minimum_fee'], note=body['note'], created_by=uid,
+                )
+                record_admin_action(uid, 'tariffs.update', detail={
+                    'product': product, 'enabled': item['enabled'],
+                    'fixed_fee': item['fixed_fee'], 'percent_fee': item['percent_fee'],
+                    'minimum_fee': item['minimum_fee'], 'version_id': item['version_id'],
+                })
+                return web.json_response({'ok': True, 'tariff': item})
             if action == 'admin-sync-users' and request.method == 'POST':
                 result = await sync_telegram_users()
                 record_admin_action(uid, 'users.sync', detail=result)
