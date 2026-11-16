@@ -475,6 +475,7 @@ export default function WalletAuraCards({
                   }
                 }}
                 onScroll={(event) => {
+                  if (event.target !== event.currentTarget) return;
                   const index = Math.round(
                     event.currentTarget.scrollLeft /
                       (event.currentTarget.clientWidth + 12),
@@ -572,6 +573,7 @@ export default function WalletAuraCards({
             </p>
             {(currentKind === "virtual" || currentKind === "physical") && (
               <WalletSubscriptionFeatures
+                skin={activeOffer?.skin ?? "silver"}
                 variant={
                   currentKind === "physical"
                     ? "premium"

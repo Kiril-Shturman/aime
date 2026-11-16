@@ -329,7 +329,9 @@ test("four offers are inline: two virtual and two physical without an appearance
     }),
   ).toHaveCount(2);
   for (const appearance of ["silver", "navy", "ice", "graphite"]) {
-    await expect(main.locator(`.wpay-card-skin--${appearance}`)).toHaveCount(1);
+    await expect(
+      main.locator(`.wpay-aura-carousel .wpay-card-skin--${appearance}`),
+    ).toHaveCount(1);
   }
   await main.getByRole("button", { name: "Карта 4", exact: true }).click();
   await expect(
@@ -338,9 +340,18 @@ test("four offers are inline: two virtual and two physical without an appearance
   const features = main.getByRole("region", {
     name: "Возможности премиальной карты",
   });
-  await expect(features.getByRole("article")).toHaveCount(6);
+  await expect(features.getByRole("article")).toHaveCount(7);
   const illustrations = features.locator(".wpay-card-benefit-art > img");
-  await expect(illustrations).toHaveCount(6);
+  await expect(illustrations).toHaveCount(5);
+  await expect(
+    features.locator(".wpay-feature-card .wpay-card-skin--graphite"),
+  ).toHaveCount(2);
+  await expect(
+    features.getByRole("article", {
+      name: "Физическая карта с доставкой",
+      exact: true,
+    }),
+  ).toBeVisible();
   await expect
     .poll(() =>
       illustrations.evaluateAll((images) =>
@@ -428,7 +439,7 @@ test("third offer is premium physical with free delivery in description and chec
   const features = main.getByRole("region", {
     name: "Возможности премиальной карты",
   });
-  await expect(features.getByRole("article")).toHaveCount(6);
+  await expect(features.getByRole("article")).toHaveCount(7);
   await expect(
     features.getByText("Оплата картой офлайн", { exact: true }),
   ).toBeVisible();

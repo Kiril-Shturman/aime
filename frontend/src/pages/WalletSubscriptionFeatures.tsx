@@ -1,18 +1,20 @@
 import taxiArtwork from "../assets/card-benefits/taxi.webp";
 import travelArtwork from "../assets/card-benefits/travel.webp";
-import { Snowflake } from "lucide-react";
+import { CreditCard, Snowflake, Truck } from "lucide-react";
+import WalletCardFace, { type CardSkin } from "./WalletCardFace";
 import topupArtwork from "../assets/card-benefits/topup.webp";
 import aiArtwork from "../assets/card-benefits/ai.webp";
 import subscriptionArtwork from "../assets/card-benefits/subscriptions.webp";
 import shoppingArtwork from "../assets/card-benefits/shopping.webp";
 import securityArtwork from "../assets/card-benefits/security.webp";
-import cardArtwork from "../assets/verification/wpay-card.webp";
 import "./WalletSubscriptionFeatures.css";
 
 export default function WalletSubscriptionFeatures({
   variant = "subscriptions",
+  skin = "silver",
 }: {
   variant?: "subscriptions" | "travel" | "premium";
+  skin?: CardSkin;
 }) {
   const tiles = [
     {
@@ -37,7 +39,7 @@ export default function WalletSubscriptionFeatures({
       key: "control",
       title: "Карта под контролем",
       description: "Реквизиты и заморозка в приложении.",
-      image: cardArtwork,
+      image: "",
     },
     {
       key: "shopping",
@@ -79,6 +81,15 @@ export default function WalletSubscriptionFeatures({
     tiles[5],
   ];
   const premiumTiles = [
+    {
+      key: "delivery",
+      title: "Физическая карта с доставкой",
+      description:
+        skin === "ice"
+          ? "Доставим бесплатно. Адрес получателя укажите при оформлении."
+          : "Укажите адрес получателя при оформлении — доставим карту вам.",
+      image: "",
+    },
     tiles[0],
     {
       ...tiles[3],
@@ -92,7 +103,7 @@ export default function WalletSubscriptionFeatures({
   ];
   return (
     <section
-      className="wpay-card-benefits"
+      className={`wpay-card-benefits wpay-card-benefits--${variant === "premium" ? "physical" : "virtual"}`}
       aria-label={
         variant === "premium"
           ? "Возможности премиальной карты"
@@ -115,13 +126,29 @@ export default function WalletSubscriptionFeatures({
           <h3>{tile.title}</h3>
           <p>{tile.description}</p>
           <span className="wpay-card-benefit-art" aria-hidden="true">
-            <img
-              src={tile.image}
-              alt=""
-              loading="lazy"
-              decoding="async"
-              draggable={false}
-            />
+            {tile.key === "control" || tile.key === "delivery" ? (
+              <span className="wpay-feature-card">
+                <WalletCardFace
+                  skin={skin}
+                  kind={variant === "premium" ? "physical" : "virtual"}
+                  status="wPay"
+                  offer
+                />
+              </span>
+            ) : (
+              <img
+                src={tile.image}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                draggable={false}
+              />
+            )}
+            {tile.key === "delivery" && (
+              <span className="wpay-feature-delivery-icon">
+                <Truck size={28} />
+              </span>
+            )}
             {tile.key === "topup" && (
               <span className="wpay-card-benefit-sbp">
                 <img src="/brands/sbp-symbol.svg" alt="" />
@@ -129,7 +156,11 @@ export default function WalletSubscriptionFeatures({
             )}
             {tile.key === "control" && (
               <span className="wpay-card-benefit-freeze">
-                <Snowflake size={23} />
+                {variant === "premium" ? (
+                  <CreditCard size={23} />
+                ) : (
+                  <Snowflake size={23} />
+                )}
               </span>
             )}
           </span>

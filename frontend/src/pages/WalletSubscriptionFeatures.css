@@ -50,7 +50,7 @@
   height: 126px;
   pointer-events: none;
 }
-.wpay-card-benefit-art img {
+.wpay-card-benefit-art > img {
   display: block;
   width: 100%;
   height: 100%;
@@ -186,5 +186,78 @@
     left: 26px;
     width: 62px;
     height: 67px;
+  }
+}
+
+/* Physical cards have their own cool-toned surfaces. */
+.wpay-card-benefits--physical .wpay-card-benefit {
+  background: #edf3fb;
+  border-color: #dce7f5;
+}
+.dark .wpay-card-benefits--physical .wpay-card-benefit {
+  background: #202b3d;
+  border-color: #ffffff06;
+}
+.wpay-feature-card {
+  display: block;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 160px;
+  height: 103px;
+}
+.wpay-feature-card > .wpay-bank-card.wpay-card-scene {
+  width: 340px;
+  min-height: 214px;
+  transform: scale(0.47);
+  transform-origin: top left;
+}
+.wpay-card-benefit--delivery {
+  grid-column: 1 / -1;
+  min-height: 170px;
+  padding: 20px 175px 24px 20px;
+  background: #e0ebfa;
+}
+.dark .wpay-card-benefits--physical .wpay-card-benefit--delivery {
+  background: #263954;
+}
+.wpay-card-benefit--delivery h3 {
+  font-size: 20px;
+  line-height: 24px;
+}
+.wpay-card-benefit--delivery .wpay-card-benefit-art {
+  width: 160px;
+  height: 130px;
+  right: 0;
+  bottom: 0;
+  transform: rotate(-12deg);
+}
+.wpay-card-benefit--delivery .wpay-feature-card {
+  right: -3px;
+  bottom: 10px;
+}
+.wpay-feature-delivery-icon {
+  position: absolute;
+  right: 19px;
+  bottom: 0;
+  display: grid;
+  place-items: center;
+  width: 54px;
+  height: 54px;
+  border-radius: 19px;
+  background: linear-gradient(#72b3fc, #347edd);
+  color: #fff;
+  box-shadow: 0 5px 16px #15346244;
+  transform: rotate(12deg);
+}
+.dark .wpay-feature-delivery-icon {
+  background: linear-gradient(#6ca9ed, #2866b4);
+}
+@media (min-width: 500px) {
+  .wpay-card-benefit--delivery {
+    padding-right: 200px;
+  }
+  .wpay-card-benefit--delivery .wpay-card-benefit-art {
+    right: 20px;
   }
 }
