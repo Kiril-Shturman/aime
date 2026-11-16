@@ -438,3 +438,127 @@
   background: #20304b;
   color: #9fc8ff;
 }
+
+.wpay-aura-card-skeleton {
+  position: relative;
+  overflow: hidden;
+}
+.wpay-aura-card-skeleton span {
+  position: absolute;
+  display: block;
+  border-radius: 8px;
+  background: #0000000d;
+}
+.dark .wpay-aura-card-skeleton span {
+  background: #ffffff0d;
+}
+.wpay-card-skeleton-logo {
+  right: 7%;
+  top: 9%;
+  width: 85px;
+  height: 30px;
+}
+.wpay-card-skeleton-chip {
+  left: 8%;
+  top: 37%;
+  width: 42px;
+  height: 33px;
+}
+.wpay-card-skeleton-number {
+  left: 8%;
+  bottom: 17%;
+  width: 42%;
+  height: 15px;
+}
+.wpay-cards-loading {
+  padding-bottom: 20px;
+}
+.wpay-cards-loading span,
+.wpay-cards-loading i,
+.wpay-cards-loading-tiles > div {
+  display: block;
+  background: #0000000b;
+}
+.dark .wpay-cards-loading span,
+.dark .wpay-cards-loading i,
+.dark .wpay-cards-loading-tiles > div {
+  background: #ffffff0e;
+}
+.wpay-cards-loading-dots {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin: 9px 0 24px;
+}
+.wpay-cards-loading-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.wpay-cards-loading-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 26px;
+}
+.wpay-cards-loading-actions span {
+  height: 62px;
+  border-radius: 22px;
+}
+.wpay-cards-loading-title {
+  width: 48%;
+  height: 23px;
+  border-radius: 7px;
+  margin-bottom: 13px;
+}
+.wpay-cards-loading-lines {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.wpay-cards-loading-lines span {
+  height: 13px;
+  border-radius: 5px;
+}
+.wpay-cards-loading-lines span:last-child {
+  width: 75%;
+}
+.wpay-cards-loading-tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.wpay-cards-loading-tiles > div {
+  position: relative;
+  min-height: 224px;
+  padding: 18px 16px;
+  border-radius: 28px;
+  overflow: hidden;
+}
+.wpay-cards-loading-tiles span {
+  height: 12px;
+  border-radius: 5px;
+  width: 80%;
+  margin-bottom: 9px;
+}
+.wpay-cards-loading-tiles span:nth-child(2) {
+  width: 60%;
+}
+.wpay-cards-loading-tiles i {
+  position: absolute;
+  width: 94px;
+  height: 85px;
+  right: 12px;
+  bottom: 14px;
+  border-radius: 22px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wpay-cards-loading {
+    animation: wpay-cards-loading-pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes wpay-cards-loading-pulse {
+    50% {
+      opacity: 0.55;
+    }
+  }
+}

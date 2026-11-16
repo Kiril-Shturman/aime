@@ -427,7 +427,11 @@ export default function WalletAuraCards({
               className="wpay-aura-card-skeleton animate-pulse"
               role="status"
               aria-label="Загружаем карты"
-            />
+            >
+              <span className="wpay-card-skeleton-logo" aria-hidden="true" />
+              <span className="wpay-card-skeleton-chip" aria-hidden="true" />
+              <span className="wpay-card-skeleton-number" aria-hidden="true" />
+            </div>
           ) : (
             <>
               <div
@@ -545,7 +549,39 @@ export default function WalletAuraCards({
             </>
           )}
         </section>
-        {showOffer ? (
+        {loading ? (
+          <section
+            className="wpay-cards-loading px-4"
+            aria-label="Загружаем содержимое карт"
+            aria-hidden="true"
+          >
+            <div className="wpay-cards-loading-dots">
+              <i />
+              <i />
+              <i />
+              <i />
+            </div>
+            <div className="wpay-cards-loading-actions">
+              {[0, 1, 2, 3].map((key) => (
+                <span key={key} />
+              ))}
+            </div>
+            <span className="wpay-cards-loading-title" />
+            <div className="wpay-cards-loading-lines">
+              <span />
+              <span />
+            </div>
+            <div className="wpay-cards-loading-tiles">
+              {[0, 1, 2, 3, 4, 5].map((key) => (
+                <div key={key}>
+                  <span />
+                  <span />
+                  <i />
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : showOffer ? (
           <section className="px-4 pt-2">
             <h2 className="text-[21px] font-semibold">
               {currentKind === "physical"

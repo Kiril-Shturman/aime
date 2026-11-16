@@ -456,3 +456,34 @@ test("third offer is premium physical with free delivery in description and chec
   ).toBeVisible();
   expect(state.calls).toHaveLength(0);
 });
+
+test("slow card loading shows structured placeholders until data arrives", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByRole("link", { name: "Кошелёк", exact: true }).click();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/wallet/aura-cards", async (route) => {
+    await gate;
+    await route.fulfill({ json: { data: [] } });
+  });
+  await page.getByRole("link", { name: "Карты", exact: true }).click();
+  try {
+    await expect(
+      page.getByRole("status", { name: "Загружаем карты" }),
+    ).toBeVisible();
+    await expect(
+      page.locator(".wpay-cards-loading-actions > span"),
+    ).toHaveCount(4);
+    await expect(page.locator(".wpay-cards-loading-tiles > div")).toHaveCount(
+      6,
+    );
+  } finally {
+    release();
+  }
+  await expect(page.locator(".wpay-cards-loading")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Для подписок", exact: true }),
+  ).toBeVisible();
+});
