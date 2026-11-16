@@ -2249,13 +2249,14 @@ async def wpay_telegram_webhook(request):
         start_video = os.environ.get("WPAY_START_VIDEO_FILE_ID", "").strip()
         if command == "/start" and start_video:
             try:
-                # Telegram transcodes media sent with sendVideo for playback.
-                # Sending the original MP4 as a document preserves every byte.
-                return _telegram_bot_api(token, "sendDocument", {
+                return _telegram_bot_api(token, "sendVideo", {
                     "chat_id": chat_id,
-                    "document": start_video,
+                    "video": start_video,
                     "caption": plain,
                     "reply_markup": reply_markup,
+                    "width": 2560,
+                    "height": 1440,
+                    "supports_streaming": True,
                 })
             except Exception as exc:
                 print(f"[wpay-bot] start video failed: {exc}", flush=True)
