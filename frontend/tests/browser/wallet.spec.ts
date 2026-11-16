@@ -725,3 +725,20 @@ test("gift countdown persists its deadline across reload and expires without res
   await expect(page.locator('.wpay-promo-countdown')).toHaveText("Время истекло");
   expect(await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"))).toBe(deadline);
 });
+
+test("oversized banner artwork does not create horizontal wallet scrolling", async ({ page }) => {
+  await setup(page, "dark");
+  await page.route("**/api/wallet/status", route => route.fulfill({ json: {
+    configured: true,
+    capabilities: { sbp_buy: true, qr_pay: true },
+    asset_routes: { USDT: ["TRON"] },
+    providers: { goswap: { configured: false } },
+    deposit_modes: { USDT: { TRON: "address" } },
+  } }));
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Возможности wPay" })).toBeVisible();
+  for (const width of [375, 390, 768, 1440, 2560]) {
+    await page.setViewportSize({ width, height: 844 });
+    await expect.poll(() => page.locator(".wpay-desktop-page").evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
+  }
+});
