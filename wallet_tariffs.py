@@ -6,10 +6,11 @@ from decimal import Decimal, InvalidOperation, localcontext
 PRODUCTS = {
     "card_virtual_issue": ("Выпуск виртуальной карты", True),
     "card_physical_issue": ("Выпуск физической карты", True),
-    "card_recharge": ("Пополнение карты", True),
+    "card_virtual_recharge": ("Пополнение виртуальной карты", True),
+    "card_physical_recharge": ("Пополнение физической карты", True),
     "sbp_buy": ("Покупка через СБП", False),
     "qr_pay": ("Оплата по QR", False),
-    "withdrawal": ("Вывод криптовалюты", False),
+    "withdrawal": ("Вывод криптовалюты (не с карты)", False),
 }
 
 def prepare(ledger):

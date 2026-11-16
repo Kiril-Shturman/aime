@@ -1629,7 +1629,17 @@ def install_wallet(app, root, owner_check):
                 result['provider'] = {'currency': 'USDT'}
                 if aura_enabled and aura_client.configured:
                     try:
-                        result['provider']['card_fees'] = await aura_client.get_card_fees()
+                        card_fees = await aura_client.get_card_fees()
+                        result['provider']['card_fees'] = card_fees
+                        provider_prices = {
+                            'card_virtual_issue': (card_fees.get('open_virtual_card_fee'), 'USDT'),
+                            'card_physical_issue': (card_fees.get('open_physical_card_fee'), 'USDT'),
+                            'card_virtual_recharge': (card_fees.get('recharge_fee_pct'), '%'),
+                            'card_physical_recharge': (card_fees.get('physical_recharge_fee_pct'), '%'),
+                        }
+                        for item in result['items']:
+                            if item['product'] in provider_prices:
+                                item['provider_fee'], item['provider_fee_unit'] = provider_prices[item['product']]
                     except (ApiError, ValueError, asyncio.TimeoutError, OSError) as error:
                         result['provider']['error'] = getattr(error, 'name', type(error).__name__)
                 return web.json_response(result, headers={'Cache-Control': 'private, no-store'})

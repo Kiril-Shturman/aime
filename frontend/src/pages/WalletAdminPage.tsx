@@ -685,6 +685,11 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
               <small className="mt-1 block opacity-50">
                 {item.enforced ? (item.enabled ? "Включён" : "Выключен") : "Подключение расчёта готовится"}
               </small>
+              {item.provider_fee !== undefined && item.provider_fee !== null && (
+                <small className="mt-2 block text-blue-500">
+                  База Aura: {amount(item.provider_fee)} {text(item.provider_fee_unit)}
+                </small>
+              )}
               <span className="mt-3 block text-xs">
                 {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум {amount(item.minimum_fee)}
               </span>

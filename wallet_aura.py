@@ -2246,7 +2246,12 @@ class AuraService:
                     "card_frozen", "Frozen Aura card cannot be recharged", 409
                 )
             tariff_base = _decimal(request_fields.get("amount_spend") or request_fields.get("amount"))
-            service_fee, tariff = calculate_tariff(self.ledger, "card_recharge", tariff_base)
+            service_fee, tariff = calculate_tariff(
+                self.ledger,
+                "card_physical_recharge" if card["kind"] == "physical"
+                else "card_virtual_recharge",
+                tariff_base,
+            )
             if "amount_spend" in request_fields:
                 reserve_amount = _decimal(request_fields["amount_spend"])
             else:

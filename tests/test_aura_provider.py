@@ -1095,8 +1095,15 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.ledger.commit()
         self.mock.app["state"].balance = Decimal("100")
 
-        result = await self.service.recharge_card_request(
-            uid, card_id, amount="25", idempotency_key="recharge-service-one"
+        with patch(
+            "wallet_aura.calculate_tariff",
+            return_value=(Decimal("0"), {"version_id": None}),
+        ) as tariff:
+            result = await self.service.recharge_card_request(
+                uid, card_id, amount="25", idempotency_key="recharge-service-one"
+            )
+        tariff.assert_called_once_with(
+            self.ledger, "card_virtual_recharge", Decimal("25")
         )
         self.assertEqual(result["charged_amount"], "25.500004")
         self.assertEqual(result["recharge_amount"], "25")
