@@ -293,3 +293,20 @@
 .wpay-promo-receipt { position: absolute; right: 51px; top: 24px; width: 55px; height: 94px; border-radius: 5px 5px 0 0; background: repeating-linear-gradient(to bottom,transparent 0 8px,#945c9a55 8px 10px,transparent 10px 15px),linear-gradient(#fff,#f3dff3); background-origin: content-box,border-box; padding: 12px 8px; opacity: .45; transform: rotate(-29deg); clip-path: polygon(0 0,100% 0,100% 100%,90% 94%,80% 100%,70% 94%,60% 100%,50% 94%,40% 100%,30% 94%,20% 100%,10% 94%,0 100%); }
 .wpay-promo-receipt--back { right: -1px; top: -3px; transform: rotate(22deg); opacity: .32; }
 .wpay-promo-qr { position: relative; z-index: 1; }
+
+.wpay-promo-logo-line { display: flex; align-items: center; gap: 5px; margin-top: 7px; }
+.wpay-promo-logo-line img { display: block; width: 59px; height: 24px; object-fit: contain; }
+.wpay-promo-gift { top: 5px; right: -4px; height: 114px; transform: rotate(8deg); }
+.wpay-promo-gift-card { width: 128px; height: 80px; top: -7px; right: 0; transform: rotate(-10deg); }
+.wpay-promo-gift-wrap { inset: 27px 0 7px 0; border-radius: 7px 7px 12px 12px; background: radial-gradient(ellipse at 22% 0%,#ff8a86,transparent 66%),linear-gradient(125deg,#f94256,#c01439 75%,#94082a); }
+.wpay-promo-gift-wrap:before { left: 84px; width: 17px; }
+.wpay-promo-gift-wrap:after { top: 15px; height: 12px; }
+.wpay-promo-gift-bow { top: 8px; left: 49px; scale: .85; }
+.wpay-promo-gift-value { position: absolute; left: 12px; bottom: 9px; font-size: 37px; font-weight: 850; line-height: 1; letter-spacing: -2px; color: #ffe98f; transform: rotate(-7deg) skewY(-3deg); text-shadow: 1px 1px 0 #e7b541,2px 2px 0 #dca532,3px 3px 0 #b47a21,4px 4px 0 #925515,6px 7px 6px #780b3260; -webkit-text-stroke: .4px #fff1b3; }
+.wpay-promo--sbp .wpay-promo-card { top: 3px; }
+.wpay-promo-sbp-logo { right: 35px; top: 57px; }
+.wpay-promo-receipts { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; pointer-events: none; z-index: 1; }
+.wpay-promo-receipts .wpay-promo-receipt { width: 35px; height: 53px; padding: 7px 5px; right: 100px; top: 43px; opacity: .55; transform: rotate(-17deg); }
+.wpay-promo-receipts .wpay-promo-receipt--back { right: 5px; top: 48px; transform: rotate(19deg); opacity: .55; }
+.wpay-promo-art { z-index: 2; }
+.wpay-promo-copy { z-index: 3; }

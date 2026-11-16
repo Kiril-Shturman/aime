@@ -21,7 +21,7 @@ export default function WalletPromos({
   const slides = [
     {
       id: "friends",
-      title: "Подари 3 друзьям\nпо $5\nв wPay",
+      title: "Подари 3 друзьям\nПо $5 в wPay",
 
       action: "Пригласить друзей",
       click: onInvite,
@@ -107,19 +107,20 @@ export default function WalletPromos({
               }}
             >
               <span className="wpay-promo-details" aria-hidden="true" />
+              {slide.id === "qr" && <span className="wpay-promo-receipts" aria-hidden="true"><span className="wpay-promo-receipt wpay-promo-receipt--back" /><span className="wpay-promo-receipt" /></span>}
               <span className="wpay-promo-copy">
-                <strong><span className="wpay-promo-headline">{slide.title.split("\n")[0]}</span><span className="wpay-promo-subline">{slide.title.split("\n").slice(1).join("\n")}</span></strong>
+                <strong><span className="wpay-promo-headline">{slide.title.split("\n")[0]}</span><span className={`wpay-promo-subline ${slide.id === "friends" ? "wpay-promo-logo-line" : ""}`}>{slide.id === "friends" ? <>По $5 в <img src="/brands/wpay-wordmark-light.svg" alt="wPay" /></> : slide.title.split("\n").slice(1).join("\n")}</span></strong>
 
               </span>
               <span className="wpay-promo-art" aria-hidden="true">
                 {slide.id === "friends" ? (
                   <span className="wpay-promo-gift">
                     <img className="wpay-promo-gift-card" src={cardArtwork} alt="" loading="lazy" />
-                    <span className="wpay-promo-gift-wrap"><span className="wpay-promo-gift-brand">wPay</span></span>
+                    <span className="wpay-promo-gift-wrap"><span className="wpay-promo-gift-value">5$</span></span>
                     <span className="wpay-promo-gift-bow"><span /><span /><i /></span>
                   </span>
                 ) : slide.id === "qr" ? (
-                  <><span className="wpay-promo-receipt wpay-promo-receipt--back" /><span className="wpay-promo-receipt" /><img className="wpay-promo-qr" src={qrArtwork} alt="" loading="lazy" /></>
+                  <img className="wpay-promo-qr" src={qrArtwork} alt="" loading="lazy" />
                 ) : (
                   <>
                     <img className="wpay-promo-card" src={cardArtwork} alt="" loading="lazy" />
