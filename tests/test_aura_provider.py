@@ -1028,11 +1028,12 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         )
         self.ledger.commit()
         create_version(
-            self.ledger, "card_virtual_issue", enabled=True, fixed_fee="2",
+            self.ledger, "card_travel", enabled=True, fixed_fee="2",
             percent_fee="0", minimum_fee="0", note="test", created_by="tg:admin",
         )
         result = await self.service.create_card_request(
-            uid, ref, kind="virtual", idempotency_key="request-link-one"
+            uid, ref, kind="virtual", plan_id="card_travel",
+            idempotency_key="request-link-one"
         )
         self.assertEqual(result["status"], "processing")
         card = self.ledger.db.execute(
@@ -1043,11 +1044,13 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         ).fetchone()
         self.assertEqual(card["user_id"], uid)
         self.assertEqual(card["status"], "processing")
+        self.assertEqual(card["plan_id"], "card_travel")
         self.assertEqual(entity["remote_id"], result["card_id"])
         self.assertEqual(self.ledger.balance(uid, "USDT"), (Decimal("78"), Decimal("0")))
         stored = json.loads(entity["request_body"])
         self.assertEqual(stored["provider_fee"], "20")
         self.assertEqual(stored["service_fee"], "2")
+        self.assertEqual(stored["plan_id"], "card_travel")
         position = self.ledger.db.execute(
             "SELECT available,reserved FROM wallet_provider_positions WHERE user_id=?", (uid,)
         ).fetchone()
@@ -1103,7 +1106,7 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
                 uid, card_id, amount="25", idempotency_key="recharge-service-one"
             )
         tariff.assert_called_once_with(
-            self.ledger, "card_virtual_recharge", Decimal("25")
+            self.ledger, "card_subscriptions", Decimal("25"), operation="recharge"
         )
         self.assertEqual(result["charged_amount"], "25.500004")
         self.assertEqual(result["recharge_amount"], "25")

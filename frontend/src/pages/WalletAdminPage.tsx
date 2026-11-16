@@ -685,11 +685,14 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
               <small className="mt-1 block opacity-50">
                 {item.enforced ? (item.enabled ? "Включён" : "Выключен") : "Подключение расчёта готовится"}
               </small>
-              {item.provider_fee !== undefined && item.provider_fee !== null && (
+              {Boolean(item.card_plan) && (
                 <small className="mt-2 block text-blue-500">
-                  База Aura: {amount(item.provider_fee)} {text(item.provider_fee_unit)}
-                  {item.provider_minimum ? ` · минимум ${amount(item.provider_minimum)} USDT` : ""}
+                  Aura: выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
+                  {item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}
                 </small>
+              )}
+              {Array.isArray(item.conditions) && (
+                <small className="mt-2 block opacity-55">{item.conditions.join(" · ")}</small>
               )}
               <span className="mt-3 block text-xs">
                 {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум {amount(item.minimum_fee)}
@@ -703,9 +706,9 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
           <div className="wpay-admin-section-title"><div><span>{current.product}</span><h2>{current.label}</h2></div></div>
           {!current.enforced && <p className="mb-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-600">Параметры видны для планирования, но включение заблокировано до подключения безопасного расчёта к settlement.</p>}
           <div className="grid gap-3 md:grid-cols-3">
-            <label><span className="text-xs font-semibold">Фиксированная комиссия</span><input className={`${input} mt-2`} value={fixed} onChange={(e) => setFixed(e.target.value)} /></label>
-            <label><span className="text-xs font-semibold">Процент</span><input className={`${input} mt-2`} value={percent} onChange={(e) => setPercent(e.target.value)} /></label>
-            <label><span className="text-xs font-semibold">Минимальная комиссия</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">{current.card_plan ? "Наценка за выпуск" : "Фиксированная комиссия"}</span><input className={`${input} mt-2`} value={fixed} onChange={(e) => setFixed(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">{current.card_plan ? "Наша комиссия пополнения, %" : "Процент"}</span><input className={`${input} mt-2`} value={percent} onChange={(e) => setPercent(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">{current.card_plan ? "Минимальная наша комиссия пополнения" : "Минимальная комиссия"}</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
           </div>
           <label className="mt-3 block"><span className="text-xs font-semibold">Комментарий к версии</span><input className={`${input} mt-2`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Причина изменения" /></label>
           <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять к новым операциям</label>

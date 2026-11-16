@@ -1051,7 +1051,7 @@ def install_wallet(app, root, owner_check):
             )
             params.extend([pattern] * 5)
         rows = decoded_rows(
-            'SELECT c.card_id,c.user_id,c.customer_id,c.environment,c.kind,c.status,'
+            'SELECT c.card_id,c.user_id,c.customer_id,c.environment,c.kind,c.plan_id,c.status,'
             'c.frozen,c.masked_pan,c.delivery_status,c.tracking,c.provider_updated_at,'
             'c.created_at,c.updated_at,a.telegram_id,a.telegram_username,a.first_name,a.last_name,'
             '(SELECT COUNT(*) FROM aura_card_operations o WHERE o.card_id=c.card_id) operation_count '
@@ -1632,15 +1632,12 @@ def install_wallet(app, root, owner_check):
                         card_fees = await aura_client.get_card_fees()
                         result['provider']['card_fees'] = card_fees
                         provider_prices = {
-                            'card_virtual_issue': (card_fees.get('open_virtual_card_fee'), 'USDT'),
-                            'card_physical_issue': (card_fees.get('open_physical_card_fee'), 'USDT'),
-                            'card_virtual_recharge': (card_fees.get('recharge_fee_pct'), '%'),
-                            'card_physical_recharge': (card_fees.get('physical_recharge_fee_pct'), '%'),
+                            'virtual': (card_fees.get('open_virtual_card_fee'), card_fees.get('recharge_fee_pct')),
+                            'physical': (card_fees.get('open_physical_card_fee'), card_fees.get('physical_recharge_fee_pct')),
                         }
                         for item in result['items']:
-                            if item['product'] in provider_prices:
-                                item['provider_fee'], item['provider_fee_unit'] = provider_prices[item['product']]
-                            if item['product'] in {'card_virtual_recharge', 'card_physical_recharge'}:
+                            if item.get('card_plan'):
+                                item['provider_issue_fee'], item['provider_recharge_fee'] = provider_prices[item['kind']]
                                 item['provider_minimum'] = card_fees.get('minimum_recharge_amount')
                     except (ApiError, ValueError, asyncio.TimeoutError, OSError) as error:
                         result['provider']['error'] = getattr(error, 'name', type(error).__name__)
@@ -1985,17 +1982,18 @@ def install_wallet(app, root, owner_check):
                 if not 1 <= len(idempotency_key) <= 200:
                     raise ApiError('idempotency_key_required', 'Idempotency-Key is required', 400)
                 body = await request.json()
-                allowed = {'kind', 'shipping_address'}
+                allowed = {'kind', 'shipping_address', 'plan_id'}
                 if not isinstance(body, dict) or set(body) - allowed:
                     raise ValueError('Unsupported Aura card fields')
                 return web.json_response(await aura_service.create_card_request(
                     uid, client_ref, kind=body.get('kind', 'virtual'),
                     idempotency_key=idempotency_key,
                     shipping_address=body.get('shipping_address'),
+                    plan_id=body.get('plan_id'),
                 ))
             if action == 'aura-cards' and request.method == 'GET':
                 cards = [dict(row) for row in ledger.db.execute(
-                    'SELECT card_id,kind,status,frozen,masked_pan,delivery_status,provider_updated_at '
+                    'SELECT card_id,kind,plan_id,status,frozen,masked_pan,delivery_status,provider_updated_at '
                     'FROM aura_cards WHERE user_id=? AND environment=? ORDER BY updated_at DESC',
                     (uid, aura_environment),
                 )]

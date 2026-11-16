@@ -3,11 +3,30 @@ import time
 import uuid
 from decimal import Decimal, InvalidOperation, localcontext
 
+CARD_PLANS = {
+    "card_subscriptions": {
+        "label": "Для подписок", "kind": "virtual", "skin": "silver",
+        "description": "Подписки, цифровые сервисы и регулярные онлайн-оплаты.",
+        "conditions": ["Нейросети и сервисы", "Оплата подписок", "3D Secure", "Заморозка в приложении"],
+    },
+    "card_travel": {
+        "label": "Для путешествий", "kind": "virtual", "skin": "navy",
+        "description": "Бронирования, билеты и онлайн-сервисы в путешествии.",
+        "conditions": ["Отели и авиабилеты", "Такси и доставка", "Сервисы в поездке", "3D Secure"],
+    },
+    "card_premium": {
+        "label": "Премиальная", "kind": "physical", "skin": "ice",
+        "description": "Физическая карта для повседневных покупок и путешествий.",
+        "conditions": ["Бесплатная доставка", "Покупки офлайн", "Отели и авиабилеты", "3D Secure"],
+    },
+    "card_platinum": {
+        "label": "Платина", "kind": "physical", "skin": "graphite",
+        "description": "Физическая карта с доставкой для покупок и поездок.",
+        "conditions": ["Физическая карта", "Покупки офлайн", "Покупки в интернете", "3D Secure"],
+    },
+}
 PRODUCTS = {
-    "card_virtual_issue": ("Выпуск виртуальной карты", True),
-    "card_physical_issue": ("Выпуск физической карты", True),
-    "card_virtual_recharge": ("Пополнение виртуальной карты", True),
-    "card_physical_recharge": ("Пополнение физической карты", True),
+    **{key: (value["label"], True) for key, value in CARD_PLANS.items()},
     "sbp_buy": ("Покупка через СБП", False),
     "qr_pay": ("Оплата по QR", False),
     "withdrawal": ("Вывод криптовалюты (не с карты)", False),
@@ -53,6 +72,8 @@ def snapshot(ledger):
     for product, (label, enforced) in PRODUCTS.items():
         item = active(ledger, product)
         item.update(label=label, enforced=enforced)
+        if product in CARD_PLANS:
+            item.update(CARD_PLANS[product], card_plan=True)
         items.append(item)
     history = [dict(row) for row in ledger.db.execute(
         "SELECT * FROM wallet_tariff_versions ORDER BY created_at DESC,rowid DESC LIMIT 200"
@@ -61,7 +82,7 @@ def snapshot(ledger):
         item["enabled"] = bool(item["enabled"])
     return {"items": items, "history": history}
 
-def calculate(ledger, product, amount=0):
+def calculate(ledger, product, amount=0, *, operation="issue"):
     tariff = active(ledger, product)
     if not tariff["enabled"] or not PRODUCTS[product][1]:
         return Decimal(0), tariff
@@ -71,7 +92,21 @@ def calculate(ledger, product, amount=0):
     minimum = _number(tariff["minimum_fee"], "minimum fee")
     with localcontext() as ctx:
         ctx.prec = 80
-        return max(minimum, fixed + base * percent / Decimal(100)), tariff
+        fee = fixed if operation == "issue" else max(minimum, base * percent / Decimal(100))
+        return fee, tariff
+
+def resolve_card_plan(plan_id, kind):
+    normalized_kind = str(kind or "").lower()
+    plan_id = str(plan_id or (
+        "card_premium" if normalized_kind == "physical" else "card_subscriptions"
+    ))
+    plan = CARD_PLANS.get(plan_id)
+    # Older webhook-created rows may not contain the card kind. A selected
+    # plan is authoritative in that case; otherwise legacy rows default to
+    # the virtual starter plan, matching the historical behavior.
+    if not plan or (normalized_kind and plan["kind"] != normalized_kind):
+        raise ValueError("Invalid card tariff plan")
+    return plan_id, plan
 
 def create_version(ledger, product, *, enabled, fixed_fee, percent_fee,
                    minimum_fee, note, created_by):

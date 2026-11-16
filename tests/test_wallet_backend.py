@@ -311,7 +311,10 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
             (uid, customer_id, 'test', 'pending', 0, 0, None, None, '{}', stamp, stamp - 90000),
         )
         self.ledger.db.execute(
-            'INSERT INTO aura_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            'INSERT INTO aura_cards '
+            '(card_id,user_id,customer_id,environment,kind,status,frozen,masked_pan,'
+            'delivery_status,tracking,provider_updated_at,body,created_at,updated_at) '
+            'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
             ('card-admin-test', uid, customer_id, 'test', 'virtual', 'opened', 0,
              '411111******1234', None, None, None, '{}', stamp, stamp),
         )

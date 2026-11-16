@@ -18,7 +18,7 @@ from urllib.parse import quote, urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
 from wallet_notifications import enqueue as enqueue_notification, prepare as prepare_notifications
-from wallet_tariffs import calculate as calculate_tariff
+from wallet_tariffs import calculate as calculate_tariff, resolve_card_plan
 
 
 TEST_BASE_URL = "https://testnet-api.aurawallet.co/v1/partner"
@@ -187,6 +187,8 @@ def prepare(ledger):
         ledger.db.execute("ALTER TABLE aura_cards ADD COLUMN delivery_status TEXT")
     if "tracking" not in card_columns:
         ledger.db.execute("ALTER TABLE aura_cards ADD COLUMN tracking TEXT")
+    if "plan_id" not in card_columns:
+        ledger.db.execute("ALTER TABLE aura_cards ADD COLUMN plan_id TEXT")
     operation_columns = {row[1] for row in ledger.db.execute("PRAGMA table_info(aura_card_operations)")}
     for name in (
         "original_amount", "original_currency", "refunded_amount", "balance_before",
@@ -2090,11 +2092,12 @@ class AuraService:
         return self._store_qr_api_payment(uid, await self.client.get_qr_payment(payment_id))
 
     async def create_card_request(self, uid, client_ref, *, kind="virtual",
-                                  idempotency_key, shipping_address=None):
+                                  idempotency_key, shipping_address=None, plan_id=None):
         customer_id = await self.ensure_customer(uid, client_ref)
         idempotency_key = str(idempotency_key)
         request_fields = _card_request_body(customer_id, kind, shipping_address)
         kind = request_fields["kind"]
+        plan_id, _plan = resolve_card_plan(plan_id, kind)
         shipping_address = request_fields.get("shipping_address")
         existing = self.ledger.db.execute(
             "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
@@ -2104,10 +2107,12 @@ class AuraService:
         if existing:
             stored = json.loads(existing["request_body"])
             comparable = {key: value for key, value in stored.items() if key not in {
-                "fee", "provider_fee", "service_fee", "tariff_version"
+                "fee", "provider_fee", "service_fee", "tariff_version", "plan_id"
             }}
             if comparable != request_fields:
                 raise ValueError("Aura idempotency key reused with another card request")
+            if stored.get("plan_id", plan_id) != plan_id:
+                raise ValueError("Aura idempotency key reused with another card tariff")
             if existing["remote_id"]:
                 return {"card_id": existing["remote_id"], "status": existing["status"]}
             if existing["status"] == "rejected":
@@ -2128,9 +2133,7 @@ class AuraService:
                 )
             provider_fee = _decimal(fees[fee_field])
             service_fee, tariff = calculate_tariff(
-                self.ledger,
-                "card_physical_issue" if kind == "physical" else "card_virtual_issue",
-                provider_fee,
+                self.ledger, plan_id, provider_fee, operation="issue",
             )
             fee = provider_fee + service_fee
             available, reserved = self.ledger.balance(uid, "USDT")
@@ -2144,7 +2147,7 @@ class AuraService:
                 stored_body = {
                     **request_fields, "fee": str(fee),
                     "provider_fee": str(provider_fee), "service_fee": str(service_fee),
-                    "tariff_version": tariff.get("version_id"),
+                    "tariff_version": tariff.get("version_id"), "plan_id": plan_id,
                 }
                 self.ledger.db.execute(
                     "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -2197,6 +2200,10 @@ class AuraService:
                  "status": "processing"},
             )
             self.ledger.db.execute(
+                "UPDATE aura_cards SET plan_id=? WHERE card_id=? AND user_id=? AND environment=?",
+                (plan_id, card_id, uid, self.environment),
+            )
+            self.ledger.db.execute(
                 "UPDATE wallet_provider_entities SET remote_id=?,status='processing',updated_at=? "
                 "WHERE provider='aura' AND environment=? AND entity_type='card_request' "
                 "AND local_id=?", (card_id, time.time(), self.environment, idempotency_key),
@@ -2213,7 +2220,7 @@ class AuraService:
         idempotency_key = str(idempotency_key)
         request_fields = _card_recharge_body(amount, amount_spend)
         card = self.ledger.db.execute(
-            "SELECT kind,frozen FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?",
+            "SELECT kind,frozen,plan_id FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?",
             (card_id, uid, self.environment),
         ).fetchone()
         if not card:
@@ -2246,11 +2253,9 @@ class AuraService:
                     "card_frozen", "Frozen Aura card cannot be recharged", 409
                 )
             tariff_base = _decimal(request_fields.get("amount_spend") or request_fields.get("amount"))
+            plan_id, _plan = resolve_card_plan(card["plan_id"], card["kind"])
             service_fee, tariff = calculate_tariff(
-                self.ledger,
-                "card_physical_recharge" if card["kind"] == "physical"
-                else "card_virtual_recharge",
-                tariff_base,
+                self.ledger, plan_id, tariff_base, operation="recharge",
             )
             if "amount_spend" in request_fields:
                 reserve_amount = _decimal(request_fields["amount_spend"])
@@ -2291,7 +2296,7 @@ class AuraService:
                     "card_id": card_id, "request": request_fields,
                     "reserve_amount": str(reserve_amount),
                     "service_fee": str(service_fee),
-                    "tariff_version": tariff.get("version_id"),
+                    "tariff_version": tariff.get("version_id"), "plan_id": plan_id,
                 }
                 self.ledger.db.execute(
                     "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
