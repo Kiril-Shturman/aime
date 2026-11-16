@@ -289,7 +289,7 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['provider']['balance'][0]['available'], '10')
         self.assertTrue((await (await self.client.get('/api/wallet/access', headers={'X-Telegram-Init-Data': init_data(321)})).json())['owner'])
         admin_headers = {'X-Telegram-Init-Data': init_data(321)}
-        for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts', 'admin-notifications']:
+        for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts', 'admin-notifications', 'admin-audit']:
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers=admin_headers)).status, 200)
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers={'X-Telegram-Init-Data': init_data(999)})).status, 403)
 
@@ -343,6 +343,49 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         )).json()
         kyc_problem = next(row for row in overview['problems']['items'] if row['kind'] == 'kyc')
         self.assertEqual(kyc_problem['count'], 1)
+
+    async def test_admin_user_actions_are_scoped_and_audited_without_content(self):
+        from wallet_notifications import enqueue
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        member = {'X-Telegram-Init-Data': init_data(999)}
+        uid = 'tg:777'
+        self.ledger.account(uid, bot_started=True, source='bot')
+        self.assertTrue(enqueue(
+            self.ledger, 'test:retry:one', uid, 'deposit',
+            'Sensitive title', 'Sensitive notification body',
+        ))
+        self.ledger.db.execute(
+            "UPDATE notification_outbox SET status='failed',last_error='private provider error' "
+            "WHERE user_id=?", (uid,),
+        )
+        denied = await self.client.post('/api/wallet/admin-user-action', json={
+            'user_id': uid, 'operation': 'retry_notifications',
+        }, headers=member)
+        self.assertEqual(denied.status, 403)
+        response = await self.client.post('/api/wallet/admin-user-action', json={
+            'user_id': uid, 'operation': 'retry_notifications',
+        }, headers=admin)
+        self.assertEqual(response.status, 200, await response.text())
+        self.assertEqual((await response.json())['queued'], 1)
+        self.assertEqual(self.ledger.db.execute(
+            'SELECT status FROM notification_outbox WHERE user_id=?', (uid,),
+        ).fetchone()[0], 'queued')
+        audit_response = await self.client.get(
+            '/api/wallet/admin-audit?user_id=' + uid, headers=admin,
+        )
+        self.assertEqual(audit_response.status, 200, await audit_response.text())
+        raw = await audit_response.text()
+        self.assertNotIn('Sensitive title', raw)
+        self.assertNotIn('Sensitive notification body', raw)
+        self.assertNotIn('private provider error', raw)
+        audit = json.loads(raw)
+        self.assertEqual(audit['total'], 1)
+        self.assertEqual(audit['items'][0]['action'], 'user.retry_notifications')
+        self.assertEqual(audit['items'][0]['detail'], {'queued': 1})
+        detail = await (await self.client.get(
+            '/api/wallet/admin-user?user_id=' + uid, headers=admin,
+        )).json()
+        self.assertEqual(detail['audit'][0]['outcome'], 'succeeded')
 
     async def test_notification_center_settings_and_deduped_deposit(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}

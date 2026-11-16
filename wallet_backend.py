@@ -422,6 +422,9 @@ class Ledger:
           CREATE TABLE IF NOT EXISTS wallet_quotes (quote_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, spend_id TEXT UNIQUE NOT NULL, body TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'quoted', payment_id TEXT);
           CREATE TABLE IF NOT EXISTS admin_broadcasts (broadcast_id TEXT PRIMARY KEY, admin_id TEXT NOT NULL, target TEXT NOT NULL, text TEXT NOT NULL, button_text TEXT, button_url TEXT, status TEXT NOT NULL, total INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, failed INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, started_at TEXT, finished_at TEXT);
           CREATE TABLE IF NOT EXISTS admin_broadcast_deliveries (broadcast_id TEXT NOT NULL, user_id TEXT NOT NULL, status TEXT NOT NULL, error TEXT, updated_at TEXT NOT NULL, PRIMARY KEY(broadcast_id,user_id));
+          CREATE TABLE IF NOT EXISTS admin_action_audit (audit_id TEXT PRIMARY KEY, admin_id TEXT NOT NULL, action TEXT NOT NULL, target_user_id TEXT, outcome TEXT NOT NULL, detail TEXT NOT NULL, created_at TEXT NOT NULL);
+          CREATE INDEX IF NOT EXISTS admin_action_audit_created ON admin_action_audit(created_at);
+          CREATE INDEX IF NOT EXISTS admin_action_audit_target ON admin_action_audit(target_user_id,created_at);
         ''')
 
         prepare_withdrawals(self)
@@ -825,6 +828,42 @@ def install_wallet(app, root, owner_check):
                         pass
         return rows
 
+    def record_admin_action(admin_id, action, target_user_id=None, outcome='succeeded', detail=None):
+        safe_detail = detail if isinstance(detail, dict) else {}
+        ledger.db.execute(
+            'INSERT INTO admin_action_audit VALUES (?,?,?,?,?,?,?)',
+            (
+                'audit-' + uuid.uuid4().hex, str(admin_id), str(action),
+                str(target_user_id) if target_user_id else None, str(outcome),
+                json.dumps(safe_detail, ensure_ascii=False, separators=(',', ':')), now(),
+            ),
+        )
+
+    def admin_audit(request):
+        count = min(max(int(request.query.get('count', '100')), 1), 500)
+        target_user_id = str(request.query.get('user_id') or '').strip()
+        action_filter = str(request.query.get('action') or '').strip()[:100]
+        clauses, params = [], []
+        if target_user_id:
+            if not target_user_id.startswith('tg:') or not target_user_id[3:].isdigit():
+                raise ValueError('Некорректный идентификатор пользователя')
+            clauses.append('target_user_id=?')
+            params.append(target_user_id)
+        if action_filter:
+            clauses.append('action=?')
+            params.append(action_filter)
+        where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
+        params.append(count)
+        return {
+            'items': decoded_rows(
+                'SELECT audit_id,admin_id,action,target_user_id,outcome,detail,created_at '
+                f'FROM admin_action_audit{where} ORDER BY rowid DESC LIMIT ?', params,
+            ),
+            'total': ledger.db.execute(
+                f'SELECT COUNT(*) FROM admin_action_audit{where}', params[:-1],
+            ).fetchone()[0],
+        }
+
     def admin_users():
         rows = decoded_rows('''
           SELECT a.*,
@@ -915,6 +954,11 @@ def install_wallet(app, root, owner_check):
                 'SELECT notification_id,event_type,title,status,attempts,last_error,created_at,sent_at '
                 'FROM notification_outbox WHERE user_id=? ORDER BY rowid DESC LIMIT 50', (user_id,),
             ),
+            'audit': decoded_rows(
+                'SELECT audit_id,admin_id,action,outcome,detail,created_at '
+                'FROM admin_action_audit WHERE target_user_id=? ORDER BY rowid DESC LIMIT 50',
+                (user_id,),
+            ),
             'referrals': {
                 'invited': decoded_rows(
                     'SELECT referred_user_id,source,created_at FROM wallet_referrals '
@@ -926,6 +970,68 @@ def install_wallet(app, root, owner_check):
                 )), None),
             },
         }
+
+    async def admin_user_action(request, admin_id):
+        body = await request.json()
+        if not isinstance(body, dict) or set(body) - {'user_id', 'operation', 'text', 'confirm'}:
+            raise ValueError('Некорректная команда оператора')
+        user_id = str(body.get('user_id') or '')
+        operation = str(body.get('operation') or '')
+        if not user_id.startswith('tg:') or not user_id[3:].isdigit():
+            raise ValueError('Некорректный идентификатор пользователя')
+        account = ledger.db.execute(
+            'SELECT client_ref,telegram_id FROM wallet_accounts WHERE user_id=?', (user_id,),
+        ).fetchone()
+        if not account:
+            raise ApiError('NOT_FOUND', 'Пользователь не найден', 404)
+        action_name = 'user.' + operation
+        try:
+            if operation == 'refresh_kyc':
+                if not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+                customer = ledger.db.execute(
+                    'SELECT customer_id FROM aura_customers WHERE user_id=? AND environment=?',
+                    (user_id, aura_environment),
+                ).fetchone()
+                if not customer:
+                    raise ApiError('NOT_FOUND', 'У пользователя ещё нет клиента Aura', 404)
+                result = await aura_service.get_kyc(user_id, account['client_ref'])
+                record_admin_action(
+                    admin_id, action_name, user_id, detail={'status': result.get('status')},
+                )
+                return {'ok': True, 'operation': operation, 'result': result}
+            if operation == 'retry_notifications':
+                cursor = ledger.db.execute(
+                    "UPDATE notification_outbox SET status='queued',next_attempt_at=0,"
+                    "last_error=NULL,updated_at=? WHERE user_id=? AND status IN ('failed','retry','skipped')",
+                    (time.time(), user_id),
+                )
+                record_admin_action(
+                    admin_id, action_name, user_id, detail={'queued': cursor.rowcount},
+                )
+                return {'ok': True, 'operation': operation, 'queued': cursor.rowcount}
+            if operation == 'send_message':
+                message_text = str(body.get('text') or '').strip()
+                if not 1 <= len(message_text) <= 4096:
+                    raise ValueError('Текст сообщения должен быть от 1 до 4096 символов')
+                if body.get('confirm') != 'send_message':
+                    raise ApiError('CONFIRMATION_REQUIRED', 'Подтвердите отправку сообщения', 409)
+                await telegram_api('sendMessage', {
+                    'chat_id': account['telegram_id'] or int(user_id.removeprefix('tg:')),
+                    'text': message_text,
+                })
+                ledger.bot_delivery(user_id, True)
+                record_admin_action(
+                    admin_id, action_name, user_id, detail={'characters': len(message_text)},
+                )
+                return {'ok': True, 'operation': operation, 'sent': True}
+            raise ValueError('Неизвестная команда оператора')
+        except (ApiError, ValueError) as error:
+            record_admin_action(
+                admin_id, action_name, user_id, outcome='failed',
+                detail={'error': getattr(error, 'name', 'INVALID_REQUEST')},
+            )
+            raise
 
     def admin_problems():
         present = tables()
@@ -1035,7 +1141,7 @@ def install_wallet(app, root, owner_check):
         catalog = [{'method': method, **spec} for method, spec in ADMIN_GOSWAP_METHODS.items()]
         return {'snapshot': dict(zip(methods, values)), 'methods': catalog}
 
-    async def admin_goswap_action(request):
+    async def admin_goswap_action(request, admin_id):
         body = await request.json()
         if not isinstance(body, dict):
             raise ValueError('Некорректный запрос')
@@ -1058,6 +1164,10 @@ def install_wallet(app, root, owner_check):
         if spec['post'] and body.get('confirm') != method:
             raise ApiError('CONFIRMATION_REQUIRED', f'Подтвердите вызов {method}', 409)
         result = await provider.call(method, params, post=spec['post'])
+        record_admin_action(
+            admin_id, 'goswap.' + method,
+            detail={'method': method, 'post': bool(spec['post']), 'parameter_names': sorted(params)},
+        )
         return {'ok': True, 'method': method, 'result': result}
 
     def admin_aura_console():
@@ -1073,7 +1183,7 @@ def install_wallet(app, root, owner_check):
             ],
         }
 
-    async def admin_aura_action(request):
+    async def admin_aura_action(request, admin_id):
         if not aura_enabled or not aura_client.configured:
             raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
         payload = await request.json()
@@ -1124,6 +1234,10 @@ def install_wallet(app, root, owner_check):
         result = await aura_client.diagnostic_request(
             spec['verb'], path, params=query or None, body=body,
             idempotency_key=idempotency_key,
+        )
+        record_admin_action(
+            admin_id, 'aura.' + method,
+            detail={'method': method, 'verb': spec['verb'], 'path': path},
         )
         safe_body = body
         if isinstance(body, dict):
@@ -1192,6 +1306,10 @@ def install_wallet(app, root, owner_check):
             targets = [row[0] for row in ledger.db.execute("SELECT user_id FROM wallet_accounts WHERE user_id LIKE 'tg:%' AND status='active'")]
         broadcast_id = 'broadcast-' + uuid.uuid4().hex
         ledger.db.execute('INSERT INTO admin_broadcasts(broadcast_id,admin_id,target,text,button_text,button_url,status,total,created_at) VALUES (?,?,?,?,?,?,?,?,?)', (broadcast_id, uid, target, text, button_text or None, button_url or None, 'queued', len(targets), now()))
+        record_admin_action(
+            uid, 'broadcast.create',
+            detail={'broadcast_id': broadcast_id, 'target': target, 'total': len(targets), 'characters': len(text), 'has_button': bool(button_text)},
+        )
         task = asyncio.create_task(run_broadcast(broadcast_id, targets, text, button_text, button_url))
         app['wpay_broadcast_tasks'].add(task)
         task.add_done_callback(app['wpay_broadcast_tasks'].discard)
@@ -1230,6 +1348,13 @@ def install_wallet(app, root, owner_check):
             )
         else:
             raise ValueError('Неизвестная операция центра уведомлений')
+        record_admin_action(
+            uid, 'notifications.' + operation,
+            detail={
+                'notification_id': str(body.get('notification_id') or '') or None,
+                'setting_names': sorted((body.get('settings') or {}).keys()),
+            },
+        )
         return notification_snapshot(ledger)
 
     async def sync_payments(uid):
@@ -1339,8 +1464,17 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(admin_users())
             if action == 'admin-user' and request.method == 'GET':
                 return web.json_response(admin_user(request), headers={'Cache-Control': 'private, no-store'})
+            if action == 'admin-user-action' and request.method == 'POST':
+                return web.json_response(
+                    await admin_user_action(request, uid),
+                    headers={'Cache-Control': 'private, no-store'},
+                )
+            if action == 'admin-audit' and request.method == 'GET':
+                return web.json_response(admin_audit(request), headers={'Cache-Control': 'private, no-store'})
             if action == 'admin-sync-users' and request.method == 'POST':
-                return web.json_response(await sync_telegram_users())
+                result = await sync_telegram_users()
+                record_admin_action(uid, 'users.sync', detail=result)
+                return web.json_response(result)
             if action == 'admin-database' and request.method == 'GET':
                 return web.json_response(admin_database(request))
             if action == 'admin-payments' and request.method == 'GET':
@@ -1381,6 +1515,13 @@ def install_wallet(app, root, owner_check):
                     )
                 else:
                     raise ApiError('INVALID_ASSET_SETTINGS', 'Unsupported asset settings operation', 400)
+                record_admin_action(
+                    uid, 'assets.update',
+                    detail={
+                        'preset': body.get('preset'), 'asset': body.get('asset'),
+                        'network': body.get('network'), 'enabled': body.get('enabled'),
+                    },
+                )
                 return web.json_response({
                     'ok': True, 'asset_routes': asset_route_rows(),
                     'enabled': enabled_asset_routes(),
@@ -1392,11 +1533,11 @@ def install_wallet(app, root, owner_check):
             if action == 'admin-goswap-action' and request.method == 'POST':
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
-                return web.json_response(await admin_goswap_action(request))
+                return web.json_response(await admin_goswap_action(request, uid))
             if action == 'admin-aura-console' and request.method == 'GET':
                 return web.json_response(admin_aura_console())
             if action == 'admin-aura-action' and request.method == 'POST':
-                return web.json_response(await admin_aura_action(request))
+                return web.json_response(await admin_aura_action(request, uid))
             if action == 'admin-providers' and request.method == 'GET':
                 aura_state = {
                     'enabled': aura_enabled,
