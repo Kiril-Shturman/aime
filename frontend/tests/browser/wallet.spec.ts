@@ -999,3 +999,21 @@ test("slow first load keeps Exchange in place and banners skeletonized until wal
   expect(Math.abs(bannerAfter!.y - bannerBefore!.y)).toBeLessThan(1);
   expect(bannerAfter!.height).toBe(bannerBefore!.height);
 });
+
+test("owner history never exposes provider console or branding", async ({
+  page,
+}) => {
+  await setup(page, "dark");
+  await page.route("**/api/wallet/access", (route) =>
+    route.fulfill({ json: { owner: true } }),
+  );
+  await page.getByRole("link", { name: "История", exact: true }).click();
+  await page.getByRole("button", { name: "Счета", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Новый счёт", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText(/GoSwap/i)).toHaveCount(0);
+  await expect(
+    page.getByRole("tablist", { name: "Раздел владельца" }),
+  ).toHaveCount(0);
+});

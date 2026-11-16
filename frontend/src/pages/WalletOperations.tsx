@@ -12,7 +12,6 @@ import {
   ExternalLink,
   Copy,
   Check,
-  Settings2,
 } from "lucide-react";
 import { walletRequest } from "../lib/wallet-api";
 import { useLiveWallet } from "./WalletLive";
@@ -243,7 +242,7 @@ export default function WalletOperations({
     [scope, setScope] = useState("personal"),
     [selected, setSelected] = useState<Entry | null>(null),
     [account, setAccount] = useState<Entry | null>(null),
-    [admin, setAdmin] = useState(false),
+    [admin] = useState(false),
     [confirmRevoke, setConfirmRevoke] = useState(false),
     [revoking, setRevoking] = useState(false),
     [actionError, setActionError] = useState(""),
@@ -412,24 +411,11 @@ export default function WalletOperations({
   return (
     <div className="mx-auto w-full max-w-[560px] pb-6 pt-5 text-black dark:text-white">
       <div className="px-4">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          {admin && (
-            <h2 className="text-[25px] font-semibold tracking-tight">GoSwap</h2>
-          )}
-          {owner && mode !== "addresses" && (
-            <button
-              type="button"
-              className="flex min-h-11 items-center gap-2 text-[15px] font-medium text-blue-600 dark:text-blue-400"
-              onClick={() => {
-                setAdmin(!admin);
-                setTab(admin ? "invoices" : "reconciliation");
-              }}
-            >
-              <Settings2 size={18} />
-              {admin ? "К истории" : "GoSwap"}
-            </button>
-          )}
-        </div>
+        {admin && (
+          <h2 className="mb-4 text-[25px] font-semibold tracking-tight">
+            Сверка операций
+          </h2>
+        )}
         {admin && (
           <div
             role="tablist"
