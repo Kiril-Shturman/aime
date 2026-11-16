@@ -13,6 +13,7 @@ import {
   ArrowLeft,
   Bell,
   Coins,
+  CreditCard,
   Database,
   LayoutDashboard,
   Menu,
@@ -51,7 +52,8 @@ type Tab =
   | "aura"
   | "goswap"
   | "notifications"
-  | "audit";
+  | "audit"
+  | "cards";
 type AdminOverview = {
   users: number;
   events: number;
@@ -77,6 +79,7 @@ type AdminUserDetail = {
   referrals: { invited: Json[]; referred_by: Json | null };
 };
 type AuditData = { items: Json[]; total: number };
+type CardsData = { items: Json[]; operations: Json[]; total: number };
 type DatabaseData = {
   tables: Record<string, number>;
   table: string;
@@ -219,6 +222,7 @@ const tabs: { id: Tab; label: string; icon: typeof Database }[] = [
   { id: "data", label: "Пользователи", icon: Database },
   { id: "payments", label: "Операции", icon: Activity },
   { id: "crypto", label: "Криптовалюты", icon: Coins },
+  { id: "cards", label: "Карты", icon: CreditCard },
   { id: "aura", label: "Aura API", icon: ShieldCheck },
   { id: "goswap", label: "GoSwap API", icon: Server },
   { id: "notifications", label: "Уведомления", icon: Bell },
@@ -301,6 +305,10 @@ export default function WalletAdminPage() {
       }
       if (tab === "audit") {
         setPayload(await walletRequest<AuditData>("admin-audit?count=250"));
+        setPayloadTab(tab);
+      }
+      if (tab === "cards") {
+        setPayload(await walletRequest<CardsData>("admin-cards"));
         setPayloadTab(tab);
       }
       setUpdatedAt(new Date());
@@ -456,6 +464,7 @@ export default function WalletAdminPage() {
                       data: "Клиенты, профили и записи базы данных",
                       payments: "История платежей, переводов и выводов",
                       crypto: "Адреса, поступления и доступные сети",
+                      cards: "Карты клиентов, состояния и безопасное управление",
                       aura: "Подключение, методы и состояние Aura",
                       goswap: "Состояние интеграции и методы GoSwap",
                       notifications: "Системные события и рассылки",
@@ -541,6 +550,8 @@ function TabContent({
   if (tab === "payments") return <Payments data={payload as PaymentsData} />;
   if (tab === "crypto")
     return <Crypto data={payload as CryptoData} reload={reload} />;
+  if (tab === "cards")
+    return <Cards data={payload as CardsData} reload={reload} />;
   if (tab === "goswap")
     return (
       <>
@@ -598,6 +609,195 @@ function Audit({ data }: { data: AuditData }) {
         ))}
       </div>
     </section>
+  );
+}
+
+function Cards({
+  data,
+  reload,
+}: {
+  data: CardsData;
+  reload: () => Promise<void>;
+}) {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState("");
+  const [detail, setDetail] = useState<CardsData | null>(null);
+  const [working, setWorking] = useState("");
+  const [notice, setNotice] = useState("");
+  const visible = data.items.filter((row) => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return true;
+    return [
+      row.card_id,
+      row.user_id,
+      row.customer_id,
+      row.masked_pan,
+      row.telegram_username,
+      row.first_name,
+      row.last_name,
+    ].some((value) => String(value || "").toLowerCase().includes(needle));
+  });
+  const current = detail?.items[0] || data.items.find((row) => row.card_id === selected);
+
+  async function openCard(cardId: string) {
+    setSelected(cardId);
+    setNotice("");
+    try {
+      setDetail(
+        await walletRequest<CardsData>(
+          `admin-cards?${new URLSearchParams({ card_id: cardId })}`,
+        ),
+      );
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Не удалось загрузить карту");
+    }
+  }
+  async function act(operation: "refresh" | "freeze" | "unfreeze" | "cancel") {
+    if (!selected || working) return;
+    if (operation === "cancel") {
+      if (window.prompt("Для закрытия карты введите ЗАКРЫТЬ") !== "ЗАКРЫТЬ") return;
+    } else if (
+      operation !== "refresh" &&
+      !window.confirm(
+        `${operation === "freeze" ? "Заморозить" : "Разморозить"} карту ${text(current?.masked_pan)}?`,
+      )
+    ) {
+      return;
+    }
+    setWorking(operation);
+    setNotice("");
+    try {
+      await walletRequest("admin-card-action", {
+        card_id: selected,
+        operation,
+        ...(operation === "refresh"
+          ? {}
+          : { confirm: `${operation}:${selected}` }),
+      });
+      setNotice(
+        operation === "refresh"
+          ? "Состояние обновлено из Aura"
+          : operation === "cancel"
+            ? "Карта закрыта"
+            : operation === "freeze"
+              ? "Карта заморожена"
+              : "Карта разморожена",
+      );
+      await Promise.all([reload(), openCard(selected)]);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Действие не выполнено");
+    } finally {
+      setWorking("");
+    }
+  }
+
+  const columns: AdminColumn[] = [
+    { key: "masked_pan", label: "Карта" },
+    {
+      key: "user_id",
+      label: "Пользователь",
+      render: (value, row) =>
+        row.telegram_username ? `@${text(row.telegram_username)}` : text(value),
+    },
+    { key: "kind", label: "Тип" },
+    {
+      key: "status",
+      label: "Статус",
+      render: (value, row) => `${text(value)}${row.frozen ? " · заморожена" : ""}`,
+    },
+    {
+      key: "balance",
+      label: "Баланс карты",
+      render: (value) => (value === null ? "—" : `${amount(value)} USDT`),
+    },
+    { key: "operation_count", label: "Операции" },
+    { key: "updated_at", label: "Обновлено", render: date },
+  ];
+  return (
+    <div className="space-y-4">
+      <section className={card}>
+        <div className="wpay-admin-section-title">
+          <div>
+            <span>Aura</span>
+            <h2>Карты клиентов</h2>
+          </div>
+          <b>{data.total}</b>
+        </div>
+        <div className="relative mt-3">
+          <Search className="absolute left-3 top-3.5 opacity-35" size={17} />
+          <input
+            className={`${input} !pl-10`}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Пользователь, customer ID, card ID или masked PAN"
+          />
+        </div>
+        <div className="wpay-admin-desktop-only mt-3">
+          <AdminTable rows={visible} columns={columns} onRowClick={(row) => void openCard(text(row.card_id))} />
+        </div>
+        <div className="wpay-admin-mobile-only wpay-admin-mobile-list mt-3">
+          {visible.map((row) => (
+            <button
+              type="button"
+              key={text(row.card_id)}
+              className="wpay-admin-mobile-item is-clickable w-full text-left"
+              onClick={() => void openCard(text(row.card_id))}
+            >
+              <b>{text(row.masked_pan || row.card_id)}</b>
+              <p className="mt-1 text-xs opacity-50">
+                {text(row.user_id)} · {text(row.kind)} · {text(row.status)}
+              </p>
+            </button>
+          ))}
+        </div>
+      </section>
+      {selected && current && (
+        <section className={`${card} wpay-admin-card-control`}>
+          <div className="wpay-admin-section-title">
+            <div>
+              <span>{text(current.user_id)}</span>
+              <h2>{text(current.masked_pan || current.card_id)}</h2>
+            </div>
+            <button type="button" onClick={() => { setSelected(""); setDetail(null); }}>
+              <X size={18} />
+            </button>
+          </div>
+          <div className="wpay-admin-user-facts mt-3">
+            <div><small>Статус</small><b>{text(current.status)}</b></div>
+            <div><small>Баланс</small><b>{current.balance === null ? "—" : `${amount(current.balance)} USDT`}</b></div>
+            <div><small>Тип</small><b>{text(current.kind)}</b></div>
+            <div><small>Customer ID</small><b>{text(current.customer_id)}</b></div>
+          </div>
+          <div className="wpay-admin-card-actions">
+            <button disabled={Boolean(working)} onClick={() => void act("refresh")}>
+              <RefreshCw size={15} className={working === "refresh" ? "animate-spin" : ""} /> Обновить
+            </button>
+            {current.frozen ? (
+              <button disabled={Boolean(working)} onClick={() => void act("unfreeze")}>
+                Разморозить
+              </button>
+            ) : (
+              <button disabled={Boolean(working)} onClick={() => void act("freeze")}>
+                Заморозить
+              </button>
+            )}
+            <button className="is-danger" disabled={Boolean(working) || ["cancelled", "closed"].includes(text(current.status))} onClick={() => void act("cancel")}>
+              Закрыть карту
+            </button>
+          </div>
+          {notice && <p className="wpay-admin-operator-notice">{notice}</p>}
+          <h3 className="mt-5 text-sm font-semibold">Последние операции</h3>
+          {detail?.operations.length ? detail.operations.map((operation) => (
+            <Row
+              key={text(operation.operation_id)}
+              title={`${text(operation.operation_type)} · ${text(operation.merchant)}`}
+              subtitle={`${date(operation.provider_created_at || operation.created_at)} · ${text(operation.status)}`}
+              right={`${amount(operation.amount)} ${text(operation.asset)}`}
+            />
+          )) : <p className="wpay-admin-user-empty mt-3">Операций пока нет.</p>}
+        </section>
+      )}
+    </div>
   );
 }
 
@@ -1628,6 +1828,9 @@ function AdminUserDrawer({
   const [actionWorking, setActionWorking] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [messageText, setMessageText] = useState("");
+  const [balanceAsset, setBalanceAsset] = useState("USDT");
+  const [balanceAmount, setBalanceAmount] = useState("");
+  const [balanceReason, setBalanceReason] = useState("");
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") onClose();
@@ -1680,6 +1883,43 @@ function AdminUserDrawer({
     } catch (reason) {
       setActionNotice(
         reason instanceof Error ? reason.message : "Команда не выполнена",
+      );
+    } finally {
+      setActionWorking("");
+    }
+  }
+  async function adjustBalance() {
+    const normalizedAmount = balanceAmount.trim().replace(",", ".");
+    if (!normalizedAmount || !balanceReason.trim() || actionWorking) return;
+    if (
+      !window.confirm(
+        `Изменить баланс ${userId} на ${normalizedAmount} ${balanceAsset}?\n\nОперация попадёт в финансовый журнал и аудит.`,
+      )
+    )
+      return;
+    setActionWorking("adjust_balance");
+    setActionNotice("");
+    try {
+      const result = await walletRequest<{ before: string; after: string }>(
+        "finance-adjustment",
+        {
+          account_id: userId,
+          asset: balanceAsset,
+          amount: normalizedAmount,
+          reason: balanceReason.trim(),
+          bucket: "available",
+          confirm: `ADJUST ${userId} ${balanceAsset} ${normalizedAmount}`,
+        },
+      );
+      setActionNotice(
+        `Баланс изменён: ${amount(result.before)} → ${amount(result.after)} ${balanceAsset}`,
+      );
+      setBalanceAmount("");
+      setBalanceReason("");
+      onRetry();
+    } catch (reason) {
+      setActionNotice(
+        reason instanceof Error ? reason.message : "Баланс не изменён",
       );
     } finally {
       setActionWorking("");
@@ -1886,6 +2126,44 @@ function AdminUserDrawer({
                 ) : (
                   <p className="wpay-admin-user-empty">Балансов пока нет.</p>
                 )}
+                <div className="wpay-admin-balance-adjustment">
+                  <div className="wpay-admin-balance-fields">
+                    <select
+                      value={balanceAsset}
+                      onChange={(event) => setBalanceAsset(event.target.value)}
+                      aria-label="Актив корректировки"
+                    >
+                      {Array.from(
+                        new Set([
+                          "USDT",
+                          ...detail.balances.map((item) => text(item.asset)),
+                        ]),
+                      ).map((asset) => <option key={asset}>{asset}</option>)}
+                    </select>
+                    <input
+                      value={balanceAmount}
+                      onChange={(event) => setBalanceAmount(event.target.value.replace(/[^\d.,+-]/g, ""))}
+                      inputMode="decimal"
+                      placeholder="Сумма: 10 или -10"
+                    />
+                  </div>
+                  <textarea
+                    value={balanceReason}
+                    onChange={(event) => setBalanceReason(event.target.value)}
+                    maxLength={1000}
+                    placeholder="Обязательная причина корректировки"
+                  />
+                  <button
+                    type="button"
+                    disabled={!balanceAmount.trim() || !balanceReason.trim() || Boolean(actionWorking)}
+                    onClick={() => void adjustBalance()}
+                  >
+                    {actionWorking === "adjust_balance" ? "Проводим…" : "Провести корректировку"}
+                  </button>
+                  <small>
+                    Это бухгалтерская корректировка, а не пополнение провайдера. При отсутствии обеспечения сверка покажет дефицит.
+                  </small>
+                </div>
               </section>
 
               <section className="wpay-admin-user-section">

@@ -1652,6 +1652,33 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.wpay.post("/api/wallet/admin-aura-process", headers=self.owner)
         card_id = card_payload["card"]["id"]
+        admin_cards = await self.wpay.get(
+            "/api/wallet/admin-cards", headers=self.owner,
+        )
+        self.assertEqual(admin_cards.status, 200, await admin_cards.text())
+        self.assertEqual((await admin_cards.json())["items"][0]["card_id"], card_id)
+        refreshed = await self.wpay.post(
+            "/api/wallet/admin-card-action", headers=self.owner,
+            json={"card_id": card_id, "operation": "refresh"},
+        )
+        self.assertEqual(refreshed.status, 200, await refreshed.text())
+        missing_confirmation = await self.wpay.post(
+            "/api/wallet/admin-card-action", headers=self.owner,
+            json={"card_id": card_id, "operation": "freeze"},
+        )
+        self.assertEqual(missing_confirmation.status, 409)
+        admin_frozen = await self.wpay.post(
+            "/api/wallet/admin-card-action", headers=self.owner,
+            json={
+                "card_id": card_id, "operation": "freeze",
+                "confirm": "freeze:" + card_id,
+            },
+        )
+        self.assertEqual(admin_frozen.status, 200, await admin_frozen.text())
+        audit = self.app["wpay_ledger"].db.execute(
+            "SELECT action,target_user_id FROM admin_action_audit ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
+        self.assertEqual((audit["action"], audit["target_user_id"]), ("card.freeze", "owner"))
         foreign = await self.wpay.post(
             "/api/wallet/aura-card-freeze",
             headers={"X-Telegram-Init-Data": init_data(323)},

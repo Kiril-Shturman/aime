@@ -289,7 +289,7 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['provider']['balance'][0]['available'], '10')
         self.assertTrue((await (await self.client.get('/api/wallet/access', headers={'X-Telegram-Init-Data': init_data(321)})).json())['owner'])
         admin_headers = {'X-Telegram-Init-Data': init_data(321)}
-        for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts', 'admin-notifications', 'admin-audit']:
+        for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts', 'admin-notifications', 'admin-audit', 'admin-cards']:
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers=admin_headers)).status, 200)
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers={'X-Telegram-Init-Data': init_data(999)})).status, 403)
 
@@ -333,6 +333,13 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body['contacts']['email'], 'se***@example.com')
         self.assertTrue(body['contacts']['phone'].endswith('67'))
         self.assertEqual(body['aura']['cards'][0]['masked_pan'], '411111******1234')
+        cards = await self.client.get('/api/wallet/admin-cards', headers=admin)
+        self.assertEqual(cards.status, 200, await cards.text())
+        card_body = await cards.json()
+        self.assertEqual(card_body['total'], 1)
+        self.assertEqual(card_body['items'][0]['user_id'], uid)
+        self.assertEqual(card_body['items'][0]['masked_pan'], '411111******1234')
+        self.assertNotIn('body', card_body['items'][0])
         denied = await self.client.get(
             '/api/wallet/admin-user?user_id=' + uid,
             headers={'X-Telegram-Init-Data': init_data(999)},

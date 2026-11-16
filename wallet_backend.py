@@ -1033,6 +1033,149 @@ def install_wallet(app, root, owner_check):
             )
             raise
 
+    def admin_cards(request):
+        query = str(request.query.get('q') or '').strip()[:200]
+        selected_card_id = str(request.query.get('card_id') or '').strip()
+        clauses, params = ['c.environment=?'], [aura_environment]
+        if selected_card_id:
+            clauses.append('c.card_id=?')
+            params.append(selected_card_id)
+        elif query:
+            pattern = '%' + query + '%'
+            clauses.append(
+                '(c.card_id LIKE ? OR c.masked_pan LIKE ? OR c.user_id LIKE ? '
+                'OR c.customer_id LIKE ? OR a.telegram_username LIKE ?)'
+            )
+            params.extend([pattern] * 5)
+        rows = decoded_rows(
+            'SELECT c.card_id,c.user_id,c.customer_id,c.environment,c.kind,c.status,'
+            'c.frozen,c.masked_pan,c.delivery_status,c.tracking,c.provider_updated_at,'
+            'c.created_at,c.updated_at,a.telegram_id,a.telegram_username,a.first_name,a.last_name,'
+            '(SELECT COUNT(*) FROM aura_card_operations o WHERE o.card_id=c.card_id) operation_count '
+            'FROM aura_cards c LEFT JOIN wallet_accounts a ON a.user_id=c.user_id WHERE ' +
+            ' AND '.join(clauses) + ' ORDER BY c.updated_at DESC LIMIT 500', params,
+        )
+        for row in rows:
+            body = ledger.db.execute(
+                'SELECT body FROM aura_cards WHERE card_id=?', (row['card_id'],),
+            ).fetchone()
+            try:
+                state = json.loads(body['body']) if body else {}
+            except (TypeError, ValueError, json.JSONDecodeError):
+                state = {}
+            balance = state.get('balance') if isinstance(state, dict) else None
+            row['balance'] = str(balance) if balance is not None else None
+            row['currency'] = 'USDT' if balance is not None else None
+            row['frozen'] = bool(row['frozen'])
+        operations = []
+        if selected_card_id:
+            operations = decoded_rows(
+                'SELECT operation_id,card_id,user_id,operation_type,status,asset,amount,fee,'
+                'merchant,original_amount,original_currency,refunded_amount,balance_before,'
+                'balance_after,merchant_country,mcc,merchant_category,decline_reason,'
+                'decline_message,provider_created_at,provider_updated_at,created_at '
+                'FROM aura_card_operations WHERE card_id=? AND environment=? '
+                'ORDER BY rowid DESC LIMIT 100', (selected_card_id, aura_environment),
+            )
+        return {'items': rows, 'operations': operations, 'total': len(rows)}
+
+    def store_admin_card_control(card, result):
+        if result['owner_id'] != card['customer_id']:
+            raise ValueError('Aura card owner mismatch')
+        ledger.db.execute(
+            'UPDATE aura_cards SET frozen=?,status=?,masked_pan=COALESCE(?,masked_pan),'
+            'delivery_status=COALESCE(?,delivery_status),provider_updated_at=?,body=?,updated_at=? '
+            'WHERE card_id=? AND user_id=? AND environment=?',
+            (
+                int(result['frozen']), result['status'], result.get('card_number_masked'),
+                result.get('delivery_status'), now(),
+                json.dumps(result, separators=(',', ':'), ensure_ascii=False), time.time(),
+                card['card_id'], card['user_id'], aura_environment,
+            ),
+        )
+
+    def normalize_admin_card_snapshot(card, payload):
+        if not isinstance(payload, dict):
+            raise ValueError('Invalid Aura card response')
+        card_id = str(payload.get('card_id') or payload.get('id') or '')
+        owner_id = str(payload.get('owner_id') or payload.get('customer_id') or '')
+        status = str(payload.get('status') or '')
+        kind = str(payload.get('kind') or card.get('kind') or '')
+        frozen = payload.get('frozen')
+        masked = payload.get('card_number_masked') or payload.get('masked_pan') or ''
+        if (
+            card_id != card['card_id'] or owner_id != card['customer_id']
+            or not re.fullmatch(r'[a-zA-Z0-9_.:-]{1,100}', status)
+            or kind not in {'virtual', 'physical'} or not isinstance(frozen, bool)
+            or not isinstance(masked, str) or len(masked) > 64
+        ):
+            raise ValueError('Invalid Aura card response')
+        balance = payload.get('balance')
+        if balance is not None:
+            balance = str(money(balance, positive=False))
+            if Decimal(balance) < 0 or payload.get('currency', 'USDT') != 'USDT':
+                raise ValueError('Invalid Aura card balance')
+        return {
+            'balance': balance, 'card_id': card_id, 'card_number_masked': masked,
+            'currency': 'USDT', 'frozen': frozen, 'owner_id': owner_id,
+            'status': status, 'kind': kind,
+            'delivery_status': payload.get('delivery_status'),
+        }
+
+    async def admin_card_action(request, admin_id):
+        body = await request.json()
+        if not isinstance(body, dict) or set(body) - {'card_id', 'operation', 'confirm'}:
+            raise ValueError('Некорректная команда по карте')
+        if not aura_enabled or not aura_client.configured:
+            raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
+        card_id = str(body.get('card_id') or '')
+        operation = str(body.get('operation') or '')
+        card = ledger.db.execute(
+            'SELECT card_id,user_id,customer_id,status,frozen FROM aura_cards '
+            'WHERE card_id=? AND environment=?', (card_id, aura_environment),
+        ).fetchone()
+        if not card:
+            raise ApiError('CARD_NOT_FOUND', 'Карта не найдена', 404)
+        action_name = 'card.' + operation
+        try:
+            if operation == 'refresh':
+                result = normalize_admin_card_snapshot(
+                    dict(card), await aura_client.get_card(card_id)
+                )
+                store_admin_card_control(card, result)
+            elif operation in {'freeze', 'unfreeze', 'cancel'}:
+                if body.get('confirm') != f'{operation}:{card_id}':
+                    raise ApiError('CONFIRMATION_REQUIRED', 'Подтвердите действие с картой', 409)
+                if operation == 'freeze':
+                    result = await aura_client.freeze_card(card_id)
+                    store_admin_card_control(card, result)
+                elif operation == 'unfreeze':
+                    result = await aura_client.unfreeze_card(card_id)
+                    store_admin_card_control(card, result)
+                else:
+                    result = await aura_client.cancel_card(card_id)
+                    status = str(result.get('status') or 'cancelled')
+                    if status not in {'cancelled', 'closed'}:
+                        raise ValueError('Unexpected Aura card cancellation status')
+                    ledger.db.execute(
+                        'UPDATE aura_cards SET status=?,provider_updated_at=?,updated_at=? '
+                        'WHERE card_id=? AND user_id=? AND environment=?',
+                        (status, now(), time.time(), card_id, card['user_id'], aura_environment),
+                    )
+            else:
+                raise ValueError('Неизвестная команда по карте')
+            record_admin_action(
+                admin_id, action_name, card['user_id'],
+                detail={'card_id': card_id, 'status': result.get('status'), 'operation': operation},
+            )
+            return {'ok': True, 'operation': operation, 'card_id': card_id, 'result': result}
+        except (ApiError, ValueError) as error:
+            record_admin_action(
+                admin_id, action_name, card['user_id'], outcome='failed',
+                detail={'card_id': card_id, 'error': getattr(error, 'name', 'INVALID_REQUEST')},
+            )
+            raise
+
     def admin_problems():
         present = tables()
         issues = []
@@ -1471,6 +1614,13 @@ def install_wallet(app, root, owner_check):
                 )
             if action == 'admin-audit' and request.method == 'GET':
                 return web.json_response(admin_audit(request), headers={'Cache-Control': 'private, no-store'})
+            if action == 'admin-cards' and request.method == 'GET':
+                return web.json_response(admin_cards(request), headers={'Cache-Control': 'private, no-store'})
+            if action == 'admin-card-action' and request.method == 'POST':
+                return web.json_response(
+                    await admin_card_action(request, uid),
+                    headers={'Cache-Control': 'private, no-store'},
+                )
             if action == 'admin-sync-users' and request.method == 'POST':
                 result = await sync_telegram_users()
                 record_admin_action(uid, 'users.sync', detail=result)
@@ -2228,7 +2378,10 @@ def install_wallet(app, root, owner_check):
                     ).fetchone()
                     if row:
                         require_asset_enabled(json.loads(row['body']).get('asset'))
-            financial = await finance_route(request,action,uid,admin,ledger,provider,money,ApiError)
+            financial = await finance_route(
+                request, action, uid, admin, ledger, provider, money, ApiError,
+                audit_callback=record_admin_action,
+            )
             if financial is not None:return financial
             aliases={'operations-transfers':'transfer-history','operations-invoices':'invoice-history'}
             owned = await user_ops_route(request,aliases.get(action,action) if uid!='owner' else action,uid,ledger,provider,money,ApiError)
