@@ -325,3 +325,5 @@
 .wpay-promo--friends .wpay-promo-subline { font-size: 18px; font-weight: 750; line-height: 1.17; margin-top: 0; }
 .wpay-promo--friends .wpay-promo-link { padding-top: 6px; padding-bottom: 5px; }
 .wpay-promo--friends .wpay-promo-countdown { margin-top: 3px; padding-top: 2px; padding-bottom: 2px; }
+.wpay-promo--sbp .wpay-promo-card { width: 188px; height: 118px; right: -15px; top: 1px; }
+.wpay-promo-sbp-logo { right: 54px; top: 69px; width: 116px; }
