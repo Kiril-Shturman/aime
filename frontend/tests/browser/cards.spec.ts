@@ -304,3 +304,28 @@ test("cards can be dragged with a mouse without opening their popup", async ({
   ).toHaveAttribute("aria-current", "true");
   await expect(popup(page)).not.toBeVisible();
 });
+
+test("four card appearances are local and persist without issuing another card", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  const picker = page.getByRole("group", {
+    name: "Оформление карты в приложении",
+  });
+  await expect(picker.getByRole("button")).toHaveCount(4);
+  await picker
+    .getByRole("button", { name: "Тёмно-синяя", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("main", { name: "Мои карты" })
+      .locator(".wpay-card-skin--navy"),
+  ).toHaveCount(4);
+  expect(state.calls).toHaveLength(0);
+  await page.reload();
+  await page.getByRole("link", { name: "Карты", exact: true }).click();
+  await expect(
+    picker.getByRole("button", { name: "Тёмно-синяя", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  expect(state.calls).toHaveLength(0);
+});

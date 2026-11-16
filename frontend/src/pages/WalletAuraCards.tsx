@@ -1,3 +1,4 @@
+import WalletCardFace, { cardSkins, type CardSkin } from "./WalletCardFace";
 import PlusCircleFill from "framework7-icons/react/esm/PlusCircleFill.js";
 import EyeFill from "framework7-icons/react/esm/EyeFill.js";
 import Snow from "framework7-icons/react/esm/Snow.js";
@@ -15,7 +16,6 @@ import {
   History,
   RefreshCw,
   Plus,
-  Cpu,
   Eye,
 } from "lucide-react";
 import { haptic } from "../lib/telegram";
@@ -118,6 +118,14 @@ export default function WalletAuraCards({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [operations, setOperations] = useState<CardOperation[]>([]);
   const [operationsLoading, setOperationsLoading] = useState(false);
+  const [skin, setSkin] = useState<CardSkin>(() => {
+    try {
+      const saved = localStorage.getItem("wpay:card-skin:v1");
+      if (cardSkins.some((item) => item.value === saved))
+        return saved as CardSkin;
+    } catch {}
+    return "silver";
+  });
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -476,7 +484,7 @@ export default function WalletAuraCards({
                       openPanel("details");
                     }}
                   >
-                    <LiveCardArtwork card={card} />
+                    <LiveCardArtwork card={card} skin={skin} />
                   </button>
                 ))}
                 {offers.map((kind) => (
@@ -487,7 +495,7 @@ export default function WalletAuraCards({
                     aria-label={`Заказать ${kind === "physical" ? "физическую" : "виртуальную"} карту`}
                     onClick={() => order(kind)}
                   >
-                    <LiveCardArtwork kind={kind} />
+                    <LiveCardArtwork kind={kind} skin={skin} />
                   </button>
                 ))}
               </div>
@@ -513,6 +521,33 @@ export default function WalletAuraCards({
             </>
           )}
         </section>
+        {!loading && (
+          <div
+            className="wpay-aura-skin-picker"
+            role="group"
+            aria-label="Оформление карты в приложении"
+          >
+            <span>Вид карты</span>
+            {cardSkins.map((item) => (
+              <button
+                type="button"
+                key={item.value}
+                data-skin={item.value}
+                aria-label={item.label}
+                aria-pressed={skin === item.value}
+                onClick={() => {
+                  haptic("light");
+                  setSkin(item.value);
+                  try {
+                    localStorage.setItem("wpay:card-skin:v1", item.value);
+                  } catch {}
+                }}
+              >
+                <span />
+              </button>
+            ))}
+          </div>
+        )}
         {showOffer ? (
           <section className="px-4 pt-2">
             <h2 className="text-[21px] font-semibold">
@@ -730,7 +765,7 @@ export default function WalletAuraCards({
               {displayPanel === "issue" && (
                 <>
                   <div className="mb-5">
-                    <LiveCardArtwork kind={issueKind} />
+                    <LiveCardArtwork kind={issueKind} skin={skin} />
                   </div>
                   <div
                     className="wpay-aura-kind-picker"
@@ -1040,7 +1075,7 @@ export default function WalletAuraCards({
                 <>
                   {displayPanel === "details" && (
                     <div className="mb-5">
-                      <LiveCardArtwork card={selected} />
+                      <LiveCardArtwork card={selected} skin={skin} />
                     </div>
                   )}
                   <div className="wpay-aura-info">
@@ -1200,59 +1235,26 @@ function PanelRow({
 function LiveCardArtwork({
   card,
   kind,
+  skin,
 }: {
   card?: AuraCard;
   kind?: "physical" | "virtual";
+  skin: CardSkin;
 }) {
-  const physical = (card?.kind ?? kind) === "physical";
   return (
-    <span
-      className={`wpay-bank-card wpay-aura-artwork ${physical ? "wpay-aura-artwork--physical" : "wpay-bank-card--usd"}`}
-    >
-      <span className="wpay-bank-card-orbit" aria-hidden="true" />
-      <span className="wpay-bank-card-head">
-        <img
-          className="wpay-aura-wordmark"
-          src="/brands/wpay-wordmark-light.svg"
-          alt="wPay"
-        />
-        <span className="wpay-bank-card-tag">
-          {card
-            ? card.frozen
-              ? "Заморожена"
-              : (statusText[card.status] ?? card.status)
-            : "Новая карта"}
-        </span>
-      </span>
-      <span className="wpay-bank-card-middle">
-        <span>
-          <span className="wpay-bank-card-name">
-            {physical ? "Карта с доставкой" : "Цифровая карта"}
-          </span>
-          <span className="wpay-aura-card-title">
-            {physical ? "Физическая" : "Виртуальная"}
-          </span>
-        </span>
-        {card ? (
-          <Cpu size={32} aria-hidden="true" />
-        ) : (
-          <span className="wpay-card-offer-plus">+</span>
-        )}
-      </span>
-      <span className="wpay-bank-card-bottom">
-        <span>
-          <span className="wpay-bank-card-number">
-            {card
-              ? (card.masked_pan ?? "•••• •••• •••• ••••")
-              : "Оформить карту"}
-          </span>
-          <span className="wpay-bank-card-kind">
-            {physical ? "PHYSICAL" : "VIRTUAL"}
-          </span>
-        </span>
-        <CreditCard size={27} aria-hidden="true" />
-      </span>
-    </span>
+    <WalletCardFace
+      skin={skin}
+      kind={card?.kind ?? kind ?? "virtual"}
+      status={
+        card
+          ? card.frozen
+            ? "Заморожена"
+            : (statusText[card.status] ?? card.status)
+          : "Новая карта"
+      }
+      maskedPan={card?.masked_pan}
+      offer={!card}
+    />
   );
 }
 
