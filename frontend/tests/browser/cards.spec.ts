@@ -169,7 +169,7 @@ for (const theme of ["light", "dark"])
   }) => {
     const state = await setup(page, theme);
     const main = page.getByRole("main", { name: "Мои карты" });
-    await expect(main.locator(".wpay-bank-card")).toHaveCount(4);
+    await expect(main.locator(".wpay-bank-card")).toHaveCount(6);
     await expect(
       main.getByText("Онлайн-сервис", { exact: true }),
     ).toBeVisible();
@@ -256,7 +256,10 @@ test("physical card order shows delivery fields and cost before charging", async
 }) => {
   const state = await setup(page, "light", false, true);
   const main = page.getByRole("main", { name: "Мои карты" });
-  await main.getByRole("button", { name: "Заказать физическую карту" }).click();
+  await main
+    .getByRole("button", { name: "Заказать физическую карту" })
+    .first()
+    .click();
   await expect(
     popup(page).getByRole("button", { name: "Выпустить карту", exact: true }),
   ).toBeDisabled();
@@ -305,28 +308,33 @@ test("cards can be dragged with a mouse without opening their popup", async ({
   await expect(popup(page)).not.toBeVisible();
 });
 
-test("four card appearances are local and persist without issuing another card", async ({
+test("four offers are inline: two virtual and two physical without an appearance picker", async ({
   page,
 }) => {
-  const state = await setup(page);
-  const picker = page.getByRole("group", {
-    name: "Оформление карты в приложении",
-  });
-  await expect(picker.getByRole("button")).toHaveCount(4);
-  await picker
-    .getByRole("button", { name: "Тёмно-синяя", exact: true })
-    .click();
+  const state = await setup(page, "dark", false, true);
+  const main = page.getByRole("main", { name: "Мои карты" });
   await expect(
-    page
-      .getByRole("main", { name: "Мои карты" })
-      .locator(".wpay-card-skin--navy"),
-  ).toHaveCount(4);
-  expect(state.calls).toHaveLength(0);
-  await page.reload();
-  await page.getByRole("link", { name: "Карты", exact: true }).click();
+    page.getByRole("group", { name: "Оформление карты в приложении" }),
+  ).toHaveCount(0);
   await expect(
-    picker.getByRole("button", { name: "Тёмно-синяя", exact: true }),
-  ).toHaveAttribute("aria-pressed", "true");
+    main.getByRole("button", {
+      name: "Заказать виртуальную карту",
+      exact: true,
+    }),
+  ).toHaveCount(2);
+  await expect(
+    main.getByRole("button", {
+      name: "Заказать физическую карту",
+      exact: true,
+    }),
+  ).toHaveCount(2);
+  for (const appearance of ["silver", "navy", "ice", "graphite"]) {
+    await expect(main.locator(`.wpay-card-skin--${appearance}`)).toHaveCount(1);
+  }
+  await main.getByRole("button", { name: "Карта 4", exact: true }).click();
+  await expect(
+    main.getByRole("heading", { name: "Карта с доставкой", exact: true }),
+  ).toBeVisible();
   expect(state.calls).toHaveLength(0);
 });
 
@@ -352,7 +360,7 @@ test("first card offer is named For subscriptions and shows provider-backed feat
   ).toBeVisible();
   await expect(features.getByRole("article")).toHaveCount(6);
   expect(state.calls).toHaveLength(0);
-  await main.getByRole("button", { name: "Карта 2", exact: true }).click();
+  await main.getByRole("button", { name: "Карта 3", exact: true }).click();
   await expect(
     main.getByRole("heading", { name: "Карта с доставкой", exact: true }),
   ).toBeVisible();
