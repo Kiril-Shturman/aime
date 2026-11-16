@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { ArrowUpRight, Heart, Sparkles } from "lucide-react";
 import qrArtwork from "../assets/verification/qr-promo.png";
-import sbpArtwork from "../assets/verification/sbp-promo.jpg";
+import sbpArtwork from "../assets/verification/sbp-promo.png";
 import cardArtwork from "../assets/verification/wpay-card.webp";
 import { haptic } from "../lib/telegram";
 import "./WalletPromos.css";
