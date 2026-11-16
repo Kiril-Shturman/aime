@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState } from "react";
-import { tg } from "../lib/telegram";
+import WalletVerificationIdentity from "./WalletVerificationIdentity";
 import telephoneArtwork from "../assets/verification/telephone.webp";
 import mailboxArtwork from "../assets/verification/mailbox-envelope.webp";
 import passportArtwork from "../assets/verification/passport.webp";
@@ -8,12 +7,11 @@ import { List, ListInput } from "framework7-react";
 import { Button } from "konsta/react";
 import {
   Check,
+  RefreshCw,
   LockKeyhole,
   ArrowUpRight,
-  RefreshCw,
   Mail,
   AtSign,
-  Camera,
 } from "lucide-react";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
 import "./WalletVerification.css";
@@ -37,174 +35,6 @@ type Props = {
   contacts: boolean;
   onContacts: () => void;
 };
-function EmbeddedVerification({
-  aura,
-}: {
-  aura: ReturnType<typeof useAuraProfile>;
-}) {
-  const [loaded, setLoaded] = useState(false);
-  const [browserOpened, setBrowserOpened] = useState(false);
-  const [frameVersion, setFrameVersion] = useState(0);
-  const preferBrowser =
-    tg()?.platform === "ios" ||
-    /iPhone|iPad|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const [camera, setCamera] = useState<
-    "idle" | "requesting" | "ready" | "denied"
-  >("idle");
-  const [cameraError, setCameraError] = useState("");
-  const active = useRef(true),
-    requesting = useRef(false);
-  useEffect(() => {
-    active.current = true;
-    return () => {
-      active.current = false;
-    };
-  }, []);
-  async function allowCamera() {
-    if (requesting.current) return;
-    requesting.current = true;
-    setCamera("requesting");
-    setCameraError("");
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) throw Error("unsupported");
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user" },
-        audio: false,
-      });
-      // Check permission only. No frames are read, stored or sent by wPay.
-      stream.getTracks().forEach((track) => track.stop());
-      if (active.current) {
-        setLoaded(false);
-        setFrameVersion((value) => value + 1);
-        setCamera("ready");
-      }
-    } catch (error) {
-      if (active.current) {
-        setCamera("denied");
-        setCameraError(
-          error instanceof DOMException && error.name === "NotAllowedError"
-            ? "Доступ к камере не разрешён. Проверьте разрешение камеры для Telegram в настройках телефона или продолжите проверку в браузере."
-            : "Камеру не удалось открыть в этом окне. Попробуйте ещё раз или продолжите проверку в браузере.",
-        );
-      }
-    } finally {
-      requesting.current = false;
-    }
-  }
-  function openBrowser() {
-    if (tg()?.openLink) tg()?.openLink?.(aura.sessionUrl);
-    else window.open(aura.sessionUrl, "_blank", "noopener,noreferrer");
-    setBrowserOpened(true);
-  }
-  return (
-    <section
-      className="wpay-verification wpay-verification-embedded"
-      aria-label="Форма проверки личности"
-    >
-      <header className="wpay-verification-frame-header">
-        <span>
-          <LockKeyhole size={15} /> Проверка личности
-        </span>
-        <span className="wpay-verification-frame-actions">
-          {camera === "ready" && (
-            <button
-              type="button"
-              aria-label="Перезапустить камеру"
-              onClick={() => {
-                setCamera("idle");
-                setLoaded(false);
-              }}
-            >
-              <RefreshCw size={15} />
-            </button>
-          )}
-          <button type="button" onClick={openBrowser}>
-            В браузере <ArrowUpRight size={14} />
-          </button>
-        </span>
-      </header>
-      <div className="wpay-verification-frame-body">
-        {camera !== "ready" ? (
-          <div className="wpay-verification-camera">
-            <span className="wpay-verification-camera-icon">
-              <Camera size={32} />
-            </span>
-            <h2>
-              {preferBrowser
-                ? "Проверка с доступом к камере"
-                : "Для проверки нужна камера"}
-            </h2>
-            <p>
-              {preferBrowser
-                ? "В Telegram на iPhone камера во встроенной форме может блокироваться. Продолжите эту же проверку в браузере и разрешите доступ к камере."
-                : "Разрешите доступ к фронтальной камере, чтобы сделать селфи в защищённой форме."}
-            </p>
-            {browserOpened && (
-              <p role="status">
-                Завершите проверку в браузере и вернитесь в wPay. Статус
-                обновится автоматически.
-              </p>
-            )}
-            {cameraError && (
-              <p role="alert" className="wpay-verification-error">
-                {cameraError}
-              </p>
-            )}
-            <Button
-              data-wpay-primary=""
-              rounded
-              disabled={camera === "requesting"}
-              onClick={preferBrowser ? openBrowser : () => void allowCamera()}
-            >
-              {preferBrowser
-                ? "Открыть проверку в браузере"
-                : camera === "requesting"
-                  ? "Ожидаем разрешение…"
-                  : camera === "denied"
-                    ? "Повторить запрос камеры"
-                    : "Разрешить камеру"}
-            </Button>
-            <button
-              type="button"
-              className="wpay-verification-text-action"
-              disabled={camera === "requesting"}
-              onClick={preferBrowser ? () => void allowCamera() : openBrowser}
-            >
-              {preferBrowser
-                ? camera === "requesting"
-                  ? "Ожидаем разрешение…"
-                  : "Попробовать внутри Telegram"
-                : "Продолжить в браузере"}{" "}
-              <ArrowUpRight size={16} />
-            </button>
-            <span className="wpay-verification-camera-note">
-              Если камера не заработает внутри формы, используйте кнопку «В
-              браузере» сверху.
-            </span>
-          </div>
-        ) : (
-          <>
-            {!loaded && (
-              <p className="wpay-verification-frame-loading" role="status">
-                Загружаем защищённую форму…
-              </p>
-            )}
-            <iframe
-              key={frameVersion}
-              title="Проверка личности Aura"
-              src={aura.sessionUrl}
-              allow="camera *; microphone *; fullscreen *"
-              referrerPolicy="no-referrer"
-              onLoad={() => setLoaded(true)}
-            />
-          </>
-        )}
-      </div>
-    </section>
-  );
-}
-
 export default function WalletVerification({
   aura,
   onPersonal,
@@ -214,9 +44,9 @@ export default function WalletVerification({
   const verified = Boolean(aura.kyc?.verified);
   const pending = ["pending", "in_review"].includes(aura.kyc?.status || "");
   const rejected = aura.kyc?.status === "rejected";
-  if (aura.sessionOpen && aura.sessionUrl)
-    return <EmbeddedVerification key={aura.sessionUrl} aura={aura} />;
-  if (contacts && !verified && !rejected)
+  if (aura.sessionOpen && !verified)
+    return <WalletVerificationIdentity aura={aura} />;
+  if (contacts && !verified && !pending && !rejected)
     return (
       <section
         className="wpay-verification wpay-verification-contacts"
@@ -461,13 +291,20 @@ export default function WalletVerification({
               !aura.available ||
               aura.loading ||
               aura.busy ||
+              pending ||
               Boolean(aura.kyc?.terminal)
             }
             className="!m-0 !w-full"
             onClick={onContacts}
           >
             <span className="wpay-verification-button-content">
-              <span>{aura.busy ? "Подготавливаем…" : "Начать"}</span>
+              <span>
+                {aura.busy
+                  ? "Подготавливаем…"
+                  : pending
+                    ? "На проверке"
+                    : "Начать"}
+              </span>
             </span>
           </Button>
         ) : (

@@ -69,7 +69,11 @@ async function setup(
     if (action === "aura-kyc")
       return route.fulfill({
         json: {
-          status: state.verified ? "verified" : "pending",
+          status: state.verified
+            ? "completed"
+            : state.posts.some((p) => p.action === "aura-kyc")
+              ? "pending"
+              : "none",
           verified: state.verified,
           terminal: state.verified,
           ...(route.request().method() === "POST"
@@ -97,409 +101,137 @@ async function setup(
   await page.getByRole("button", { name: "Профиль", exact: true }).click();
   return state;
 }
-test("contacts persist through server, hosted KYC updates from pending to verified", async ({
-  page,
-}) => {
-  const state = await setup(page);
-  await page
-    .getByRole("link", { name: "Личные данные Имя и контакты" })
-    .click();
-  await page.locator("#profile-first-name").fill("Кирилл");
-  await page.locator("#profile-phone").fill("8 (999) 123-45-67");
-  await page.locator("#profile-email").fill("hello@example.com");
-  await page.getByRole("button", { name: "Сохранить", exact: true }).click();
-  await expect(
-    page.getByRole("status").filter({ hasText: "Телефон и почта сохранены" }),
-  ).toBeVisible();
-  expect(state.posts).toEqual([
-    {
-      action: "aura-customer",
-      body: { phone: "+79991234567", email: "hello@example.com" },
-    },
-  ]);
-  await page.reload();
-  await page.getByRole("button", { name: "Профиль", exact: true }).click();
-  await page
-    .getByRole("link", { name: "Личные данные Имя и контакты" })
-    .click();
-  await expect(page.locator("#profile-phone")).toHaveValue("+79991234567");
-  await expect(page.locator("#profile-email")).toHaveValue("hello@example.com");
-  await page.reload();
-  await page.getByRole("button", { name: "Профиль", exact: true }).click();
+
+async function contacts(page: Page, native = false) {
+  const state = await setup(page, true, "light", native);
   await page
     .getByRole("link", { name: "Верификация Подтверждение личности" })
     .click();
   await page.getByRole("button", { name: "Начать", exact: true }).click();
-  await expect(page.locator("#verification-phone")).toHaveValue("+79991234567");
-  await expect(page.locator("#verification-email")).toHaveValue(
-    "hello@example.com",
-  );
-  await expect(page.locator(".wpay-contact-telephone")).toBeVisible();
-  await expect(page.locator(".wpay-contact-mailbox")).toBeVisible();
-  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
-
-  await page
-    .getByRole("button", {
-      name: "Разрешить камеру",
-      exact: true,
-    })
-    .click();
-  await expect(page.getByTitle("Проверка личности Aura")).toHaveAttribute(
-    "src",
-    "https://verify.example/session-private",
-  );
-  expect(state.posts.at(-1)).toEqual({ action: "aura-kyc", body: {} });
-  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
-    "session-private",
-  );
-  state.verified = true;
-  await page.reload();
-  await page.getByRole("button", { name: "Профиль", exact: true }).click();
-  await page
-    .getByRole("link", { name: "Верификация Подтверждение личности" })
-    .click();
-  await expect(
-    page.getByRole("heading", { name: "Личность подтверждена" }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Начать" })).toHaveCount(0);
-});
-test("invalid contacts never post; viewing KYC never registers a customer", async ({
-  page,
-}) => {
-  const state = await setup(page);
-  await page
-    .getByRole("link", { name: "Верификация Подтверждение личности" })
-    .click();
-  await page.getByRole("button", { name: "Начать", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "Ваши контакты" }),
-  ).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(0);
-  const continueButton = page.getByRole("button", { name: "Продолжить", exact: true });
-  await expect(continueButton).toHaveCount(0);
-  await page.locator("#verification-email").fill("hello@");
-  await expect(continueButton).toHaveCount(0);
-  await page.locator("#verification-email").fill("hello@example.com");
-  await expect(continueButton).toBeVisible();
-  await page.locator("#verification-email").fill("");
-  await expect(continueButton).toHaveCount(0);
-  await page.locator("#verification-email").fill("hello@example.com");
-  await page.setViewportSize({ width: 375, height: 667 });
-  const next = await page
-    .getByRole("button", { name: "Продолжить", exact: true })
-    .boundingBox();
-  expect(next!.y + next!.height).toBeGreaterThan(627);
-  expect(next!.y + next!.height).toBeLessThanOrEqual(667);
-  await page.screenshot({
-    path: test.info().outputPath("verification-contacts.png"),
-  });
-
-  expect(state.posts).toHaveLength(0);
-  const phone = page.locator("#verification-phone");
-  await phone.fill("+7+7 (999) 123-45-67");
-  await expect(phone).toHaveValue("+79991234567");
-  await phone.fill("+78 (999) 123-45-67");
-  await expect(phone).toHaveValue("+79991234567");
-  await phone.fill("+7 999 123-45-67");
-  await expect(phone).toHaveValue("+7 999 123-45-67");
-  await phone.fill("123");
-  await page.locator("#verification-email").fill("hello@example.com");
-  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
-  await expect(page.getByRole("alert")).toContainText("+7");
-  expect(state.posts).toHaveLength(0);
-  await page.locator("#verification-phone").fill("8 (999) 123-45-67");
-  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
-  await page
-    .getByRole("button", { name: "Разрешить камеру", exact: true })
-    .click();
-  await expect(page.getByTitle("Проверка личности Aura")).toHaveAttribute(
-    "src",
-    "https://verify.example/session-private",
-  );
-  expect(state.posts).toEqual([
-    {
-      action: "aura-customer",
-      body: { phone: "+79991234567", email: "hello@example.com" },
-    },
-    { action: "aura-kyc", body: {} },
-  ]);
-});
-test("provider unavailable cannot fake a saved profile", async ({ page }) => {
-  const state = await setup(page, false);
-  await page
-    .getByRole("link", { name: "Личные данные Имя и контакты" })
-    .click();
-  await expect(page.getByRole("alert")).toContainText("недоступно");
-  await expect(
-    page.getByRole("button", { name: "Сохранить", exact: true }),
-  ).toBeDisabled();
-  expect(state.posts).toHaveLength(0);
-});
-
-for (const theme of ["light", "dark"]) {
-  test(`verification composition: ${theme}, pinned action and layered artwork`, async ({
-    page,
-  }, info) => {
-    await setup(page, true, theme);
-    await page
-      .getByRole("link", { name: "Верификация Подтверждение личности" })
-      .click();
-    const screen = page.getByRole("region", {
-      name: "Проверка личности",
-      exact: true,
-    });
-    await expect(screen).toBeVisible();
-    const images = screen.locator("img");
-    await expect(images).toHaveCount(2);
-    for (const image of await images.all()) {
-      await expect(image).toHaveAttribute("src", /\/assets\/.*\.webp$/);
-      await expect
-        .poll(() =>
-          image.evaluate((node) => (node as HTMLImageElement).naturalWidth),
-        )
-        .toBeGreaterThan(0);
-    }
-    for (const size of [
-      { width: 375, height: 667 },
-      { width: 390, height: 844 },
-      { width: 768, height: 1024 },
-    ]) {
-      await page.setViewportSize(size);
-      const button = page.getByRole("button", { name: "Начать", exact: true });
-      await expect(button).toBeVisible();
-      const rect = await button.boundingBox();
-      expect(rect!.y + rect!.height).toBeGreaterThan(size.height - 40);
-      expect(rect!.y + rect!.height).toBeLessThanOrEqual(size.height);
-    }
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.screenshot({
-      path: info.outputPath(`verification-${theme}.png`),
-      animations: "disabled",
-    });
-  });
+  return state;
 }
-
-test("verification uses Telegram back and a plain Start button", async ({
+async function openDocuments(page: Page) {
+  await page.locator("#verification-phone").fill("+79991234567");
+  await page.locator("#verification-email").fill("test@example.com");
+  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Данные паспорта" }),
+  ).toBeVisible();
+}
+async function fillDocuments(page: Page) {
+  for (const [key, value] of Object.entries({
+    first_name: "Иван",
+    last_name: "Иванов",
+    birth_date: "1990-01-01",
+    passport: "1234 567890",
+    passport_issue_date: "2015-01-01",
+  })) {
+    await page.locator(`#identity-${key}`).fill(value);
+  }
+}
+test("contacts lead to own documents form; only filled identity is submitted", async ({
   page,
 }) => {
-  await setup(page, true, "light", true);
-  await page
-    .getByRole("link", { name: "Верификация Подтверждение личности" })
-    .click();
-  const screen = page.getByRole("region", {
-    name: "Проверка личности",
-    exact: true,
-  });
-  await expect(screen).toBeVisible();
+  const state = await contacts(page);
+  await openDocuments(page);
+  expect(state.posts.map((p) => p.action)).toEqual(["aura-customer"]);
+  await expect(page.locator("iframe")).toHaveCount(0);
+  await fillDocuments(page);
+  await page.getByRole("button", { name: "Отправить на проверку" }).click();
   await expect(
-    screen.getByRole("button", { name: "Начать", exact: true }).locator("svg"),
-  ).toHaveCount(0);
-  const view = screen.locator(
-    'xpath=ancestor::section[contains(@class,"wpay-viewport")]',
-  );
-  await expect(view.locator(".k-navbar")).toHaveCount(0);
-  await expect
-    .poll(() =>
-      page.evaluate(() => (window as any).Telegram.WebApp.BackButton.isVisible),
-    )
-    .toBe(true);
+    page
+      .getByRole("region", { name: "Проверка личности", exact: true })
+      .getByRole("status"),
+  ).toContainText("Документы на проверке");
+  expect(state.posts[1]).toEqual({
+    action: "aura-kyc",
+    body: {
+      first_name: "Иван",
+      last_name: "Иванов",
+      birth_date: "1990-01-01",
+      passport: "1234567890",
+      passport_issue_date: "2015-01-01",
+    },
+  });
+});
+test("invalid passport stays on form without identity POST", async ({
+  page,
+}) => {
+  const state = await contacts(page);
+  await openDocuments(page);
+  await fillDocuments(page);
+  await page.locator("#identity-passport").fill("123");
+  await page.getByRole("button", { name: "Отправить на проверку" }).click();
+  await expect(page.getByRole("alert")).toContainText("4 цифры");
+  expect(state.posts).toHaveLength(1);
+});
+test("Telegram back returns documents to contacts and then intro", async ({
+  page,
+}) => {
+  await contacts(page, true);
+  await openDocuments(page);
   await page.evaluate(() =>
     (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {}),
   );
   await expect(
-    page.getByRole("region", { name: "Проверка личности", exact: true }),
-  ).toHaveCount(0);
-  await expect
-    .poll(() =>
-      page.evaluate(() => (window as any).Telegram.WebApp.BackButton.isVisible),
-    )
-    .toBe(false);
-});
-
-test("Telegram back from contacts returns to verification start before closing", async ({
-  page,
-}) => {
-  await setup(page, true, "light", true);
-  await page
-    .getByRole("link", { name: "Верификация Подтверждение личности" })
-    .click();
-  await page.getByRole("button", { name: "Начать", exact: true }).click();
-  await expect(
     page.getByRole("heading", { name: "Ваши контакты" }),
   ).toBeVisible();
-  await page.evaluate(() => {
-    const w = window as any;
-    w.backVisibilityCalls = [];
-    const back = w.Telegram.WebApp.BackButton;
-    for (const method of ["show", "hide"]) {
-      const original = back[method].bind(back);
-      back[method] = () => {
-        w.backVisibilityCalls.push(method);
-        return original();
-      };
-    }
-  });
-  await page.locator("#verification-email").pressSequentially("test@example.com");
-  await expect.poll(() => page.evaluate(() => (window as any).backVisibilityCalls)).toEqual([]);
   await page.evaluate(() =>
     (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {}),
   );
   await expect(
     page.getByRole("button", { name: "Начать", exact: true }),
   ).toBeVisible();
-  await expect(
-    page.getByRole("region", { name: "Контакты для верификации", exact: true }),
-  ).toHaveCount(0);
-  await page.evaluate(() =>
-    (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {}),
-  );
-  await expect(
-    page.getByRole("region", { name: "Проверка личности", exact: true }),
-  ).toHaveCount(0);
 });
-
-test("embedded verification stays inside app, back resumes contacts, and polling detects completion", async ({
+test("email gates Continue and iOS inserted full phone replaces default prefix", async ({
   page,
 }) => {
-  const state = await setup(page, true, "light", true);
-  await page
-    .getByRole("link", { name: "Верификация Подтверждение личности" })
-    .click();
-  await page.getByRole("button", { name: "Начать", exact: true }).click();
-  await page.locator("#verification-phone").fill("+79991234567");
-  await page.locator("#verification-email").fill("hello@example.com");
-  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
-  expect(await page.evaluate(() => (window as any).cameraCalls)).toBe(0);
-  await page
-    .getByRole("button", { name: "Попробовать внутри Telegram", exact: true })
-    .click();
-  expect(await page.evaluate(() => (window as any).cameraStops)).toBe(1);
-  const frame = page.getByTitle("Проверка личности Aura");
-  await expect(frame).toBeVisible();
-
-  await expect(
-    page
-      .frameLocator('iframe[title="Проверка личности Aura"]')
-      .getByRole("heading", { name: "Защищённая проверка" }),
-  ).toBeVisible();
-  for (const size of [
-    { width: 375, height: 667 },
-    { width: 768, height: 1024 },
-  ]) {
-    await page.setViewportSize(size);
-    const rect = await frame.boundingBox();
-    expect(rect!.height).toBeGreaterThan(size.height - 160);
-    expect(rect!.y + rect!.height).toBeLessThanOrEqual(size.height);
-  }
-  const posts = state.posts.length;
-  await page.evaluate(() =>
-    (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {}),
-  );
-  await expect(frame).toHaveCount(0);
-  await expect(page.locator("#verification-email")).toHaveValue(
-    "hello@example.com",
-  );
-  await page
-    .getByRole("button", { name: "Продолжить проверку", exact: true })
-    .click();
-  await page
-    .getByRole("button", { name: "Попробовать внутри Telegram", exact: true })
-    .click();
-  await expect(frame).toBeVisible();
-  expect(state.posts.length).toBe(posts);
-  state.verified = true;
-  await expect(
-    page.getByRole("heading", { name: "Личность подтверждена" }),
-  ).toBeVisible({ timeout: 12000 });
-  await expect(frame).toHaveCount(0);
-  expect(await page.evaluate(() => JSON.stringify(localStorage))).not.toContain(
-    "session-private",
-  );
+  await contacts(page, true);
+  const next = page.getByRole("button", { name: "Продолжить", exact: true });
+  await expect(next).toHaveCount(0);
+  await page.locator("#verification-email").fill("test@");
+  await expect(next).toHaveCount(0);
+  await page.locator("#verification-email").fill("test@example.com");
+  await expect(next).toBeVisible();
+  await page.locator("#verification-phone").fill("+7+7 (999) 123-45-67");
+  await expect(page.locator("#verification-phone")).toHaveValue("+79991234567");
+  await page.locator("#verification-email").fill("");
+  await expect(next).toHaveCount(0);
 });
-
-test("camera denial stays readable and retry stops the permission-check stream", async ({
-  page,
-}) => {
-  await setup(page);
-  await page
-    .getByRole("link", { name: "Верификация Подтверждение личности" })
-    .click();
-  await page.getByRole("button", { name: "Начать", exact: true }).click();
-  await page.locator("#verification-phone").fill("+79991234567");
-  await page.locator("#verification-email").fill("hello@example.com");
-  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
-  await page.evaluate(() => {
-    (window as any).cameraDenied = true;
+for (const theme of ["light", "dark"])
+  test(`documents form fits mobile in ${theme}`, async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await setup(page, true, theme);
+    await page
+      .getByRole("link", { name: "Верификация Подтверждение личности" })
+      .click();
+    await page.getByRole("button", { name: "Начать", exact: true }).click();
+    await openDocuments(page);
+    const region = page.getByRole("region", {
+      name: "Документы для верификации",
+    });
+    expect(
+      await region.evaluate((el) => el.scrollWidth - el.clientWidth),
+    ).toBeLessThanOrEqual(1);
+    await expect(
+      page.getByRole("button", { name: "Отправить на проверку" }),
+    ).toBeInViewport();
   });
-  await page
-    .getByRole("button", { name: "Разрешить камеру", exact: true })
-    .click();
-  await expect(page.getByRole("alert")).toContainText(
-    "Доступ к камере не разрешён",
+test("provider validation error keeps identity editable", async ({ page }) => {
+  await contacts(page);
+  await openDocuments(page);
+  await fillDocuments(page);
+  await page.route("**/api/wallet/aura-kyc", (route) =>
+    route.request().method() === "POST"
+      ? route.fulfill({
+          status: 400,
+          json: { error: { name: "INVALID_REQUEST" } },
+        })
+      : route.fulfill({
+          json: { status: "none", verified: false, terminal: false },
+        }),
   );
-  await expect(page.getByTitle("Проверка личности Aura")).toHaveCount(0);
-  await expect(
-    page.getByRole("button", { name: "Продолжить в браузере", exact: true }),
-  ).toBeVisible();
-  await page.evaluate(() => {
-    (window as any).cameraDenied = false;
-  });
-  await page
-    .getByRole("button", { name: "Повторить запрос камеры", exact: true })
-    .click();
-  await expect(page.getByTitle("Проверка личности Aura")).toBeVisible();
-  expect(await page.evaluate(() => (window as any).cameraStops)).toBe(1);
-});
-
-test("iPhone offers the same session in browser without pre-opening camera", async ({
-  page,
-}) => {
-  await setup(page);
-  await page.evaluate(() =>
-    Object.defineProperty(navigator, "userAgent", {
-      configurable: true,
-      value:
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 Mobile Safari/604.1",
-    }),
-  );
-  await page
-    .getByRole("link", { name: "Верификация Подтверждение личности" })
-    .click();
-  await page.getByRole("button", { name: "Начать", exact: true }).click();
-  await page.locator("#verification-phone").fill("+79991234567");
-  await page.locator("#verification-email").fill("hello@example.com");
-  await page.getByRole("button", { name: "Продолжить", exact: true }).click();
-  const external = page.getByRole("button", {
-    name: "Открыть проверку в браузере",
-    exact: true,
-  });
-  await expect(external).toBeVisible();
-  await page.evaluate(() => {
-    (window as any).Telegram.WebApp.openLink = (url: string) => {
-      (window as any).openedKyc = url;
-    };
-  });
-  await external.click();
-  expect(await page.evaluate(() => (window as any).openedKyc)).toBe(
-    "https://verify.example/session-private",
-  );
-  await expect(
-    page
-      .getByRole("status")
-      .filter({ hasText: "Завершите проверку в браузере" }),
-  ).toBeVisible();
-  expect(await page.evaluate(() => (window as any).cameraCalls)).toBe(0);
-  await page
-    .getByRole("button", { name: "Попробовать внутри Telegram", exact: true })
-    .click();
-  const frame = page.getByTitle("Проверка личности Aura");
-  await expect(frame).toHaveAttribute(
-    "allow",
-    "camera *; microphone *; fullscreen *",
-  );
-  await page
-    .getByRole("button", { name: "Перезапустить камеру", exact: true })
-    .click();
-  await expect(frame).toHaveCount(0);
-  await expect(external).toBeVisible();
+  await page.getByRole("button", { name: "Отправить на проверку" }).click();
+  await expect(page.getByRole("alert")).toContainText("данные паспорта");
+  await expect(page.locator("#identity-first_name")).toHaveValue("Иван");
 });

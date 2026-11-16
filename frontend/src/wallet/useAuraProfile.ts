@@ -120,7 +120,12 @@ export function useAuraProfile(page: string | null) {
     };
   }, [page, available, refresh]);
   useEffect(() => {
-    if (page !== "verification" || !sessionOpen || !available) return;
+    if (
+      page !== "verification" ||
+      !available ||
+      (!sessionOpen && !["pending", "in_review"].includes(kyc?.status || ""))
+    )
+      return;
     const controller = new AbortController();
     let polling = false;
     const timer = window.setInterval(async () => {
@@ -142,7 +147,7 @@ export function useAuraProfile(page: string | null) {
       controller.abort();
       clearInterval(timer);
     };
-  }, [page, sessionOpen, available, refresh]);
+  }, [page, sessionOpen, available, refresh, kyc?.status]);
   const save = async () => {
     if (working.current || !available) return false;
     const cleanEmail = email.trim();
@@ -186,30 +191,26 @@ export function useAuraProfile(page: string | null) {
       );
       return;
     }
+    setError("");
+    setSessionOpen(true);
+  };
+  const submitIdentity = async (identity: Record<string, string>) => {
+    if (working.current || !available) return false;
     working.current = true;
     setBusy(true);
     setError("");
-    setSessionUrl("");
     try {
-      const result = await walletRequest<
-        KycState & { session_url?: string | null }
-      >("aura-kyc", {});
-      setKyc({
-        status: result.status,
-        verified: result.verified,
-        terminal: result.terminal,
-        reason: result.reason,
-      });
-      if (result.verified) return;
-      if (
-        !result.session_url ||
-        new URL(result.session_url).protocol !== "https:"
-      )
-        throw Error("No session URL");
-      setSessionUrl(result.session_url);
-      setSessionOpen(true);
+      const result = await walletRequest<KycState>("aura-kyc", identity);
+      setKyc(result);
+      setSessionOpen(false);
+      return true;
     } catch (e) {
-      setError(message(e));
+      setError(
+        e instanceof WalletApiError && e.code === "INVALID_REQUEST"
+          ? "Проверьте данные паспорта и даты."
+          : message(e),
+      );
+      return false;
     } finally {
       working.current = false;
       setBusy(false);
@@ -231,6 +232,7 @@ export function useAuraProfile(page: string | null) {
     resumeSession: () => setSessionOpen(true),
     save,
     start,
+    submitIdentity,
     refresh: async () => {
       try {
         setError("");

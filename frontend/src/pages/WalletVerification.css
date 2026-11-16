@@ -840,3 +840,15 @@
 .wpay-verification-frame-header .wpay-verification-frame-actions {
   font-weight: 500;
 }
+
+.wpay-verification-identity-body {
+  overflow-y: auto;
+  padding-top: 20px;
+  padding-bottom: 130px;
+}
+.wpay-verification-identity-body .wpay-verification-contact-copy h2 {
+  font-size: clamp(28px, 7vw, 38px);
+}
+.wpay-verification-identity-body .wpay-verification-contact-copy p {
+  font-size: 15px;
+}
