@@ -1,10 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import giftArtwork from "../assets/verification/gift-promo.png";
 import qrArtwork from "../assets/verification/qr-promo.png";
 import sbpArtwork from "../assets/verification/sbp-promo.png";
 import cardArtwork from "../assets/verification/wpay-card.webp";
 import { haptic } from "../lib/telegram";
 import "./WalletPromos.css";
+
+function PromoSlide({ children, className, label, direction }: { children: ReactNode; className: string; label: string; direction: number }) {
+  const present = useIsPresent();
+  const reduced = useReducedMotion();
+  return <motion.div className={className} role="group" aria-roledescription="слайд" aria-label={label} aria-hidden={!present} inert={!present}
+    custom={direction}
+    variants={{ enter: (sign: number) => ({ x: reduced ? 0 : `${sign * 108}%` }), exit: (sign: number) => ({ x: reduced ? 0 : `${sign * -108}%`, opacity: reduced ? 0 : 1 }) }}
+    initial="enter" animate={{ x: 0, opacity: 1 }} exit="exit"
+    transition={{ duration: reduced ? 0 : .42, ease: [.22, 1, .36, 1] }}
+    style={{ pointerEvents: present ? "auto" : "none" }}>
+    {children}
+  </motion.div>;
+}
 
 export default function WalletPromos({
   onInvite,
@@ -18,6 +32,7 @@ export default function WalletPromos({
   const gesture = useRef<{ x: number; y: number } | null>(null);
   const suppressClickUntil = useRef(0);
   const [active, setActive] = useState(0);
+  const [direction, setDirection] = useState(1);
   const [paused, setPaused] = useState(false);
   const [giftDeadline] = useState(() => {
     const key = "wpay:gift-banner:deadline:v1";
@@ -65,9 +80,14 @@ export default function WalletPromos({
   ];
   const selected = Math.min(active, slides.length - 1);
   useEffect(() => {
+    for (const src of [giftArtwork, qrArtwork, sbpArtwork, cardArtwork]) {
+      const image = new Image(); image.src = src;
+    }
+  }, []);
+  useEffect(() => {
     if (paused || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const timer = window.setInterval(() => {
-      if (!document.hidden) setActive((value) => (value + 1) % slides.length);
+      if (!document.hidden) { setDirection(1); setActive((value) => (value + 1) % slides.length); }
     }, 5000);
     return () => window.clearInterval(timer);
   }, [paused, selected, slides.length]);
@@ -96,6 +116,7 @@ export default function WalletPromos({
           const dy = event.clientY - start.y;
           if (Math.abs(dx) < 45 || Math.abs(dx) < Math.abs(dy) * 1.4) return;
           suppressClickUntil.current = performance.now() + 400;
+          setDirection(dx < 0 ? 1 : -1);
           setActive((value) => (value + (dx < 0 ? 1 : -1) + slides.length) % slides.length);
         }}
         onClickCapture={(event) => {
@@ -105,15 +126,13 @@ export default function WalletPromos({
           }
         }}
       >
-        {slides.map((slide, index) => (
-          <div
+        <AnimatePresence initial={false} custom={direction}>
+        {slides.map((slide, index) => selected === index && (
+          <PromoSlide
             key={slide.id}
-            className={`wpay-promo wpay-promo--${slide.id} ${selected === index ? "is-active" : ""}`}
-            aria-hidden={selected !== index}
-            inert={selected !== index}
-            role="group"
-            aria-roledescription="слайд"
-            aria-label={`${index + 1} из ${slides.length}`}
+            className={`wpay-promo wpay-promo--${slide.id} is-active`}
+            label={`${index + 1} из ${slides.length}`}
+            direction={direction}
           >
             <button
               type="button"
@@ -144,8 +163,9 @@ export default function WalletPromos({
                 )}
               </span>
             </button>
-          </div>
+          </PromoSlide>
         ))}
+        </AnimatePresence>
       </div>
       <div className="wpay-promo-dots" aria-label="Выбрать баннер">
         {slides.map((slide, index) => (
@@ -154,7 +174,7 @@ export default function WalletPromos({
             key={slide.id}
             aria-label={`Баннер ${index + 1}: ${slide.title}`}
             aria-current={selected === index ? "true" : undefined}
-            onClick={() => setActive(index)}
+            onClick={() => { setDirection(index > selected ? 1 : -1); setActive(index); }}
           >
             <span />
           </button>

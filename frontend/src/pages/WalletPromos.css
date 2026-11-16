@@ -336,3 +336,7 @@
 .wpay-promo-sbp-symbol img { left: -14px; width: 234px; height: 105px; }
 .wpay-promo--sbp .wpay-promo-card { right: -29px; }
 .wpay-promo-sbp-symbol { right: 49px; }
+
+/* Clip at the page edges, keeping the raised artwork above the banners visible. */
+.wpay-promos-rail { overflow: visible; }
+.wpay-promo { transition: none; }

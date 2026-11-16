@@ -722,6 +722,7 @@ test("gift countdown persists its deadline across reload and expires without res
   await page.reload();
   expect(await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"))).toBe(deadline);
   await page.clock.fastForward(24 * 60 * 60 * 1000 + 1000);
+  await page.getByRole("button", { name: /Баннер 1:/ }).click();
   await expect(page.locator('.wpay-promo-countdown')).toHaveText("Время истекло");
   expect(await page.evaluate(() => localStorage.getItem("wpay:gift-banner:deadline:v1"))).toBe(deadline);
 });
@@ -741,4 +742,20 @@ test("oversized banner artwork does not create horizontal wallet scrolling", asy
     await page.setViewportSize({ width, height: 844 });
     await expect.poll(() => page.locator(".wpay-desktop-page").evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
   }
+});
+
+test("promo slides leave left while the next enters from the right without stretching the page", async ({ page }) => {
+  await setup(page, "light");
+  const carousel = page.getByRole("region", { name: "Возможности wPay" });
+  await expect(carousel).toBeVisible();
+  await carousel.getByRole("button", { name: /Баннер 2:/ }).click();
+  await expect.poll(() => carousel.evaluate(el => {
+    const rail = el.querySelector('.wpay-promos-rail')!.getBoundingClientRect();
+    const previous = el.querySelector('.wpay-promo--friends')?.getBoundingClientRect();
+    const next = el.querySelector('.wpay-promo--qr')?.getBoundingClientRect();
+    return Boolean(previous && next && previous.x < rail.x - 1 && next.x > rail.x + 1);
+  }), { intervals: [10, 20, 30], timeout: 1000 }).toBe(true);
+  await expect.poll(() => carousel.evaluate(el => Math.abs(el.querySelector('.wpay-promo--qr')!.getBoundingClientRect().x - el.querySelector('.wpay-promos-rail')!.getBoundingClientRect().x))).toBeLessThan(1);
+  await expect(page.locator('.wpay-promo--friends')).toHaveCount(0);
+  await expect.poll(() => page.locator('.wpay-desktop-page').evaluate(el => el.scrollWidth - el.clientWidth)).toBeLessThanOrEqual(0);
 });
