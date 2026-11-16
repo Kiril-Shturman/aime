@@ -571,6 +571,7 @@ export default function WalletAuraCards({
             <Button
               rounded
               large
+              data-wpay-primary=""
               className="wpay-aura-primary !mt-4 !w-full"
               disabled={!fees || Boolean(busy)}
               onClick={() => order(currentKind)}
@@ -842,7 +843,8 @@ export default function WalletAuraCards({
                   <Button
                     large
                     rounded
-                    className="wpay-aura-primary !mt-5 !w-full"
+                    data-wpay-primary=""
+              className="wpay-aura-primary !mt-5 !w-full"
                     disabled={
                       !fees ||
                       Boolean(busy) ||
@@ -945,7 +947,8 @@ export default function WalletAuraCards({
                   <Button
                     large
                     rounded
-                    className="wpay-aura-primary !mt-5 !w-full"
+                    data-wpay-primary=""
+              className="wpay-aura-primary !mt-5 !w-full"
                     disabled={
                       Boolean(busy) ||
                       !fees ||
@@ -1191,7 +1194,8 @@ export default function WalletAuraCards({
                     <Button
                       large
                       rounded
-                      className="wpay-aura-primary !mt-5 !w-full"
+                      data-wpay-primary=""
+              className="wpay-aura-primary !mt-5 !w-full"
                       onClick={() => openPanel("activation")}
                     >
                       Карта получена — активировать

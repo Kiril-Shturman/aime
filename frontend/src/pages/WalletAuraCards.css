@@ -319,11 +319,7 @@
 .dark .wpay-aura-panel-row:active {
   background: #ffffff15;
 }
-.wpay-aura-primary {
-  min-height: 54px !important;
-  border-radius: 22px !important;
-  font-size: 17px !important;
-}
+
 .wpay-aura-empty {
   display: flex;
   flex-direction: column;
