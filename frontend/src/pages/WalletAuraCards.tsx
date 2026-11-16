@@ -18,6 +18,8 @@ import {
   History,
   Eye,
   EyeOff,
+  ArrowUpRight,
+  Trash2,
 } from "lucide-react";
 import { haptic } from "../lib/telegram";
 import "./WalletAuraCards.css";
@@ -128,6 +130,7 @@ export default function WalletAuraCards({
   const [issueKind, setIssueKind] = useState<"virtual" | "physical">("virtual");
   const [shipping, setShipping] = useState(emptyShipping);
   const [recharge, setRecharge] = useState("");
+  const [cardWithdrawal, setCardWithdrawal] = useState("");
   const [activationCode, setActivationCode] = useState("");
   const [pin, setPin] = useState("");
   const [cvvVisible, setCvvVisible] = useState(false);
@@ -434,6 +437,7 @@ export default function WalletAuraCards({
   const panelTitles: Record<string, string> = {
     issue: "Новая карта",
     recharge: "Пополнить карту",
+    withdraw: "Вывести с карты",
     credentials: "Реквизиты карты",
     otp: "Код подтверждения",
     more: "Управление картой",
@@ -469,6 +473,45 @@ export default function WalletAuraCards({
             ),
         },
       ],
+      on: {
+        closed: () => {
+          freezeConfirmation.current = null;
+        },
+      },
+    });
+    freezeConfirmation.current.open();
+  };
+  const confirmDeleteCard = () => {
+    if (!selected || freezeConfirmation.current) return;
+    freezeConfirmation.current = f7.dialog.create({
+      cssClass: "wpay-card-freeze-confirm",
+      title: selected.demo ? "Удалить демо-карту?" : "Закрытие карты",
+      text: selected.demo
+        ? "Пример карты исчезнет из карусели. Настоящие карты и баланс не изменятся."
+        : "Закрытие выпущенной карты пока недоступно в приложении. Обратитесь в поддержку.",
+      destroyOnClose: true,
+      buttons: selected.demo
+        ? [
+            { text: "Отмена", keyCodes: [27] },
+            {
+              text: "Удалить",
+              color: "red",
+              strong: true,
+              onClick: () => {
+                setPanel(null);
+                setCredentials(null);
+                setCvvVisible(false);
+                setCards((items) =>
+                  items.filter((card) => card.card_id !== selected.card_id),
+                );
+                setSelectedId(null);
+                setActiveSlide(0);
+                carousel.current?.scrollTo({ left: 0, behavior: "instant" });
+                showNotice("Демо-карта удалена");
+              },
+            },
+          ]
+        : [{ text: "Понятно", strong: true }],
       on: {
         closed: () => {
           freezeConfirmation.current = null;
@@ -1136,6 +1179,55 @@ export default function WalletAuraCards({
                     )}
                 </>
               )}
+              {displayPanel === "withdraw" && selected && (
+                <>
+                  <p className="mb-4 text-[15px] leading-6 text-black/50 dark:text-white/50">
+                    {selected.demo
+                      ? "Пример вывода с карты на кошелёк wPay. Баланс не изменится."
+                      : "Вывод с карты пока недоступен. Обратитесь в поддержку."}
+                  </p>
+                  <div className="wpay-aura-fields">
+                    <label>
+                      <span>Сумма, USD</span>
+                      <input
+                        aria-label="Сумма вывода с карты"
+                        inputMode="decimal"
+                        placeholder="0.00"
+                        value={cardWithdrawal}
+                        disabled={!selected.demo}
+                        onChange={(event) =>
+                          setCardWithdrawal(event.target.value)
+                        }
+                      />
+                    </label>
+                  </div>
+                  <div className="wpay-aura-info mt-4">
+                    {infoRow(
+                      "Откуда",
+                      `Карта ${selected.masked_pan ?? "wPay"}`,
+                    )}
+                    {infoRow("Куда", "Кошелёк wPay")}
+                  </div>
+                  <Button
+                    data-wpay-primary=""
+                    rounded
+                    large
+                    className="!mt-5 !w-full"
+                    disabled={
+                      !selected.demo ||
+                      !Number.isFinite(Number(cardWithdrawal)) ||
+                      Number(cardWithdrawal) <= 0
+                    }
+                    onClick={() =>
+                      showNotice(
+                        "Демо: вывод показан для примера, баланс не изменён",
+                      )
+                    }
+                  >
+                    Вывести
+                  </Button>
+                </>
+              )}
               {displayPanel === "recharge" && selected && (
                 <>
                   <p className="mb-4 text-[15px] text-black/50 dark:text-white/50">
@@ -1341,6 +1433,14 @@ export default function WalletAuraCards({
                           onClick={() => void reveal("credentials")}
                         />
                         <PanelRow
+                          title="Вывести с карты"
+                          Icon={ArrowUpRight}
+                          onClick={() => {
+                            setCardWithdrawal("");
+                            openPanel("withdraw");
+                          }}
+                        />
+                        <PanelRow
                           title="Код 3DS"
                           Icon={MessageSquareLock}
                           onClick={() => void reveal("otp")}
@@ -1380,6 +1480,13 @@ export default function WalletAuraCards({
                         Отменить выпуск карты
                       </button>
                     )}
+                  </div>
+                  <div className="wpay-aura-menu wpay-card-danger-menu">
+                    <PanelRow
+                      title="Удалить карту"
+                      Icon={Trash2}
+                      onClick={confirmDeleteCard}
+                    />
                   </div>
                 </>
               )}
@@ -1477,6 +1584,11 @@ function PanelRow({
       tone: "blue",
     },
     Тарифы: { description: "Комиссии и условия карты", tone: "teal" },
+    "Вывести с карты": {
+      description: "Перевести на кошелёк wPay",
+      tone: "blue",
+    },
+    "Удалить карту": { description: "Удаление и закрытие карты", tone: "red" },
   };
   const detail = details[title];
   return (

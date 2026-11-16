@@ -679,3 +679,39 @@ test("native freeze confirmation cancels without calling provider", async ({
   ).toBeVisible();
   expect(state.calls).toHaveLength(0);
 });
+
+test("demo card has withdrawal preview and confirmed local deletion", async ({
+  page,
+}) => {
+  const state = await setup(page, "dark", false, true);
+  const main = page.getByRole("main", { name: "Мои карты" });
+  await main.getByRole("button", { name: "Карта 1", exact: true }).click();
+  await main.getByRole("button", { name: "Ещё", exact: true }).click();
+  await popup(page)
+    .getByRole("button", { name: "Вывести с карты", exact: true })
+    .click();
+  await popup(page).getByLabel("Сумма вывода с карты").fill("10");
+  await popup(page)
+    .getByRole("button", { name: "Вывести", exact: true })
+    .click();
+  expect(state.calls).toHaveLength(0);
+  await close(page);
+  await main.getByRole("button", { name: "Ещё", exact: true }).click();
+  await popup(page)
+    .getByRole("button", { name: "Удалить карту", exact: true })
+    .click();
+  await page
+    .locator(".dialog.modal-in")
+    .getByText("Отмена", { exact: true })
+    .click();
+  await expect(main.locator(".wpay-aura-carousel-item")).toHaveCount(5);
+  await popup(page)
+    .getByRole("button", { name: "Удалить карту", exact: true })
+    .click();
+  await page
+    .locator(".dialog.modal-in")
+    .getByText("Удалить", { exact: true })
+    .click();
+  await expect(main.locator(".wpay-aura-carousel-item")).toHaveCount(4);
+  expect(state.calls).toHaveLength(0);
+});

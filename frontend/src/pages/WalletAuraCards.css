@@ -889,3 +889,19 @@
 .dark .wpay-card-setting-label small {
   color: #fff7;
 }
+
+.wpay-card-danger-menu {
+  margin-top: 16px;
+}
+.wpay-card-danger-menu .wpay-card-setting-label strong {
+  color: #d74a51;
+}
+.dark .wpay-card-danger-menu .wpay-card-setting-label strong {
+  color: #ff7b82;
+}
+.wpay-card-setting-icon--red {
+  background: linear-gradient(#fb969b, #df5765);
+}
+.dark .wpay-card-setting-icon--red {
+  background: linear-gradient(#e98088, #bd4253);
+}
