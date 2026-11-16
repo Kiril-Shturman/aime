@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Plus,
   Eye,
+  EyeOff,
 } from "lucide-react";
 import { haptic } from "../lib/telegram";
 import "./WalletAuraCards.css";
@@ -130,6 +131,7 @@ export default function WalletAuraCards({
   const [recharge, setRecharge] = useState("");
   const [activationCode, setActivationCode] = useState("");
   const [pin, setPin] = useState("");
+  const [cvvVisible, setCvvVisible] = useState(false);
   const [credentials, setCredentials] = useState<CardCredentials | null>(null);
   const [otp, setOtp] = useState<CardOtp | null | undefined>(undefined);
   const [panel, setPanel] = useState<string | null>(null);
@@ -151,6 +153,7 @@ export default function WalletAuraCards({
       if (document.hidden) {
         revealRequest.current?.abort();
         setCredentials(null);
+        setCvvVisible(false);
       }
     };
     document.addEventListener("visibilitychange", hide);
@@ -299,6 +302,7 @@ export default function WalletAuraCards({
   const openPanel = (name: string) => {
     haptic("light");
     setCredentials(null);
+    setCvvVisible(false);
     setOtp(undefined);
     setError("");
     setDisplayPanel(name);
@@ -308,6 +312,7 @@ export default function WalletAuraCards({
     revealRequest.current?.abort();
     setPanel(null);
     setCredentials(null);
+    setCvvVisible(false);
     setOtp(undefined);
     setPin("");
     setActivationCode("");
@@ -315,6 +320,7 @@ export default function WalletAuraCards({
   const selectCard = (id: string) => {
     revealRequest.current?.abort();
     setCredentials(null);
+    setCvvVisible(false);
     setOtp(undefined);
     setPin("");
     setActivationCode("");
@@ -323,8 +329,10 @@ export default function WalletAuraCards({
   const reveal = async (kind: "credentials" | "otp") => {
     if (!selected || busyRef.current) return;
     if (kind === "credentials") {
+      setCvvVisible(false);
       if (credentials?.card_id === selected.card_id) {
         setCredentials(null);
+        setCvvVisible(false);
         return;
       }
       setPanel(null);
@@ -340,7 +348,7 @@ export default function WalletAuraCards({
           card_id: DEMO_CARD_ID,
           number: "0000 0000 0000 4242",
           expiry: "12/29",
-          cvv: "•••",
+          cvv: "123",
         });
       else setOtp(null);
       return;
@@ -402,6 +410,7 @@ export default function WalletAuraCards({
     else {
       revealRequest.current?.abort();
       setCredentials(null);
+      setCvvVisible(false);
     }
   };
   const order = (
@@ -571,87 +580,110 @@ export default function WalletAuraCards({
                   else if (!card) {
                     revealRequest.current?.abort();
                     setCredentials(null);
+                    setCvvVisible(false);
                   }
                 }}
               >
                 {cards.map((card) => (
-                  <button
+                  <div
                     key={card.card_id}
-                    type="button"
-                    className="wpay-aura-carousel-item"
-                    aria-label={
-                      credentials?.card_id === card.card_id
-                        ? "Скрыть реквизиты карты"
-                        : `Открыть ${card.kind === "physical" ? "физическую" : "виртуальную"} карту ${card.masked_pan ?? ""}`
-                    }
-                    onClick={() => {
-                      if (credentials?.card_id === card.card_id) {
-                        setCredentials(null);
-                        return;
-                      }
-                      selectCard(card.card_id);
-                      openPanel("details");
-                    }}
+                    className="wpay-aura-carousel-item wpay-owned-card-item"
                   >
-                    <span
-                      className={`wpay-card-flip ${credentials?.card_id === card.card_id ? "wpay-card-flip--revealed" : ""}`}
+                    <button
+                      type="button"
+                      className="wpay-card-surface-button"
+                      aria-label={
+                        credentials?.card_id === card.card_id
+                          ? "Скрыть реквизиты карты"
+                          : `Открыть ${card.kind === "physical" ? "физическую" : "виртуальную"} карту ${card.masked_pan ?? ""}`
+                      }
+                      onClick={() => {
+                        if (credentials?.card_id === card.card_id) {
+                          setCredentials(null);
+                          setCvvVisible(false);
+                          return;
+                        }
+                        selectCard(card.card_id);
+                        openPanel("details");
+                      }}
                     >
-                      <span className="wpay-card-flip-inner">
-                        <span
-                          className="wpay-card-flip-front"
-                          aria-hidden={credentials?.card_id === card.card_id}
-                        >
-                          <LiveCardArtwork card={card} skin="silver" />
-                        </span>
-                        <span
-                          className="wpay-card-flip-back"
-                          aria-hidden={credentials?.card_id !== card.card_id}
-                          role="group"
-                          aria-label="Реквизиты карты"
-                        >
-                          <span className="wpay-card-back-stripe" />
-                          <img
-                            className="wpay-card-back-logo"
-                            src="/brands/wpay-wordmark.svg"
-                            alt="wPay"
-                          />
-                          <span className="wpay-card-back-number">
-                            <small>НОМЕР КАРТЫ</small>
-                            <span>
-                              {credentials?.card_id === card.card_id
-                                ? credentials.number
-                                    .replace(/\s/g, "")
-                                    .match(/.{1,4}/g)
-                                    ?.join(" ")
-                                : card.masked_pan}
-                            </span>
+                      <span
+                        className={`wpay-card-flip ${credentials?.card_id === card.card_id ? "wpay-card-flip--revealed" : ""}`}
+                      >
+                        <span className="wpay-card-flip-inner">
+                          <span
+                            className="wpay-card-flip-front"
+                            aria-hidden={credentials?.card_id === card.card_id}
+                          >
+                            <LiveCardArtwork card={card} skin="silver" />
                           </span>
-                          <span className="wpay-card-back-fields">
-                            <span>
-                              <small>ДЕЙСТВУЕТ ДО</small>
-                              <b>
+                          <span
+                            className="wpay-card-flip-back"
+                            aria-hidden={credentials?.card_id !== card.card_id}
+                            role="group"
+                            aria-label="Реквизиты карты"
+                          >
+                            <span className="wpay-card-back-stripe" />
+                            <img
+                              className="wpay-card-back-logo"
+                              src="/brands/wpay-wordmark.svg"
+                              alt="wPay"
+                            />
+                            <span className="wpay-card-back-number">
+                              <small>НОМЕР КАРТЫ</small>
+                              <span>
                                 {credentials?.card_id === card.card_id
-                                  ? credentials.expiry
-                                  : "••/••"}
-                              </b>
+                                  ? credentials.number
+                                      .replace(/\s/g, "")
+                                      .match(/.{1,4}/g)
+                                      ?.join(" ")
+                                  : card.masked_pan}
+                              </span>
                             </span>
-                            <span>
-                              <small>CVV</small>
-                              <b>
-                                {credentials?.card_id === card.card_id
-                                  ? credentials.cvv
-                                  : "•••"}
-                              </b>
+                            <span className="wpay-card-back-fields">
+                              <span>
+                                <small>ДЕЙСТВУЕТ ДО</small>
+                                <b>
+                                  {credentials?.card_id === card.card_id
+                                    ? credentials.expiry
+                                    : "••/••"}
+                                </b>
+                              </span>
+                              <span>
+                                <small>CVV</small>
+                                <b>
+                                  {credentials?.card_id === card.card_id &&
+                                  cvvVisible
+                                    ? credentials.cvv
+                                    : "•••"}
+                                </b>
+                              </span>
                             </span>
-                          </span>
-                          <span className="wpay-card-back-hint">
-                            {card.demo ? "Демо-карта · " : ""}Нажмите, чтобы
-                            скрыть
+                            <span className="wpay-card-back-hint">
+                              {card.demo ? "Демо-карта · " : ""}Нажмите, чтобы
+                              скрыть
+                            </span>
                           </span>
                         </span>
                       </span>
-                    </span>
-                  </button>
+                    </button>
+                    {credentials?.card_id === card.card_id && (
+                      <button
+                        type="button"
+                        className="wpay-card-cvv-toggle"
+                        aria-label={cvvVisible ? "Скрыть CVV" : "Показать CVV"}
+                        aria-pressed={cvvVisible}
+                        onPointerDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          haptic("light");
+                          setCvvVisible((value) => !value);
+                        }}
+                      >
+                        {cvvVisible ? <Eye size={19} /> : <EyeOff size={19} />}
+                      </button>
+                    )}
+                  </div>
                 ))}
                 {offers.map(({ kind, skin: appearance }) => (
                   <button

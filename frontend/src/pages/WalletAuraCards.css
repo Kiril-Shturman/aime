@@ -688,3 +688,53 @@
   flex: 0 0 44px;
   justify-content: center;
 }
+
+.wpay-owned-card-item {
+  position: relative;
+}
+.wpay-card-surface-button {
+  display: block;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: inherit;
+}
+.wpay-card-surface-button:focus-visible {
+  outline: 2px solid #007aff;
+  outline-offset: -3px;
+  border-radius: 24px;
+}
+.wpay-card-cvv-toggle {
+  position: absolute;
+  z-index: 3;
+  right: calc(7% + 34px);
+  top: calc(65% + 5px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+  color: #4d596b;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.dark .wpay-card-cvv-toggle {
+  color: #465367;
+}
+.wpay-card-cvv-toggle:active {
+  background: #0000000c;
+}
+.dark .wpay-card-cvv-toggle:active {
+  background: #00000012;
+}
+.wpay-card-cvv-toggle:focus-visible {
+  outline: 2px solid #2476df;
+  outline-offset: 1px;
+}

@@ -567,3 +567,28 @@ for (const theme of ["dark", "light"])
     expect(glass!.height).toBeCloseTo(44, 0);
     await close(page);
   });
+
+test("CVV stays hidden until eye is pressed and resets after hiding card", async ({
+  page,
+}) => {
+  await setup(page);
+  const main = page.getByRole("main", { name: "Мои карты" });
+  await main.getByRole("button", { name: "Реквизиты", exact: true }).click();
+  const back = main.getByRole("group", {
+    name: "Реквизиты карты",
+    exact: true,
+  });
+  await expect(back.getByText("123", { exact: true })).toHaveCount(0);
+  await main.getByRole("button", { name: "Показать CVV", exact: true }).click();
+  await expect(back.getByText("123", { exact: true })).toBeVisible();
+  await expect(main.locator(".wpay-card-flip--revealed")).toHaveCount(1);
+  await main.getByRole("button", { name: "Скрыть CVV", exact: true }).click();
+  await expect(back.getByText("123", { exact: true })).toHaveCount(0);
+  await main.getByRole("button", { name: "Показать CVV", exact: true }).click();
+  await main.getByRole("button", { name: "Скрыть", exact: true }).click();
+  await main.getByRole("button", { name: "Реквизиты", exact: true }).click();
+  await expect(
+    main.getByRole("button", { name: "Показать CVV", exact: true }),
+  ).toBeVisible();
+  await expect(back.getByText("123", { exact: true })).toHaveCount(0);
+});
