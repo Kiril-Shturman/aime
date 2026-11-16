@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { Heart } from "lucide-react";
 import qrArtwork from "../assets/verification/qr-promo.png";
 import sbpArtwork from "../assets/verification/sbp-promo.png";
 import cardArtwork from "../assets/verification/wpay-card.webp";
@@ -22,7 +21,7 @@ export default function WalletPromos({
   const slides = [
     {
       id: "friends",
-      title: "Приглашайте друзей\nв wPay и пользуйтесь\nкошельком вместе",
+      title: "Подари 3 друзьям\nпо $5\nв wPay",
 
       action: "Пригласить друзей",
       click: onInvite,
@@ -109,18 +108,18 @@ export default function WalletPromos({
             >
               <span className="wpay-promo-details" aria-hidden="true" />
               <span className="wpay-promo-copy">
-                <strong>{slide.title}</strong>
+                <strong><span className="wpay-promo-headline">{slide.title.split("\n")[0]}</span><span className="wpay-promo-subline">{slide.title.split("\n").slice(1).join("\n")}</span></strong>
 
               </span>
               <span className="wpay-promo-art" aria-hidden="true">
                 {slide.id === "friends" ? (
-                  <>
-                    <span className="wpay-promo-letter">wPay</span>
-                    <span className="wpay-promo-envelope" />
-                    <Heart className="wpay-promo-heart" fill="currentColor" />
-                  </>
+                  <span className="wpay-promo-gift">
+                    <img className="wpay-promo-gift-card" src={cardArtwork} alt="" loading="lazy" />
+                    <span className="wpay-promo-gift-wrap"><span className="wpay-promo-gift-brand">wPay</span></span>
+                    <span className="wpay-promo-gift-bow"><span /><span /><i /></span>
+                  </span>
                 ) : slide.id === "qr" ? (
-                  <img className="wpay-promo-qr" src={qrArtwork} alt="" loading="lazy" />
+                  <><span className="wpay-promo-receipt wpay-promo-receipt--back" /><span className="wpay-promo-receipt" /><img className="wpay-promo-qr" src={qrArtwork} alt="" loading="lazy" /></>
                 ) : (
                   <>
                     <img className="wpay-promo-card" src={cardArtwork} alt="" loading="lazy" />
