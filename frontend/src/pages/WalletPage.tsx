@@ -362,13 +362,7 @@ function WalletScreen() {
   );
   const [cryptoFlow, setCryptoFlow] = useState<CryptoFlow | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [introOpen, setIntroOpen] = useState(() => {
-    try {
-      return localStorage.getItem(walletIntroKey) !== "seen";
-    } catch {
-      return true;
-    }
-  });
+  const [introOpen, setIntroOpen] = useState(false);
   const finishIntro = () => {
     try {
       localStorage.setItem(walletIntroKey, "seen");

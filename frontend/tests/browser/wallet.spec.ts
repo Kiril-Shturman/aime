@@ -787,3 +787,13 @@ test("holding the promo locks vertical touch scrolling and pull refresh while ho
   await dragTouch(moved.x + moved.width - 35, moved.y + 40, -170, 0);
   await expect(carousel.getByRole("button", { name: /Баннер 2:/ })).toHaveAttribute("aria-current", "true");
 });
+
+test("first visit opens the wallet directly without automatic intro slides", async ({ page }) => {
+  await page.route("**/api/**", route => route.fulfill({ json: route.request().url().endsWith('/status')
+    ? { configured: true, asset_routes: { USDT: ['TRON'] }, capabilities: {} }
+    : { balances: [], rates: [], transactions: [], items: [] } }));
+  await page.goto('/wallet');
+  await expect(page.locator('.wpay-wallet-home')).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('wpay:intro:v1'))).toBeNull();
+  await expect(page.locator('dialog.wpay-intro')).toHaveCount(0);
+});
