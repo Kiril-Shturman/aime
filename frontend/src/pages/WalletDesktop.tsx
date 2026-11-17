@@ -276,6 +276,7 @@ function CbrRate() {
 
 function RapiraDepth() {
   const book = useDesktopMarket<OrderBook>("rapira-depth", 10_000);
+  const maxAmount = book ? Math.max(1, ...[...book.ask, ...book.bid].map(({ amount }) => Number(amount))) : 1;
   return (
     <section className="wpay-desktop-card wpay-desktop-fx" aria-label="Стакан Rapira">
       <div className="wpay-desktop-section-head"><h2>Стакан Rapira</h2><span>USDT/RUB</span></div>
@@ -286,9 +287,14 @@ function RapiraDepth() {
         <div className={`wpay-depth-side wpay-depth-${tone}`} key={tone}>
           <div className="wpay-depth-line"><strong>{label}</strong><span>Объём, USDT</span></div>
           {levels.length ? levels.map((level) => (
-            <div className="wpay-depth-line" key={level.price}>
+            <div className="wpay-depth-line wpay-depth-level" key={level.price}>
               <span>{formatRubles(level.price)}</span>
               <span>{Number(level.amount).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}</span>
+              <span
+                className="wpay-depth-volume"
+                aria-hidden="true"
+                style={{ width: `${100 * Number(level.amount) / maxAmount}%` }}
+              />
             </div>
           )) : <p className="wpay-desktop-fx-status">Нет заявок</p>}
         </div>

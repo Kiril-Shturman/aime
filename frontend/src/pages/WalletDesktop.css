@@ -162,8 +162,20 @@
  .wpay-desktop-fx-value { margin-top: 12px; font-size: 27px; font-weight: 650; letter-spacing: -.6px; font-variant-numeric: tabular-nums; }
  .wpay-depth-side { margin-top: 14px; font-size: 13px; font-variant-numeric: tabular-nums; }
  .wpay-depth-line { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; }
- .wpay-depth-line > span:last-child { color: #6e7584; }
- .dark .wpay-depth-line > span:last-child { color: #a2a5af; }
+ .wpay-depth-level { position: relative; isolation: isolate; padding: 5px 8px; }
+ .wpay-depth-volume {
+   position: absolute;
+   inset: 1px 0 1px auto;
+   z-index: -1;
+   border-radius: 6px;
+   pointer-events: none;
+ }
+ .wpay-depth-ask .wpay-depth-volume { background: #e7506024; }
+ .wpay-depth-bid .wpay-depth-volume { background: #14a96d26; }
+ .dark .wpay-depth-ask .wpay-depth-volume { background: #fb677d30; }
+ .dark .wpay-depth-bid .wpay-depth-volume { background: #41cc9430; }
+ .wpay-depth-line > span:last-of-type:not(.wpay-depth-volume), .wpay-depth-level > span:nth-child(2) { color: #6e7584; }
+ .dark .wpay-depth-line > span:last-of-type:not(.wpay-depth-volume), .dark .wpay-depth-level > span:nth-child(2) { color: #a2a5af; }
  .wpay-depth-ask .wpay-depth-line > :first-child { color: #b52e3b; }
  .wpay-depth-bid .wpay-depth-line > :first-child { color: #08794d; }
  .dark .wpay-depth-ask .wpay-depth-line > :first-child { color: #ff8c96; }
