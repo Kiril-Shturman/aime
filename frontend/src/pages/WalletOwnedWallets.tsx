@@ -1,8 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Sheet, Preloader } from "framework7-react";
-import { Card, Button } from "konsta/react";
-import { Copy, Check, ChevronRight } from "lucide-react";
+import { Button } from "konsta/react";
+import { Copy, Check } from "lucide-react";
 import QRCode from "react-qr-code";
 import { walletRequest } from "../lib/wallet-api";
 import WalletAssetAvatar from "./WalletAssetAvatar";
@@ -43,14 +43,15 @@ export default function WalletOwnedWallets({
   icon,
   color,
   iconColor,
+  onAvailability,
 }: {
+  onAvailability: (available: boolean) => void;
   code: string;
   active: boolean;
   icon: ReactNode;
   color: string;
   iconColor: string;
 }) {
-  const [status, setStatus] = useState<Status | null>(null);
   const [rows, setRows] = useState<Owned[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -58,12 +59,13 @@ export default function WalletOwnedWallets({
   const [selected, setSelected] = useState<Owned | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
-    if (!active || !networks[code]) return;
+    if (!active) return;
+    onAvailability(false);
+    if (!networks[code]) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const signal = controller.signal;
     setRows([]);
-    setStatus(null);
     setError("");
     setLoading(true);
     setSelected(null);
@@ -90,8 +92,8 @@ export default function WalletOwnedWallets({
           signal,
         );
         if (signal.aborted) return;
-        setStatus(capability);
         if (!capability.configured) return;
+        onAvailability(true);
         if (!["mainnet", "testnet"].includes(capability.chain_env))
           throw new Error("Сеть кошелька не определена");
         // Server controls ownership, environment and derivation. Repeat returns the same wallet.
@@ -127,85 +129,74 @@ export default function WalletOwnedWallets({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [active, code, retry]);
+  }, [active, code, retry, onAvailability]);
   useEffect(() => {
     setCopied(false);
   }, [selected]);
   if (!networks[code]) return null;
-  const environment = status?.chain_env === "mainnet" ? "Mainnet" : "Testnet";
+
   return (
-    <section className="px-4 pb-3 pt-6" aria-label="Собственные кошельки">
-      <div className="mb-3 flex items-center justify-between gap-2 px-2">
-        <h3 className="text-[16px] font-semibold text-black/50 dark:text-white/50">
-          Мои адреса в сети
-        </h3>
-        {status?.configured && (
-          <span className="text-xs text-black/45 dark:text-white/45">
-            wPay · {environment}
+    <section aria-label="Собственные кошельки">
+      {rows.map((row) => (
+        <button
+          key={row.id}
+          type="button"
+          onClick={() => setSelected(row)}
+          aria-label={`Открыть собственный адрес ${row.network}`}
+          className="wpay-address-row flex h-16 w-full items-center justify-between gap-3 border-b border-black/[.06] py-2 text-left dark:border-white/[.08]"
+        >
+          <span className="flex min-w-0 items-center gap-3">
+            <WalletAssetAvatar
+              {...{ icon, color, iconColor }}
+              network={row.network}
+            />
+            <span className="min-w-0">
+              <span className="block text-[15px] font-medium">
+                {code}
+                {["BTC", "TRX"].includes(code)
+                  ? ""
+                  : " · " +
+                    ({
+                      BSC: "BEP20",
+                      ETH: "ERC20",
+                      TRON: "TRC20",
+                      SOL: "SPL",
+                      TON: "TON",
+                    }[row.network] ?? row.network)}
+              </span>
+              <span className="block truncate text-xs text-black/45 dark:text-white/45">
+                {names[row.network]}
+              </span>
+            </span>
           </span>
-        )}
-      </div>
-      <Card className="!m-0 !rounded-[30px]" contentWrapPadding="px-4 py-0">
-        {rows.map((row) => (
+          <span className="shrink-0 text-right">
+            <span className="text-right text-sm tabular-nums">
+              {row.balance?.status === "ok" && row.balance.amount !== null
+                ? cryptoAmount(row.balance.amount)
+                : "—"}
+            </span>
+            <span className="mt-0.5 block text-[12px] leading-5 text-black/45 dark:text-white/45">
+              {row.address.slice(0, 9)}…{row.address.slice(-7)}
+            </span>
+          </span>
+        </button>
+      ))}
+      {loading && (
+        <div className="flex items-center gap-3 py-4 text-sm">
+          <Preloader size={20} />
+          Создаём адреса…
+        </div>
+      )}
+      {error && (
+        <div className="py-3 text-sm">
+          <p role="status">{error}</p>
           <button
-            key={row.id}
-            type="button"
-            onClick={() => setSelected(row)}
-            className="flex min-h-16 w-full items-center justify-between gap-3 border-b border-black/[.06] py-2 text-left last:border-0 active:bg-black/10 dark:border-white/[.08] dark:active:bg-white/10"
+            className="mt-2 text-primary"
+            onClick={() => setRetry((n) => n + 1)}
           >
-            <span className="flex min-w-0 items-center gap-3">
-              <WalletAssetAvatar
-                {...{ icon, color, iconColor }}
-                network={row.network}
-              />
-              <span className="min-w-0">
-                <span className="block text-[15px] font-medium">
-                  {code} · {names[row.network]}
-                </span>
-                <span className="block truncate text-xs text-black/45 dark:text-white/45">
-                  {row.address.slice(0, 9)}…{row.address.slice(-7)}
-                </span>
-              </span>
-            </span>
-            <span className="flex shrink-0 items-center gap-2">
-              <span className="text-right text-sm tabular-nums">
-                {row.balance?.status === "ok" && row.balance.amount !== null
-                  ? cryptoAmount(row.balance.amount)
-                  : "—"}
-              </span>
-              <ChevronRight size={16} className="opacity-30" />
-            </span>
+            Повторить
           </button>
-        ))}
-        {loading && (
-          <div className="flex items-center gap-3 py-4 text-sm">
-            <Preloader size={20} />
-            Создаём адреса…
-          </div>
-        )}
-        {status && !status.configured && (
-          <p className="py-4 text-sm text-black/50 dark:text-white/50">
-            Создание собственных кошельков пока не подключено.
-          </p>
-        )}
-        {error && (
-          <div className="py-3 text-sm">
-            <p role="status">{error}</p>
-            <button
-              className="mt-2 text-primary"
-              onClick={() => setRetry((n) => n + 1)}
-            >
-              Повторить
-            </button>
-          </div>
-        )}
-      </Card>
-      {status?.configured && (
-        <p className="px-2 pt-2 text-xs leading-5 text-black/45 dark:text-white/45">
-          Собственные адреса wPay. Баланс читается из блокчейна отдельно от
-          баланса приложения. Автоматическое зачисление и вывод ещё не
-          подключены.
-        </p>
+        </div>
       )}
       {createPortal(
         <Sheet

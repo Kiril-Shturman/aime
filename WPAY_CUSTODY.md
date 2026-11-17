@@ -8,8 +8,10 @@ GRAM is not treated as native TON and is not assigned an invented token contract
 ## User-visible behavior
 
 Opening a supported asset ensures one free address per authenticated user,
-network and environment. “Мои адреса в сети” shows wPay and Mainnet/Testnet,
-the address, QR and the observed blockchain balance. Network failures show an
+network and environment. Existing network rows beneath the application balance
+show the own address and the observed blockchain balance; a second portfolio
+block is not added. Opening a row shows wPay and Mainnet/Testnet, the full address
+and QR. Network failures show an
 unknown balance, never a fabricated zero. The same address is returned on repeats.
 Private keys and recovery seeds never reach the browser.
 

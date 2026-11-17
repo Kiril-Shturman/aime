@@ -62,13 +62,15 @@ for (const theme of ["light", "dark"]) {
       .first()
       .click();
     const own = page.getByRole("region", { name: "Собственные кошельки" });
-    await expect(own).toContainText("wPay · Mainnet");
+    await expect(own).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Мои адреса в сети" })).toHaveCount(0);
     await expect(own.getByRole("button")).toHaveCount(5);
+    await expect(own.getByRole("button").first()).toContainText("owned-BSC");
     expect(created).toEqual(["BSC", "ETH", "TON", "SOL", "TRON"]);
     await expect(
-      own.getByRole("button").filter({ hasText: "USDT · TRON" }),
+      own.getByRole("button", { name: "Открыть собственный адрес TRON", exact: true }),
     ).toContainText("—");
-    await own.getByRole("button").filter({ hasText: "USDT · TRON" }).click();
+    await own.getByRole("button", { name: "Открыть собственный адрес TRON", exact: true }).click();
     const sheet = page.locator(".sheet-modal.modal-in");
     await expect(sheet).toContainText(rows[4].address);
     await expect(sheet).toContainText("Mainnet · wPay");

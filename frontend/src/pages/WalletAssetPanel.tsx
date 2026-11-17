@@ -107,6 +107,7 @@ export default function WalletAssetPanel({
   onExchange: () => void;
 }) {
   const wallet = useLiveWallet();
+  const [ownedAvailable, setOwnedAvailable] = useState(false);
   const [allHistory, setAllHistory] = useState(false);
   const historySection = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -290,7 +291,6 @@ export default function WalletAssetPanel({
           ))}
         </div>
       </Card>
-      <WalletOwnedWallets {...{ code, active, icon, color, iconColor }} />
       <section className="px-4 pb-3 pt-6">
         <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
           Баланс приложения
@@ -338,100 +338,108 @@ export default function WalletAssetPanel({
             </p>
           )}
           <div className="wpay-portfolio-networks">
-            {(wallet.assetRoutes[code] ?? []).map((network) => {
-              const item = demoPortfolio
-                ? portfolioExamples[network]
-                : addresses.find((row) => row.network === network);
-              return (
-                <button
-                  key={network}
-                  type="button"
-                  aria-label={`Открыть адрес ${network}`}
-                  disabled={
-                    !demoPortfolio &&
-                    !(code === "USDT" && network === "TRON") &&
-                    !item &&
-                    (!(addressNetworks[code] ?? []).includes(network) ||
-                      !wallet.configured ||
-                      loadingAddresses ||
-                      addressBusy)
-                  }
-                  onClick={() => {
-                    setAddressError("");
-                    setCopiedAddress("");
-                    if (item)
-                      onOpenAddress({
-                        network,
-                        address: item.address,
-                        min_deposit:
-                          "min_deposit" in item ? item.min_deposit : undefined,
-                        demo: demoPortfolio,
-                        amount: demoPortfolio
+            <WalletOwnedWallets
+              {...{ code, active, icon, color, iconColor }}
+              onAvailability={setOwnedAvailable}
+            />
+            {(!ownedAvailable ? (wallet.assetRoutes[code] ?? []) : []).map(
+              (network) => {
+                const item = demoPortfolio
+                  ? portfolioExamples[network]
+                  : addresses.find((row) => row.network === network);
+                return (
+                  <button
+                    key={network}
+                    type="button"
+                    aria-label={`Открыть адрес ${network}`}
+                    disabled={
+                      !demoPortfolio &&
+                      !(code === "USDT" && network === "TRON") &&
+                      !item &&
+                      (!(addressNetworks[code] ?? []).includes(network) ||
+                        !wallet.configured ||
+                        loadingAddresses ||
+                        addressBusy)
+                    }
+                    onClick={() => {
+                      setAddressError("");
+                      setCopiedAddress("");
+                      if (item)
+                        onOpenAddress({
+                          network,
+                          address: item.address,
+                          min_deposit:
+                            "min_deposit" in item
+                              ? item.min_deposit
+                              : undefined,
+                          demo: demoPortfolio,
+                          amount: demoPortfolio
+                            ? code === "USDT"
+                              ? portfolioExamples[network].amount
+                              : preview.amount
+                            : null,
+                          rate: demoPortfolio ? preview.rate : rate,
+                        });
+                      else if (network === "TRON" && code === "USDT")
+                        onDeposit("TRON");
+                      else if ((addressNetworks[code] ?? []).includes(network))
+                        void createAddress(network);
+                    }}
+                    className="wpay-address-row flex h-16 w-full items-center justify-between gap-3 border-b border-black/[.06] py-2 text-left dark:border-white/[.08]"
+                  >
+                    <span className="flex min-w-0 items-center gap-3">
+                      <WalletAssetAvatar
+                        icon={icon}
+                        color={color}
+                        iconColor={iconColor}
+                        network={network}
+                      />
+                      <span className="min-w-0">
+                        <span className="block truncate text-[15px] font-medium text-black dark:text-white">
+                          {code}
+                          {["BTC", "TRX"].includes(code)
+                            ? ""
+                            : " · " + (networkStandards[network] ?? network)}
+                        </span>
+                        <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
+                          {networkNames[network] ?? network}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span
+                        className="block text-[16px] leading-6 font-medium tabular-nums text-black dark:text-white"
+                        aria-label={
+                          demoPortfolio
+                            ? "Пример баланса сети"
+                            : "Баланс сети пока недоступен"
+                        }
+                      >
+                        {demoPortfolio
                           ? code === "USDT"
-                            ? portfolioExamples[network].amount
-                            : preview.amount
-                          : null,
-                        rate: demoPortfolio ? preview.rate : rate,
-                      });
-                    else if (network === "TRON" && code === "USDT")
-                      onDeposit("TRON");
-                    else if ((addressNetworks[code] ?? []).includes(network))
-                      void createAddress(network);
-                  }}
-                  className="wpay-address-row flex h-16 w-full items-center justify-between gap-3 border-b border-black/[.06] py-2 text-left dark:border-white/[.08]"
-                >
-                  <span className="flex min-w-0 items-center gap-3">
-                    <WalletAssetAvatar
-                      icon={icon}
-                      color={color}
-                      iconColor={iconColor}
-                      network={network}
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate text-[15px] font-medium text-black dark:text-white">
-                        {code}
-                        {["BTC", "TRX"].includes(code)
-                          ? ""
-                          : " · " + (networkStandards[network] ?? network)}
+                            ? "$" +
+                              cryptoAmount(portfolioExamples[network].amount)
+                            : cryptoAmount(preview.amount)
+                          : "—"}
                       </span>
-                      <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
-                        {networkNames[network] ?? network}
+                      <span className="mt-0.5 block text-[12px] leading-5 text-black/45 dark:text-white/45">
+                        {network === "TRON" && !demoPortfolio
+                          ? "По точной сумме"
+                          : item
+                            ? item.address.slice(0, 7) +
+                              "…" +
+                              item.address.slice(-5)
+                            : loadingAddresses
+                              ? "Получаем адрес…"
+                              : wallet.configured
+                                ? "Получить адрес"
+                                : "Нет адреса"}
                       </span>
                     </span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span
-                      className="block text-[16px] leading-6 font-medium tabular-nums text-black dark:text-white"
-                      aria-label={
-                        demoPortfolio
-                          ? "Пример баланса сети"
-                          : "Баланс сети пока недоступен"
-                      }
-                    >
-                      {demoPortfolio
-                        ? code === "USDT"
-                          ? "$" +
-                            cryptoAmount(portfolioExamples[network].amount)
-                          : cryptoAmount(preview.amount)
-                        : "—"}
-                    </span>
-                    <span className="mt-0.5 block text-[12px] leading-5 text-black/45 dark:text-white/45">
-                      {network === "TRON" && !demoPortfolio
-                        ? "По точной сумме"
-                        : item
-                          ? item.address.slice(0, 7) +
-                            "…" +
-                            item.address.slice(-5)
-                          : loadingAddresses
-                            ? "Получаем адрес…"
-                            : wallet.configured
-                              ? "Получить адрес"
-                              : "Нет адреса"}
-                    </span>
-                  </span>
-                </button>
-              );
-            })}
+                  </button>
+                );
+              },
+            )}
 
             {addressError && (
               <p
