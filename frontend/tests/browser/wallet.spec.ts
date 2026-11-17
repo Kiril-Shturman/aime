@@ -1246,3 +1246,22 @@ test("card recharge history shows charged total and separate credited amount", a
   await expect(page.getByText("На карту, USDT",{exact:true})).toBeVisible();
   await expect(page.getByText("0.225002",{exact:true})).toBeVisible();
 });
+
+test("desktop sidebar navigates and switches the wPay wordmark with the theme", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await setup(page, "light");
+  const menu = page.getByRole("navigation", { name: "Основное меню" });
+  const brand = page.getByRole("button", { name: "wPay", exact: true });
+  const logo = brand.getByRole("img", { name: "wPay" });
+  await expect(logo).toHaveAttribute("src", "/brands/wpay-wordmark.svg");
+  await expect(page.locator(".wpay-bottom-menu")).toBeHidden();
+  await menu.getByRole("button", { name: "История" }).click();
+  await expect(menu.getByRole("button", { name: "История" })).toHaveAttribute("aria-current", "page");
+  await page.locator(".wpay-desktop-sidebar").getByRole("button", { name: "Тёмная тема" }).click();
+  await expect(logo).toHaveAttribute("src", "/brands/wpay-wordmark-light.svg");
+  await brand.click();
+  await expect(menu.getByRole("button", { name: "Кошелёк" })).toHaveAttribute("aria-current", "page");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(menu).toBeHidden();
+  await expect(page.locator(".wpay-bottom-menu")).toBeVisible();
+});

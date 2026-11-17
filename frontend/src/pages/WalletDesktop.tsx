@@ -1,11 +1,55 @@
 import { Wallet, CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight } from 'lucide-react'
 import { useLiveWallet, cryptoAmount, usdPrice } from './WalletLive'
 
-type Tab='wallet'|'cards'|'history'|'profile'
-export function DesktopSidebar({tab,onSelect,dark,onTheme,name,cardsEnabled}:{tab:Tab;onSelect:(tab:Tab)=>void;dark:boolean;onTheme:()=>void;name:string;cardsEnabled:boolean}){
- const items=([{id:'wallet',label:'Кошелёк',Icon:Wallet},{id:'cards',label:'Карты',Icon:CreditCard},{id:'history',label:'История',Icon:Clock3},{id:'profile',label:'Профиль',Icon:UserRound}] as const).filter(item=>item.id!=='cards'||cardsEnabled)
- return <aside className="wpay-desktop-sidebar"><a href="/wallet" className="wpay-desktop-brand"><span>W</span>WPay<span className="wpay-desktop-brand-label">Wallet</span></a><nav aria-label="Основное меню">{items.map(({id,label,Icon})=><button type="button" key={id} aria-current={tab===id?'page':undefined} onClick={()=>onSelect(id)}><Icon size={21} strokeWidth={1.8}/>{label}<ArrowUpRight className="wpay-desktop-nav-arrow" size={16}/></button>)}</nav><div className="wpay-desktop-sidebar-footer"><button type="button" onClick={onTheme}>{dark?<Sun size={19}/>:<Moon size={19}/>} {dark?'Светлая тема':'Тёмная тема'}</button><button type="button" className="wpay-desktop-user" onClick={()=>onSelect('profile')}><span>{name.slice(0,1).toUpperCase()}</span><span><strong>{name}</strong><small>Личный кабинет</small></span></button></div></aside>
+type Tab = "wallet" | "cards" | "history" | "profile";
+
+const desktopLinks = [
+  { id: "wallet", label: "Кошелёк", Icon: Wallet },
+  { id: "cards", label: "Карты", Icon: CreditCard },
+  { id: "history", label: "История", Icon: Clock3 },
+  { id: "profile", label: "Профиль", Icon: UserRound },
+] as const;
+
+export function DesktopSidebar({
+  tab, onSelect, dark, onTheme, name, cardsEnabled,
+}: {
+  tab: Tab;
+  onSelect: (tab: Tab) => void;
+  dark: boolean;
+  onTheme: () => void;
+  name: string;
+  cardsEnabled: boolean;
+}) {
+  const ThemeIcon = dark ? Sun : Moon;
+  const items = desktopLinks.filter(({ id }) => id !== "cards" || cardsEnabled);
+
+  return (
+    <aside className="wpay-desktop-sidebar">
+      <button type="button" className="wpay-desktop-brand" onClick={() => onSelect("wallet")}>
+        <img src={dark ? "/brands/wpay-wordmark-light.svg" : "/brands/wpay-wordmark.svg"} alt="wPay" width={104} height={43} />
+      </button>
+      <nav aria-label="Основное меню">
+        {items.map(({ id, label, Icon }) => (
+          <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => onSelect(id)}>
+            <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="wpay-desktop-sidebar-footer">
+        <button type="button" className="wpay-desktop-theme" onClick={onTheme}>
+          <ThemeIcon size={18} aria-hidden="true" />
+          {dark ? "Светлая тема" : "Тёмная тема"}
+        </button>
+        <button type="button" className="wpay-desktop-user" onClick={() => onSelect("profile")}>
+          <span className="wpay-desktop-user-initial" aria-hidden="true">{name.trim().slice(0, 1).toUpperCase() || "W"}</span>
+          <strong>{name}</strong>
+        </button>
+      </div>
+    </aside>
+  );
 }
+
 export function DesktopOverview({onHistory,onDeposit,onExchange}:{onHistory:()=>void;onDeposit:()=>void;onExchange:()=>void}){
  const wallet=useLiveWallet()
  const transactions=wallet.data.transactions.slice(0,4)
