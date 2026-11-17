@@ -13,6 +13,8 @@ import {
   ArrowUpRight,
   Mail,
   AtSign,
+  CircleAlert,
+  MessageCircle,
 } from "lucide-react";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
 import "./WalletVerification.css";
@@ -33,12 +35,14 @@ export function preloadVerificationArtwork() {
 type Props = {
   aura: ReturnType<typeof useAuraProfile>;
   onPersonal: () => void;
+  onSupport?: () => void;
   contacts: boolean;
   onContacts: () => void;
 };
 export default function WalletVerification({
   aura,
   onPersonal,
+  onSupport,
   contacts,
   onContacts,
 }: Props) {
@@ -187,7 +191,10 @@ export default function WalletVerification({
       </section>
     );
   return (
-    <section className="wpay-verification" aria-label="Проверка личности">
+    <section
+      className={`wpay-verification${rejected ? " wpay-verification--issue" : ""}`}
+      aria-label="Проверка личности"
+    >
       <div className="wpay-verification-body">
         <div className="wpay-verification-scene" aria-hidden="true">
           <div className="wpay-verification-glow" />
@@ -227,13 +234,17 @@ export default function WalletVerification({
           <span className="wpay-verification-spark wpay-verification-spark--two" />
         </div>
         <div className="wpay-verification-copy">
-          <span className="wpay-verification-eyebrow">
-            ВАША ЛИЧНОСТЬ. ВАШИ ВОЗМОЖНОСТИ.
-          </span>
+          {!rejected && (
+            <span className="wpay-verification-eyebrow">
+              ВАША ЛИЧНОСТЬ. ВАШИ ВОЗМОЖНОСТИ.
+            </span>
+          )}
           <h2>
             {verified
               ? "Личность подтверждена"
-              : "Больше доверия.\nБольше возможностей."}
+              : rejected
+                ? "Проверка не пройдена"
+                : "Больше доверия.\nБольше возможностей."}
           </h2>
           <p role="status">
             {aura.loading
@@ -243,11 +254,14 @@ export default function WalletVerification({
                 : pending
                   ? "Документы на проверке. Мы обновим статус, когда проверка завершится."
                   : rejected
-                    ? "Проверка не пройдена. Обратитесь в поддержку, если нужна помощь."
+                    ? "Поможем разобраться в поддержке. Повторно отправлять документы не нужно."
                     : "Подтвердите личность, чтобы пользоваться всеми возможностями wPay."}
           </p>
-          {rejected && aura.kyc?.reason && (
-            <p className="wpay-verification-guidance">Причина: {aura.kyc.reason}</p>
+          {rejected && (
+            <VerificationIssue
+              reason={aura.kyc?.reason}
+              diagnostic={aura.error}
+            />
           )}
           {!verified && !pending && !rejected && (
             <p className="wpay-verification-guidance">
@@ -255,10 +269,12 @@ export default function WalletVerification({
               документы в защищённой форме.
             </p>
           )}
-          <span className="wpay-verification-trust">
-            <LockKeyhole size={14} /> Защищённая форма проверки
-          </span>
-          {aura.error && (
+          {!rejected && (
+            <span className="wpay-verification-trust">
+              <LockKeyhole size={14} /> Защищённая форма проверки
+            </span>
+          )}
+          {aura.error && !rejected && (
             <p role="alert" className="wpay-verification-error">
               {aura.error}
             </p>
@@ -273,7 +289,7 @@ export default function WalletVerification({
             </button>
           )}
           <div className="wpay-verification-links">
-            {!verified && (
+            {!verified && !rejected && (
               <button type="button" onClick={onPersonal}>
                 Личные данные
               </button>
@@ -291,7 +307,19 @@ export default function WalletVerification({
         </div>
       </div>
       <div className="wpay-verification-footer">
-        {!verified ? (
+        {rejected ? (
+          <Button
+            data-wpay-primary=""
+            rounded
+            className="!m-0 !w-full"
+            onClick={onSupport || (() => void aura.refresh())}
+          >
+            <span className="wpay-verification-button-content">
+              {onSupport && <MessageCircle size={20} aria-hidden="true" />}
+              {onSupport ? "Связаться с поддержкой" : "Обновить статус"}
+            </span>
+          </Button>
+        ) : !verified ? (
           <Button
             data-wpay-primary=""
             rounded
@@ -322,5 +350,54 @@ export default function WalletVerification({
         )}
       </div>
     </section>
+  );
+}
+
+function VerificationIssue({
+  reason,
+  diagnostic,
+}: {
+  reason?: string | null;
+  diagnostic?: string;
+}) {
+  const passportFailed = /PassportFailed/i.test(reason || "");
+  const alreadyUsed = /already_used|already_verified/i.test(reason || "");
+  const locked = /identity_locked/i.test(reason || "");
+  const title = alreadyUsed
+    ? "Паспорт уже используется"
+    : passportFailed
+      ? "Паспорт не прошёл проверку"
+      : locked
+        ? "Данные нельзя изменить самостоятельно"
+        : "Нужна помощь с проверкой";
+  const description = alreadyUsed
+    ? "Этот паспорт связан с другим профилем. Поддержка поможет разобраться."
+    : locked
+      ? "Паспортные данные уже переданы. Уточнить причину отказа и внести изменения можно через поддержку."
+      : "Сервис проверки не подтвердил данные. Обратитесь в поддержку, чтобы уточнить причину и дальнейшие шаги.";
+  return (
+    <div className="wpay-verification-issue" role="alert">
+      <div className="wpay-verification-issue-heading">
+        <span className="wpay-verification-issue-icon">
+          <CircleAlert size={22} aria-hidden="true" />
+        </span>
+        <h3>{title}</h3>
+      </div>
+      <p>{description}</p>
+      {(reason || diagnostic) && (
+        <details className="wpay-verification-diagnostics">
+          <summary>Данные для поддержки</summary>
+          {reason && (
+            <p>
+              <span>Код проверки</span>
+              <code>{reason}</code>
+            </p>
+          )}
+          {diagnostic && (
+            <p className="wpay-verification-diagnostic-message">{diagnostic}</p>
+          )}
+        </details>
+      )}
+    </div>
   );
 }

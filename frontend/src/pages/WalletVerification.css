@@ -1194,3 +1194,104 @@
 .wpay-verification-contact-inputs .item-content {
   scroll-margin-block: 16px;
 }
+
+.wpay-verification--issue .wpay-verification-scene {
+  height: clamp(230px, 31svh, 290px);
+}
+.wpay-verification--issue .wpay-verification-copy h2 {
+  font-size: clamp(26px, 6.6vw, 32px);
+  line-height: 1.15;
+  letter-spacing: -0.8px;
+}
+.wpay-verification-issue {
+  margin: 22px auto 0;
+  max-width: 440px;
+  padding: 18px;
+  border: 1px solid #17243d08;
+  border-radius: 24px;
+  background: #ffffff;
+  box-shadow: 0 8px 28px #182b4805;
+  text-align: left;
+}
+.dark .wpay-verification-issue {
+  background: #252b36;
+  border-color: #ffffff0a;
+  box-shadow: none;
+}
+.wpay-verification-issue-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.wpay-verification-issue-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  height: 40px;
+  border-radius: 14px;
+  background: #fff3df;
+  color: #ad691c;
+}
+.dark .wpay-verification-issue-icon {
+  background: #e6aa4520;
+  color: #eabd75;
+}
+.wpay-verification-issue h3 {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: var(--verify-ink);
+}
+.wpay-verification-issue > p {
+  margin: 13px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--verify-muted);
+}
+.wpay-verification-diagnostics {
+  margin-top: 16px;
+  border-top: 1px solid #17243d0c;
+  padding-top: 13px;
+}
+.dark .wpay-verification-diagnostics {
+  border-top-color: #ffffff12;
+}
+.wpay-verification-diagnostics summary {
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: var(--verify-muted);
+}
+.wpay-verification-diagnostics p {
+  margin: 12px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--verify-muted);
+  overflow-wrap: anywhere;
+}
+.wpay-verification-diagnostics p > span,
+.wpay-verification-diagnostics code {
+  display: block;
+}
+.wpay-verification-diagnostics code {
+  margin-top: 5px;
+  user-select: text;
+  font-size: 11px;
+}
+.wpay-verification--issue {
+  --verify-muted: #667184;
+}
+.dark .wpay-verification--issue {
+  --verify-muted: #a1aec3;
+}
+
+.wpay-verification--issue .wpay-verification-card {
+  top: 22%;
+  left: 50%;
+  translate: -50% 0;
+  width: 76%;
+  max-width: 340px;
+}

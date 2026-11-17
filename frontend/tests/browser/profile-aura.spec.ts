@@ -452,8 +452,8 @@ test("identity submission shows native preloader and never offers retry after re
     page.getByRole("button", { name: "Отправить на проверку" }),
   ).toHaveCount(0);
   await expect(
-    page.locator("p[role=status]").filter({ hasText: "Проверка не пройдена" }),
-  ).toContainText("Обратитесь в поддержку");
+    page.locator("p[role=status]").filter({ hasText: "Поможем разобраться" }),
+  ).toContainText("Поможем разобраться");
   expect(posts).toBe(1);
 });
 
@@ -548,3 +548,69 @@ test("Aura rejected email returns to editable contacts", async ({ page }) => {
   await expect(page.getByRole("alert")).toContainText("Укажите другой адрес");
   await expect(page.locator('input[type="email"]')).toBeVisible();
 });
+
+for (const theme of ["light", "dark"]) {
+  test(`${theme}: rejected verification has a readable status, collapsed diagnostics and support action`, async ({
+    page,
+  }) => {
+    const state = await setup(page, true, theme);
+    state.contact = { email: "test@example.com", phone: "+79991234567" };
+    const reason = "need_complete_kyc:NeedCompleteKYC,PassportFailed";
+    await page.route("**/api/wallet/aura-kyc", (route) =>
+      route.fulfill({
+        json: {
+          status: "rejected",
+          verified: false,
+          terminal: false,
+          reason,
+        },
+      }),
+    );
+    await page
+      .getByRole("link", { name: "Верификация Подтверждение личности" })
+      .click();
+    const region = page.getByRole("region", {
+      name: "Проверка личности",
+      exact: true,
+    });
+    await expect(
+      region.getByRole("heading", {
+        name: "Проверка не пройдена",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      region.getByRole("heading", {
+        name: "Паспорт не прошёл проверку",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      region.getByRole("button", { name: "Начать", exact: true }),
+    ).toHaveCount(0);
+    await expect(region.locator("code")).not.toBeVisible();
+    await expect(
+      region.getByText("Защищённая форма проверки", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      region.getByRole("button", { name: "Связаться с поддержкой" }),
+    ).toBeEnabled();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    ).toBe(true);
+    await page.screenshot({
+      path: test.info().outputPath(`verification-rejected-${theme}.png`),
+      animations: "disabled",
+    });
+    await region.getByText("Данные для поддержки", { exact: true }).click();
+    await expect(region.locator("code")).toHaveText(reason);
+    await expect(region.locator("code")).toBeVisible();
+    await region
+      .getByRole("button", { name: "Связаться с поддержкой" })
+      .click();
+    await expect(page.locator(".wpay-support-chat")).toBeVisible();
+    expect(state.posts).toHaveLength(0);
+  });
+}

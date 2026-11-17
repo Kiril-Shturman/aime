@@ -3297,6 +3297,7 @@ function ProfileSettingsPushView({
               contacts={verificationContacts}
               onContacts={() => setVerificationContacts(true)}
               onPersonal={() => setDisplayPage("personal")}
+              onSupport={() => setChatOpen(true)}
             />
           )}
 
