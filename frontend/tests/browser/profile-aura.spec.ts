@@ -498,6 +498,10 @@ for (const code of [
       code === "kyc_pending" ? "Дождитесь результата" : "поддержку",
     );
     await expect(page.getByRole("alert")).toContainText("checks_failed");
+    if (code !== "kyc_pending")
+      await expect(
+        page.locator(".wpay-verification-visible-code code"),
+      ).toHaveText(code);
     await expect(
       page.getByRole("button", { name: "Отправить на проверку" }),
     ).toHaveCount(0);
@@ -604,6 +608,12 @@ for (const theme of ["light", "dark"]) {
         json: { status: "rejected", verified: false, terminal: false, reason },
       });
     });
+    await expect(
+      region.locator(".wpay-verification-visible-code code"),
+    ).toHaveText(reason);
+    await expect(
+      region.locator(".wpay-verification-visible-code code"),
+    ).toBeVisible();
     const refreshButton = region.getByRole("button", {
       name: "Обновить статус",
       exact: true,
@@ -616,7 +626,9 @@ for (const theme of ["light", "dark"]) {
     finish();
     await expect(refreshButton).toBeEnabled();
     await expect(refreshButton.locator(".preloader")).toHaveCount(0);
-    await expect(region.locator("code")).not.toBeVisible();
+    await expect(
+      region.locator(".wpay-verification-diagnostics code"),
+    ).not.toBeVisible();
     await expect(
       region.getByText("Защищённая форма проверки", { exact: true }),
     ).toHaveCount(0);
@@ -633,8 +645,12 @@ for (const theme of ["light", "dark"]) {
       animations: "disabled",
     });
     await region.getByText("Данные для поддержки", { exact: true }).click();
-    await expect(region.locator("code")).toHaveText(reason);
-    await expect(region.locator("code")).toBeVisible();
+    await expect(
+      region.locator(".wpay-verification-diagnostics code"),
+    ).toHaveText(reason);
+    await expect(
+      region.locator(".wpay-verification-diagnostics code"),
+    ).toBeVisible();
     await region
       .getByRole("button", { name: "Связаться с поддержкой" })
       .click();

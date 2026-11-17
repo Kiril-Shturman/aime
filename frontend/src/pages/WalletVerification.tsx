@@ -291,6 +291,7 @@ export default function WalletVerification({
                 <VerificationIssue
                   reason={aura.kyc?.reason}
                   diagnostic={aura.error}
+                  errorCode={aura.errorCode}
                 />
               )}
               {!verified && !pending && !rejected && (
@@ -398,9 +399,11 @@ export default function WalletVerification({
 function VerificationIssue({
   reason,
   diagnostic,
+  errorCode,
 }: {
   reason?: string | null;
   diagnostic?: string;
+  errorCode?: string;
 }) {
   const passportFailed = /PassportFailed/i.test(reason || "");
   const alreadyUsed = /already_used|already_verified/i.test(reason || "");
@@ -438,6 +441,12 @@ function VerificationIssue({
         <div className="wpay-verification-issue-text">
           <h3>{title}</h3>
           <p>{description}</p>
+          {(errorCode || reason) && (
+            <p className="wpay-verification-visible-code">
+              <span>{errorCode ? "Код ошибки" : "Код проверки"}</span>
+              <code>{errorCode || reason}</code>
+            </p>
+          )}
         </div>
       </div>
       {(reason || diagnostic) && (
