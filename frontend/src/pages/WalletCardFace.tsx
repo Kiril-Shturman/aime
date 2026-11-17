@@ -15,7 +15,11 @@ export default function WalletCardFace({
   status,
   maskedPan,
   offer = false,
+  balance,
+  currency = "USDT",
 }: {
+  balance?: string | null;
+  currency?: string;
   skin: CardSkin;
   kind: "physical" | "virtual";
   status: string;
@@ -72,6 +76,21 @@ export default function WalletCardFace({
           )}
         </svg>
         <span className="wpay-card-face-status">{status}</span>
+        {!offer && (
+          <span
+            className="absolute right-[8%] top-[29%] z-10 text-[22px] font-semibold tabular-nums "
+            aria-label="Баланс карты"
+            style={{ color: dark ? "#fff" : "#152030" }}
+          >
+            {balance !== undefined && balance !== null
+              ? Number(balance).toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })
+              : "—"}{" "}
+            <span className="text-[12px] opacity-60">{currency}</span>
+          </span>
+        )}
         <img
           className="wpay-card-face-logo"
           src={

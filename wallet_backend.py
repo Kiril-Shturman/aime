@@ -5,6 +5,7 @@ Only this module sees the provider token; organization funds are never a user's
 balance. All money arithmetic uses Decimal and SQLite write transactions.
 """
 import asyncio
+from wallet_card_ui import CardUI
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
 from wallet_chain import ChainReader
@@ -702,6 +703,8 @@ def install_wallet(app, root, owner_check):
         base_url=os.environ.get('AURA_BASE_URL') or None,
     )
     aura_service = AuraService(ledger, aura_client, aura_environment)
+    card_ui = CardUI(ledger, aura_service, enabled=aura_enabled)
+    app["wpay_card_ui"] = card_ui
     app['wpay_provider'] = provider
     app['wpay_aura_provider'] = aura_client
     app['wpay_ledger'] = ledger
@@ -1193,6 +1196,9 @@ def install_wallet(app, root, owner_check):
             exchange_response = await exchange_route(request, action, uid, exchange)
             if exchange_response is not None:
                 return exchange_response
+            card_response = await card_ui.route(request, action, uid, client_ref)
+            if card_response is not None:
+                return card_response
             if action == 'profile-avatar' and request.method == 'GET':
                 if request.query:
                     raise ValueError('Avatar query parameters are not supported')
@@ -1527,13 +1533,14 @@ def install_wallet(app, root, owner_check):
                 if not 1 <= len(idempotency_key) <= 200:
                     raise ApiError('idempotency_key_required', 'Idempotency-Key is required', 400)
                 body = await request.json()
-                allowed = {'kind', 'shipping_address'}
+                allowed = {'kind', 'shipping_address', 'plan_id'}
                 if not isinstance(body, dict) or set(body) - allowed:
                     raise ValueError('Unsupported Aura card fields')
                 return web.json_response(await aura_service.create_card_request(
                     uid, client_ref, kind=body.get('kind', 'virtual'),
                     idempotency_key=idempotency_key,
                     shipping_address=body.get('shipping_address'),
+                    plan_id=body.get('plan_id'),
                 ))
             if action == 'aura-cards' and request.method == 'GET':
                 cards = [dict(row) for row in ledger.db.execute(

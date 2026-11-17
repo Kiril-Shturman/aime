@@ -8,7 +8,17 @@ async function setup(
 ) {
   const state = {
     cards: noCards
-      ? []
+      ? [
+          {
+            card_id: "wpay-ui-demo-card",
+            kind: "virtual",
+            status: "opened",
+            frozen: false,
+            masked_pan: "•••• 4242",
+            delivery_status: null,
+            demo: true,
+          },
+        ]
       : [
           {
             card_id: "card-v",
@@ -42,6 +52,30 @@ async function setup(
     const req = route.request(),
       url = new URL(req.url()),
       action = url.pathname.split("/").pop()!;
+    if (action === "card-quote") {
+      const body = req.postDataJSON();
+      const physical =
+        body.plan_id === "card_premium" || body.plan_id === "card_platinum";
+      const fee = body.operation === "issue" ? (physical ? "20" : "2") : "0.10";
+      return route.fulfill({
+        json: {
+          quote_id: "quote-" + (body.plan_id ?? body.card_id),
+          total:
+            body.operation === "issue"
+              ? fee
+              : String(Number(body.amount) + 0.1),
+          reserve:
+            body.operation === "issue"
+              ? fee
+              : String(Number(body.amount) + 0.11),
+          service_fee: "0",
+          provider_fee: fee,
+          can_afford: true,
+          expires_at: Date.now() / 1000 + 120,
+          estimated: body.operation === "recharge",
+        },
+      });
+    }
     if (req.method() === "POST") {
       const body = req.postDataJSON();
       state.calls.push({ action, body, key: req.headers()["idempotency-key"] });
@@ -240,7 +274,11 @@ test("card recharge preserves idempotency after 503", async ({ page }) => {
   const calls = state.calls.filter((c) => c.action === "aura-card-recharge");
   expect(calls[0].key).toBeTruthy();
   expect(calls[1].key).toBe(calls[0].key);
-  expect(calls[1].body).toEqual({ card_id: "card-v", amount: "10" });
+  expect(calls[1].body).toEqual({
+    card_id: "card-v",
+    amount: "10",
+    quote_id: "quote-card-v",
+  });
 });
 test("physical card selection drives delivery, activation and 3DS", async ({
   page,
@@ -511,10 +549,9 @@ test("slow card loading shows structured placeholders until data arrives", async
   }
   await expect(page.locator(".wpay-cards-loading")).toHaveCount(0);
   await expect(
-    page.getByText("Демо-карта · Пример меню выпущенной карты", {
-      exact: true,
-    }),
+    page.getByRole("heading", { name: "Для подписок", exact: true }),
   ).toBeVisible();
+  await expect(page.locator(".wpay-owned-card-item")).toHaveCount(0);
 });
 
 test("demo owned card precedes offers and its controls never call provider", async ({
@@ -763,4 +800,30 @@ test("touch swipes settle cards exactly into place in both directions", async ({
   await expect(
     main.getByRole("heading", { name: "Для подписок", exact: true }),
   ).toBeVisible();
+});
+
+test("chosen travel tariff and server quote are sent with issuance, never a browser price", async ({ page }) => {
+  const state = await setup(page, "light", false, true);
+  await page.route("**/api/wallet/card-quote", route => {
+    expect(route.request().postDataJSON().plan_id).toBe("card_travel");
+    return route.fulfill({json:{quote_id:"travel-priced",total:"29",reserve:"29",provider_fee:"2",service_fee:"27",can_afford:true,estimated:false,expires_at:Date.now()/1000+120}});
+  });
+  const main = page.getByRole("main", { name: "Мои карты" });
+  await main.getByRole("button", { name: "Карта 3", exact: true }).click();
+  await main.getByRole("button", { name: "Оформить карту", exact: true }).click();
+  await expect(popup(page)).toContainText("29 USDT");
+  await popup(page).getByRole("button", {name:"Выпустить карту",exact:true}).click();
+  await expect.poll(() => state.calls.filter(c=>c.action==="aura-cards").length).toBe(1);
+  const issue=state.calls.find(c=>c.action==="aura-cards")!;
+  expect(issue.body).toEqual({kind:"virtual",plan_id:"card_travel",quote_id:"travel-priced"});
+  expect(issue.key).toBeTruthy();
+});
+
+test("insufficient balance in server quote disables issuance", async ({page}) => {
+  const state=await setup(page,"dark",false,true);
+  await page.route("**/api/wallet/card-quote", route=>route.fulfill({json:{quote_id:"unfunded",total:"29",reserve:"29",provider_fee:"2",service_fee:"27",can_afford:false,expires_at:Date.now()/1000+120}}));
+  await page.getByRole("main",{name:"Мои карты"}).getByRole("button",{name:"Оформить карту",exact:true}).click();
+  await expect(popup(page)).toContainText("Недостаточно USDT");
+  await expect(popup(page).getByRole("button",{name:"Выпустить карту",exact:true})).toBeDisabled();
+  expect(state.calls).toHaveLength(0);
 });

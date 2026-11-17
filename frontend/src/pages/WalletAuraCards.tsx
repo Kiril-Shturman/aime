@@ -6,7 +6,15 @@ import Snow from "framework7-icons/react/esm/Snow.js";
 import Ellipsis from "framework7-icons/react/esm/Ellipsis.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, List, ListItem } from "konsta/react";
-import { f7, Popup, Page, Navbar, NavRight, Link } from "framework7-react";
+import {
+  f7,
+  Popup,
+  Page,
+  Navbar,
+  NavRight,
+  Link,
+  Preloader,
+} from "framework7-react";
 import "framework7/components/dialog/css";
 import {
   CreditCard,
@@ -34,6 +42,11 @@ import { useLiveWallet } from "./WalletLive";
 const DEMO_CARD_ID = "wpay-ui-demo-card";
 type AuraCard = {
   demo?: boolean;
+  plan_id?: string;
+  skin?: CardSkin;
+  balance?: string | null;
+  currency?: string;
+  tracking?: { carrier?: string; number?: string; url?: string } | null;
   card_id: string;
   kind: "virtual" | "physical";
   status: "processing" | "opened" | "failed_to_open" | "cancelled";
@@ -42,7 +55,30 @@ type AuraCard = {
   delivery_status: string | null;
   provider_updated_at: string | null;
 };
+type CardPlan = {
+  plan_id: string;
+  label: string;
+  kind: string;
+  skin: CardSkin;
+  issue_fee: string | null;
+  available: boolean;
+  tariff_configured?: boolean;
+  service_recharge_pct: string;
+  service_minimum_fee: string;
+};
+type CardQuote = {
+  quote_id: string;
+  retry_key?: string | null;
+  total: string;
+  reserve: string;
+  provider_fee: string;
+  service_fee: string;
+  can_afford: boolean;
+  estimated: boolean;
+  expires_at: number;
+};
 type CardFees = {
+  plans?: CardPlan[];
   currency: "USDT";
   minimum_recharge_amount: string;
   open_virtual_card_fee: string;
@@ -120,6 +156,10 @@ export default function WalletAuraCards({
   const wallet = useLiveWallet();
   const [cards, setCards] = useState<AuraCard[]>([]);
   const [fees, setFees] = useState<CardFees | null>(null);
+  const [quote, setQuote] = useState<CardQuote | null>(null);
+  const [quoteBusy, setQuoteBusy] = useState(false);
+  const [quoteError, setQuoteError] = useState("");
+  const [quoteRetry, setQuoteRetry] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [operations, setOperations] = useState<CardOperation[]>([]);
   const [operationsLoading, setOperationsLoading] = useState(false);
@@ -183,26 +223,24 @@ export default function WalletAuraCards({
   const loadCards = useCallback(async () => {
     setError("");
     try {
-      const [cardResult, feeResult] = await Promise.all([
-        walletRequest<{ data: AuraCard[] }>("aura-cards"),
+      const [cardResponse, feeResponse] = await Promise.allSettled([
+        walletRequest<{ data: AuraCard[]; refresh_warning?: string }>(
+          "aura-cards",
+        ),
         walletRequest<CardFees>("aura-card-fees"),
       ]);
-      const availableCards: AuraCard[] = cardResult.data.length
-        ? cardResult.data
-        : [
-            {
-              card_id: DEMO_CARD_ID,
-              kind: "virtual",
-              status: "opened",
-              frozen: false,
-              masked_pan: "•••• 4242",
-              delivery_status: null,
-              provider_updated_at: null,
-              demo: true,
-            },
-          ];
+      if (cardResponse.status === "rejected") throw cardResponse.reason;
+      const availableCards: AuraCard[] = cardResponse.value.data;
       setCards(availableCards);
-      setFees(feeResult);
+      if (feeResponse.status === "fulfilled") setFees(feeResponse.value);
+      else {
+        setFees(null);
+        setError(errorText(feeResponse.reason));
+      }
+      if (cardResponse.value.refresh_warning)
+        setError(
+          "Не удалось обновить данные карты. Показано последнее сохранённое состояние.",
+        );
       setSelectedId((current) =>
         current && availableCards.some((card) => card.card_id === current)
           ? current
@@ -217,6 +255,10 @@ export default function WalletAuraCards({
 
   useEffect(() => {
     void loadCards();
+    const refresh = window.setInterval(() => {
+      if (!document.hidden && !busyRef.current) void loadCards();
+    }, 30_000);
+    return () => window.clearInterval(refresh);
   }, [loadCards]);
   useEffect(() => {
     if (!selectedId || selectedId === DEMO_CARD_ID) {
@@ -258,10 +300,88 @@ export default function WalletAuraCards({
     () => cards.find((card) => card.card_id === selectedId) ?? null,
     [cards, selectedId],
   );
+  const shippingKey = JSON.stringify(shipping);
+  const issuePlanId =
+    issueKind === "physical"
+      ? skin === "graphite"
+        ? "card_platinum"
+        : "card_premium"
+      : skin === "navy"
+        ? "card_travel"
+        : "card_subscriptions";
+  const issuePlan = fees?.plans?.find((plan) => plan.plan_id === issuePlanId);
+  const planPrice = (kind: string, appearance?: CardSkin) => {
+    const plan = fees?.plans?.find(
+      (plan) => plan.kind === kind && plan.skin === appearance,
+    );
+    return plan
+      ? plan.issue_fee === null
+        ? "Тариф не настроен"
+        : plan.issue_fee + " USDT"
+      : (kind === "physical"
+          ? fees?.open_physical_card_fee
+          : fees?.open_virtual_card_fee) + " USDT";
+  };
+  useEffect(() => {
+    if (panel !== "issue" && panel !== "recharge") return;
+    const controller = new AbortController();
+    setQuote(null);
+    setQuoteError("");
+    setQuoteBusy(true);
+    if (
+      panel === "recharge" &&
+      (!selectedId ||
+        !/^\d+(?:[.,]\d{1,6})?$/.test(recharge) ||
+        Number(recharge.replace(",", ".")) <= 0)
+    ) {
+      setQuoteBusy(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      void walletRequest<CardQuote>(
+        "card-quote",
+        panel === "issue"
+          ? {
+              operation: "issue",
+              plan_id: issuePlanId,
+              ...(issueKind === "physical"
+                ? { shipping_address: JSON.parse(shippingKey) }
+                : {}),
+            }
+          : {
+              operation: "recharge",
+              card_id: selectedId,
+              amount: recharge.replace(",", "."),
+            },
+        controller.signal,
+      )
+        .then((result) => {
+          if (!controller.signal.aborted) setQuote(result);
+        })
+        .catch((error) => {
+          if (!controller.signal.aborted) setQuoteError(errorText(error));
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setQuoteBusy(false);
+        });
+    }, 350);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [
+    panel,
+    issuePlanId,
+    selectedId,
+    recharge,
+    quoteRetry,
+    shippingKey,
+    issueKind,
+  ]);
   const mutate = async (
     name: string,
     task: () => Promise<unknown>,
-    success: string,
+    success: string | ((result: unknown) => string),
   ) => {
     if (busyRef.current) return;
     if (selected?.demo && name !== "issue") {
@@ -271,7 +391,9 @@ export default function WalletAuraCards({
             card.demo ? { ...card, frozen: !card.frozen } : card,
           ),
         );
-        showNotice(success);
+        showNotice(
+          typeof success === "string" ? success : "Демо: баланс не изменён",
+        );
       } else
         showNotice(
           "Демо-карта: действие показано для примера, деньги не списываются",
@@ -282,11 +404,21 @@ export default function WalletAuraCards({
     setBusy(name);
     setError("");
     try {
-      await task();
+      const result = await task();
       await Promise.all([loadCards(), wallet.refresh()]);
-      showNotice(success);
+      showNotice(typeof success === "function" ? success(result) : success);
     } catch (requestError) {
       setError(errorText(requestError));
+      if (
+        requestError instanceof WalletApiError &&
+        [400, 401, 403, 404, 409, 412, 422].includes(
+          requestError.httpStatus ?? 0,
+        )
+      ) {
+        issueKey.current = "";
+        rechargeKey.current = "";
+        setQuoteRetry((value) => value + 1);
+      }
     } finally {
       busyRef.current = false;
       setBusy("");
@@ -296,12 +428,22 @@ export default function WalletAuraCards({
     mutate(
       "issue",
       async () => {
-        issueKey.current ||= operationKey();
+        if (!quote) return;
+        issueKey.current ||= quote.retry_key ?? operationKey();
         const result = await walletIdempotentRequest(
           "aura-cards",
           issueKind === "physical"
-            ? { kind: issueKind, shipping_address: shipping }
-            : { kind: issueKind },
+            ? {
+                kind: issueKind,
+                shipping_address: shipping,
+                plan_id: issuePlanId,
+                quote_id: quote.quote_id,
+              }
+            : {
+                kind: issueKind,
+                plan_id: issuePlanId,
+                quote_id: quote.quote_id,
+              },
           issueKey.current,
         );
         issueKey.current = "";
@@ -751,7 +893,19 @@ export default function WalletAuraCards({
                             className="wpay-card-flip-front"
                             aria-hidden={credentials?.card_id === card.card_id}
                           >
-                            <LiveCardArtwork card={card} skin="silver" />
+                            <LiveCardArtwork
+                              card={card}
+                              skin={
+                                card.skin ??
+                                (card.plan_id === "card_travel"
+                                  ? "navy"
+                                  : card.plan_id === "card_platinum"
+                                    ? "graphite"
+                                    : card.kind === "physical"
+                                      ? "ice"
+                                      : "silver")
+                              }
+                            />
                           </span>
                           <span
                             className="wpay-card-flip-back"
@@ -932,11 +1086,25 @@ export default function WalletAuraCards({
                   "Пополнение карты",
                   `От ${fees.minimum_recharge_amount} USDT · комиссия ${fees.recharge_fee_pct}%`,
                 )}
+              {fees?.plans
+                ?.filter(
+                  (plan) =>
+                    plan.kind === currentKind &&
+                    plan.skin === activeOffer?.skin,
+                )
+                .map((plan) => (
+                  <div key={plan.plan_id}>
+                    {infoRow(
+                      "Комиссия wPay за пополнение",
+                      `${plan.service_recharge_pct}% · минимум ${plan.service_minimum_fee} USDT`,
+                    )}
+                  </div>
+                ))}
               {premiumOffer && infoRow("Доставка", "Бесплатно")}
               {infoRow(
                 "Выпуск",
                 fees
-                  ? `${currentKind === "physical" ? fees.open_physical_card_fee : fees.open_virtual_card_fee} USDT`
+                  ? planPrice(currentKind, activeOffer?.skin)
                   : "Тариф загружается",
               )}
             </div>
@@ -945,7 +1113,15 @@ export default function WalletAuraCards({
               large
               data-wpay-primary=""
               className="wpay-aura-primary !mt-4 !w-full"
-              disabled={!fees || Boolean(busy)}
+              disabled={
+                !fees ||
+                Boolean(busy) ||
+                fees.plans?.find(
+                  (plan) =>
+                    plan.kind === currentKind &&
+                    plan.skin === activeOffer?.skin,
+                )?.available === false
+              }
               onClick={() => order(currentKind, activeOffer?.skin)}
             >
               Оформить карту
@@ -1090,6 +1266,26 @@ export default function WalletAuraCards({
                   Выполняем запрос…
                 </p>
               )}
+              {(displayPanel === "issue" || displayPanel === "recharge") && (
+                <>
+                  {quoteBusy && (
+                    <div className="flex items-center gap-2 py-3 text-sm">
+                      <Preloader size={18} />
+                      Рассчитываем стоимость…
+                    </div>
+                  )}
+                  {quoteError && (
+                    <p role="alert" className="py-2 text-sm text-red-500">
+                      {quoteError}
+                    </p>
+                  )}
+                  {quote && !quote.can_afford && (
+                    <p role="status" className="py-2 text-sm text-red-500">
+                      Недостаточно USDT на балансе кошелька
+                    </p>
+                  )}
+                </>
+              )}
               {displayPanel === "issue" && (
                 <>
                   <div className="mb-5">
@@ -1160,14 +1356,24 @@ export default function WalletAuraCards({
                       "Карта",
                       issueKind === "physical" ? "Физическая" : "Виртуальная",
                     )}
+                    {infoRow(
+                      "Тариф",
+                      issuePlan?.label ??
+                        (issueKind === "physical"
+                          ? "Физическая карта"
+                          : "Виртуальная карта"),
+                    )}
+                    {quote &&
+                      infoRow(
+                        "Комиссия wPay включена",
+                        `${quote.service_fee} USDT`,
+                      )}
                     {issueKind === "physical" &&
                       skin === "ice" &&
                       infoRow("Доставка", "Бесплатно")}
                     {infoRow(
                       "Спишется с кошелька",
-                      fees
-                        ? `${issueKind === "physical" ? fees.open_physical_card_fee : fees.open_virtual_card_fee} USDT`
-                        : "Тариф не загружен",
+                      quote ? `${quote.total} USDT` : "Рассчитываем стоимость…",
                     )}
                   </div>
                   <Button
@@ -1177,13 +1383,23 @@ export default function WalletAuraCards({
                     className="wpay-aura-primary !mt-5 !w-full"
                     disabled={
                       !fees ||
+                      !quote ||
+                      !quote.can_afford ||
+                      quoteBusy ||
                       Boolean(busy) ||
                       (issueKind === "physical" &&
                         Object.values(shipping).some((value) => !value.trim()))
                     }
                     onClick={() => void issue()}
                   >
-                    {busy === "issue" ? "Отправляем…" : "Выпустить карту"}
+                    {busy === "issue" ? (
+                      <span className="flex items-center gap-2">
+                        <Preloader size={20} color="white" />
+                        Отправляем…
+                      </span>
+                    ) : (
+                      "Выпустить карту"
+                    )}
                   </Button>
                 </>
               )}
@@ -1322,6 +1538,15 @@ export default function WalletAuraCards({
                         ? `${physical ? fees.physical_recharge_fee_pct : fees.recharge_fee_pct}%`
                         : "—",
                     )}
+                    {quote &&
+                      infoRow("Комиссия wPay", `${quote.service_fee} USDT`)}
+                    {quote &&
+                      infoRow("Всего ориентировочно", `${quote.total} USDT`)}
+                    {quote &&
+                      infoRow(
+                        "Резерв до уточнения комиссии",
+                        `${quote.reserve} USDT`,
+                      )}
                   </div>
                   <Button
                     large
@@ -1331,6 +1556,9 @@ export default function WalletAuraCards({
                     disabled={
                       Boolean(busy) ||
                       !fees ||
+                      !quote ||
+                      !quote.can_afford ||
+                      quoteBusy ||
                       !/^\d+(?:[.,]\d{1,6})?$/.test(recharge) ||
                       Number(recharge.replace(",", ".")) <= 0
                     }
@@ -1338,11 +1566,14 @@ export default function WalletAuraCards({
                       mutate(
                         "recharge",
                         async () => {
-                          rechargeKey.current ||= operationKey();
+                          if (!quote) return;
+                          rechargeKey.current ||=
+                            quote.retry_key ?? operationKey();
                           const result = await walletIdempotentRequest(
                             "aura-card-recharge",
                             {
                               card_id: selected.card_id,
+                              quote_id: quote.quote_id,
                               amount: recharge.replace(",", "."),
                             },
                             rechargeKey.current,
@@ -1351,11 +1582,22 @@ export default function WalletAuraCards({
                           setRecharge("");
                           return result;
                         },
-                        "Карта пополнена",
+                        (result) =>
+                          (result as { status?: string })?.status ===
+                          "completed"
+                            ? "Карта пополнена"
+                            : (result as { status?: string })?.status ===
+                                "failed"
+                              ? "Пополнение не прошло. Средства возвращены"
+                              : "Пополнение принято. Ожидаем зачисления",
                       )
                     }
                   >
-                    Пополнить
+                    {busy === "recharge" ? (
+                      <Preloader size={20} color="white" />
+                    ) : (
+                      "Пополнить"
+                    )}
                   </Button>
                 </>
               )}
@@ -1549,12 +1791,26 @@ export default function WalletAuraCards({
               )}
               {displayPanel === "fees" && (
                 <div className="wpay-aura-info">
+                  {fees?.plans?.map((plan) => (
+                    <div key={plan.plan_id}>
+                      {infoRow(
+                        plan.label,
+                        plan.issue_fee === null
+                          ? "Тариф не настроен"
+                          : `${plan.issue_fee} USDT`,
+                      )}
+                      {infoRow(
+                        "Комиссия wPay за пополнение",
+                        `${plan.service_recharge_pct}% · минимум ${plan.service_minimum_fee} USDT`,
+                      )}
+                    </div>
+                  ))}
                   {infoRow(
-                    "Виртуальная карта",
+                    "Базовый выпуск виртуальной",
                     fees ? `${fees.open_virtual_card_fee} USDT` : "—",
                   )}
                   {infoRow(
-                    "Физическая карта",
+                    "Базовый выпуск физической",
                     fees?.open_physical_card_fee
                       ? `${fees.open_physical_card_fee} USDT`
                       : "Недоступна",
@@ -1591,6 +1847,25 @@ export default function WalletAuraCards({
                         "Нет обновлений",
                     )}
                   </div>
+                  {selected.tracking && (
+                    <div className="wpay-aura-info mb-4">
+                      {infoRow(
+                        "Служба доставки",
+                        selected.tracking.carrier ?? "—",
+                      )}
+                      {infoRow("Трек-номер", selected.tracking.number ?? "—")}
+                      {selected.tracking.url?.startsWith("https://") && (
+                        <a
+                          className="block py-3 text-center text-primary"
+                          href={selected.tracking.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Отследить доставку
+                        </a>
+                      )}
+                    </div>
+                  )}
                   {canUse && selected.delivery_status !== "activated" && (
                     <Button
                       large
@@ -1692,6 +1967,8 @@ function LiveCardArtwork({
               : (statusText[card.status] ?? card.status)
             : "Новая карта"
       }
+      balance={card?.balance}
+      currency={card?.currency}
       maskedPan={card?.masked_pan}
       offer={!card}
     />
