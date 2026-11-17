@@ -124,5 +124,6 @@ class FundingTests(unittest.TestCase):
         job = self.funding.estimate('tg:1', self.intent)
         self.call('claim')
         self.ledger.db.execute("UPDATE custody_funding_jobs SET state='unknown',signed_payload='{}',next_attempt_at=?,lease_until=0", (time.time()-1,))
-        self.ledger.db.execute("INSERT INTO custody_funding_jobs(id,intent_id,user_id,wallet_id,network,state,created_at,updated_at) VALUES (?,?,?,?,?,'estimating',?,?)", ('d'*32,self.intent,'tg:1','another-source','BSC',time.time(),time.time()))
+        other = self.custody.create('tg:1', 'ETH')
+        self.ledger.db.execute("INSERT INTO custody_funding_jobs(id,intent_id,user_id,wallet_id,network,state,created_at,updated_at) VALUES (?,?,?,?,?,'estimating',?,?)", ('d'*32,self.intent,'tg:1',other['id'],'ETH',time.time(),time.time()))
         self.assertEqual(self.call('claim')['job']['id'], 'd'*32)
