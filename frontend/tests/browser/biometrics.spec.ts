@@ -410,3 +410,66 @@ test("late desktop capability restores the saved lock when biometry becomes avai
   await expect(page.locator(".wpay-biometric-content")).not.toBeVisible();
   expect(vault.posts).toContain("web_app_biometry_request_auth");
 });
+
+test("protection startup displays the real wordmark and Framework7 loader instead of loading text", async ({
+  page,
+}) => {
+  await setup(page, false, undefined, false);
+  const screen = page.getByRole("main", { name: "Блокировка WPay" });
+  await expect(
+    screen.locator('img[src="/brands/wpay-wordmark.svg"]'),
+  ).toBeVisible();
+  await expect(
+    screen.getByRole("heading", { name: "WPay", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    screen.getByText("Проверяем защиту устройства…", { exact: true }),
+  ).toHaveCount(0);
+  const loader = screen.getByRole("status", {
+    name: "Проверка защиты устройства",
+  });
+  await expect(loader.locator(".preloader")).toBeVisible();
+  await expect(loader.locator(".preloader-inner-line")).toHaveCount(8);
+  await page.evaluate(() => document.documentElement.classList.add("dark"));
+  await expect(
+    screen.locator('img[src="/brands/wpay-wordmark-light.svg"]'),
+  ).toBeVisible();
+});
+
+test("initial route loading uses a native preloader before wallet code is loaded", async ({
+  page,
+}) => {
+  await page.route("**/api/**", (route) =>
+    route.fulfill({
+      json: {
+        configured: false,
+        items: [],
+        balances: [],
+        rates: [],
+        transactions: [],
+      },
+    }),
+  );
+  let finish!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.route(/\/assets\/WalletPage-[^/]+\.js$/, async (route) => {
+    await waiting;
+    await route.continue();
+  });
+  await page.goto("/wallet#tgWebAppVersion=6.1&tgWebAppPlatform=ios", {
+    waitUntil: "domcontentloaded",
+  });
+  const loading = page.getByRole("status", { name: "Загрузка приложения" });
+  await expect(loading.locator(".preloader")).toBeVisible();
+  await expect(loading.locator(".preloader-inner-line")).toHaveCount(8);
+  expect(
+    await loading
+      .locator(".preloader-inner")
+      .evaluate((node) => getComputedStyle(node).animationName),
+  ).toBe("ios-preloader-spin");
+  await expect(page.getByText("Загрузка…", { exact: true })).toHaveCount(0);
+  finish();
+  await expect(loading).toHaveCount(0);
+});

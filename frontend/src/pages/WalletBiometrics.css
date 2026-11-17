@@ -328,3 +328,18 @@
 .wpay-lock-screen h1 { font-size: clamp(30px, 8vw, 38px); font-weight: 650; }
 .wpay-lock-copy > p { font-size: 17px; line-height: 1.5; }
 @media (max-height: 650px) { .wpay-lock-screen h1 { font-size: 28px; } .wpay-lock-copy > p { font-size: 15px; } }
+
+.wpay-lock-copy--checking {
+  top: 50%;
+  transform: translateY(-50%);
+}
+.wpay-lock-wordmark {
+  width: 156px;
+  height: auto;
+  margin: 0 auto;
+}
+.wpay-lock-checking-spinner {
+  display: flex;
+  justify-content: center;
+  margin-top: 22px;
+}

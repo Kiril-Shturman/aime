@@ -1,3 +1,4 @@
+import AppPreloader from "./components/AppPreloader";
 import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { App as KonstaApp } from "konsta/react";
@@ -76,9 +77,11 @@ function Themed() {
               fallback={
                 <div
                   role="status"
-                  className="p-6 text-center text-black/45 dark:text-white/45"
+                  aria-label="Загрузка приложения"
+                  aria-busy="true"
+                  className="flex min-h-[100dvh] w-full items-center justify-center bg-[#efeff4] dark:bg-black"
                 >
-                  Загрузка…
+                  <AppPreloader />
                 </div>
               }
             >

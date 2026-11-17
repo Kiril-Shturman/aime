@@ -13,6 +13,7 @@ import { tg, getUser, haptic, type TgBiometricManager } from "../lib/telegram";
 import "./WalletBiometrics.css";
 import Aurora from "../components/reactbits/Aurora";
 import WalletLockBadge from "./WalletLockBadge";
+import AppPreloader from "../components/AppPreloader";
 
 // Device privacy lock only. Server authentication and financial authorization remain independent.
 function nativeCall<T>(
@@ -523,21 +524,44 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
             />
           </div>
           {ready && locked && <WalletLockBadge />}
-          <div className="wpay-lock-copy">
-            <h1>
-              {approved
-                ? "Добро пожаловать"
-                : ready
-                  ? "wPay заблокирован"
-                  : "WPay"}
-            </h1>
-            <p>
-              {approved
-                ? "Вход подтверждён"
-                : ready
-                  ? `Подтвердите вход с помощью ${label}`
-                  : "Проверяем защиту устройства…"}
-            </p>
+          <div
+            className={`wpay-lock-copy${!ready ? " wpay-lock-copy--checking" : ""}`}
+          >
+            {ready ? (
+              <>
+                <h1>{approved ? "Добро пожаловать" : "wPay заблокирован"}</h1>
+                <p>
+                  {approved
+                    ? "Вход подтверждён"
+                    : `Подтвердите вход с помощью ${label}`}
+                </p>
+              </>
+            ) : (
+              <>
+                <img
+                  className="wpay-lock-wordmark dark:hidden"
+                  src="/brands/wpay-wordmark.svg"
+                  width={282}
+                  height={116}
+                  alt="wPay"
+                />
+                <img
+                  className="wpay-lock-wordmark hidden dark:block"
+                  src="/brands/wpay-wordmark-light.svg"
+                  width={282}
+                  height={116}
+                  alt="wPay"
+                />
+                <div
+                  className="wpay-lock-checking-spinner"
+                  role="status"
+                  aria-label="Проверка защиты устройства"
+                  aria-busy="true"
+                >
+                  <AppPreloader />
+                </div>
+              </>
+            )}
             {error && (
               <p role="alert" className="wpay-lock-error">
                 {error}
