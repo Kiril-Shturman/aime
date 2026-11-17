@@ -179,6 +179,83 @@ function useDesktopMarket<T>(endpoint: string, interval: number) {
   return result;
 }
 
+type RubleRate = { date: string; rate: number };
+
+const formatRateDate = (date: string) =>
+  new Date(date + "T00:00:00Z").toLocaleDateString("ru-RU", {
+    day: "numeric", month: "short", timeZone: "UTC",
+  });
+
+function CbrHistory() {
+  const [rates, setRates] = useState<RubleRate[] | null>(null);
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 1100px)");
+    let request: AbortController | undefined;
+    const update = () => {
+      request?.abort();
+      if (!desktop.matches) return;
+      const controller = new AbortController();
+      request = controller;
+      const now = Date.now();
+      const day = (offset: number) => new Date(now + offset * 86_400_000).toISOString().slice(0, 10);
+      const query = new URLSearchParams({ base: "USD", quotes: "RUB", from: day(-30), to: day(0) });
+      void fetch("https://api.frankfurter.dev/v2/providers/cbr/rates?" + query, {
+        signal: controller.signal,
+      }).then((response) => {
+        if (!response.ok) throw new Error("Rate history unavailable");
+        return response.json();
+      }).then((history) => {
+        if (!Array.isArray(history)) throw new Error("Unexpected rate history");
+        const entries = history.filter((point): point is RubleRate =>
+          point && typeof point.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(point.date) &&
+          Number.isFinite(Date.parse(point.date)) && Number.isFinite(point.rate) && point.rate > 0,
+        ).sort((left, right) => left.date.localeCompare(right.date));
+        if (!controller.signal.aborted) setRates(entries);
+      }).catch(() => {
+        if (!controller.signal.aborted) setRates([]);
+      });
+    };
+    update();
+    desktop.addEventListener("change", update);
+    return () => {
+      request?.abort();
+      desktop.removeEventListener("change", update);
+    };
+  }, []);
+
+  const first = rates?.[0];
+  const last = rates?.at(-1);
+  let points = "";
+  if (rates && first && last && last.date > first.date) {
+    const start = Date.parse(first.date);
+    const duration = Date.parse(last.date) - start;
+    const values = rates.map(({ rate }) => rate);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    points = rates.map(({ date, rate }) => {
+      const x = 2 + 256 * (Date.parse(date) - start) / duration;
+      const y = max === min ? 44 : 8 + 72 * (max - rate) / (max - min);
+      return `${x},${y}`;
+    }).join(" ");
+  }
+
+  if (!points || !first || !last) {
+    return <p className="wpay-desktop-fx-status" role="status">
+      {rates === null ? "Загружаем график…" : "История курса недоступна"}
+    </p>;
+  }
+
+  return (
+    <figure className="wpay-cbr-history">
+      <svg viewBox="0 0 260 88" role="img" aria-label="Курс ЦБ за 30 дней">
+        <path d="M0 24H260 M0 52H260 M0 80H260" className="wpay-cbr-history-grid" />
+        <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+      <figcaption><span>{formatRateDate(first.date)}</span><span>{formatRateDate(last.date)}</span></figcaption>
+    </figure>
+  );
+}
+
 function CbrRate() {
   const rate = useDesktopMarket<OfficialRate>("cbr-usd", 300_000);
   return (
@@ -187,6 +264,7 @@ function CbrRate() {
       {rate ? (
         <>
           <div className="wpay-desktop-fx-value">{formatRubles(rate.rate)}</div>
+          <CbrHistory />
           <a href="https://www.cbr.ru/currency_base/daily/" target="_blank" rel="noreferrer">Банк России · {rate.date}</a>
         </>
       ) : (

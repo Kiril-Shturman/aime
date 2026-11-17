@@ -170,6 +170,12 @@
  .dark .wpay-depth-bid .wpay-depth-line > :first-child { color: #69d7a3; }
  .wpay-desktop-fx a, .wpay-desktop-fx-status { color: #6e7584; font-size: 12px; }
  .dark .wpay-desktop-fx a, .dark .wpay-desktop-fx-status { color: #a2a5af; }
+ .wpay-cbr-history { margin-top: 12px; }
+ .wpay-cbr-history svg { display: block; width: 100%; color: #3275e9; }
+ .dark .wpay-cbr-history svg { color: #80acff; }
+ .wpay-cbr-history-grid { fill: none; stroke: currentColor; stroke-opacity: .15; }
+ .wpay-cbr-history figcaption { display: flex; justify-content: space-between; color: #6e7584; font-size: 12px; }
+ .dark .wpay-cbr-history figcaption { color: #a2a5af; }
  .wpay-desktop-fx a { display: inline-block; margin-top: 12px; }
  .wpay-desktop-fx a:hover { text-decoration: underline; }
  .wpay-desktop-fx-status { margin-top: 14px; }
