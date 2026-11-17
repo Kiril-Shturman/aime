@@ -412,3 +412,31 @@ test("Telegram viewport events keep fields visible when visual viewport is uncha
     )
     .toBeLessThanOrEqual(404);
 });
+
+ test("identity submission shows native preloader and explains rejection", async ({ page }) => {
+  await contacts(page);
+  await openDocuments(page);
+  await fillDocuments(page);
+  let finish!: () => void;
+  const pending = new Promise<void>(resolve => { finish = resolve; });
+  let posts = 0;
+  await page.route("**/api/wallet/aura-kyc", async route => {
+    if (route.request().method() !== "POST") {
+      await route.fulfill({ json: { status: "none", verified: false, terminal: false } });
+      return;
+    }
+    posts++;
+    await pending;
+    await route.fulfill({ status: 422, json: { error: { name: "kyc_rejected" } } });
+  });
+  await page.getByRole("button", { name: "Отправить на проверку" }).click();
+  const sending = page.getByRole("button", { name: "Отправляем…" });
+  await expect(sending).toBeDisabled();
+  await expect(sending).toHaveAttribute("aria-busy", "true");
+  await expect(sending.locator(".preloader")).toBeVisible();
+  expect(posts).toBe(1);
+  finish();
+  await expect(page.getByRole("alert")).toContainText("Данные верификации отклонены");
+  await expect(page.locator("#identity-first_name")).toHaveValue("Иван");
+  await expect(page.getByRole("button", { name: "Отправить на проверку" })).toBeEnabled();
+});

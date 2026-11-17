@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useKeyboardFormScroll } from "../wallet/useKeyboardFormScroll";
-import { List, ListInput } from "framework7-react";
+import "framework7/components/preloader/css";
+import { List, ListInput, Preloader } from "framework7-react";
 import { Button } from "konsta/react";
 import { FileText, Fingerprint, ScanFace, ScanLine } from "lucide-react";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
@@ -159,9 +160,15 @@ export default function WalletVerificationIdentity({
               data-wpay-primary=""
               rounded
               className="!m-0 !w-full"
+              aria-busy={aura.busy}
               disabled={aura.busy || !reviewed || !aura.available}
             >
-              {aura.busy ? "Отправляем…" : "Отправить на проверку"}
+              {aura.busy ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Preloader size={22} color="white" />
+                  <span>Отправляем…</span>
+                </span>
+              ) : "Отправить на проверку"}
             </Button>
           </div>
         )}
