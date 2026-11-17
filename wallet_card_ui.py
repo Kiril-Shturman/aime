@@ -175,6 +175,9 @@ class CardUI:
         if tariff['version_id'] is None:
             raise self.client.error_cls('TARIFF_NOT_CONFIGURED', 'Тариф карты ещё не настроен. Обратитесь в поддержку', 503)
         available, _ = self.ledger.balance(uid, 'USDT')
+        backed_row=self.ledger.db.execute("SELECT available FROM wallet_provider_positions WHERE provider='aura' AND environment=? AND user_id=? AND asset='USDT'",(self.environment,uid)).fetchone()
+        backed=Decimal(backed_row['available']) if backed_row else Decimal(0)
+        spendable=min(available,backed)
         retry_key = None
         for pending in self.ledger.db.execute(
             "SELECT idempotency_key,request_body FROM wallet_provider_entities WHERE provider='aura' AND environment=? AND user_id=? AND entity_type=? AND status IN ('reserved','needs_reconciliation') AND remote_id IS NULL",
@@ -193,7 +196,8 @@ class CardUI:
                  'card_id': card_id, 'amount': str(amount) if amount is not None else None,
                  'provider_fee': str(provider_fee), 'service_fee': str(service_fee),
                  'total': str(total), 'reserve': str(reserve), 'currency': 'USDT',
-                 'tariff_version': tariff['version_id'], 'retry_key': retry_key, 'can_afford': retry_key is not None or available >= reserve,
+                 'tariff_version': tariff['version_id'], 'retry_key': retry_key, 'can_afford': retry_key is not None or spendable >= reserve,
+                 'spendable': str(spendable), 'funding_error': 'AURA_FUNDS_UNAVAILABLE' if retry_key is None and available >= reserve and backed < reserve else None,
                  'expires_at': time.time() + 120, 'estimated': operation == 'recharge'}
         self.ledger.db.execute('INSERT INTO wallet_card_quotes(id,user_id,environment,operation,body,expires_at) VALUES (?,?,?,?,?,?)',
             (quote['quote_id'],uid,self.environment,operation,json.dumps(quote),quote['expires_at']))

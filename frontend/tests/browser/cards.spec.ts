@@ -827,3 +827,12 @@ test("insufficient balance in server quote disables issuance", async ({page}) =>
   await expect(popup(page).getByRole("button",{name:"Выпустить карту",exact:true})).toBeDisabled();
   expect(state.calls).toHaveLength(0);
 });
+
+test("unbacked wallet balance explains card funding and never issues a card", async ({page}) => {
+  const state=await setup(page,"dark",false,true);
+  await page.route("**/api/wallet/card-quote",route=>route.fulfill({json:{quote_id:"unbacked",total:"25",reserve:"25",provider_fee:"15",service_fee:"10",can_afford:false,spendable:"0",funding_error:"AURA_FUNDS_UNAVAILABLE",expires_at:Date.now()/1000+120}}));
+  await page.getByRole("main",{name:"Мои карты"}).getByRole("button",{name:"Оформить карту",exact:true}).click();
+  await expect(popup(page)).toContainText("Для покупки карты доступно 0 USDT");
+  await expect(popup(page).getByRole("button",{name:"Выпустить карту",exact:true})).toBeDisabled();
+  expect(state.calls).toHaveLength(0);
+});

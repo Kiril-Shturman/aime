@@ -2091,6 +2091,12 @@ class AuraService:
             raise self.client.error_cls("not_found", "QR payment not found", 404)
         return self._store_qr_api_payment(uid, await self.client.get_qr_payment(payment_id))
 
+    def require_card_funds(self, uid, amount):
+        row=self.ledger.db.execute("SELECT available FROM wallet_provider_positions WHERE provider='aura' AND environment=? AND user_id=? AND asset='USDT'",(self.environment,uid)).fetchone()
+        backed=Decimal(row['available']) if row else Decimal(0)
+        if backed < amount:
+            raise self.client.error_cls('AURA_FUNDS_UNAVAILABLE','Для оплаты карты недостаточно средств, подтверждённых в Aura. Пополнение общего баланса вручную не пополняет этот остаток.',409)
+
     async def create_card_request(self, uid, client_ref, *, kind="virtual",
                                   idempotency_key, shipping_address=None, plan_id=None, price_guard=None):
         customer_id = await self.ensure_customer(uid, client_ref)
@@ -2139,6 +2145,7 @@ class AuraService:
             if price_guard: price_guard(fee, tariff.get("version_id"))
             self.ledger.begin("aura_card_reserve", uid, idempotency_key)
             try:
+                self.require_card_funds(uid, fee)
                 available, reserved = self.ledger.balance(uid, "USDT")
                 self.ledger.put_balance(uid, "USDT", available - fee, reserved + fee)
                 _position_adjust(
@@ -2286,6 +2293,7 @@ class AuraService:
             if price_guard: price_guard(reserve_amount, tariff.get("version_id"))
             self.ledger.begin("aura_card_recharge_reserve", uid, idempotency_key)
             try:
+                self.require_card_funds(uid, reserve_amount)
                 available, reserved = self.ledger.balance(uid, "USDT")
                 self.ledger.put_balance(
                     uid, "USDT", available - reserve_amount, reserved + reserve_amount

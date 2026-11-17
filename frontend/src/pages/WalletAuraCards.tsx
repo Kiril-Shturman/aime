@@ -67,6 +67,8 @@ type CardPlan = {
   service_minimum_fee: string;
 };
 type CardQuote = {
+  spendable?: string;
+  funding_error?: string | null;
   quote_id: string;
   retry_key?: string | null;
   total: string;
@@ -1281,7 +1283,9 @@ export default function WalletAuraCards({
                   )}
                   {quote && !quote.can_afford && (
                     <p role="status" className="py-2 text-sm text-red-500">
-                      Недостаточно USDT на балансе кошелька
+                      {quote.funding_error === "AURA_FUNDS_UNAVAILABLE"
+                        ? `Для покупки карты доступно ${quote.spendable ?? "0"} USDT. Средства общего баланса пока не подтверждены в Aura.`
+                        : "Недостаточно USDT на балансе кошелька"}
                     </p>
                   )}
                 </>

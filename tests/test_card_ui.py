@@ -112,3 +112,14 @@ class CardUITests(unittest.IsolatedAsyncioTestCase):
         cards=self.ui.cards(self.uid);self.assertEqual(cards[0]['card_id'],card)
         self.assertEqual(self.ui.cards('tg:other'),[])
         self.assertNotIn('cvv',json.dumps(cards));self.client.get_card_credentials.assert_not_awaited()
+
+    async def test_unbacked_app_credit_never_reaches_provider_or_reserves_money(self):
+        self.tariff();self.ledger.db.execute("DELETE FROM wallet_provider_positions WHERE user_id=?",(self.uid,))
+        quote=await self.ui.quote(self.uid,{'operation':'issue','plan_id':'card_subscriptions'})
+        self.assertFalse(quote['can_afford']);self.assertEqual(quote['spendable'],'0');self.assertEqual(quote['funding_error'],'AURA_FUNDS_UNAVAILABLE')
+        self.client.create_card=AsyncMock()
+        with self.assertRaises(ApiError) as caught:
+            await self.service.create_card_request(self.uid,self.ref,plan_id='card_subscriptions',idempotency_key='unbacked',price_guard=self.ui.guard(self.uid,{'quote_id':quote['quote_id'],'plan_id':'card_subscriptions'},'issue','unbacked'))
+        self.assertEqual(caught.exception.name,'AURA_FUNDS_UNAVAILABLE')
+        self.client.create_card.assert_not_awaited();self.assertEqual(self.ledger.balance(self.uid,'USDT'),(Decimal(300),Decimal(0)))
+        self.assertFalse(self.ledger.db.execute("SELECT 1 FROM wallet_provider_entities WHERE local_id='unbacked'").fetchone())
