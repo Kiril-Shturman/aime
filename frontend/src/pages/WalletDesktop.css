@@ -97,7 +97,8 @@
    text-overflow: ellipsis;
    white-space: nowrap;
  }
- .wpay-desktop-body{max-width:1240px;margin:24px auto 0;padding:0 32px}
+ .wpay-desktop-body,.wpay-asset-sidebar{width:100%;max-width:1240px;margin-inline:auto;padding-inline:32px}
+ .wpay-desktop-body{margin-top:24px}
  .wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=history],.wpay-desktop-body[data-tab=profile],.wpay-desktop-body[data-tab=cards]:has(.wpay-card-tariff-aside){display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:24px;align-items:start}
  .wpay-desktop-body[data-tab=cards] > .wpay-aura-cards { min-width: 0; }
  .wpay-card-tariff-aside { display: block; }
@@ -289,7 +290,6 @@
    align-items: start;
    gap: 18px 24px;
    min-width: 0;
-   padding-inline: 32px;
  }
  .wpay-asset-sidebar > section { min-width: 0; padding: 0; }
  .wpay-asset-balance { grid-area: 1 / 1; }

@@ -1297,8 +1297,10 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
 });
 
 test("desktop asset chart fills the page above actions and balances", async ({ page }) => {
-  await page.setViewportSize({ width: 1280, height: 860 });
+  await page.setViewportSize({ width: 1720, height: 860 });
   await setup(page, "light");
+  const home = await page.locator(".wpay-desktop-body[data-tab=wallet]").boundingBox();
+  expect(home).not.toBeNull();
   await page.locator(".wpay-wallet-home span.font-semibold").filter({ hasText: /^Tether$/ }).first().click();
   const surface = page.locator('[data-wallet-surface="asset"][aria-hidden="false"]');
   const chart = surface.locator(".wpay-asset-chart-card");
@@ -1306,6 +1308,8 @@ test("desktop asset chart fills the page above actions and balances", async ({ p
   const actions = surface.locator(".wpay-asset-actions");
   await expect(chart).toBeVisible();
   await expect(side.getByText("Баланс приложения", { exact: true })).toBeVisible();
+  await expect.poll(async () => (await side.boundingBox())?.width).toBe(home!.width);
+  await expect.poll(async () => (await side.boundingBox())?.x).toBe(home!.x);
   await expect(actions).toHaveCSS("position", "static");
   await expect.poll(() => surface.evaluate((node) => {
     const bounds = (selector: string) => node.querySelector(selector)!.getBoundingClientRect();
