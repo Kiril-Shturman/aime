@@ -12,7 +12,10 @@ from unittest.mock import patch
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
-from wallet_backend import ApiError, Ledger, install_wallet, telegram_user
+from wallet_backend import (
+    ApiError, Ledger, _broadcast_image, _telegram_html, _telegram_text_length,
+    install_wallet, telegram_user,
+)
 from wallet_operations import prepare_operations, save_address
 
 TOKEN = 'unit-test-provider-key'
@@ -101,6 +104,41 @@ class AuthenticationTests(unittest.TestCase):
             ledger.deposit(payload)
             ledger.deposit({**payload, 'deposit_id': 'b', 'credited': '0.000000000000000001'})
             self.assertEqual(str(ledger.balance('one', 'ETH')[0]), '123456789012.123456789012345679')
+            ledger.db.close()
+
+    def test_broadcast_rich_text_is_reduced_to_safe_telegram_html(self):
+        result = _telegram_html(
+            '<p>Hello <strong>world</strong></p>'
+            '<script>hidden()</script><a href="javascript:alert(1)">safe</a>'
+        )
+        self.assertEqual(result, 'Hello <b>world</b>\nsafe')
+        self.assertEqual(_telegram_text_length(result), 16)
+
+    def test_broadcast_image_accepts_only_small_jpeg_or_png_data_urls(self):
+        image = _broadcast_image('data:image/jpeg;base64,/9j/2Q==')
+        self.assertEqual(image, (b'\xff\xd8\xff\xd9', 'image/jpeg', 'broadcast.jpg'))
+        with self.assertRaisesRegex(ValueError, 'JPEG и PNG'):
+            _broadcast_image('data:image/gif;base64,R0lGODlh')
+
+    def test_existing_broadcast_table_gets_additive_columns(self):
+        with tempfile.TemporaryDirectory() as path:
+            database = path + '/db'
+            db = sqlite3.connect(database)
+            db.execute(
+                'CREATE TABLE admin_broadcasts ('
+                'broadcast_id TEXT PRIMARY KEY, admin_id TEXT NOT NULL, target TEXT NOT NULL,'
+                'text TEXT NOT NULL, button_text TEXT, button_url TEXT, status TEXT NOT NULL,'
+                'total INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0,'
+                'failed INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, started_at TEXT,'
+                'finished_at TEXT)'
+            )
+            db.commit()
+            db.close()
+            ledger = Ledger(database)
+            columns = {
+                row[1] for row in ledger.db.execute('PRAGMA table_info(admin_broadcasts)')
+            }
+            self.assertTrue({'parse_mode', 'image_file_id', 'has_image'} <= columns)
             ledger.db.close()
 
     def test_address_migration_preserves_network_identity_and_asset_support(self):

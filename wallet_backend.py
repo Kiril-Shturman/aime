@@ -5,8 +5,11 @@ Only this module sees the provider token; organization funds are never a user's
 balance. All money arithmetic uses Decimal and SQLite write transactions.
 """
 import asyncio
+import base64
+import binascii
 import hashlib
 import hmac
+import html
 import json
 import logging
 import os
@@ -17,9 +20,10 @@ import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, localcontext
+from html.parser import HTMLParser
 from urllib.parse import parse_qsl, quote, urlsplit
 
-from aiohttp import ClientSession, ClientTimeout, web
+from aiohttp import ClientSession, ClientTimeout, FormData, web
 from wallet_avatar import load_avatar, AvatarNotFound
 
 from wallet_book import Book
@@ -50,6 +54,111 @@ WALLET_ASSET_NETWORKS = {
     'TRX': ('TRON',), 'BNB': ('BSC',), 'ETH': ('ETH',),
     'GRAM': ('TON',), 'SOL': ('SOL',), 'BTC': ('BTC',), 'XAUT': ('ETH',),
 }
+
+
+class _TelegramHtmlSanitizer(HTMLParser):
+    """Reduce rich-editor HTML to the subset accepted by Telegram."""
+
+    TAGS = {
+        'b': 'b', 'strong': 'b', 'i': 'i', 'em': 'i', 'u': 'u',
+        's': 's', 'strike': 's', 'del': 's', 'code': 'code',
+        'pre': 'pre', 'blockquote': 'blockquote', 'a': 'a',
+    }
+    BLOCKS = {'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.open_tags = []
+        self.skip_depth = 0
+
+    def newline(self):
+        if self.parts and not self.parts[-1].endswith('\n'):
+            self.parts.append('\n')
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in {'script', 'style'}:
+            self.skip_depth += 1
+            return
+        if self.skip_depth:
+            return
+        if tag in self.BLOCKS:
+            self.newline()
+            return
+        if tag == 'br':
+            self.parts.append('\n')
+            return
+        if tag == 'li':
+            self.newline()
+            self.parts.append('• ')
+            return
+        mapped = self.TAGS.get(tag)
+        if not mapped:
+            return
+        if mapped == 'a':
+            href = dict(attrs).get('href', '').strip()
+            scheme = urlsplit(href).scheme.lower()
+            if scheme not in {'http', 'https', 'tg', 'mailto'}:
+                return
+            self.parts.append('<a href="' + html.escape(href, quote=True) + '">')
+        else:
+            self.parts.append('<' + mapped + '>')
+        self.open_tags.append((tag, mapped))
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in {'script', 'style'}:
+            self.skip_depth = max(0, self.skip_depth - 1)
+            return
+        if self.skip_depth:
+            return
+        if tag in self.BLOCKS or tag == 'li':
+            self.newline()
+            return
+        for index in range(len(self.open_tags) - 1, -1, -1):
+            source, mapped = self.open_tags[index]
+            if source == tag:
+                self.parts.append('</' + mapped + '>')
+                self.open_tags.pop(index)
+                break
+
+    def handle_data(self, data):
+        if not self.skip_depth:
+            self.parts.append(html.escape(data))
+
+    def result(self):
+        for _, mapped in reversed(self.open_tags):
+            self.parts.append('</' + mapped + '>')
+        value = ''.join(self.parts)
+        value = re.sub(r'\n{3,}', '\n\n', value).strip()
+        return value
+
+
+def _telegram_html(value):
+    parser = _TelegramHtmlSanitizer()
+    parser.feed(str(value or ''))
+    return parser.result()
+
+
+def _telegram_text_length(value):
+    return len(re.sub(r'<[^>]+>', '', html.unescape(value)))
+
+
+def _broadcast_image(value):
+    if not value:
+        return None
+    match = re.fullmatch(r'data:(image/(?:jpeg|png));base64,([A-Za-z0-9+/=\s]+)', str(value))
+    if not match:
+        raise ValueError('Поддерживаются изображения JPEG и PNG')
+    try:
+        payload = base64.b64decode(match.group(2), validate=True)
+    except (ValueError, binascii.Error):
+        raise ValueError('Изображение повреждено') from None
+    if not 1 <= len(payload) <= 600_000:
+        raise ValueError('Изображение должно быть не больше 600 КБ после обработки')
+    extension = 'jpg' if match.group(1) == 'image/jpeg' else 'png'
+    return payload, match.group(1), 'broadcast.' + extension
 
 ADMIN_GOSWAP_METHODS = {
     'getMe': {'title': 'Приложение', 'post': False, 'params': [], 'required': [], 'example': {}},
@@ -427,6 +536,15 @@ class Ledger:
           CREATE INDEX IF NOT EXISTS admin_action_audit_created ON admin_action_audit(created_at);
           CREATE INDEX IF NOT EXISTS admin_action_audit_target ON admin_action_audit(target_user_id,created_at);
         ''')
+        broadcast_columns = {
+            row[1] for row in self.db.execute('PRAGMA table_info(admin_broadcasts)')
+        }
+        if 'parse_mode' not in broadcast_columns:
+            self.db.execute("ALTER TABLE admin_broadcasts ADD COLUMN parse_mode TEXT NOT NULL DEFAULT 'HTML'")
+        if 'image_file_id' not in broadcast_columns:
+            self.db.execute('ALTER TABLE admin_broadcasts ADD COLUMN image_file_id TEXT')
+        if 'has_image' not in broadcast_columns:
+            self.db.execute('ALTER TABLE admin_broadcasts ADD COLUMN has_image INTEGER NOT NULL DEFAULT 0')
 
         prepare_withdrawals(self)
         prepare_tariffs(self)
@@ -1402,22 +1520,51 @@ def install_wallet(app, root, owner_check):
             'response': result,
         }
 
-    async def run_broadcast(broadcast_id, targets, text, button_text, button_url):
+    async def run_broadcast(broadcast_id, targets, text, button_text, button_url, image=None):
         ledger.db.execute("UPDATE admin_broadcasts SET status='sending',started_at=? WHERE broadcast_id=?", (now(), broadcast_id))
         sent = failed = 0
+        image_file_id = None
         async with ClientSession(timeout=ClientTimeout(total=15)) as session:
             for uid in targets:
-                payload = {'chat_id': int(uid.removeprefix('tg:')), 'text': text}
+                payload = {
+                    'chat_id': int(uid.removeprefix('tg:')),
+                    ('caption' if image else 'text'): text,
+                    'parse_mode': 'HTML',
+                }
                 if button_text and button_url:
                     payload['reply_markup'] = {'inline_keyboard': [[{'text': button_text, 'url': button_url}]]}
                 error = None
                 blocked = False
                 try:
-                    async with session.post(f'https://api.telegram.org/bot{bot_token}/sendMessage', json=payload) as response:
+                    method = 'sendPhoto' if image else 'sendMessage'
+                    request_kwargs = {'json': payload}
+                    if image and image_file_id:
+                        payload['photo'] = image_file_id
+                    elif image:
+                        image_bytes, image_mime, image_name = image
+                        form = FormData()
+                        for key, value in payload.items():
+                            form.add_field(key, json.dumps(value) if isinstance(value, dict) else str(value))
+                        form.add_field(
+                            'photo', image_bytes, filename=image_name,
+                            content_type=image_mime,
+                        )
+                        request_kwargs = {'data': form}
+                    async with session.post(
+                        f'https://api.telegram.org/bot{bot_token}/{method}', **request_kwargs
+                    ) as response:
                         body = await response.json(content_type=None)
                         if response.status >= 400 or not body.get('ok'):
                             error = str(body.get('description') or 'Telegram error')[:300]
                             blocked = response.status == 403
+                        elif image and not image_file_id:
+                            photos = (body.get('result') or {}).get('photo') or []
+                            if photos:
+                                image_file_id = str(photos[-1].get('file_id') or '') or None
+                                ledger.db.execute(
+                                    'UPDATE admin_broadcasts SET image_file_id=? WHERE broadcast_id=?',
+                                    (image_file_id, broadcast_id),
+                                )
                 except (asyncio.TimeoutError, OSError, ValueError) as reason:
                     error = str(reason)[:300]
                 status = 'failed' if error else 'sent'
@@ -1434,9 +1581,13 @@ def install_wallet(app, root, owner_check):
             items = decoded_rows('SELECT * FROM admin_broadcasts ORDER BY rowid DESC LIMIT 100')
             return {'items': items}
         body = await request.json()
-        text = str(body.get('text') or '').strip()
-        if not 1 <= len(text) <= 4096:
-            raise ValueError('Текст рассылки должен быть от 1 до 4096 символов')
+        text = _telegram_html(body.get('text'))
+        image = _broadcast_image(body.get('image_data'))
+        text_limit = 1024 if image else 4096
+        if not 1 <= _telegram_text_length(text) <= text_limit:
+            raise ValueError(
+                f'Текст рассылки должен быть от 1 до {text_limit} символов'
+            )
         target = str(body.get('target') or 'self')
         if target not in {'self', 'all'}:
             raise ValueError('Некорректная аудитория')
@@ -1451,12 +1602,24 @@ def install_wallet(app, root, owner_check):
         else:
             targets = [row[0] for row in ledger.db.execute("SELECT user_id FROM wallet_accounts WHERE user_id LIKE 'tg:%' AND status='active'")]
         broadcast_id = 'broadcast-' + uuid.uuid4().hex
-        ledger.db.execute('INSERT INTO admin_broadcasts(broadcast_id,admin_id,target,text,button_text,button_url,status,total,created_at) VALUES (?,?,?,?,?,?,?,?,?)', (broadcast_id, uid, target, text, button_text or None, button_url or None, 'queued', len(targets), now()))
+        ledger.db.execute(
+            'INSERT INTO admin_broadcasts('
+            'broadcast_id,admin_id,target,text,button_text,button_url,status,total,created_at,'
+            'parse_mode,has_image) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            (broadcast_id, uid, target, text, button_text or None, button_url or None,
+             'queued', len(targets), now(), 'HTML', int(bool(image))),
+        )
         record_admin_action(
             uid, 'broadcast.create',
-            detail={'broadcast_id': broadcast_id, 'target': target, 'total': len(targets), 'characters': len(text), 'has_button': bool(button_text)},
+            detail={
+                'broadcast_id': broadcast_id, 'target': target, 'total': len(targets),
+                'characters': _telegram_text_length(text), 'has_button': bool(button_text),
+                'has_image': bool(image),
+            },
         )
-        task = asyncio.create_task(run_broadcast(broadcast_id, targets, text, button_text, button_url))
+        task = asyncio.create_task(
+            run_broadcast(broadcast_id, targets, text, button_text, button_url, image)
+        )
         app['wpay_broadcast_tasks'].add(task)
         task.add_done_callback(app['wpay_broadcast_tasks'].discard)
         return {'broadcast_id': broadcast_id, 'status': 'queued', 'total': len(targets)}

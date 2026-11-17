@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ComponentType,
@@ -20,6 +21,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  ImagePlus,
   Server,
   ShieldCheck,
   Users,
@@ -43,6 +45,7 @@ import Framework7React, {
   App as F7App,
   Button as F7Button,
   Preloader as F7Preloader,
+  TextEditor as F7TextEditor,
 } from "framework7-react";
 import { walletIdempotentRequest, walletRequest } from "../lib/wallet-api";
 import { useTheme } from "../store/ThemeStore";
@@ -2833,6 +2836,59 @@ function GoSwap({ data }: { data: GoSwapData }) {
   );
 }
 
+function richTextPlain(value: string) {
+  const element = document.createElement("div");
+  element.innerHTML = value;
+  return (element.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function fileDataUrl(file: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Не удалось прочитать изображение"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function prepareBroadcastImage(file: File) {
+  if (!['image/jpeg', 'image/png'].includes(file.type))
+    throw new Error("Выберите изображение JPEG или PNG");
+  if (file.size > 12 * 1024 * 1024)
+    throw new Error("Исходное изображение должно быть не больше 12 МБ");
+  if (file.size <= 560_000) return fileDataUrl(file);
+  const bitmap = await createImageBitmap(file);
+  try {
+    const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    let width = Math.max(1, Math.round(bitmap.width * ratio));
+    let height = Math.max(1, Math.round(bitmap.height * ratio));
+    let quality = 0.88;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Не удалось обработать изображение");
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(bitmap, 0, 0, width, height);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", quality),
+      );
+      if (!blob) throw new Error("Не удалось обработать изображение");
+      if (blob.size <= 560_000) return fileDataUrl(blob);
+      quality = Math.max(0.55, quality - 0.08);
+      if (quality === 0.55) {
+        width = Math.max(1, Math.round(width * 0.82));
+        height = Math.max(1, Math.round(height * 0.82));
+      }
+    }
+    throw new Error("Не удалось уменьшить изображение до допустимого размера");
+  } finally {
+    bitmap.close();
+  }
+}
+
 function Notifications({
   data,
   reload,
@@ -2841,16 +2897,34 @@ function Notifications({
   reload: () => Promise<void>;
 }) {
   const [message, setMessage] = useState("");
+  const [imageData, setImageData] = useState("");
+  const [imageName, setImageName] = useState("");
+  const [imageBusy, setImageBusy] = useState(false);
+  const imageInput = useRef<HTMLInputElement | null>(null);
   const [target, setTarget] = useState<"self" | "all">("self");
   const [buttonText, setButtonText] = useState("");
   const [buttonUrl, setButtonUrl] = useState("");
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState("");
-  const canSend = useMemo(
-    () => message.trim().length > 0 && !sending,
-    [message, sending],
-  );
+  const messageLength = useMemo(() => richTextPlain(message).length, [message]);
+  const messageLimit = imageData ? 1024 : 4096;
+  const canSend =
+    messageLength > 0 && messageLength <= messageLimit && !sending && !imageBusy;
+  async function pickImage(file?: File) {
+    if (!file) return;
+    setImageBusy(true);
+    setNotice("");
+    try {
+      setImageData(await prepareBroadcastImage(file));
+      setImageName(file.name);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Ошибка изображения");
+    } finally {
+      setImageBusy(false);
+      if (imageInput.current) imageInput.current.value = "";
+    }
+  }
   async function send() {
     if (!canSend) return;
     if (
@@ -2870,10 +2944,13 @@ function Notifications({
           target,
           button_text: buttonText,
           button_url: buttonUrl,
+          image_data: imageData || undefined,
         },
       );
       setNotice(`Рассылка запущена. Получателей: ${result.total}`);
       setMessage("");
+      setImageData("");
+      setImageName("");
       await reload();
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : "Ошибка отправки");
@@ -3008,15 +3085,65 @@ function Notifications({
             <h2>Новая рассылка</h2>
           </div>
         </div>
-        <textarea
+        <F7TextEditor
           value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          className={`${input} mt-3 min-h-32 resize-y`}
-          maxLength={4096}
+          onTextEditorInput={(value) => setMessage(String(value || ""))}
+          mode="toolbar"
+          buttons={[
+            ["bold", "italic", "underline", "strikeThrough"],
+            ["orderedList", "unorderedList"],
+            ["link"],
+          ]}
+          clearFormattingOnPaste
+          resizable
+          className="wpay-admin-message-editor mt-3"
           placeholder="Текст сообщения"
         />
-        <div className="mt-2 text-right text-xs opacity-40">
-          {message.length}/4096
+        <div
+          className={`mt-2 text-right text-xs ${messageLength > messageLimit ? "text-red-500" : "opacity-40"}`}
+        >
+          {messageLength}/{messageLimit}
+        </div>
+        <div className="mt-3">
+          <input
+            ref={imageInput}
+            type="file"
+            accept="image/jpeg,image/png"
+            className="hidden"
+            onChange={(event) => void pickImage(event.target.files?.[0])}
+          />
+          {imageData ? (
+            <div className="relative overflow-hidden rounded-2xl bg-black/[.04] dark:bg-white/[.06]">
+              <img
+                src={imageData}
+                alt="Предпросмотр рассылки"
+                className="max-h-72 w-full object-contain"
+              />
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <span className="min-w-0 truncate text-xs opacity-55">{imageName}</span>
+                <button
+                  type="button"
+                  className="shrink-0 text-xs font-semibold text-red-500"
+                  onClick={() => { setImageData(""); setImageName(""); }}
+                >
+                  Удалить
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={imageBusy}
+              onClick={() => imageInput.current?.click()}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-black/15 py-3 text-sm font-semibold dark:border-white/20"
+            >
+              <ImagePlus size={18} />
+              {imageBusy ? "Обрабатываю…" : "Добавить изображение"}
+            </button>
+          )}
+          <p className="mt-2 text-xs opacity-40">
+            JPEG или PNG. Большие файлы автоматически уменьшаются. С картинкой лимит подписи — 1024 символа.
+          </p>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
@@ -3069,12 +3196,13 @@ function Notifications({
               className="border-b border-black/[.06] py-3 last:border-0 dark:border-white/[.08]"
             >
               <Row
-                title={text(row.text)}
+                title={richTextPlain(text(row.text))}
                 subtitle={`${date(row.created_at)} · ${text(row.target)}`}
                 right={`${text(row.sent)}/${text(row.total)}`}
               />
               <div className="mt-1 text-xs opacity-45">
                 Статус: {text(row.status)} · ошибок {text(row.failed)}
+                {row.has_image ? " · с изображением" : ""}
               </div>
             </div>
           ))
