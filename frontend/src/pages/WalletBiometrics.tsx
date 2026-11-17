@@ -55,6 +55,19 @@ function manager(): TgBiometricManager | null {
     return null;
   return app.BiometricManager;
 }
+function isDesktopClient() {
+  const app = tg();
+  return (
+    !app ||
+    ["tdesktop", "macos", "unigram", "web", "weba", "webk"].includes(
+      app.platform || "",
+    ) ||
+    (app.platform === "unknown" &&
+      navigator.maxTouchPoints === 0 &&
+      !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent))
+  );
+}
+
 const key = () => `wpay:biometric-lock:v1:${getUser()?.id ?? "guest"}`;
 function hint() {
   try {
@@ -309,20 +322,8 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     alive.current = true;
     let cancelled = false;
     let initializing = true;
-    const desktopClient = () => {
-      const app = tg();
-      return (
-        !app ||
-        ["tdesktop", "macos", "unigram", "web", "weba", "webk"].includes(
-          app.platform || "",
-        ) ||
-        (app.platform === "unknown" &&
-          navigator.maxTouchPoints === 0 &&
-          !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent))
-      );
-    };
     const allowUnsupportedDesktop = (bio: TgBiometricManager | null) => {
-      if (cancelled || !desktopClient() || bio?.isBiometricAvailable)
+      if (cancelled || !isDesktopClient() || bio?.isBiometricAvailable)
         return false;
       initializing = false;
       capability(bio);
@@ -441,7 +442,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
       capability(bio);
       if (
         !initializing &&
-        desktopClient() &&
+        isDesktopClient() &&
         bio?.isInited &&
         bio.isBiometricAvailable &&
         !enabledRef.current &&
@@ -630,6 +631,7 @@ export function WalletBiometricRow({
 }) {
   const state = useContext(Context);
   if (!state) throw Error("Biometric gate missing");
+  if (state.ready && !state.available && isDesktopClient()) return null;
   const subtitle = state.busy
     ? "Подтверждение в Telegram…"
     : !state.available

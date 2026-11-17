@@ -353,6 +353,8 @@ for (const platform of ["tdesktop", "macos", "webk"]) {
     expect(vault.posts).not.toContain("web_app_biometry_request_auth");
     expect(vault.posts).not.toContain("web_app_biometry_update_token");
     expect(vault.token).toBe("device-marker");
+    await profile(page);
+    await expect(page.locator(".wpay-biometric-row")).toHaveCount(0);
     expect(
       await page.evaluate(() =>
         localStorage.getItem("wpay:biometric-lock:v1:123"),
