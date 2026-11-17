@@ -32,8 +32,10 @@ async function setup(
       return route.fulfill({
         json: { can_withdraw: true, can_transfer: true, currencies: [] },
       });
-    if (cards && path.endsWith("/rapira-quote"))
-      return route.fulfill({ json: { close: "86.39", low: "86.09", high: "87.19" } });
+    if (cards && path.endsWith("/rapira-depth"))
+      return route.fulfill({ json: { ask: [{ price: "86.39", amount: "32" }], bid: [{ price: "86.38", amount: "20" }] } });
+    if (cards && path.endsWith("/cbr-usd"))
+      return route.fulfill({ json: { rate: "82.45", date: "18.11.2026" } });
     if (cards && path.endsWith("/aura-cards"))
       return route.fulfill({
         json: { data: [
@@ -1267,6 +1269,7 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
   const logo = brand.getByRole("img", { name: "wPay" });
   await expect(logo).toHaveAttribute("src", "/brands/wpay-wordmark.svg");
   await expect(page.locator(".wpay-bottom-menu")).toBeHidden();
+  await expect(page.getByRole("region", { name: "Официальный курс ЦБ" }).getByText(/82,45/)).toBeVisible();
   await menu.getByRole("button", { name: "История" }).click();
   await expect(menu.getByRole("button", { name: "История" })).toHaveAttribute("aria-current", "page");
   await page.locator(".wpay-desktop-sidebar").getByRole("button", { name: "Тёмная тема" }).click();
@@ -1278,7 +1281,7 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
   await expect(profileAside).toBeVisible();
   await expect(profileAside.getByRole("button", { name: /Кошелёк.*1,250/ })).toBeVisible();
   await expect(profileAside.getByRole("button", { name: /На картах.*\$16\.00/ })).toBeVisible();
-  await expect(profileAside.getByRole("region", { name: "Курс Rapira" }).getByText(/86,39/)).toBeVisible();
+  await expect(profileAside.getByRole("region", { name: "Стакан Rapira" }).getByText(/86,39/)).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(menu).toBeHidden();
   await expect(profileAside).toBeHidden();

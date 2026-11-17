@@ -27,7 +27,8 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import parse_qsl, quote, urlsplit
 
-from aiohttp import ClientSession, ClientTimeout, web
+from aiohttp import ClientError, ClientSession, ClientTimeout, FormData, web
+from xml.etree import ElementTree
 from wallet_avatar import load_avatar, AvatarNotFound
 
 from wallet_book import Book
@@ -1570,9 +1571,62 @@ def install_wallet(app, root, owner_check):
             raise ApiError('RAPIRA_UNAVAILABLE', 'Курс Rapira недоступен', 503)
         return web.json_response(rapira_quote)
 
+    market_snapshots = {}
+    market_locks = {name: asyncio.Lock() for name in ('rapira-depth', 'cbr-usd')}
+
+    async def get_public_market_snapshot(name):
+        ttl = 10 if name == 'rapira-depth' else 300
+        async with market_locks[name]:
+            checked, data = market_snapshots.get(name, (float('-inf'), None))
+            if time.monotonic() - checked >= ttl:
+                try:
+                    async with ClientSession(timeout=ClientTimeout(total=6)) as session:
+                        if name == 'rapira-depth':
+                            form = FormData()
+                            form.add_field('symbol', 'USDT/RUB', content_type='text/plain')
+                            async with session.post(
+                                'https://api.rapira.net/market/exchange-plate-mini', data=form,
+                            ) as response:
+                                response.raise_for_status()
+                                payload = await response.json(content_type=None)
+                            data = {}
+                            for side in ('ask', 'bid'):
+                                book = payload[side]
+                                if book['symbol'] != 'USDT/RUB':
+                                    raise ValueError('Unexpected market pair')
+                                levels = [
+                                    (Decimal(str(item['price'])), Decimal(str(item['amount'])))
+                                    for item in book['items']
+                                ]
+                                if any(not v.is_finite() or v <= 0 for level in levels for v in level):
+                                    raise ValueError('Invalid order book level')
+                                levels.sort(key=lambda level: level[0], reverse=side == 'bid')
+                                data[side] = [
+                                    {'price': str(price), 'amount': str(amount)}
+                                    for price, amount in levels[:5]
+                                ]
+                        else:
+                            async with session.get('https://www.cbr.ru/scripts/XML_daily.asp') as response:
+                                response.raise_for_status()
+                                document = ElementTree.fromstring(await response.read())
+                            usd = next(row for row in document if row.findtext('CharCode') == 'USD')
+                            rate = Decimal(usd.findtext('Value').replace(',', '.')) / int(usd.findtext('Nominal'))
+                            if not rate.is_finite() or rate <= 0:
+                                raise ValueError('Invalid CBR rate')
+                            data = {'rate': str(rate), 'date': document.attrib['Date']}
+                except (ClientError, OSError, asyncio.TimeoutError, ValueError, TypeError,
+                        KeyError, AttributeError, StopIteration, ArithmeticError, ElementTree.ParseError):
+                    data = None
+                market_snapshots[name] = (time.monotonic(), data)
+        if data is None:
+            raise ApiError('MARKET_UNAVAILABLE', 'Рыночные данные недоступны', 503)
+        return web.json_response(data)
+
     async def route(request):
         try:
             action = request.match_info['action']
+            if action in market_locks and request.method == 'GET':
+                return await get_public_market_snapshot(action)
             if action == 'rapira-quote' and request.method == 'GET':
                 return await get_rapira_quote()
             if action == 'status' and request.method == 'GET':

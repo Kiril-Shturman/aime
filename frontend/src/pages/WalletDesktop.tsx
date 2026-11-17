@@ -55,7 +55,7 @@ export function DesktopSidebar({
 export function DesktopOverview({onHistory,onDeposit,onExchange}:{onHistory:()=>void;onDeposit:()=>void;onExchange:()=>void}){
  const wallet=useLiveWallet()
  const transactions=wallet.data.transactions.slice(0,4)
- return <aside className="wpay-desktop-overview-side"><section className="wpay-desktop-card"><div className="wpay-desktop-section-head"><h2>Последние операции</h2><button type="button" onClick={onHistory}>Все <ArrowUpRight size={15}/></button></div>{transactions.length?transactions.map(item=><button type="button" className="wpay-desktop-transaction" key={item.event_id} onClick={onHistory}><span className={Number(item.amount)>0?'income':''}>{Number(item.amount)>0?<ArrowDownLeft size={19}/>:<ArrowUpRight size={19}/>}</span><span><strong>{item.type==='deposit'?'Пополнение':String(item.detail.merchant_name??'Платёж')}</strong><small>{new Date(item.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'short'})}</small></span><b>{Number(item.amount)>0?'+':''}{cryptoAmount(item.amount)}<small>{item.asset}</small></b></button>):<div className="wpay-desktop-empty"><Clock3 size={30} strokeWidth={1.5}/><strong>Пока без операций</strong><p>Пополнения и платежи появятся здесь.</p></div>}</section><section className="wpay-desktop-card"><div className="wpay-desktop-section-head"><h2>На рынке</h2><span>USD</span></div>{['BTC','ETH','SOL'].map(code=><div className="wpay-desktop-rate" key={code}><span>{code}</span><strong>{wallet.rate(code)!==null?usdPrice(wallet.rate(code)!):'—'}</strong></div>)}</section><section className="wpay-desktop-quick"><span className="wpay-desktop-quick-icon"><ArrowLeftRight size={24}/></span><h2>Ваши активы.<br/>Ваши возможности.</h2><p>Пополняйте кошелёк и управляйте валютами в одном месте.</p><button type="button" onClick={onDeposit}>Пополнить кошелёк <ArrowUpRight size={17}/></button><button type="button" onClick={onExchange}>Перейти к обмену <ArrowUpRight size={17}/></button></section></aside>
+ return <aside className="wpay-desktop-overview-side"><section className="wpay-desktop-card"><div className="wpay-desktop-section-head"><h2>Последние операции</h2><button type="button" onClick={onHistory}>Все <ArrowUpRight size={15}/></button></div>{transactions.length?transactions.map(item=><button type="button" className="wpay-desktop-transaction" key={item.event_id} onClick={onHistory}><span className={Number(item.amount)>0?'income':''}>{Number(item.amount)>0?<ArrowDownLeft size={19}/>:<ArrowUpRight size={19}/>}</span><span><strong>{item.type==='deposit'?'Пополнение':String(item.detail.merchant_name??'Платёж')}</strong><small>{new Date(item.created_at).toLocaleDateString('ru-RU',{day:'numeric',month:'short'})}</small></span><b>{Number(item.amount)>0?'+':''}{cryptoAmount(item.amount)}<small>{item.asset}</small></b></button>):<div className="wpay-desktop-empty"><Clock3 size={30} strokeWidth={1.5}/><strong>Пока без операций</strong><p>Пополнения и платежи появятся здесь.</p></div>}</section><section className="wpay-desktop-card"><div className="wpay-desktop-section-head"><h2>На рынке</h2><span>USD</span></div>{['BTC','ETH','SOL'].map(code=><div className="wpay-desktop-rate" key={code}><span>{code}</span><strong>{wallet.rate(code)!==null?usdPrice(wallet.rate(code)!):'—'}</strong></div>)}</section><CbrRate /><section className="wpay-desktop-quick"><span className="wpay-desktop-quick-icon"><ArrowLeftRight size={24}/></span><h2>Ваши активы.<br/>Ваши возможности.</h2><p>Пополняйте кошелёк и управляйте валютами в одном месте.</p><button type="button" onClick={onDeposit}>Пополнить кошелёк <ArrowUpRight size={17}/></button><button type="button" onClick={onExchange}>Перейти к обмену <ArrowUpRight size={17}/></button></section></aside>
 }
 
 
@@ -125,7 +125,7 @@ export function DesktopProfileAside({
           </button>
         )}
       </section>
-      <RapiraRate />
+      <RapiraDepth />
       <section className="wpay-desktop-card wpay-desktop-profile-balances">
         <div className="wpay-desktop-section-head"><h2>Помощь и настройки</h2></div>
         <button type="button" onClick={onSupport}>
@@ -144,13 +144,15 @@ export function DesktopProfileAside({
 }
 
 
-type RapiraQuote = { close: string; low: string; high: string };
+type OrderLevel = { price: string; amount: string };
+type OrderBook = { ask: OrderLevel[]; bid: OrderLevel[] };
+type OfficialRate = { rate: string; date: string };
 
-const formatRubles = (rate: number) =>
-  rate.toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
+const formatRubles = (rate: string) =>
+  Number(rate).toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
 
-function RapiraRate() {
-  const [quote, setQuote] = useState<RapiraQuote | null>();
+function useDesktopMarket<T>(endpoint: string, interval: number) {
+  const [result, setResult] = useState<T | null>();
   useEffect(() => {
     const desktop = window.matchMedia("(min-width: 1100px)");
     let request: AbortController | undefined;
@@ -159,12 +161,12 @@ function RapiraRate() {
       if (!desktop.matches || document.hidden) return;
       const controller = new AbortController();
       request = controller;
-      void walletRequest<RapiraQuote>("rapira-quote", undefined, controller.signal)
-        .then((result) => { if (!controller.signal.aborted) setQuote(result); })
-        .catch(() => { if (!controller.signal.aborted) setQuote(null); });
+      void walletRequest<T>(endpoint, undefined, controller.signal)
+        .then((value) => { if (!controller.signal.aborted) setResult(value); })
+        .catch(() => { if (!controller.signal.aborted) setResult(null); });
     };
     update();
-    const timer = window.setInterval(update, 60_000);
+    const timer = window.setInterval(update, interval);
     desktop.addEventListener("change", update);
     document.addEventListener("visibilitychange", update);
     return () => {
@@ -173,28 +175,47 @@ function RapiraRate() {
       desktop.removeEventListener("change", update);
       document.removeEventListener("visibilitychange", update);
     };
-  }, []);
+  }, [endpoint, interval]);
+  return result;
+}
 
-  const low = Number(quote?.low);
-  const high = Number(quote?.high);
-  const close = Number(quote?.close);
-  const position = high === low ? 50 : Math.max(0, Math.min(100, 100 * (close - low) / (high - low)));
-
+function CbrRate() {
+  const rate = useDesktopMarket<OfficialRate>("cbr-usd", 300_000);
   return (
-    <section className="wpay-desktop-card wpay-desktop-fx" aria-label="Курс Rapira">
-      <div className="wpay-desktop-section-head"><h2>Курс Rapira</h2><span>USDT/RUB</span></div>
-      {quote ? (
+    <section className="wpay-desktop-card wpay-desktop-fx" aria-label="Официальный курс ЦБ">
+      <div className="wpay-desktop-section-head"><h2>Курс ЦБ</h2><span>USD/RUB</span></div>
+      {rate ? (
         <>
-          <div className="wpay-desktop-fx-value">{formatRubles(close)}</div>
-          <div className="wpay-desktop-fx-status">Диапазон за 24 часа</div>
-          <div className="wpay-desktop-fx-range" aria-hidden="true">
-            <span style={{ left: `${position}%` }} />
-          </div>
-          <div className="wpay-desktop-fx-dates"><span>{formatRubles(low)}</span><span>{formatRubles(high)}</span></div>
-          <a href="https://rapira.net/" target="_blank" rel="noreferrer">Биржа Rapira</a>
+          <div className="wpay-desktop-fx-value">{formatRubles(rate.rate)}</div>
+          <a href="https://www.cbr.ru/currency_base/daily/" target="_blank" rel="noreferrer">Банк России · {rate.date}</a>
         </>
       ) : (
-        <p className="wpay-desktop-fx-status" role="status">{quote === undefined ? "Загружаем курс…" : "Курс Rapira недоступен"}</p>
+        <p className="wpay-desktop-fx-status" role="status">{rate === undefined ? "Загружаем курс…" : "Курс ЦБ недоступен"}</p>
+      )}
+    </section>
+  );
+}
+
+function RapiraDepth() {
+  const book = useDesktopMarket<OrderBook>("rapira-depth", 10_000);
+  return (
+    <section className="wpay-desktop-card wpay-desktop-fx" aria-label="Стакан Rapira">
+      <div className="wpay-desktop-section-head"><h2>Стакан Rapira</h2><span>USDT/RUB</span></div>
+      {book ? ([
+        { label: "Продажа", levels: book.ask, tone: "ask" },
+        { label: "Покупка", levels: book.bid, tone: "bid" },
+      ].map(({ label, levels, tone }) => (
+        <div className={`wpay-depth-side wpay-depth-${tone}`} key={tone}>
+          <div className="wpay-depth-line"><strong>{label}</strong><span>Объём, USDT</span></div>
+          {levels.length ? levels.map((level) => (
+            <div className="wpay-depth-line" key={level.price}>
+              <span>{formatRubles(level.price)}</span>
+              <span>{Number(level.amount).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}</span>
+            </div>
+          )) : <p className="wpay-desktop-fx-status">Нет заявок</p>}
+        </div>
+      ))) : (
+        <p className="wpay-desktop-fx-status" role="status">{book === undefined ? "Загружаем стакан…" : "Стакан Rapira недоступен"}</p>
       )}
     </section>
   );
