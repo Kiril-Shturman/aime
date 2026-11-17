@@ -110,6 +110,14 @@ class WPayRichBotTests(unittest.TestCase):
         self.assertEqual(state["status"], "Заморожена")
         self.assertEqual(state["tone"], "danger")
 
+    def test_card_widget_can_show_pre_issue_state(self):
+        state = json.loads(_wpay_card_widget_state({
+            "kind": "virtual", "status": "not_issued", "frozen": 0,
+            "masked_pan": None,
+        }))
+        self.assertEqual(state["status"], "Не выпущена")
+        self.assertEqual(state["tone"], "pending")
+
     def test_referral_view_exposes_only_personal_link_and_count(self):
         rich, plain, markup = _wpay_bot_view(
             "referral", {"first_name": "User"}, [], [],

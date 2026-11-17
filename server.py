@@ -1792,7 +1792,7 @@ _WPAY_CARD_WIDGET_HTML = r"""<style>
 .pending .dot{background:#f4c45e;box-shadow:0 0 0 4px rgba(244,196,94,.13)}.danger .dot{background:#ff7777;box-shadow:0 0 0 4px rgba(255,119,119,.13)}
 .refresh{border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:7px 10px;font:600 12px system-ui;position:relative;z-index:2}
 </style><div class="card" id="card"><div class="top"><div><div class="brand">WPay</div><div class="kind" id="kind"></div></div><div class="chip"></div></div><div class="number" id="number"></div><div class="bottom"><div><div class="meta">Статус</div><div class="status"><span class="dot"></span><span id="status"></span></div></div><button class="refresh" id="refresh">Обновить</button></div></div><script>
-const W=TelegramWidget,C=document.getElementById('card');function state(){try{return JSON.parse(W.chatData)||{}}catch(e){return{}}}function draw(){const s=state();document.getElementById('kind').textContent=s.kind||'Карта';document.getElementById('number').textContent=s.masked||'•••• •••• •••• ••••';document.getElementById('status').textContent=s.status||'Обновляется';C.className='card '+(s.tone||'pending')}draw();W.onEvent('chatDataChanged',draw);document.getElementById('refresh').onclick=()=>{const b=document.getElementById('refresh');b.disabled=true;b.textContent='Обновляем…';W.request('card:refresh').then(()=>{b.textContent='Готово';setTimeout(()=>{b.disabled=false;b.textContent='Обновить'},900)},()=>{b.disabled=false;b.textContent='Повторить'})};W.ready();
+const W=TelegramWidget,C=document.getElementById('card');function state(){try{return JSON.parse(W.chatData)||{}}catch(e){return{}}}function draw(){const s=state();document.getElementById('kind').textContent=s.kind||'Карта';document.getElementById('number').textContent=s.masked||'•••• •••• •••• ••••';document.getElementById('status').textContent=s.status||'Обновляется';C.className='card '+(s.tone||'pending')}draw();W.onEvent('chatDataChanged',draw);document.getElementById('refresh').onclick=()=>{const b=document.getElementById('refresh');b.disabled=true;b.textContent='Обновляем…';W.request('card:refresh').then(a=>{b.textContent=a.result==='card_not_found'?'Карты пока нет':'Готово';setTimeout(()=>{b.disabled=false;b.textContent='Обновить'},1200)},()=>{b.disabled=false;b.textContent='Повторить'})};W.ready();
 </script>"""
 
 
@@ -1802,12 +1802,13 @@ def _wpay_card_widget_state(card):
     frozen = bool(card.get("frozen"))
     labels = {
         "opened": "Активна", "active": "Активна", "processing": "Выпускается",
-        "pending": "Выпускается", "failed_to_open": "Ошибка выпуска",
+        "pending": "Выпускается", "not_issued": "Не выпущена",
+        "failed_to_open": "Ошибка выпуска",
         "cancelled": "Закрыта", "closed": "Закрыта",
     }
     status = "Заморожена" if frozen else labels.get(raw_status, "Статус обновлён")
     tone = "danger" if frozen or raw_status in {"failed_to_open", "cancelled", "closed"} else (
-        "pending" if raw_status in {"processing", "pending"} else "active"
+        "pending" if raw_status in {"processing", "pending", "not_issued"} else "active"
     )
     masked = str(card.get("masked_pan") or "•••• •••• •••• ••••")[:32]
     kind = "Виртуальная карта" if card.get("kind") == "virtual" else "Физическая карта"
@@ -2378,11 +2379,18 @@ async def wpay_telegram_webhook(request):
                 })
             except Exception as exc:
                 print(f"[wpay-bot] start animation failed: {exc}", flush=True)
-        if view == "cards" and cards:
+        widgets_enabled = os.environ.get("WPAY_CARD_WIDGETS_ENABLED", "").lower() in {
+            "1", "true", "yes",
+        }
+        if view == "cards" and widgets_enabled:
             try:
+                card = cards[0] if cards else {
+                    "kind": "virtual", "status": "not_issued", "frozen": False,
+                    "masked_pan": None,
+                }
                 return _telegram_bot_api(
                     token, "sendWidget",
-                    _wpay_card_widget_payload(chat_id, cards[0], app_url, reply_markup),
+                    _wpay_card_widget_payload(chat_id, card, app_url, reply_markup),
                 )
             except Exception as exc:
                 print(f"[wpay-bot] card widget failed, using fallback: {exc}", flush=True)
