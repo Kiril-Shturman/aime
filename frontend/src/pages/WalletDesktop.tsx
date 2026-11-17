@@ -1,6 +1,6 @@
 import { CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Bell, Headphones } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import desktopWalletIcon from '../assets/desktop-wallet-icon.svg'
+import desktopWalletIcon from '../assets/desktop-wallet-icon.svg?raw'
 import { walletRequest } from '../lib/wallet-api'
 import { useLiveWallet, cryptoAmount, usd, usdPrice } from './WalletLive'
 
@@ -23,6 +23,7 @@ export function DesktopSidebar({
   name: string;
   cardsEnabled: boolean;
 }) {
+  const [walletAnimation, setWalletAnimation] = useState(0);
   const ThemeIcon = dark ? Sun : Moon;
   const items = desktopLinks.filter(({ id }) => id !== "cards" || cardsEnabled);
 
@@ -33,11 +34,20 @@ export function DesktopSidebar({
       </button>
       <nav aria-label="Основное меню">
         {items.map(({ id, label, Icon }) => (
-          <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => onSelect(id)}>
+          <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => {
+            if (id === "wallet") setWalletAnimation((count) => count + 1);
+            onSelect(id);
+          }}>
             {Icon ? (
               <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
             ) : (
-              <img src={desktopWalletIcon} alt="" width={20} height={20} className="shrink-0" />
+              <span
+                key={walletAnimation}
+                aria-hidden="true"
+                className="wpay-desktop-wallet-icon"
+                data-playing={walletAnimation > 0 ? "" : undefined}
+                dangerouslySetInnerHTML={{ __html: desktopWalletIcon }}
+              />
             )}
             <span>{label}</span>
           </button>

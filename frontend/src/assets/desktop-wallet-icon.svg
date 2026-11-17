@@ -80,14 +80,14 @@
       <use href="#wpay-wallet-card-shape" fill="url(#wpay-wallet-card-blue)" stroke="url(#wpay-wallet-card-rim)" stroke-width="1.5"/>
     </g>
     </defs>
-    <path d="M27 43c4-6 11-9 20-9h76c10 0 17 3 22 9-15-2-36-2-59-2s-43 0-59 2Z" fill="#124C9E"/>
+    <path class="wallet-opening" d="M27 43c4-6 11-9 20-9h76c10 0 17 3 22 9-15-2-36-2-59-2s-43 0-59 2Z" fill="#124C9E"/>
     <g mask="url(#wpay-wallet-outside-glass)">
-      <use href="#wallet-back"/>
+      <use class="back-motion" href="#wallet-back"/>
     </g>
     <g clip-path="url(#wpay-wallet-glass-clip)">
-      <use href="#wallet-back" filter="url(#wpay-wallet-frost)"/>
+      <use class="back-motion" href="#wallet-back" filter="url(#wpay-wallet-frost)"/>
     </g>
-    <g>
+    <g class="front-motion">
     <g id="wallet-body" opacity=".69">
       <use href="#wpay-wallet-body-shape" fill="url(#wpay-wallet-body)"/>
       <use href="#wpay-wallet-body-shape" fill="url(#wpay-wallet-body-blue)"/>

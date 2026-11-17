@@ -324,3 +324,40 @@
    padding: 0;
  }
 }
+
+.wpay-desktop-wallet-icon { display: block; width: 30px; height: 30px; flex: none; margin-inline: -5px; }
+.wpay-desktop-wallet-icon svg { display: block; width: 100%; height: 100%; }
+  .wpay-desktop-wallet-icon #wallet-clasp {
+    transform-box: fill-box;
+    transform-origin: right center;
+  }
+  .wpay-desktop-wallet-icon :is(.back-motion, .front-motion) {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+  }
+  .wpay-desktop-wallet-icon .wallet-opening { opacity: 0; }
+  .wpay-desktop-wallet-icon[data-playing] .back-motion { animation: wallet-lift 480ms ease-in-out; }
+  .wpay-desktop-wallet-icon[data-playing] .front-motion { animation: wallet-front 480ms ease-in-out; }
+  .wpay-desktop-wallet-icon[data-playing] #wallet-clasp { animation: wallet-clasp 480ms ease-in-out; }
+  .wpay-desktop-wallet-icon[data-playing] .wallet-opening { animation: wallet-gap 480ms ease-in-out; }
+  @keyframes wallet-lift {
+    0%, 100% { transform: translateY(0) skewX(0deg) scale(1); }
+    40% { transform: translateY(-5px) skewX(2deg) scale(.99, .975); }
+  }
+  @keyframes wallet-front {
+    0%, 100% { transform: translateY(0) skewX(0deg) scale(1); }
+    46% { transform: translateY(2.5px) skewX(-1.5deg) scale(1.01, .975); }
+  }
+  @keyframes wallet-clasp {
+    0%, 100% { transform: rotate(0); }
+    35% { transform: rotate(4deg); }
+    83% { transform: rotate(-1deg); }
+  }
+  @keyframes wallet-gap {
+    0%, 100% { opacity: 0; }
+    44% { opacity: .18; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wpay-desktop-wallet-icon[data-playing] .back-motion, .wpay-desktop-wallet-icon[data-playing] .front-motion, .wpay-desktop-wallet-icon[data-playing] #wallet-clasp,
+    .wpay-desktop-wallet-icon[data-playing] .wallet-opening { animation: none; }
+  }
