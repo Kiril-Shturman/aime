@@ -14,6 +14,7 @@ import "./WalletBiometrics.css";
 import Aurora from "../components/reactbits/Aurora";
 import WalletLockBadge from "./WalletLockBadge";
 import AppPreloader from "../components/AppPreloader";
+import StartupWordmark from "../components/StartupWordmark";
 
 // Device privacy lock only. Server authentication and financial authorization remain independent.
 function nativeCall<T>(
@@ -524,6 +525,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
             />
           </div>
           {ready && locked && <WalletLockBadge />}
+          {!ready && <StartupWordmark />}
           <div
             className={`wpay-lock-copy${!ready ? " wpay-lock-copy--checking" : ""}`}
           >
@@ -538,20 +540,6 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
               </>
             ) : (
               <>
-                <img
-                  className="wpay-lock-wordmark dark:hidden"
-                  src="/brands/wpay-wordmark.svg"
-                  width={282}
-                  height={116}
-                  alt="wPay"
-                />
-                <img
-                  className="wpay-lock-wordmark hidden dark:block"
-                  src="/brands/wpay-wordmark-light.svg"
-                  width={282}
-                  height={116}
-                  alt="wPay"
-                />
                 <div
                   className="wpay-lock-checking-spinner"
                   role="status"

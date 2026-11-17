@@ -430,6 +430,13 @@ test("protection startup displays the real wordmark and Framework7 loader instea
   });
   await expect(loader.locator(".preloader")).toBeVisible();
   await expect(loader.locator(".preloader-inner-line")).toHaveCount(8);
+  const logoBox = await screen.locator(".wpay-startup-wordmark").boundingBox();
+  const spinnerBox = await loader.locator(".preloader").boundingBox();
+  expect(
+    Math.abs(logoBox!.x + logoBox!.width / 2 - page.viewportSize()!.width / 2),
+  ).toBeLessThan(2);
+  expect(logoBox!.y).toBeLessThan(150);
+  expect(spinnerBox!.y).toBeGreaterThan(logoBox!.y + logoBox!.height + 60);
   await page.evaluate(() => document.documentElement.classList.add("dark"));
   await expect(
     screen.locator('img[src="/brands/wpay-wordmark-light.svg"]'),
@@ -464,6 +471,14 @@ test("initial route loading uses a native preloader before wallet code is loaded
   const loading = page.getByRole("status", { name: "Загрузка приложения" });
   await expect(loading.locator(".preloader")).toBeVisible();
   await expect(loading.locator(".preloader-inner-line")).toHaveCount(8);
+  await expect(loading.locator(".wpay-startup-wordmark")).toBeVisible();
+  const logoBox = await loading.locator(".wpay-startup-wordmark").boundingBox();
+  const spinnerBox = await loading.locator(".preloader").boundingBox();
+  expect(
+    Math.abs(logoBox!.x + logoBox!.width / 2 - page.viewportSize()!.width / 2),
+  ).toBeLessThan(2);
+  expect(logoBox!.y).toBeLessThan(150);
+  expect(spinnerBox!.y).toBeGreaterThan(logoBox!.y + logoBox!.height + 60);
   expect(
     await loading
       .locator(".preloader-inner")

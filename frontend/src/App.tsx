@@ -1,4 +1,5 @@
 import AppPreloader from "./components/AppPreloader";
+import StartupWordmark from "./components/StartupWordmark";
 import { useEffect, lazy, Suspense } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { App as KonstaApp } from "konsta/react";
@@ -79,8 +80,9 @@ function Themed() {
                   role="status"
                   aria-label="Загрузка приложения"
                   aria-busy="true"
-                  className="flex min-h-[100dvh] w-full items-center justify-center bg-[#efeff4] dark:bg-black"
+                  className="relative flex min-h-[100dvh] w-full items-center justify-center bg-[#efeff4] dark:bg-black"
                 >
+                  <StartupWordmark />
                   <AppPreloader />
                 </div>
               }

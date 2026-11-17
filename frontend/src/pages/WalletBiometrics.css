@@ -333,13 +333,8 @@
   top: 50%;
   transform: translateY(-50%);
 }
-.wpay-lock-wordmark {
-  width: 156px;
-  height: auto;
-  margin: 0 auto;
-}
 .wpay-lock-checking-spinner {
   display: flex;
   justify-content: center;
-  margin-top: 22px;
+  margin-top: 0;
 }
