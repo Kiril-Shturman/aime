@@ -9,6 +9,9 @@ def bridge(db,body):
     worker=body.get('worker_id')
     if not isinstance(worker,str) or not 8<=len(worker)<=100:raise ValueError('Invalid worker')
     op=body.get('op')
+    if op in {'export-claim','export-complete'}:
+        from wallet_key_export import bridge as export_bridge
+        return export_bridge(db,body)
     if op=='heartbeat':
         networks=body['networks']
         if not isinstance(networks,list) or set(networks)-{'BSC','ETH','TRON'}:raise ValueError('Invalid networks')

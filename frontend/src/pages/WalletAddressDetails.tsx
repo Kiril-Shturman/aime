@@ -1,4 +1,5 @@
 import QRCode from "react-qr-code";
+import WalletKeyExport from "./WalletKeyExport";
 import {
   networkStandards as addressNetworkStandards,
   networkNames as addressNetworkNames,
@@ -225,6 +226,7 @@ export default function WalletAddressDetails({
           </span>
         </div>
       </section>
+
       {entry.custody && (
         <p className="text-center text-xs text-black/45 dark:text-white/45">
           wPay · {entry.custody.chain_env === "mainnet" ? "Mainnet" : "Testnet"}{" "}
@@ -284,9 +286,17 @@ export default function WalletAddressDetails({
         </Card>
       </section>
       {entry.custody && (
+        <WalletKeyExport
+          key={entry.custody.id}
+          walletId={entry.custody.id}
+          address={entry.address}
+          network={entry.network}
+        />
+      )}
+      {entry.custody && (
         <p className="px-2 text-xs leading-5 text-black/45 dark:text-white/45">
-          Собственный кошелёк wPay. Автоматическое зачисление на баланс
-          приложения, вывод и обмен с этого адреса ещё не подключены.
+          Собственный кошелёк wPay. Его баланс в блокчейне учитывается отдельно
+          от баланса приложения.
         </p>
       )}
       <section>

@@ -175,8 +175,36 @@ class Controller:
             # Read the canonical DB state: signed acknowledgements may have been lost.
             self.bridge('status', job_id=identifier, state='failed', error=code)
 
+    def process_export(self, item):
+        from Cryptodome.PublicKey import RSA
+        from Cryptodome.Cipher import PKCS1_OAEP
+        from Cryptodome.Hash import SHA256
+        job, wallet = item['job'], item['wallet']
+        try:
+            if (job['user_id'] != wallet['user_id'] or job['wallet_id'] != wallet['id'] or
+                    wallet['network'] not in {'ETH','BSC'} or wallet['key_id'] != self.key_id or
+                    job['expires_at'] <= time.time()):
+                raise ValueError('Invalid export ownership')
+            recipient = RSA.import_key(base64.b64decode(job['public_key'], validate=True))
+            if recipient.has_private() or recipient.size_in_bits() != 3072 or recipient.e != 65537:
+                raise ValueError('Invalid export recipient')
+            key = self.key(wallet)
+            try:
+                document = {'job_id': job['id'], 'wallet_id': wallet['id'], 'network': wallet['network'],
+                            'address': wallet['address'], 'private_key': key.hex()}
+                encrypted = PKCS1_OAEP.new(recipient, hashAlgo=SHA256).encrypt(canonical(document))
+            finally:
+                del key
+            del document
+            self.bridge('export-complete', job_id=job['id'], ciphertext=base64.b64encode(encrypted).decode())
+        except Exception:
+            self.bridge('export-complete', job_id=job['id'], ciphertext=None)
+
     def cycle(self):
         self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON'], key_id=self.key_id)
+        export = self.bridge('export-claim')
+        if export.get('job'):
+            self.process_export(export)
         item = self.bridge('claim')
         if item.get('job'):
             self.process(item)

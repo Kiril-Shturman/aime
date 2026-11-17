@@ -8,6 +8,7 @@ import asyncio
 from wallet_fixedfloat_orders import Orders
 from wallet_card_ui import CardUI
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
+from wallet_key_export import prepare as prepare_key_export, route as key_export_route
 from wallet_exchange_funding import Funding
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
 from wallet_chain import ChainReader
@@ -691,6 +692,7 @@ def install_wallet(app, root, owner_check):
         chain_env=os.environ.get('WPAY_CUSTODY_CHAIN_ENV', 'testnet'),
     )
     app['wpay_custody'] = custody
+    prepare_key_export(ledger)
     exchange_funding = Funding(ledger, exchange_orders, custody, enabled=os.environ.get('WPAY_WALLET_FUNDING_ENABLED','0') == '1')
     app['wpay_exchange_funding'] = exchange_funding
     app['wpay_chain'] = ChainReader(ledger, ApiError)
@@ -1605,6 +1607,8 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            export_response = await key_export_route(request, action, uid, custody)
+            if export_response is not None:return export_response
             custody_response = await custody_route(request, action, uid, custody)
             if custody_response is not None:
                 return custody_response
