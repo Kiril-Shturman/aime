@@ -1,4 +1,4 @@
-"""Server-only FixedFloat quote adapter. No order creation or wallet signing."""
+"""Signed FixedFloat transport; quote API and explicit, gated order methods."""
 
 import asyncio
 import hashlib
@@ -31,6 +31,7 @@ class FixedFloat:
         self.currency_until = 0
         self.currency_lock = asyncio.Lock()
         self.ledger = None
+        self.orders_enabled = False
 
     @property
     def configured(self):
@@ -102,16 +103,51 @@ class FixedFloat:
         # These POST endpoints are read-only. Deliberately reject create/order actions.
         if method not in {"ccies", "price"}:
             raise ValueError("Only quote endpoints are allowed")
+        return await self._request(method, params)
+
+    async def create_order(self, params):
+        if not self.orders_enabled:
+            raise self.error("EXCHANGE_NOT_ENABLED", "Создание обменов не включено", 503)
+        if set(params) - {"type","fromCcy","toCcy","direction","amount","toAddress","tag"}:
+            raise ValueError("Unsupported order parameters")
+        return await self._request("create", params)
+
+    async def fetch_order(self, order_id, token):
+        if not self.orders_enabled:
+            raise self.error("EXCHANGE_NOT_ENABLED", "Создание обменов не включено", 503)
+        return await self._request("order", {"id":order_id,"token":token})
+
+    async def _request(self, method, params):
+        if method not in {"ccies", "price", "create", "order"}:
+            raise ValueError("Unsupported FixedFloat method")
         if not self.configured:
             raise self.error(
                 "EXCHANGE_NOT_CONFIGURED", "Расчёт обмена пока недоступен", 503
             )
+        weight = 50 if method == "create" else 1
         stamp = time.monotonic()
-        while self.window and self.window[0] <= stamp - 60:
+        while self.window and self.window[0][0] <= stamp - 60:
             self.window.popleft()
-        if len(self.window) >= 120:
-            raise self.error("RATE_LIMITED", "Лимит расчётов обмена", 429, "60")
-        self.window.append(stamp)
+        if sum(item[1] for item in self.window) + weight > 200:
+            error = self.error("RATE_LIMITED", "Лимит запросов обменника", 429, "60")
+            error.definitive = True
+            raise error
+        if self.ledger is not None:
+            ledger = self.ledger
+            ledger.begin("fixedfloat_budget", "system", "Bound provider request weights")
+            try:
+                ledger.db.execute("DELETE FROM fixedfloat_call_budget WHERE created_at<=?", (time.time()-60,))
+                used = ledger.db.execute("SELECT COALESCE(SUM(weight),0) FROM fixedfloat_call_budget").fetchone()[0]
+                if used + weight > 200:
+                    error = self.error("RATE_LIMITED", "Лимит запросов обменника", 429, "60")
+                    error.definitive = True
+                    raise error
+                ledger.db.execute("INSERT INTO fixedfloat_call_budget(created_at,weight) VALUES (?,?)", (time.time(),weight))
+                ledger.commit()
+            except Exception:
+                ledger.rollback()
+                raise
+        self.window.append((stamp, weight))
         raw = json.dumps(params, separators=(",", ":"), ensure_ascii=False).encode(
             "utf-8"
         )
@@ -133,24 +169,21 @@ class FixedFloat:
             ) as response:
                 if response.status == 429:
                     retry = response.headers.get("Retry-After", "60")
-                    raise self.error(
-                        "RATE_LIMITED",
-                        "Сервис обмена временно ограничил запросы",
-                        429,
-                        retry,
-                    )
+                    error = self.error("RATE_LIMITED", "Сервис обмена временно ограничил запросы", 429, retry)
+                    error.definitive = True
+                    raise error
                 if response.status != 200:
-                    raise self.error(
-                        "EXCHANGE_UNAVAILABLE", "Сервис обмена временно недоступен", 503
-                    )
+                    error = self.error("EXCHANGE_UNAVAILABLE", "Сервис обмена временно недоступен", 503)
+                    error.definitive = response.status in {400,401,403,404,405,415,422}
+                    raise error
                 data = await response.json(
                     content_type=None,
                     loads=lambda raw: json.loads(raw, parse_float=Decimal),
                 )
                 if not isinstance(data, dict) or data.get("code") != 0:
-                    raise self.error(
-                        "EXCHANGE_UNAVAILABLE", "Не удалось получить расчёт обмена", 503
-                    )
+                    error = self.error("EXCHANGE_REJECTED", "Обменник отклонил запрос. Проверьте направление, сумму и адрес", 400) if method == "create" else self.error("EXCHANGE_UNAVAILABLE", "Не удалось получить ответ обменника", 503)
+                    error.definitive = method == "create" and isinstance(data, dict) and type(data.get("code")) is int and data["code"] != 0
+                    raise error
                 return data["data"]
         except (asyncio.TimeoutError, ClientError):
             raise self.error(
@@ -303,6 +336,8 @@ async def exchange_route(request, action, uid, provider):
                 "configured": provider.configured,
                 "provider": "fixedfloat",
                 "execution_enabled": False,
+                "orders_enabled": provider.orders_enabled and provider.configured,
+                "funding_modes": ["external"] if provider.orders_enabled else [],
                 "networks": await provider.networks() if provider.configured else [],
             }
         )
@@ -316,5 +351,7 @@ def prepare_exchange_limits(ledger):
         """
       CREATE TABLE IF NOT EXISTS wallet_exchange_rate_limits (id INTEGER PRIMARY KEY,user_id TEXT NOT NULL,created_at REAL NOT NULL);
       CREATE INDEX IF NOT EXISTS wallet_exchange_rate_limits_time ON wallet_exchange_rate_limits(created_at);
+      CREATE TABLE IF NOT EXISTS fixedfloat_call_budget (id INTEGER PRIMARY KEY,created_at REAL NOT NULL,weight INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS fixedfloat_call_budget_time ON fixedfloat_call_budget(created_at);
     """
     )

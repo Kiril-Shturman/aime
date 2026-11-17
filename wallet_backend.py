@@ -5,6 +5,7 @@ Only this module sees the provider token; organization funds are never a user's
 balance. All money arithmetic uses Decimal and SQLite write transactions.
 """
 import asyncio
+from wallet_fixedfloat_orders import Orders
 from wallet_card_ui import CardUI
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
@@ -654,7 +655,7 @@ def install_wallet(app, root, owner_check):
                 if sep and key in {
                     'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS',
                     'WPAY_CUSTODY_ENABLED', 'WPAY_CUSTODY_CHAIN_ENV', 'WPAY_CUSTODY_PUBLIC_KEY_FILE',
-                    'FIXEDFLOAT_API_KEY', 'FIXEDFLOAT_API_SECRET',
+                    'FIXEDFLOAT_API_KEY', 'FIXEDFLOAT_API_SECRET', 'WPAY_FIXEDFLOAT_ORDERS_ENABLED',
                     'AURA_API_KEY', 'AURA_ENVIRONMENT', 'AURA_BASE_URL',
                     'AURA_WEBHOOK_SECRET', 'AURA_PARTNER_ID', 'WPAY_AURA_ENABLED',
                 }:
@@ -679,6 +680,8 @@ def install_wallet(app, root, owner_check):
     exchange = FixedFloat(os.environ.get('FIXEDFLOAT_API_KEY', ''), os.environ.get('FIXEDFLOAT_API_SECRET', ''), ApiError)
     exchange.ledger = ledger
     app['wpay_exchange'] = exchange
+    exchange_orders = Orders(ledger, exchange, enabled=os.environ.get('WPAY_FIXEDFLOAT_ORDERS_ENABLED','0') == '1')
+    app['wpay_exchange_orders'] = exchange_orders
     prepare_custody(ledger)
     custody = Custody(
         ledger, ApiError,
@@ -1602,6 +1605,9 @@ def install_wallet(app, root, owner_check):
             custody_response = await custody_route(request, action, uid, custody)
             if custody_response is not None:
                 return custody_response
+            order_response = await exchange_orders.route(request, action, uid)
+            if order_response is not None:
+                return order_response
             exchange_response = await exchange_route(request, action, uid, exchange)
             if exchange_response is not None:
                 return exchange_response
@@ -2578,6 +2584,9 @@ def install_wallet(app, root, owner_check):
             return web.json_response({'ok': False, 'error': {'name': 'INVALID_REQUEST'}, 'detail': 'Некорректные данные запроса или ответа провайдера'}, status=400)
 
     async def cleanup(_):
+        order_task = app.get('wpay_order_task')
+        if order_task:
+            order_task.cancel(); await asyncio.gather(order_task, return_exceptions=True)
         task=app.get('wpay_finance_task')
         if task:
             task.cancel();await asyncio.gather(task,return_exceptions=True)
@@ -2598,6 +2607,8 @@ def install_wallet(app, root, owner_check):
         ledger.db.close()
 
     async def startup(_):
+        if exchange_orders.enabled:
+            app['wpay_order_task'] = asyncio.create_task(exchange_orders.run())
         if bot_token:
             app['wpay_notification_task'] = asyncio.create_task(
                 app['wpay_notification_worker'].run()

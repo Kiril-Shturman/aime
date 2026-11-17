@@ -1,93 +1,96 @@
-# FixedFloat: USDT network quote integration
+# FixedFloat exchange
 
-Restored from `wpay/self-hosted-crypto`, commit `e47b0f7`, onto the current
-WPay UI and backend. The existing application and custody routes are preserved
-with `scripts/apply_fixedfloat.py`; quote credentials are kept server-side in
-a private environment file.
+## Current funding model
 
-## Scope
+The exchange page supports real, **externally funded** USDT swaps between TRON,
+Ethereum, BNB Smart Chain, Solana and TON when the provider reports availability.
+The user chooses a destination address, reviews a fresh estimate, explicitly
+creates an order, then transfers USDT to that order's payment address. The UI
+shows the exact amount, network, QR, required memo, deadline and status.
 
-Adds authenticated, server-side FixedFloat quotes for USDT across TRON, Ethereum,
-BNB Smart Chain, Solana and TON, with floating/fixed quote modes. Availability is
-read from FixedFloat; listing a network in WPay does not imply that it is enabled.
-TON was under maintenance during the live smoke check.
+This does not spend the WPay ledger balance, sign a custody-wallet transfer, or
+credit the internal wallet on completion. Users may explicitly select their own
+mainnet WPay receiving address; that destination remains an on-chain wallet with
+its existing limitations. The recovery private key stays off the web server.
 
-This is a quote integration, not a completed money-transfer integration. It never
-creates an exchange order, signs/broadcasts an on-chain transaction, changes a
-client balance, or reserves money. `execution_enabled` is always false. The
-FixedFloat adapter explicitly permits only its read-only `ccies` and `price`
-methods, even though both use HTTP POST. Existing GoSwap financial flows are
-retained until the separate custody migration is designed and reviewed.
+## Routes
 
-## Server configuration and routes
+Existing authenticated routes remain:
+- GET exchange-status: configuration, network availability, orders_enabled,
+  funding_modes. execution_enabled remains false for automatic wallet spending.
+- POST exchange-quote: read-only estimate.
 
-Put FIXEDFLOAT_API_KEY and FIXEDFLOAT_API_SECRET in the backend environment or
-ignored `.env.wallet`. Neither key is returned by API responses or included in
-frontend bundles. Existing credentials can be reused from the private operator configuration;
-they are not committed. The example configuration contains empty placeholders.
+New authenticated routes:
+- POST exchange-prepare: from_network, to_network, decimal-string amount,
+  rate_type, to_address and optional to_tag. Checks the address/network, obtains
+  a fresh quote and persists a server intent valid for 20 seconds.
+- POST exchange-create: only that server intent_id. Creates the provider order
+  once and returns a public allowlisted projection; no API or order token.
+- GET exchange-order?intent_id=...: own order snapshot, with bounded refresh.
+- GET exchange-orders: latest 30 own intents, including pending/unknown outcomes.
+- POST exchange-own-address: selected network only; ensures a permanent owned
+  mainnet wallet without returning keys or enabling internal credits.
 
-- GET /api/wallet/exchange-status: configured flag and receive/send availability
-  per network; requires normal Telegram/owner authentication.
-- POST /api/wallet/exchange-quote: accepts only from_network, to_network, amount
-  (decimal string, up to six decimal places) and rate_type (float/fixed).
+No browser user_id, provider token, provider currency code, callback URL or
+API origin is accepted. Address checks cover EVM, TRON Base58Check, Solana and TON;
+explicit test-only TON addresses are refused. The chosen asset, networks,
+destination and memo are verified again against the authenticated order response.
 
-The adapter signs the exact UTF-8 JSON bytes with HMAC-SHA256. The API origin is
-server controlled, redirects are disabled, and browser parameters cannot select a
-URL, contract, provider currency code or money endpoint. All returned asset and
-network identities and the unchanged input amount are verified. Provider decimal
-numbers are parsed as Decimal. Missing availability fails closed.
+## Durable creation and status
 
-Currency metadata is cached for 30 seconds with a shared lock. Quotes are fresh
-requests; provider maintenance/limit/liquidity errors never expose a usable payout.
-The SQLite wallet_exchange_rate_limits table atomically bounds authenticated
-exchange requests across backend processes sharing this database: 20/minute/user,
-100/minute globally, using BEGIN IMMEDIATE. Each quote needs at most two provider
-calls, leaving headroom under the documented 250-weight/minute account quota.
-The adapter also limits its own process to 120 provider calls/minute. Independent
-applications using the same key need separate account-level coordination. No key
-rotation or provider-account settings were changed.
+Private table fixedfloat_order_intents stores the authenticated owner, operation
+parameters, quote, durable creation state, provider id, security token, public
+snapshot, next poll time and backoff. Its name is deliberately outside the generic
+wallet_/admin_ database browser allowlist. Database and backups must be private.
+Existing financial postings are unchanged because funding occurs externally.
 
-## Interface
+A BEGIN IMMEDIATE claim commits creating before the non-idempotent create POST.
+Parallel/repeated calls cannot create the same intent twice. A process restart or
+unknown network/5xx outcome never triggers another create automatically. If the
+remote id and token were received, status can recover through read-only requests;
+otherwise the intent stays unknown and needs support. Explicit provider 4xx/error
+responses reject the intent. A definitive HTTP 429 records Retry-After and permits
+retry only later; if its quote expired, a fresh reviewed quote is required.
 
-Wallet → Exchange opens USDT network quotes by default for the home/USDT entry.
-The same action on an owned USDT address preselects that address network without
-reserving or sending its funds.
-The existing other-currency page remains under “Другие валюты”. The new flow uses
-the existing push-view shell, rounded cards, primary buttons, and both themes.
+The background worker resumes due known orders after restart, at most six per
+cycle, with durable exponential backoff. Terminal DONE/refunded orders are not
+polled; expired pay-ins are checked hourly for up to three days for late funds.
+A database nonce and provider update timestamp reject stale concurrent responses.
+DONE requires the provider's payout transaction hash; refunded completion requires
+a refund transaction hash. This is provider-reported proof, not an independent
+blockchain-finality verification or a reason to credit WPay's internal ledger.
 
-It displays the actual estimated payout and input-minus-output difference;
-“difference” is not misrepresented as just the provider's service fee. The
-provider payout already includes its quote-side charges. Sending funds from our
-own source wallet still requires separate network resources. A quote is not a
-locked order; prices are invalidated after 20 seconds and after changing inputs.
-In-flight requests are cancelled/ignored when inputs change or the view closes.
-Unavailable networks are disabled. A provider failure has no demo-price fallback.
-There is no money-submission button.
+Emergency/incorrect/late-payment states are shown with support instructions.
+The implementation never automatically chooses a new rate, refund recipient or
+emergency action. API keys and order security tokens never reach the browser.
 
-## Validation
+## Configuration and request budget
 
-- 217 backend tests, including the 11 restored FixedFloat cases.
-- 20 frontend unit tests.
-- 34 relevant Playwright tests (wallet, owned addresses and exchange cases).
-- TypeScript/Vite production build and frontend lint pass; existing repository
-  lint warnings and bundle-size warning remain.
-- Live read-only adapter check: 100 USDT TRC20 → BSC returned 99.193 USDT with
-  available=true. This is a timestamped observation, not a guaranteed future rate.
-- No real orders, on-chain transfers or charges. Server configuration enables
-  read-only quotes only.
+FIXEDFLOAT_API_KEY / FIXEDFLOAT_API_SECRET are backend-only secrets. Set
+WPAY_FIXEDFLOAT_ORDERS_ENABLED=1 explicitly to enable order creation and the status
+worker. Existing private server configuration is reused; no credentials belong
+in Git, VITE variables, logs, request URLs or browser storage.
 
-Regression cases cover exact HMAC signing, provider errors and 429, strict amount
-and direction validation, currency-cache concurrency, auth, operation without a
-GoSwap token, zero ledger changes, rejection of money methods, maintenance/limits,
-light/dark UI, input invalidation, stale responses and closing/reopening mid-request.
+The exact UTF-8 JSON bytes are signed with HMAC-SHA256, redirects are disabled,
+and method/parameter allowlists are server controlled. The ordinary call method
+still permits quotes only; gated create_order and fetch_order methods are explicit.
 
-## What remains for execution
+fixedfloat_call_budget shares weighted usage across processes on the same SQLite
+DB: create costs 50, other methods 1, with a conservative 200-weight/minute cap
+below the provider's documented 250. Other applications using the same key and a
+different DB require separate coordination. Existing user quote throttles remain.
 
-Implement and review isolated custody/signing, TRON resource management, owned
-order intents, authenticated withdrawal destinations, durable unknown-order
-recovery, reservation/settlement postings, provider status reconciliation and
-on-chain proof of both pay-in and payout. A successful price response alone is
-not authorization to send funds, and a successful creation POST is not proof of
-payout. This change deliberately does not simulate these missing execution steps.
+## Validation and deployment
 
-Official API reference: https://ff.io/en/api
+243 backend tests, 20 frontend unit tests, existing wallet browser regressions and
+four new exchange UI cases cover parallel prepare/create, unknown outcome/restart,
+429, foreign ownership, destination mismatch, missing payout proof, stale status,
+terminal reordering, network validation, weighted budget, explicit confirmation,
+QR/requisites, completion and restoring an unknown order after reload. Monetary
+scenarios run against local mocks; no real cryptocurrency was sent during testing.
+
+scripts/apply_fixedfloat_orders.py adds lifecycle integration while preserving
+current card/admin/custody code. The existing signed transport is updated as well.
+Back up the database before migration and keep the database/backups mode 0600.
+
+Official provider API: https://ff.io/en/api

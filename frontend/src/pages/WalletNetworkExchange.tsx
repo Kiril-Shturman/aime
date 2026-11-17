@@ -1,3 +1,4 @@
+import WalletExchangeOrder from "./WalletExchangeOrder";
 import { useEffect, useRef, useState } from "react";
 import { Preloader } from "framework7-react";
 import { Button, Card } from "konsta/react";
@@ -12,7 +13,11 @@ type Network = {
   can_send: boolean;
   can_receive: boolean;
 };
-type Status = { configured: boolean; networks: Network[] };
+type Status = {
+  configured: boolean;
+  networks: Network[];
+  orders_enabled?: boolean;
+};
 type Quote = {
   available: boolean;
   to_amount: string | null;
@@ -46,6 +51,7 @@ export default function WalletNetworkExchange({
   active: boolean;
   initialNetwork?: string;
 }) {
+  const [orderOpen, setOrderOpen] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
   const [from, setFrom] = useState("TRON"),
     [to, setTo] = useState("BSC"),
@@ -156,214 +162,232 @@ export default function WalletNetworkExchange({
       className="mx-auto flex w-full max-w-[560px] flex-col gap-4 px-4 pb-6 pt-3"
       aria-label="Межсетевой обмен USDT"
     >
-      <div className="flex items-center gap-3 px-2 py-2">
-        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-b from-[#6ac6aa] to-[#26a17b] text-white">
-          <SiTether size={25} />
-        </span>
-        <div>
-          <h2 className="text-[19px] font-semibold text-black dark:text-white">
-            Tether USDT
-          </h2>
-          <p className="text-[14px] text-black/45 dark:text-white/45">
-            Перевод между сетями
-          </p>
+      <div
+        className={orderOpen ? "hidden" : "contents"}
+        aria-hidden={orderOpen}
+      >
+        <div className="flex items-center gap-3 px-2 py-2">
+          <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-b from-[#6ac6aa] to-[#26a17b] text-white">
+            <SiTether size={25} />
+          </span>
+          <div>
+            <h2 className="text-[19px] font-semibold text-black dark:text-white">
+              Tether USDT
+            </h2>
+            <p className="text-[14px] text-black/45 dark:text-white/45">
+              Перевод между сетями
+            </p>
+          </div>
         </div>
-      </div>
-      {status?.configured === false && (
-        <p role="status" className="px-2 text-black/50 dark:text-white/50">
-          Расчёт обмена пока недоступен
-        </p>
-      )}
-      <Card className="!m-0 !rounded-[28px]" contentWrapPadding="px-5 py-3">
-        {(["from", "to"] as const).map((side) => (
-          <label
-            key={side}
-            className={`block ${side === "from" ? "border-b border-black/[.06] pb-2 dark:border-white/[.08]" : "pt-3"}`}
+        {status?.configured === false && (
+          <p role="status" className="px-2 text-black/50 dark:text-white/50">
+            Расчёт обмена пока недоступен
+          </p>
+        )}
+        <Card className="!m-0 !rounded-[28px]" contentWrapPadding="px-5 py-3">
+          {(["from", "to"] as const).map((side) => (
+            <label
+              key={side}
+              className={`block ${side === "from" ? "border-b border-black/[.06] pb-2 dark:border-white/[.08]" : "pt-3"}`}
+            >
+              <span className="text-[13px] text-black/45 dark:text-white/45">
+                {side === "from" ? "Откуда" : "Куда"}
+              </span>
+              <select
+                aria-label={
+                  side === "from"
+                    ? "Сеть отправления USDT"
+                    : "Сеть получения USDT"
+                }
+                className={selectClass}
+                value={side === "from" ? from : to}
+                disabled={!status?.configured}
+                onChange={(event) => {
+                  invalidate();
+                  (side === "from" ? setFrom : setTo)(event.target.value);
+                }}
+              >
+                {(
+                  status?.networks ?? [
+                    {
+                      network: "TRON",
+                      name: "Tron",
+                      standard: "TRC20",
+                      can_send: true,
+                      can_receive: true,
+                    },
+                    {
+                      network: "BSC",
+                      name: "BNB Smart Chain",
+                      standard: "BEP20",
+                      can_send: true,
+                      can_receive: true,
+                    },
+                  ]
+                ).map((network) => {
+                  const available =
+                    side === "from" ? network.can_send : network.can_receive;
+                  return (
+                    <option
+                      key={network.network}
+                      value={network.network}
+                      disabled={!available}
+                    >
+                      {network.name} · {network.standard}
+                      {available ? "" : " · Недоступно"}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+          ))}
+          <button
+            type="button"
+            aria-label="Поменять сети местами"
+            className="mx-auto mt-2 flex min-h-11 min-w-11 items-center justify-center rounded-full text-primary active:bg-black/5 dark:active:bg-white/10"
+            disabled={!status?.configured}
+            onClick={() => {
+              invalidate();
+              setFrom(to);
+              setTo(from);
+            }}
           >
+            <ArrowDownUp size={22} />
+          </button>
+        </Card>
+        <Card className="!m-0 !rounded-[28px]" contentWrapPadding="px-5 py-4">
+          <label>
             <span className="text-[13px] text-black/45 dark:text-white/45">
-              {side === "from" ? "Откуда" : "Куда"}
+              Отправляете, USDT
             </span>
-            <select
-              aria-label={
-                side === "from"
-                  ? "Сеть отправления USDT"
-                  : "Сеть получения USDT"
-              }
-              className={selectClass}
-              value={side === "from" ? from : to}
-              disabled={!status?.configured}
+            <input
+              aria-label="Сумма межсетевого обмена USDT"
+              inputMode="decimal"
+              className="mt-2 min-h-12 w-full bg-transparent text-[30px] font-semibold tabular-nums text-black outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-white"
+              value={amount}
               onChange={(event) => {
                 invalidate();
-                (side === "from" ? setFrom : setTo)(event.target.value);
+                setAmount(event.target.value.replace(",", "."));
               }}
-            >
-              {(
-                status?.networks ?? [
-                  {
-                    network: "TRON",
-                    name: "Tron",
-                    standard: "TRC20",
-                    can_send: true,
-                    can_receive: true,
-                  },
-                  {
-                    network: "BSC",
-                    name: "BNB Smart Chain",
-                    standard: "BEP20",
-                    can_send: true,
-                    can_receive: true,
-                  },
-                ]
-              ).map((network) => {
-                const available =
-                  side === "from" ? network.can_send : network.can_receive;
-                return (
-                  <option
-                    key={network.network}
-                    value={network.network}
-                    disabled={!available}
-                  >
-                    {network.name} · {network.standard}
-                    {available ? "" : " · Недоступно"}
-                  </option>
-                );
-              })}
-            </select>
+            />
           </label>
-        ))}
-        <button
-          type="button"
-          aria-label="Поменять сети местами"
-          className="mx-auto mt-2 flex min-h-11 min-w-11 items-center justify-center rounded-full text-primary active:bg-black/5 dark:active:bg-white/10"
-          disabled={!status?.configured}
-          onClick={() => {
-            invalidate();
-            setFrom(to);
-            setTo(from);
-          }}
-        >
-          <ArrowDownUp size={22} />
-        </button>
-      </Card>
-      <Card className="!m-0 !rounded-[28px]" contentWrapPadding="px-5 py-4">
-        <label>
+        </Card>
+        <label className="px-2">
           <span className="text-[13px] text-black/45 dark:text-white/45">
-            Отправляете, USDT
+            Тип курса
           </span>
-          <input
-            aria-label="Сумма межсетевого обмена USDT"
-            inputMode="decimal"
-            className="mt-2 min-h-12 w-full bg-transparent text-[30px] font-semibold tabular-nums text-black outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-white"
-            value={amount}
+          <select
+            aria-label="Тип курса обмена"
+            className={selectClass}
+            value={mode}
             onChange={(event) => {
               invalidate();
-              setAmount(event.target.value.replace(",", "."));
+              setMode(event.target.value);
             }}
-          />
-        </label>
-      </Card>
-      <label className="px-2">
-        <span className="text-[13px] text-black/45 dark:text-white/45">
-          Тип курса
-        </span>
-        <select
-          aria-label="Тип курса обмена"
-          className={selectClass}
-          value={mode}
-          onChange={(event) => {
-            invalidate();
-            setMode(event.target.value);
-          }}
-        >
-          <option value="float">Плавающий</option>
-          <option value="fixed">Фиксированный</option>
-        </select>
-      </label>
-      {from === to && (
-        <p role="status" className="px-2 text-black/50 dark:text-white/50">
-          Выберите разные сети
-        </p>
-      )}
-      {status?.configured && (!fromAvailable || !toAvailable) && (
-        <p role="status" className="px-2 text-black/50 dark:text-white/50">
-          Выбранная сеть временно недоступна
-        </p>
-      )}
-      {quote?.available && !stale && (
-        <Card className="!m-0 !rounded-[28px]" contentWrapPadding="p-5">
-          <p className="text-[13px] text-black/45 dark:text-white/45">
-            Получите ориентировочно
-          </p>
-          <p
-            role="status"
-            aria-label="Сумма получения USDT"
-            className="mt-2 text-[30px] font-semibold tabular-nums text-black dark:text-white"
           >
-            {format(quote.to_amount!)}{" "}
-            <span className="text-[17px] text-black/45 dark:text-white/45">
-              USDT
-            </span>
+            <option value="float">Плавающий</option>
+            <option value="fixed">Фиксированный</option>
+          </select>
+        </label>
+        {from === to && (
+          <p role="status" className="px-2 text-black/50 dark:text-white/50">
+            Выберите разные сети
           </p>
-          <p className="mt-3 text-[14px] text-black/50 dark:text-white/50">
-            Разница: {format(quote.difference!)} USDT
-          </p>
-        </Card>
-      )}
-      {quote && !quote.available && (
-        <p role="status" className="px-2 text-black/50 dark:text-white/50">
-          {Array.from(
-            new Set(
-              quote.reasons.map(
-                (reason) =>
-                  reasons[reason] ?? "Направление временно недоступно",
-              ),
-            ),
-          ).join(". ")}
-        </p>
-      )}
-      {stale && (
-        <p role="status" className="px-2 text-black/50 dark:text-white/50">
-          Расчёт устарел. Получите новую котировку.
-        </p>
-      )}
-      {error && (
-        <p role="alert" className="px-2 text-red-600 dark:text-red-400">
-          {error}
-        </p>
-      )}
-      <Button
-        data-wpay-primary=""
-        rounded
-        large
-        className="!m-0 !h-14 !rounded-[22px] !text-[17px]"
-        disabled={
-          busy ||
-          !valid ||
-          !status?.configured ||
-          !fromAvailable ||
-          !toAvailable
-        }
-        onClick={() => void calculate()}
-      >
-        {busy ? (
-          <span className="flex items-center justify-center gap-2">
-            <Preloader size={20} color="white" />
-            Рассчитываем…
-          </span>
-        ) : quote || stale ? (
-          "Обновить расчёт"
-        ) : (
-          "Рассчитать"
         )}
-      </Button>
-      <p className="px-2 text-center text-[12px] leading-5 text-black/45 dark:text-white/45">
-        Сумма включает расходы обменника и выплату в выбранной сети. Отправка
-        USDT с вашего кошелька оплачивается отдельно.
-      </p>
-      <p className="px-2 text-center text-[12px] leading-5 text-black/45 dark:text-white/45">
-        Доступен предварительный расчёт FixedFloat. Обмен и списание средств
-        пока недоступны.
-      </p>
+        {status?.configured && (!fromAvailable || !toAvailable) && (
+          <p role="status" className="px-2 text-black/50 dark:text-white/50">
+            Выбранная сеть временно недоступна
+          </p>
+        )}
+        {quote?.available && !stale && (
+          <Card className="!m-0 !rounded-[28px]" contentWrapPadding="p-5">
+            <p className="text-[13px] text-black/45 dark:text-white/45">
+              Получите ориентировочно
+            </p>
+            <p
+              role="status"
+              aria-label="Сумма получения USDT"
+              className="mt-2 text-[30px] font-semibold tabular-nums text-black dark:text-white"
+            >
+              {format(quote.to_amount!)}{" "}
+              <span className="text-[17px] text-black/45 dark:text-white/45">
+                USDT
+              </span>
+            </p>
+            <p className="mt-3 text-[14px] text-black/50 dark:text-white/50">
+              Разница: {format(quote.difference!)} USDT
+            </p>
+          </Card>
+        )}
+        {quote && !quote.available && (
+          <p role="status" className="px-2 text-black/50 dark:text-white/50">
+            {Array.from(
+              new Set(
+                quote.reasons.map(
+                  (reason) =>
+                    reasons[reason] ?? "Направление временно недоступно",
+                ),
+              ),
+            ).join(". ")}
+          </p>
+        )}
+        {stale && (
+          <p role="status" className="px-2 text-black/50 dark:text-white/50">
+            Расчёт устарел. Получите новую котировку.
+          </p>
+        )}
+        {error && (
+          <p role="alert" className="px-2 text-red-600 dark:text-red-400">
+            {error}
+          </p>
+        )}
+        <Button
+          data-wpay-primary=""
+          rounded
+          large
+          className="!m-0 !h-14 !rounded-[22px] !text-[17px]"
+          disabled={
+            busy ||
+            !valid ||
+            !status?.configured ||
+            !fromAvailable ||
+            !toAvailable
+          }
+          onClick={() => void calculate()}
+        >
+          {busy ? (
+            <span className="flex items-center justify-center gap-2">
+              <Preloader size={20} color="white" />
+              Рассчитываем…
+            </span>
+          ) : quote || stale ? (
+            "Обновить расчёт"
+          ) : (
+            "Рассчитать"
+          )}
+        </Button>
+        <p className="px-2 text-center text-[12px] leading-5 text-black/45 dark:text-white/45">
+          Сумма включает расходы обменника и выплату в выбранной сети. Отправка
+          USDT с вашего кошелька оплачивается отдельно.
+        </p>
+      </div>
+      {status?.orders_enabled ? (
+        <WalletExchangeOrder
+          active={active}
+          from={from}
+          to={to}
+          value={amount}
+          mode={mode}
+          quoteValid={Boolean(quote?.available && !stale)}
+          enabled={Boolean(status.orders_enabled)}
+          onIntentChange={setOrderOpen}
+        />
+      ) : (
+        <p className="px-2 text-center text-[12px] leading-5 text-black/45 dark:text-white/45">
+          Доступен предварительный расчёт FixedFloat. Обмен и списание средств
+          пока недоступны.
+        </p>
+      )}
     </main>
   );
 }
