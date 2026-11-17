@@ -264,6 +264,10 @@
  }
  .wpay-viewport[data-wallet-surface="asset"] .wpay-asset-scroll > .k-navbar {
    --wpay-top-inset: 0px;
+   background: var(--wpay-top-surface);
+ }
+ .wpay-asset-scroll .wpay-asset-navbar-bg {
+   background: var(--wpay-top-surface) !important;
  }
  .wpay-viewport[data-wallet-surface="asset"] main.wpay-asset-layout {
    display: grid;
@@ -281,13 +285,16 @@
  .wpay-asset-sidebar {
    grid-row: 3;
    display: grid;
-   grid-template-columns: repeat(2, minmax(0, 1fr));
+   grid-template-columns: minmax(0, 1fr) 310px;
    align-items: start;
    gap: 18px 24px;
    min-width: 0;
    padding-inline: 32px;
  }
  .wpay-asset-sidebar > section { min-width: 0; padding: 0; }
+ .wpay-asset-balance { grid-area: 1 / 1; }
+ .wpay-asset-history { grid-area: 2 / 1; }
+ .wpay-asset-about { grid-area: 1 / 2 / span 2; }
  .wpay-asset-layout > .wpay-asset-actions {
    position: static;
    grid-row: 2;
@@ -295,4 +302,8 @@
    max-width: 560px;
    padding: 0 32px;
  }
+}
+
+@media (min-width: 1600px) {
+ .wpay-asset-sidebar { grid-template-columns: minmax(0, 1fr) 340px; gap: 18px 32px; }
 }

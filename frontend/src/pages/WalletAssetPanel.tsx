@@ -292,7 +292,7 @@ export default function WalletAssetPanel({
         </div>
       </Card>
       <div className="wpay-asset-sidebar">
-        <section className="px-4 pb-3 pt-6">
+        <section className="wpay-asset-balance px-4 pb-3 pt-6">
           <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
             Баланс приложения
           </h3>
@@ -469,7 +469,7 @@ export default function WalletAssetPanel({
             </div>
           </Card>
         </section>
-        <section ref={historySection} className="scroll-mt-24 px-4 pb-3 pt-4">
+        <section ref={historySection} className="wpay-asset-history scroll-mt-24 px-4 pb-3 pt-4">
           <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
             История транзакций
           </h3>
@@ -518,7 +518,7 @@ export default function WalletAssetPanel({
             )}
           </Card>
         </section>
-        <section className="px-4 pb-5 pt-4">
+        <section className="wpay-asset-about px-4 pb-5 pt-4">
           <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
             {about.title}
           </h3>
