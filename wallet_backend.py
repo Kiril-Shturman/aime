@@ -1542,9 +1542,39 @@ def install_wallet(app, root, owner_check):
                 if payment.get('spend_id') in {r[0] for r in rows}:
                     ledger.payment(payment)
 
+    rapira_quote = None
+    rapira_checked = 0.0
+    rapira_lock = asyncio.Lock()
+
+    async def get_rapira_quote():
+        nonlocal rapira_quote, rapira_checked
+        async with rapira_lock:
+            if not rapira_checked or time.monotonic() - rapira_checked >= 60:
+                rapira_checked = time.monotonic()
+                try:
+                    async with ClientSession(timeout=ClientTimeout(total=6)) as session:
+                        async with session.get('https://api.rapira.net/open/market/rates') as response:
+                            if response.status != 200:
+                                raise ValueError('Unexpected Rapira status')
+                            payload = await response.json(content_type=None)
+                    pair = next(item for item in payload['data'] if item['symbol'] == 'USDT/RUB')
+                    values = {key: Decimal(str(pair[key])) for key in ('close', 'low', 'high')}
+                    if not all(value.is_finite() and value > 0 for value in values.values()):
+                        raise ValueError('Invalid Rapira prices')
+                    if not values['low'] <= values['close'] <= values['high']:
+                        raise ValueError('Invalid Rapira range')
+                    rapira_quote = {key: str(value) for key, value in values.items()}
+                except (OSError, ValueError, TypeError, KeyError, StopIteration, ArithmeticError, asyncio.TimeoutError):
+                    rapira_quote = None
+        if rapira_quote is None:
+            raise ApiError('RAPIRA_UNAVAILABLE', 'Курс Rapira недоступен', 503)
+        return web.json_response(rapira_quote)
+
     async def route(request):
         try:
             action = request.match_info['action']
+            if action == 'rapira-quote' and request.method == 'GET':
+                return await get_rapira_quote()
             if action == 'status' and request.method == 'GET':
                 aura_products = {
                     'cards': False, 'sbp_buy': False,

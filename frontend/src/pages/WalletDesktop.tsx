@@ -125,7 +125,7 @@ export function DesktopProfileAside({
           </button>
         )}
       </section>
-      <UsdRubChart />
+      <RapiraRate />
       <section className="wpay-desktop-card wpay-desktop-profile-balances">
         <div className="wpay-desktop-section-head"><h2>Помощь и настройки</h2></div>
         <button type="button" onClick={onSupport}>
@@ -144,89 +144,57 @@ export function DesktopProfileAside({
 }
 
 
-type RubleRate = { date: string; rate: number };
+type RapiraQuote = { close: string; low: string; high: string };
 
 const formatRubles = (rate: number) =>
   rate.toLocaleString("ru-RU", { style: "currency", currency: "RUB" });
-const formatRateDate = (date: string) =>
-  new Date(date + "T00:00:00Z").toLocaleDateString("ru-RU", {
-    day: "numeric", month: "short", timeZone: "UTC",
-  });
 
-function UsdRubChart() {
-  const [rates, setRates] = useState<RubleRate[] | null>(null);
+function RapiraRate() {
+  const [quote, setQuote] = useState<RapiraQuote | null>();
   useEffect(() => {
     const desktop = window.matchMedia("(min-width: 1100px)");
     let request: AbortController | undefined;
     const update = () => {
       request?.abort();
-      if (!desktop.matches) return;
+      if (!desktop.matches || document.hidden) return;
       const controller = new AbortController();
       request = controller;
-      const now = Date.now();
-      const day = (offset: number) => new Date(now + offset * 86_400_000).toISOString().slice(0, 10);
-      const query = new URLSearchParams({ base: "USD", quotes: "RUB", from: day(-30), to: day(0) });
-      void fetch("https://api.frankfurter.dev/v2/providers/cbr/rates?" + query, {
-        signal: controller.signal,
-      }).then((response) => {
-        if (!response.ok) throw new Error("Rate history unavailable");
-        return response.json();
-      }).then((history) => {
-        if (!Array.isArray(history)) throw new Error("Unexpected rate history");
-        const entries = history.filter((point): point is RubleRate =>
-          point && typeof point.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(point.date) &&
-          Number.isFinite(Date.parse(point.date)) && Number.isFinite(point.rate) && point.rate > 0,
-        ).sort((left, right) => left.date.localeCompare(right.date));
-        if (!controller.signal.aborted) setRates(entries);
-      }).catch(() => {
-        if (!controller.signal.aborted) setRates([]);
-      });
+      void walletRequest<RapiraQuote>("rapira-quote", undefined, controller.signal)
+        .then((result) => { if (!controller.signal.aborted) setQuote(result); })
+        .catch(() => { if (!controller.signal.aborted) setQuote(null); });
     };
     update();
+    const timer = window.setInterval(update, 60_000);
     desktop.addEventListener("change", update);
+    document.addEventListener("visibilitychange", update);
     return () => {
+      window.clearInterval(timer);
       request?.abort();
       desktop.removeEventListener("change", update);
+      document.removeEventListener("visibilitychange", update);
     };
   }, []);
 
-  const first = rates?.[0];
-  const last = rates?.at(-1);
-  let points = "";
-  if (rates && first && last && last.date > first.date) {
-    const start = Date.parse(first.date);
-    const duration = Date.parse(last.date) - start;
-    const values = rates.map(({ rate }) => rate);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    points = rates.map(({ date, rate }) => {
-      const x = 2 + 256 * (Date.parse(date) - start) / duration;
-      const y = max === min ? 44 : 8 + 72 * (max - rate) / (max - min);
-      return `${x},${y}`;
-    }).join(" ");
-  }
+  const low = Number(quote?.low);
+  const high = Number(quote?.high);
+  const close = Number(quote?.close);
+  const position = high === low ? 50 : Math.max(0, Math.min(100, 100 * (close - low) / (high - low)));
 
   return (
-    <section className="wpay-desktop-card wpay-desktop-fx" aria-label="Курс доллара к рублю">
-      <div className="wpay-desktop-section-head"><h2>Доллар к рублю</h2><span>USD/RUB</span></div>
-      {last ? (
+    <section className="wpay-desktop-card wpay-desktop-fx" aria-label="Курс Rapira">
+      <div className="wpay-desktop-section-head"><h2>Курс Rapira</h2><span>USDT/RUB</span></div>
+      {quote ? (
         <>
-          <div className="wpay-desktop-fx-value">{formatRubles(last.rate)}</div>
-          {points && (
-            <>
-              <svg viewBox="0 0 260 88" role="img" aria-label="Динамика официального курса за месяц">
-                <path d="M0 24H260 M0 52H260 M0 80H260" className="wpay-desktop-fx-grid" />
-                <polyline points={points} fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-              </svg>
-              {first && <div className="wpay-desktop-fx-dates"><span>{formatRateDate(first.date)}</span><span>{formatRateDate(last.date)}</span></div>}
-            </>
-          )}
-          <a href="https://frankfurter.dev/providers/cbr/" target="_blank" rel="noreferrer">
-            Официальный курс ЦБ РФ · {formatRateDate(last.date)}
-          </a>
+          <div className="wpay-desktop-fx-value">{formatRubles(close)}</div>
+          <div className="wpay-desktop-fx-status">Диапазон за 24 часа</div>
+          <div className="wpay-desktop-fx-range" aria-hidden="true">
+            <span style={{ left: `${position}%` }} />
+          </div>
+          <div className="wpay-desktop-fx-dates"><span>{formatRubles(low)}</span><span>{formatRubles(high)}</span></div>
+          <a href="https://rapira.net/" target="_blank" rel="noreferrer">Биржа Rapira</a>
         </>
       ) : (
-        <p className="wpay-desktop-fx-status" role="status">{rates === null ? "Загружаем курс…" : "История курса недоступна"}</p>
+        <p className="wpay-desktop-fx-status" role="status">{quote === undefined ? "Загружаем курс…" : "Курс Rapira недоступен"}</p>
       )}
     </section>
   );

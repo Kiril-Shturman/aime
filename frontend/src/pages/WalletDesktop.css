@@ -148,9 +148,9 @@
  .wpay-desktop-profile-balances button > svg { color: #3275e9; }
  .dark .wpay-desktop-profile-balances button > svg { color: #9ebeff; }
  .wpay-desktop-fx-value { margin-top: 12px; font-size: 27px; font-weight: 650; letter-spacing: -.6px; font-variant-numeric: tabular-nums; }
- .wpay-desktop-fx svg { display: block; width: 100%; margin-top: 8px; color: #3275e9; }
- .dark .wpay-desktop-fx svg { color: #80acff; }
- .wpay-desktop-fx-grid { fill: none; stroke: currentColor; stroke-opacity: .13; }
+ .wpay-desktop-fx-range { position: relative; height: 4px; margin: 12px 6px 8px; border-radius: 4px; background: #3275e940; }
+ .wpay-desktop-fx-range span { position: absolute; top: 50%; width: 10px; height: 10px; transform: translate(-50%, -50%); border-radius: 50%; background: #3275e9; }
+ .dark .wpay-desktop-fx-range span { background: #9ebeff; }
  .wpay-desktop-fx-dates { display: flex; justify-content: space-between; }
  .wpay-desktop-fx-dates, .wpay-desktop-fx a, .wpay-desktop-fx-status { color: #6e7584; font-size: 12px; }
  .dark .wpay-desktop-fx-dates, .dark .wpay-desktop-fx a, .dark .wpay-desktop-fx-status { color: #a2a5af; }
