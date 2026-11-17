@@ -281,7 +281,7 @@ export function LiveHistory() {
         (filter === "income"
           ? Number(x.amount) > 0
           : Number(x.amount) < 0 || x.type === "qr_failed")) &&
-      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${x.type === "card_issue" ? "Выпуск карты" : x.type === "card_issue_refund" ? "Возврат за выпуск карты" : ""} ${x.detail.plan ?? ""}`
+      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${x.type === "card_topup" ? "Пополнение карты" : x.type === "card_issue" ? "Выпуск карты" : x.type === "card_issue_refund" ? "Возврат за выпуск карты" : ""} ${x.detail.plan ?? ""}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -366,6 +366,7 @@ export function LiveHistory() {
                   const failed = item.type === "qr_failed";
                   const cardIssue =
                     item.type === "card_issue" ||
+                    item.type === "card_topup" ||
                     item.type === "card_issue_refund";
                   const Icon = cardIssue
                     ? CreditCard
@@ -373,19 +374,21 @@ export function LiveHistory() {
                       ? ArrowDownCircleFill
                       : Qrcode;
                   const title =
-                    item.type === "card_issue"
-                      ? "Выпуск карты"
-                      : item.type === "card_issue_refund"
-                        ? "Возврат за выпуск карты"
-                        : item.type === "deposit"
-                          ? "Пополнение"
-                          : item.type === "qr_refunded"
-                            ? "Возврат QR"
-                            : failed
-                              ? "Платёж не прошёл"
-                              : String(
-                                  item.detail.merchant_name || "Оплата QR",
-                                );
+                    item.type === "card_topup"
+                      ? "Пополнение карты"
+                      : item.type === "card_issue"
+                        ? "Выпуск карты"
+                        : item.type === "card_issue_refund"
+                          ? "Возврат за выпуск карты"
+                          : item.type === "deposit"
+                            ? "Пополнение"
+                            : item.type === "qr_refunded"
+                              ? "Возврат QR"
+                              : failed
+                                ? "Платёж не прошёл"
+                                : String(
+                                    item.detail.merchant_name || "Оплата QR",
+                                  );
                   return (
                     <ListItem
                       key={item.event_id}

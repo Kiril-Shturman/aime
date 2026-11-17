@@ -5,9 +5,10 @@ import time
 import uuid
 from collections import deque
 from decimal import Decimal, localcontext
+from datetime import datetime, timezone
 from aiohttp import web
 from wallet_tariffs import CARD_PLANS, calculate, resolve_card_plan, prepare as prepare_tariffs
-from wallet_aura import _decimal, _store_card_event
+from wallet_aura import _decimal, _store_card_event, _store_card_operation, _list_data
 
 
 class CardUI:
@@ -17,6 +18,8 @@ class CardUI:
         self.client, self.environment = service.client, service.environment
         self.locks, self.checked = {}, {}
         self.refresh_calls = deque()
+        self.operation_checked = {}
+        self.operation_locks = {}
         self.fee_cache = None
         self.fee_lock = asyncio.Lock()
         prepare_tariffs(ledger)
@@ -134,6 +137,39 @@ class CardUI:
                     raise
             self.checked[uid] = time.monotonic()
 
+    async def operations(self, uid, card_id):
+        self.owned(uid,card_id)
+        warning=None;key=(uid,card_id)
+        if self.enabled and self.client.configured:
+            async with self.operation_locks.setdefault(key,asyncio.Lock()):
+                if time.monotonic()>=self.operation_checked.get(key,0):
+                    stamp=time.monotonic()
+                    while self.refresh_calls and self.refresh_calls[0]<stamp-60:self.refresh_calls.popleft()
+                    if len(self.refresh_calls)>=60:
+                        warning='RATE_LIMITED'
+                    else:
+                        self.refresh_calls.append(stamp)
+                        try:
+                            payload=await self.client.list_card_operations(card_id,limit=100)
+                            items=_list_data(payload)
+                            if len(items)>100 or any(not isinstance(row,dict) or row.get('card_id')!=card_id for row in items):raise ValueError('Operation card mismatch')
+                            self.ledger.begin('card_operations_snapshot',uid,card_id)
+                            try:
+                                for row in items:_store_card_operation(self.ledger,self.environment,row,notify=False)
+                                self.ledger.commit()
+                            except Exception:self.ledger.rollback();raise
+                        except Exception as error:warning=getattr(error,'name','CARD_OPERATIONS_UNAVAILABLE')
+                    self.operation_checked[key]=time.monotonic()+30
+        rows={row['operation_id']:dict(row) for row in self.ledger.db.execute('SELECT operation_id,operation_type,status,previous_status,asset,amount,fee,merchant,decline_message,provider_created_at FROM aura_card_operations WHERE card_id=? AND user_id=? AND environment=?',(card_id,uid,self.environment))}
+        for entity in self.ledger.db.execute("SELECT remote_id,status,request_body,created_at FROM wallet_provider_entities WHERE provider='aura' AND environment=? AND user_id=? AND entity_type='card_recharge' AND remote_id IS NOT NULL AND status IN ('requested','sent','completed','failed')",(self.environment,uid)):
+            stored=json.loads(entity['request_body']);result=stored.get('result')
+            if stored.get('card_id')!=card_id or not isinstance(result,dict) or entity['remote_id'] in rows:continue
+            rows[entity['remote_id']]={'operation_id':entity['remote_id'],'operation_type':'topup','status':'pending' if entity['status'] in {'requested','sent'} else entity['status'],
+                'asset':'USDT','amount':str(_decimal(result['recharge_amount'],allow_zero=True)),'fee':None,'merchant':None,'decline_message':None,
+                'provider_created_at':datetime.fromtimestamp(entity['created_at'],timezone.utc).isoformat()}
+        items=sorted(rows.values(),key=lambda row:row['provider_created_at'] or '',reverse=True)[:200]
+        return {'data':items,'refresh_warning':warning}
+
     async def quote(self, uid, body):
         if not isinstance(body, dict) or set(body) - {'operation','plan_id','card_id','amount','shipping_address'}:
             raise ValueError('Invalid card quote')
@@ -239,8 +275,11 @@ class CardUI:
         return verify
 
     async def route(self, request, action, uid, client_ref):
-        if action not in {'card-quote','aura-card-fees','aura-cards','aura-card-recharge'}:
+        if action not in {'card-quote','aura-card-fees','aura-cards','aura-card-recharge','aura-card-operations'}:
             return None
+        if action == 'aura-card-operations' and request.method == 'GET':
+            if set(request.query)!={'card_id'}:raise ValueError('Only card_id accepted')
+            return web.json_response(await self.operations(uid,request.query['card_id']),headers={'Cache-Control':'no-store'})
         if not self.enabled:
             if action == 'aura-cards' and request.method == 'GET':
                 return web.json_response({'data':self.cards(uid)},headers={'Cache-Control':'no-store'})

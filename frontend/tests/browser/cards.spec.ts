@@ -870,3 +870,12 @@ test("card number and expiry copy separately without hiding details or revealing
   await main.getByRole("button",{name:"Скрыть",exact:true}).click();
   await expect(main.getByRole("button",{name:"Скопировать номер карты",exact:true})).toHaveCount(0);
 });
+
+test("card topup appears as positive dollar credit",async({page})=>{
+  await setup(page,"light");
+  await page.route("**/api/wallet/aura-card-operations**",route=>route.fulfill({json:{data:[{operation_id:"fixture-topup",operation_type:"topup",status:"completed",asset:"USDT",amount:"15",fee:null,merchant:null,decline_message:null,provider_created_at:new Date().toISOString()}]}}));
+  await page.reload();
+  await page.getByRole("link",{name:"Карты",exact:true}).click();
+  await expect(page.getByText("+$15.00",{exact:true})).toBeVisible();
+  await expect(page.getByText("Пополнение",{exact:true})).toBeVisible();
+});

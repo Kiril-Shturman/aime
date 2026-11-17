@@ -84,6 +84,47 @@ class CardUITests(unittest.IsolatedAsyncioTestCase):
         repeated=await self.service.recharge_card_request(self.uid,card,amount='25',idempotency_key='topup',price_guard=guard)
         self.assertEqual(result,repeated)
 
+    async def test_recharge_history_is_exact_idempotent_and_card_credit_is_separate(self):
+        from wallet_aura import backfill_card_recharge_history
+        self.tariff();card=await self.card()
+        q=await self.ui.quote(self.uid,{'operation':'recharge','card_id':card,'amount':'25'})
+        guard=self.ui.guard(self.uid,{'quote_id':q['quote_id'],'card_id':card,'amount':'25'},'recharge','history-topup')
+        result=await self.service.recharge_card_request(self.uid,card,amount='25',idempotency_key='history-topup',price_guard=guard)
+        balance=self.ledger.balance(self.uid,'USDT')
+        for _ in range(2):backfill_card_recharge_history(self.ledger)
+        rows=self.ledger.db.execute("SELECT * FROM wallet_events WHERE user_id=? AND type='card_topup'",(self.uid,)).fetchall()
+        self.assertEqual(len(rows),1)
+        self.assertEqual(Decimal(rows[0]['amount']),-Decimal(result['charged_amount']))
+        self.assertEqual(Decimal(json.loads(rows[0]['detail'])['card_credit']),Decimal(25))
+        self.assertEqual(self.ledger.balance(self.uid,'USDT'),balance)
+        self.client.list_card_operations=AsyncMock(return_value={'data':[]})
+        for _ in range(2):
+            items=(await self.ui.operations(self.uid,card))['data']
+            self.assertEqual(len(items),1);self.assertEqual(Decimal(items[0]['amount']),Decimal(25))
+            self.assertEqual(items[0]['operation_type'],'topup')
+        self.client.list_card_operations.assert_awaited_once()
+        with self.assertRaises(ApiError):await self.ui.operations('tg:other',card)
+        self.assertEqual(self.ledger.balance(self.uid,'USDT'),balance)
+
+    async def test_failed_recharge_updates_history_without_duplicate_refund(self):
+        from wallet_aura import _settle_card_recharge
+        self.tariff();card=await self.card()
+        original=self.client.recharge_card
+        async def pending(*args,**kwargs):
+            result=await original(*args,**kwargs);result['status']='sent';return result
+        self.client.recharge_card=pending
+        q=await self.ui.quote(self.uid,{'operation':'recharge','card_id':card,'amount':'25'})
+        guard=self.ui.guard(self.uid,{'quote_id':q['quote_id'],'card_id':card,'amount':'25'},'recharge','failed-history')
+        result=await self.service.recharge_card_request(self.uid,card,amount='25',idempotency_key='failed-history',price_guard=guard)
+        for _ in range(2):
+            self.ledger.begin('test_failure','test','settle failed recharge')
+            _settle_card_recharge(self.ledger,'test',result['operation_id'],'failed')
+            self.ledger.commit()
+        self.assertEqual(self.ledger.balance(self.uid,'USDT'),(Decimal(300),Decimal(0)))
+        rows=self.ledger.db.execute("SELECT * FROM wallet_events WHERE type='card_topup'").fetchall()
+        self.assertEqual(len(rows),1);self.assertEqual(Decimal(rows[0]['amount']),Decimal(0))
+        self.assertEqual(json.loads(rows[0]['detail'])['status'],'failed')
+
     async def test_foreign_card_never_reaches_provider(self):
         self.tariff();card=await self.card();self.client.recharge_card=AsyncMock()
         with self.assertRaises(ApiError):await self.ui.quote('tg:other',{'operation':'recharge','card_id':card,'amount':'25'})

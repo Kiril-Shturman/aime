@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from wallet_backend import Ledger
-from wallet_aura import backfill_card_issue_history
+from wallet_aura import backfill_card_issue_history,backfill_card_recharge_history
 
 
 def money_snapshot(db):
@@ -25,7 +25,7 @@ def main():
         ledger.begin('card_history_repair','system','Rebuild display history from settled card requests; no monetary changes')
         try:
             before=money_snapshot(ledger.db)
-            count=backfill_card_issue_history(ledger)
+            count=backfill_card_issue_history(ledger)+backfill_card_recharge_history(ledger)
             if before!=money_snapshot(ledger.db):raise ValueError('Monetary changes prohibited')
             if args.apply:ledger.commit()
             else:ledger.rollback()

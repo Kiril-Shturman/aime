@@ -18,13 +18,13 @@ const incoming = (kind:Kind)=>['deposit','ruble_deposit','refund','referral'].in
 const number = (value:string)=>Number(value).toLocaleString('en-US',{maximumFractionDigits:8})
 export function transactionFromApi(item:WalletTransaction):TransactionView {
   const d=item.detail
-  const status:Status=(item.type==='card_issue' && d.status==='processing')?'processing':item.type==='qr_failed'?'failed':item.type==='qr_refunded'?'refunded':item.type==='qr_processing'?'processing':'completed'
-  const kind:Kind=item.type==='card_issue'?'card_issue':item.type==='card_issue_refund'?'refund':item.type==='deposit'?'deposit':item.type.startsWith('qr_')?'qr':'transfer'
+  const status:Status=(['card_issue','card_topup'].includes(item.type) && d.status==='processing')?'processing':(item.type==='card_topup' && d.status==='failed')?'failed':item.type==='qr_failed'?'failed':item.type==='qr_refunded'?'refunded':item.type==='qr_processing'?'processing':'completed'
+  const kind:Kind=item.type==='card_topup'?'card_topup':item.type==='card_issue'?'card_issue':item.type==='card_issue_refund'?'refund':item.type==='deposit'?'deposit':item.type.startsWith('qr_')?'qr':'transfer'
   const rows:[string,string][]=[]
   for(const [label,key] of [['Получатель','merchant_name'],['Сумма покупки, ₽','amount_rub'],['Сеть','network'],['Адрес','address'],['Хеш транзакции','tx_hash'],['Курс, ₽ за 1 USDT','rate'],['Номер платежа','payment_id'],['Ваш номер платежа','spend_id'],['Причина','failure_reason']] as const) {
     if(d[key]!==undefined&&d[key]!==null&&d[key]!=='') rows.push([label,String(d[key])])
   }
-  for (const [label,key] of [['Карта','card'],['Тариф','plan'],['Комиссия провайдера, USDT','provider_fee'],['Комиссия wPay, USDT','service_fee'],['Основание','reason']] as const) { if(d[key]!==undefined&&d[key]!==null&&d[key]!=='') rows.push([label,String(d[key])]) }
+  for (const [label,key] of [['Карта','card'],['На карту, USDT','card_credit'],['Номер операции','operation_id'],['Тариф','plan'],['Комиссия провайдера, USDT','provider_fee'],['Комиссия wPay, USDT','service_fee'],['Основание','reason']] as const) { if(d[key]!==undefined&&d[key]!==null&&d[key]!=='') rows.push([label,String(d[key])]) }
   return {id:item.event_id,kind,status,amount:status==='failed'?'0':item.amount,asset:item.asset,date:item.created_at,rows}
 }
 const examples:TransactionView[] = [

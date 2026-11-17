@@ -1233,3 +1233,16 @@ test("card issuance appears in all history and payments with amount and tariff d
   await expect(page.getByText("Для подписок",{exact:true})).toBeVisible();
   await expect(page.getByText("Виртуальная · •• 4242",{exact:true})).toBeVisible();
 });
+
+test("card recharge history shows charged total and separate credited amount", async ({page}) => {
+  await setup(page,"light");
+  await page.route("**/api/wallet/overview",route=>route.fulfill({json:{balances:[{asset:"USDT",available:"1.774998",reserved:"0"}],rates:[],transactions:[{event_id:"aura:test:card_topup:fixture",asset:"USDT",amount:"-18.225002",type:"card_topup",created_at:new Date().toISOString(),detail:{status:"completed",card:"Виртуальная · •• 7446",card_credit:"15",provider_fee:"0.225002",service_fee:"3"}}]}}));
+  await page.reload();
+  await page.getByRole("link",{name:"История",exact:true}).click();
+  await expect(page.getByText("Пополнение карты",{exact:true})).toBeVisible();
+  await expect(page.getByText("-$18.23",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Платежи",exact:true}).click();
+  await page.getByText("Пополнение карты",{exact:true}).click();
+  await expect(page.getByText("На карту, USDT",{exact:true})).toBeVisible();
+  await expect(page.getByText("0.225002",{exact:true})).toBeVisible();
+});

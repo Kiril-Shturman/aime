@@ -2411,6 +2411,7 @@ class AuraService:
                         self.ledger, self.environment, result["operation_id"],
                         already_delivered["status"],
                     )
+            record_card_recharge_history(self.ledger,self.environment,idempotency_key)
             self.ledger.commit()
         except Exception:
             self.ledger.rollback()
@@ -2634,6 +2635,30 @@ def backfill_card_issue_history(ledger):
     return len(rows)
 
 
+def record_card_recharge_history(ledger, environment, local_id):
+    """Project the existing recharge settlement into history; no monetary postings."""
+    entity=ledger.db.execute("SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? AND entity_type='card_recharge' AND local_id=?",(environment,local_id)).fetchone()
+    if not entity or not entity['remote_id'] or entity['status'] not in {'requested','sent','completed','failed'}:return
+    stored=json.loads(entity['request_body']);result=stored.get('result')
+    if not isinstance(result,dict):return
+    charged=_decimal(result['charged_amount'],allow_zero=True)
+    credit=_decimal(result['recharge_amount'],allow_zero=True)
+    card=ledger.db.execute('SELECT kind,masked_pan FROM aura_cards WHERE environment=? AND user_id=? AND card_id=?',(environment,entity['user_id'],stored['card_id'])).fetchone()
+    digits=re.sub(r'\D','',(card['masked_pan'] if card else None) or '')[-4:]
+    detail={'status':'completed' if entity['status']=='completed' else 'failed' if entity['status']=='failed' else 'processing',
+            'card_id':stored['card_id'],'card':('Физическая' if card and card['kind']=='physical' else 'Виртуальная')+(' · •• '+digits if digits else ''),
+            'card_credit':str(credit),'provider_fee':str(result.get('fee','0')),'service_fee':str(result.get('service_fee',stored.get('service_fee','0'))),
+            'operation_id':entity['remote_id'],'environment':environment}
+    stamp=datetime.fromtimestamp(entity['created_at'],timezone.utc).isoformat()
+    ledger.db.execute("INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?) ON CONFLICT(event_id) DO UPDATE SET amount=excluded.amount,detail=excluded.detail",('aura:'+environment+':card_topup:'+local_id,entity['user_id'],'USDT','0' if entity['status']=='failed' else str(charged.copy_negate()),'card_topup',stamp,json.dumps(detail,ensure_ascii=False)))
+
+
+def backfill_card_recharge_history(ledger):
+    rows=ledger.db.execute("SELECT environment,local_id FROM wallet_provider_entities WHERE provider='aura' AND entity_type='card_recharge' AND remote_id IS NOT NULL AND status IN ('requested','sent','completed','failed')").fetchall()
+    for row in rows:record_card_recharge_history(ledger,row['environment'],row['local_id'])
+    return len(rows)
+
+
 def _settle_card_request(ledger, environment, card_id, status):
     entity = ledger.db.execute(
         "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
@@ -2701,6 +2726,7 @@ def _settle_card_recharge(ledger, environment, operation_id, status):
          json.dumps(stored, sort_keys=True, separators=(",", ":")),
          time.time(), environment, entity["local_id"]),
     )
+    record_card_recharge_history(ledger,environment,entity["local_id"])
 
 
 def _release_qr_reserve(ledger, environment, local_id, final_status):
@@ -3020,7 +3046,7 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
     )
 
 
-def _store_card_operation(ledger, environment, data):
+def _store_card_operation(ledger, environment, data, *, notify=True):
     if not isinstance(data, dict):
         raise ValueError("Aura card operation data must be an object")
     required = {
@@ -3151,6 +3177,7 @@ def _store_card_operation(ledger, environment, data):
          stamp, stamp),
     )
     _settle_card_recharge(ledger, environment, operation_id, status)
+    if not notify:return
     operation_name = {
         "purchase": "Покупка", "refund": "Возврат", "reversal": "Отмена",
         "fee": "Комиссия", "topup": "Пополнение карты", "other": "Операция",

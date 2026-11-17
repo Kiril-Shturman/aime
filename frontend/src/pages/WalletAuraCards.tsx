@@ -38,7 +38,7 @@ import {
   walletRequest,
   WalletApiError,
 } from "../lib/wallet-api";
-import { useLiveWallet } from "./WalletLive";
+import { useLiveWallet, usd } from "./WalletLive";
 
 const DEMO_CARD_ID = "wpay-ui-demo-card";
 type AuraCard = {
@@ -776,6 +776,7 @@ export default function WalletAuraCards({
     ({
       refund: "Возврат",
       recharge: "Пополнение",
+      topup: "Пополнение",
       purchase: "Покупка",
       payment: "Оплата",
     }[op.operation_type] ??
@@ -1268,10 +1269,14 @@ export default function WalletAuraCards({
                       }
                       after={
                         <span className="text-[15px] font-medium tabular-nums text-black dark:text-white">
-                          {["refund", "recharge"].includes(op.operation_type)
+                          {["refund", "recharge", "topup"].includes(
+                            op.operation_type,
+                          )
                             ? "+"
                             : "−"}
-                          {op.amount} {op.asset}
+                          {op.asset === "USDT" || op.asset === "USD"
+                            ? usd(Number(op.amount))
+                            : `${op.amount} ${op.asset}`}
                         </span>
                       }
                     />
