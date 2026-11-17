@@ -413,7 +413,7 @@ test("Telegram viewport events keep fields visible when visual viewport is uncha
     .toBeLessThanOrEqual(404);
 });
 
- test("identity submission shows native preloader and explains rejection", async ({ page }) => {
+ test("identity submission shows native preloader and never offers retry after rejection", async ({ page }) => {
   await contacts(page);
   await openDocuments(page);
   await fillDocuments(page);
@@ -422,7 +422,7 @@ test("Telegram viewport events keep fields visible when visual viewport is uncha
   let posts = 0;
   await page.route("**/api/wallet/aura-kyc", async route => {
     if (route.request().method() !== "POST") {
-      await route.fulfill({ json: { status: "none", verified: false, terminal: false } });
+      await route.fulfill({ json: { status: "rejected", verified: false, terminal: true } });
       return;
     }
     posts++;
@@ -437,6 +437,7 @@ test("Telegram viewport events keep fields visible when visual viewport is uncha
   expect(posts).toBe(1);
   finish();
   await expect(page.getByRole("alert")).toContainText("Данные верификации отклонены");
-  await expect(page.locator("#identity-first_name")).toHaveValue("Иван");
-  await expect(page.getByRole("button", { name: "Отправить на проверку" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Отправить на проверку" })).toHaveCount(0);
+  await expect(page.locator("p[role=status]").filter({ hasText: "Проверка не пройдена" })).toContainText("Обратитесь в поддержку");
+  expect(posts).toBe(1);
 });

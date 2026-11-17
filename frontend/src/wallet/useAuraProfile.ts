@@ -11,7 +11,7 @@ const messages: Record<string, string> = {
   NOT_CONFIGURED: "Подключение профиля пока недоступно. Попробуйте позже.",
   sbp_buy_not_enabled: "Проверка личности пока недоступна для этого сервиса.",
   kyc_email_required: "Сначала сохраните электронную почту в личных данных.",
-  kyc_rejected: "Данные верификации отклонены. Проверьте паспортные данные. Если они верны, обратитесь в поддержку.",
+  kyc_rejected: "Данные верификации отклонены. Обратитесь в поддержку — повторно отправлять документы не нужно.",
   kyc_pending: "Документы уже на проверке.",
   kyc_identity_locked: "Данные проверки заблокированы. Обратитесь в поддержку.",
   kyc_session_unavailable:
@@ -206,8 +206,21 @@ export function useAuraProfile(page: string | null) {
       setSessionOpen(false);
       return true;
     } catch (e) {
+      if (e instanceof WalletApiError && e.code === "kyc_rejected") {
+        // A rejection is not a retryable validation error. Refresh the provider
+        // state for its reason, but keep submission closed even if GET fails.
+        setKyc({ status: "rejected", verified: false, terminal: true });
+        setSessionOpen(false);
+        try {
+          const current = await refresh();
+          if (!current.verified && current.status !== "pending" && current.status !== "in_review")
+            setKyc({ ...current, status: "rejected" });
+        } catch { /* Keep the known rejection. */ }
+        setError(messages.kyc_rejected);
+        return false;
+      }
       setError(
-        e instanceof WalletApiError && e.code === "INVALID_REQUEST"
+        e instanceof WalletApiError && (e.code === "INVALID_REQUEST" || e.code === "invalid_argument")
           ? "Проверьте данные паспорта и даты."
           : message(e),
       );

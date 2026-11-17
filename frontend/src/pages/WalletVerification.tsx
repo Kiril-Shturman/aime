@@ -246,6 +246,9 @@ export default function WalletVerification({
                     ? "Проверка не пройдена. Обратитесь в поддержку, если нужна помощь."
                     : "Подтвердите личность, чтобы пользоваться всеми возможностями wPay."}
           </p>
+          {rejected && aura.kyc?.reason && (
+            <p className="wpay-verification-guidance">Причина: {aura.kyc.reason}</p>
+          )}
           {!verified && !pending && !rejected && (
             <p className="wpay-verification-guidance">
               Сохраните телефон и почту в личных данных, затем подтвердите
