@@ -27,14 +27,14 @@ class WPayRichBotTests(unittest.TestCase):
         self.assertIn("виртуальная карта", plain.lower())
         self.assertNotIn("20 USDT", plain)
         self.assertNotIn("Кирилл", plain)
-        self.assertIn('emoji-id="5467871067232052983"', plain)
+        self.assertIn('emoji-id="5467913823631484285"', plain)
         self.assertIn('type="web_app"', rich)
         self.assertEqual(len(markup["inline_keyboard"]), 1)
         self.assertEqual(len(markup["inline_keyboard"][0]), 1)
         self.assertEqual(markup["inline_keyboard"][0][0]["text"], "Открыть WPay")
         self.assertEqual(
             markup["inline_keyboard"][0][0]["icon_custom_emoji_id"],
-            "5467913823631484285",
+            "5467871067232052983",
         )
         self.assertEqual(
             markup["inline_keyboard"][0][0]["web_app"]["url"],

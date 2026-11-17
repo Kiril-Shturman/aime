@@ -1785,10 +1785,10 @@ def _wpay_bot_snapshot(ledger, sender_id, environment):
 def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, referral=None):
     """Return rich HTML and a classic-message fallback for a bot screen."""
     start_text_emoji_id = os.environ.get(
-        "WPAY_START_TEXT_EMOJI_ID", "5467871067232052983",
+        "WPAY_START_TEXT_EMOJI_ID", "5467913823631484285",
     ).strip()
     start_button_emoji_id = os.environ.get(
-        "WPAY_START_BUTTON_EMOJI_ID", "5467913823631484285",
+        "WPAY_START_BUTTON_EMOJI_ID", "5467871067232052983",
     ).strip()
     first_name = html.escape(str(sender.get("first_name") or "друг")[:80])
     balance_rows = [
@@ -1805,7 +1805,7 @@ def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, refer
 
     if view == "start":
         start_emoji = (
-            f'<tg-emoji emoji-id="{html.escape(start_text_emoji_id, quote=True)}">📌</tg-emoji> '
+            f'<tg-emoji emoji-id="{html.escape(start_text_emoji_id, quote=True)}">💸</tg-emoji> '
             if start_text_emoji_id else ""
         )
         rich = (
