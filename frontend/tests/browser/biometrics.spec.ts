@@ -8,6 +8,14 @@ async function setup(
   platform = "ios",
   available = true,
 ) {
+  // These scenarios exercise the lock and its fallback without depending on a GPU.
+  await page.addInitScript(() => {
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function (kind: string, options?: unknown) {
+      if (kind === "webgl" || kind === "webgl2" || kind === "experimental-webgl") return null;
+      return Reflect.apply(getContext, this, [kind, options]);
+    } as typeof getContext;
+  });
   const vault = {
     token: saved ? "device-marker" : "",
     authorized: true,
@@ -181,10 +189,9 @@ test("saved native marker locks on reload even without local hint; cancellation 
   ).toBeVisible();
   await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
   await expect(page.locator(".wpay-lock-aurora")).toBeVisible();
-  await expect(page.locator(".wpay-lock-badge canvas")).toHaveCount(1);
-  await expect(page.getByLabel("Бейдж профиля")).toHaveCSS(
+  await expect(page.locator(".wpay-lock-badge-fallback")).toHaveCSS(
     "animation-name",
-    "wpay-badge-arrive",
+    "wpay-badge-fallback",
   );
   await expect(page.getByLabel("Бейдж профиля")).toBeVisible();
   await expect(page.locator(".wpay-lock-badge-fallback img")).toHaveAttribute(
@@ -252,8 +259,7 @@ test("badge respects reduced motion", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Открыть", exact: true }),
   ).toBeEnabled();
-  await expect(page.locator(".wpay-lock-badge canvas")).toHaveCount(1);
-  await expect(page.getByLabel("Бейдж профиля")).toHaveCSS(
+  await expect(page.locator(".wpay-lock-badge-fallback")).toHaveCSS(
     "animation-name",
     "none",
   );
