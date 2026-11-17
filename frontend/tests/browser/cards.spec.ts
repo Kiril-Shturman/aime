@@ -832,7 +832,22 @@ test("unbacked wallet balance explains card funding and never issues a card", as
   const state=await setup(page,"dark",false,true);
   await page.route("**/api/wallet/card-quote",route=>route.fulfill({json:{quote_id:"unbacked",total:"25",reserve:"25",provider_fee:"15",service_fee:"10",can_afford:false,spendable:"0",funding_error:"AURA_FUNDS_UNAVAILABLE",expires_at:Date.now()/1000+120}}));
   await page.getByRole("main",{name:"Мои карты"}).getByRole("button",{name:"Оформить карту",exact:true}).click();
-  await expect(popup(page)).toContainText("Для покупки карты доступно 0 USDT");
+  await expect(popup(page)).toContainText("Для оплаты карты доступно 0 USDT");
   await expect(popup(page).getByRole("button",{name:"Выпустить карту",exact:true})).toBeDisabled();
   expect(state.calls).toHaveLength(0);
+});
+
+
+test("open issue sheet refreshes its funding quote when returning to the app", async ({page}) => {
+  const state=await setup(page,"light",false,true);
+  let funded=false, calls=0;
+  await page.route("**/api/wallet/card-quote",route=>{calls++;return route.fulfill({json:{quote_id:"refresh-"+calls,total:"25",reserve:"25",provider_fee:"15",service_fee:"10",can_afford:funded,spendable:funded?"25":"0",funding_error:funded?null:"AURA_FUNDS_UNAVAILABLE",expires_at:Date.now()/1000+120}})});
+  await page.getByRole("main",{name:"Мои карты"}).getByRole("button",{name:"Оформить карту",exact:true}).click();
+  await expect(popup(page)).toContainText("Для оплаты карты доступно 0 USDT");
+  await expect(popup(page).getByRole("button",{name:"Выпустить карту",exact:true})).toBeDisabled();
+  funded=true;
+  await page.evaluate(()=>window.dispatchEvent(new Event("focus")));
+  await expect(popup(page).getByRole("button",{name:"Выпустить карту",exact:true})).toBeEnabled();
+  await expect(popup(page)).not.toContainText("Для оплаты карты доступно 0 USDT");
+  expect(calls).toBeGreaterThan(1);expect(state.calls).toHaveLength(0);
 });

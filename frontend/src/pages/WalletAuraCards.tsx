@@ -380,6 +380,24 @@ export default function WalletAuraCards({
     shippingKey,
     issueKind,
   ]);
+  useEffect(() => {
+    if (panel !== "issue" && panel !== "recharge") return;
+    const refresh = () => {
+      if (!document.hidden && !busyRef.current)
+        setQuoteRetry((value) => value + 1);
+    };
+    const timer = window.setInterval(refresh, 20_000);
+    const onVisibility = () => {
+      if (!document.hidden) refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("focus", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [panel]);
   const mutate = async (
     name: string,
     task: () => Promise<unknown>,
@@ -1284,7 +1302,7 @@ export default function WalletAuraCards({
                   {quote && !quote.can_afford && (
                     <p role="status" className="py-2 text-sm text-red-500">
                       {quote.funding_error === "AURA_FUNDS_UNAVAILABLE"
-                        ? `Для покупки карты доступно ${quote.spendable ?? "0"} USDT. Средства общего баланса пока не подтверждены в Aura.`
+                        ? `Для оплаты карты доступно ${quote.spendable ?? "0"} USDT. Пополните баланс для карт.`
                         : "Недостаточно USDT на балансе кошелька"}
                     </p>
                   )}
