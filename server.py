@@ -1784,6 +1784,12 @@ def _wpay_bot_snapshot(ledger, sender_id, environment):
 
 def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, referral=None):
     """Return rich HTML and a classic-message fallback for a bot screen."""
+    start_text_emoji_id = os.environ.get(
+        "WPAY_START_TEXT_EMOJI_ID", "5467871067232052983",
+    ).strip()
+    start_button_emoji_id = os.environ.get(
+        "WPAY_START_BUTTON_EMOJI_ID", "5467913823631484285",
+    ).strip()
     first_name = html.escape(str(sender.get("first_name") or "друг")[:80])
     balance_rows = [
         f"<tr><td><b>{html.escape(str(row['asset']))}</b></td>"
@@ -1798,14 +1804,18 @@ def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, refer
     ] or ["USDT: 0 доступно"]
 
     if view == "start":
+        start_emoji = (
+            f'<tg-emoji emoji-id="{html.escape(start_text_emoji_id, quote=True)}">📌</tg-emoji> '
+            if start_text_emoji_id else ""
+        )
         rich = (
-            "<h1>WPay</h1>"
+            f"<h1>{start_emoji}WPay</h1>"
             "<p>Виртуальная карта для оплаты по всему миру.</p>"
             "<p>Пополняйте баланс в USDT, подключайте карту к Apple Pay "
             "и Google Pay и оплачивайте покупки онлайн и офлайн.</p>"
         )
         plain = (
-            "WPay — виртуальная карта для оплаты по всему миру.\n\n"
+            f"{start_emoji}<b>WPay</b> — виртуальная карта для оплаты по всему миру.\n\n"
             "Пополняйте баланс в USDT, подключайте карту к Apple Pay и Google Pay "
             "и оплачивайте покупки онлайн и офлайн."
         )
@@ -1813,11 +1823,14 @@ def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, refer
             "<tg-button-row><tg-button type=\"web_app\" style=\"primary\" url=\""
             + html.escape(app_url, quote=True) + "\">Открыть WPay</tg-button></tg-button-row>"
         )
-        return rich, plain, {"inline_keyboard": [[{
+        start_button = {
             "text": "Открыть WPay",
             "web_app": {"url": app_url},
             "style": "primary",
-        }]]}
+        }
+        if start_button_emoji_id:
+            start_button["icon_custom_emoji_id"] = start_button_emoji_id
+        return rich, plain, {"inline_keyboard": [[start_button]]}
     if view == "balance":
         rich = (
             "<h1>Баланс WPay</h1>"
@@ -2246,20 +2259,18 @@ async def wpay_telegram_webhook(request):
                 _telegram_bot_api(token, "answerCallbackQuery", {"callback_query_id": callback["id"]})
             except Exception:
                 pass
-        start_video = os.environ.get("WPAY_START_VIDEO_FILE_ID", "").strip()
-        if command == "/start" and start_video:
+        start_animation = os.environ.get("WPAY_START_VIDEO_FILE_ID", "").strip()
+        if command == "/start" and start_animation:
             try:
-                return _telegram_bot_api(token, "sendVideo", {
+                return _telegram_bot_api(token, "sendAnimation", {
                     "chat_id": chat_id,
-                    "video": start_video,
+                    "animation": start_animation,
                     "caption": plain,
+                    "parse_mode": "HTML",
                     "reply_markup": reply_markup,
-                    "width": 2560,
-                    "height": 1440,
-                    "supports_streaming": True,
                 })
             except Exception as exc:
-                print(f"[wpay-bot] start video failed: {exc}", flush=True)
+                print(f"[wpay-bot] start animation failed: {exc}", flush=True)
         try:
             return _telegram_bot_api(token, "sendRichMessage", {
                 "chat_id": chat_id,
@@ -2267,12 +2278,15 @@ async def wpay_telegram_webhook(request):
                 "protect_content": view in {"balance", "cards"},
             })
         except Exception:
-            return _telegram_bot_api(token, "sendMessage", {
+            fallback = {
                 "chat_id": chat_id,
                 "text": plain,
                 "reply_markup": reply_markup,
                 "protect_content": view in {"balance", "cards"},
-            })
+            }
+            if view == "start":
+                fallback["parse_mode"] = "HTML"
+            return _telegram_bot_api(token, "sendMessage", fallback)
 
     try:
         await asyncio.to_thread(send_message)
