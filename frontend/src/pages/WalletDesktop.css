@@ -213,12 +213,11 @@
  .wpay-desktop-fx-status { margin-top: 14px; }
  .wpay-wallet-home{transform:none!important;opacity:1!important}
  .wpay-desktop-balance-card{padding:28px 16px 20px;border-radius:32px;background:#fff;box-shadow:0 3px 16px #16223a03}
- .dark .wpay-desktop-balance-card{background:#1c1e22;box-shadow:none}
  .wpay-desktop-balance-card>section{padding-top:4px;text-align:left}
  .wpay-desktop-balance-card .grid{margin-top:12px}
  .wpay-desktop-overview-side{display:grid;gap:20px}
  .wpay-desktop-card{padding:24px;border-radius:28px;background:#fff;box-shadow:0 3px 16px #16223a03}
- .dark .wpay-desktop-card{background:#1c1e22;box-shadow:none}
+ .dark :is(.wpay-desktop-balance-card,.wpay-desktop-card){background:var(--color-ios-dark-surface-1);box-shadow:none}
  .wpay-desktop-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
  .wpay-desktop-section-head h2{font-size:16px;font-weight:600;color:#181b21;letter-spacing:-.3px}
  .dark .wpay-desktop-section-head h2{color:#f8f8fa}
