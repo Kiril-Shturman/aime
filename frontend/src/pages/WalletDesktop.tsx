@@ -1,12 +1,13 @@
-import { Wallet, CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Bell, Headphones } from 'lucide-react'
+import { CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Bell, Headphones } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import desktopWalletIcon from '../assets/desktop-wallet-icon.svg'
 import { walletRequest } from '../lib/wallet-api'
 import { useLiveWallet, cryptoAmount, usd, usdPrice } from './WalletLive'
 
 type Tab = "wallet" | "cards" | "history" | "profile";
 
 const desktopLinks = [
-  { id: "wallet", label: "Кошелёк", Icon: Wallet },
+  { id: "wallet", label: "Кошелёк", Icon: null },
   { id: "cards", label: "Карты", Icon: CreditCard },
   { id: "history", label: "История", Icon: Clock3 },
   { id: "profile", label: "Профиль", Icon: UserRound },
@@ -33,7 +34,11 @@ export function DesktopSidebar({
       <nav aria-label="Основное меню">
         {items.map(({ id, label, Icon }) => (
           <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => onSelect(id)}>
-            <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
+            {Icon ? (
+              <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
+            ) : (
+              <img src={desktopWalletIcon} alt="" width={20} height={20} className="shrink-0" />
+            )}
             <span>{label}</span>
           </button>
         ))}
