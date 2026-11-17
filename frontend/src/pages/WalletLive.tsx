@@ -2,6 +2,7 @@ import { Search, CreditCard } from "lucide-react";
 import WalletOperations from "./WalletOperations";
 import {
   TransactionDetails,
+  TransactionDetailContent,
   TransactionExamples,
   transactionFromApi,
   type TransactionView,
@@ -275,6 +276,14 @@ export function LiveHistory() {
     [query, setQuery] = useState("");
   const [selectedTransaction, setSelectedTransaction] =
     useState<TransactionView | null>(null);
+  const [desktop, setDesktop] = useState(() => window.matchMedia("(min-width: 1100px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1100px)");
+    const update = () => setDesktop(media.matches);
+    media.addEventListener("change", update);
+    update();
+    return () => media.removeEventListener("change", update);
+  }, []);
   const items = wallet.data.transactions.filter(
     (x) =>
       (filter === "all" ||
@@ -298,6 +307,7 @@ export function LiveHistory() {
   }
 
   return (
+    <>
     <main className="mx-auto w-full max-w-[560px] pb-6 pt-5">
       <div className="px-4">
         {(filter === "all" || filter === "expense") && (
@@ -463,10 +473,6 @@ export function LiveHistory() {
             </div>
           )}
           <TransactionExamples onSelect={setSelectedTransaction} />
-          <TransactionDetails
-            item={selectedTransaction}
-            onClose={() => setSelectedTransaction(null)}
-          />
           <div className="mt-5 px-4">
             <Button
               data-wpay-primary=""
@@ -482,6 +488,19 @@ export function LiveHistory() {
         </>
       )}
     </main>
+    {desktop ? (
+      <aside className="wpay-desktop-card wpay-history-details" aria-label="Детали операции">
+        <div className="wpay-desktop-section-head"><h2>Детали операции</h2></div>
+        {selectedTransaction ? (
+          <TransactionDetailContent key={selectedTransaction.id} model={selectedTransaction} />
+        ) : (
+          <p className="wpay-desktop-fx-status">Выберите операцию из списка.</p>
+        )}
+      </aside>
+    ) : (
+      <TransactionDetails item={selectedTransaction} onClose={() => setSelectedTransaction(null)} />
+    )}
+    </>
   );
 }
 

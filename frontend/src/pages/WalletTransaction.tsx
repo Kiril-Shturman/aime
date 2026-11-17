@@ -43,15 +43,22 @@ const examples:TransactionView[] = [
 ].map((entry,index)=>({id:`example-${index+1}`,kind:entry[0] as Kind,amount:entry[1] as string,asset:entry[2] as string,rows:entry[3] as [string,string][],status:'completed',date:'2026-11-13T09:30:00Z',demo:true}))
 
 export function TransactionDetails({item,onClose}:{item:TransactionView|null;onClose:()=>void}) {
+  return <Popup push opened={!!item} className="wpay-profile-popup wpay-card-popup" closeByBackdropClick closeOnEscape swipeToClose="to-bottom" swipeHandler=".navbar" onPopupClosed={onClose}>
+    <div className="view"><Page><Navbar transparent><span slot="title">Детали операции</span><NavRight><Link popupClose aria-label="Закрыть детали операции"><i className="icon icon-close"/></Link></NavRight></Navbar>
+      {item && <TransactionDetailContent key={item.id} model={item}/>}
+    </Page></div>
+  </Popup>
+}
+
+export function TransactionDetailContent({model}:{model:TransactionView}) {
   const [copied,setCopied]=useState(false),[copyError,setCopyError]=useState(false)
-  const model=item??examples[0], meta=kinds[model.kind], Icon=meta.icon, state=statuses[model.status], StateIcon=state.icon
+  const meta=kinds[model.kind], Icon=meta.icon, state=statuses[model.status], StateIcon=state.icon
   const positive=incoming(model.kind)||model.status==='refunded'
   const amount=Number(model.amount)
   const date=new Date(model.date)
   async function copy(){try{await navigator.clipboard.writeText(model.id);setCopied(true);setCopyError(false)}catch{setCopyError(true)}}
-  return <Popup push opened={!!item} className="wpay-profile-popup wpay-card-popup" closeByBackdropClick closeOnEscape swipeToClose="to-bottom" swipeHandler=".navbar" onPopupClosed={()=>{setCopied(false);setCopyError(false);onClose()}}>
-    <div className="view"><Page><Navbar transparent><span slot="title">Детали операции</span><NavRight><Link popupClose aria-label="Закрыть детали операции"><i className="icon icon-close"/></Link></NavRight></Navbar>
-      <main className="mx-auto w-full max-w-[560px] px-4 pb-10 pt-5 text-black dark:text-white">
+  return (
+      <div className="mx-auto w-full max-w-[560px] px-4 pb-10 pt-5 text-black dark:text-white">
         {model.demo&&<p className="mb-6 text-center text-[13px] font-medium text-black/45 dark:text-white/45">Пример операции · средства не перемещаются</p>}
         <div className="text-center"><span className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full text-white shadow-sm ${positive?'bg-gradient-to-b from-emerald-300 to-emerald-500 dark:from-emerald-400 dark:to-emerald-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={36} strokeWidth={1.8}/></span>
           <h1 className="mt-5 text-[21px] font-semibold tracking-tight">{meta.title}</h1>
@@ -64,8 +71,8 @@ export function TransactionDetails({item,onClose}:{item:TransactionView|null;onC
         <div className="mt-4 rounded-[28px] bg-white p-4 dark:bg-[#1c1c1e]"><p className="text-[13px] text-black/45 dark:text-white/45">ID операции</p><button type="button" onClick={()=>void copy()} className="mt-2 flex min-h-9 w-full items-center justify-between gap-3 text-left text-[14px] text-blue-600 dark:text-blue-400" aria-label="Скопировать ID операции"><span className="min-w-0 break-all">{model.id}</span>{copied?<Check size={19} className="shrink-0"/>:<Copy size={19} className="shrink-0"/>}</button>{copyError&&<p role="alert" className="text-[13px] text-red-600 dark:text-red-400">Не удалось скопировать. Выделите ID вручную.</p>}</div>
         {(model.status==='failed'||model.status==='processing')&&<p className="mt-4 px-3 text-center text-[14px] leading-relaxed text-black/45 dark:text-white/45">{model.status==='failed'?'Платёж не выполнен. Списание по этой операции отсутствует.':'Операция обрабатывается. Дождитесь обновления статуса перед повторной отправкой.'}</p>}
         {model.demo&&<p className="mt-5 px-3 text-center text-[13px] leading-relaxed text-black/40 dark:text-white/40">Данные и тарифы показаны для примера. Доступность операции зависит от подключения провайдера.</p>}
-      </main></Page></div>
-  </Popup>
+      </div>
+  )
 }
 export function TransactionExamples({onSelect}:{onSelect:(item:TransactionView)=>void}) {
  const [expanded,setExpanded]=useState(false)

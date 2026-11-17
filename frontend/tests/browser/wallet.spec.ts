@@ -1246,6 +1246,14 @@ test("card issuance appears in all history and payments with amount and tariff d
   await page.getByText("Выпуск карты",{exact:true}).click();
   await expect(page.getByText("Для подписок",{exact:true})).toBeVisible();
   await expect(page.getByText("Виртуальная · •• 4242",{exact:true})).toBeVisible();
+  await page.getByLabel("Закрыть детали операции", { exact: true }).click();
+  await expect(page.getByText("Виртуальная · •• 4242", { exact: true })).toHaveCount(0);
+  await page.setViewportSize({ width: 1366, height: 768 });
+  const details = page.getByRole("complementary", { name: "Детали операции" });
+  await expect(details.getByText("Выберите операцию из списка.")).toBeVisible();
+  await page.getByText("Выпуск карты", { exact: true }).click();
+  await expect(details.getByText("Виртуальная · •• 4242", { exact: true })).toBeVisible();
+
 });
 
 test("card recharge history shows charged total and separate credited amount", async ({page}) => {
