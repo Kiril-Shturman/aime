@@ -9,8 +9,10 @@ import {
   Link,
 } from "framework7-react";
 import ArrowUpCircleFill from "framework7-icons/react/esm/ArrowUpCircleFill.js";
-import Paperclip from "framework7-icons/react/esm/Paperclip.js";
+import CameraFill from "framework7-icons/react/esm/CameraFill.js";
+import QuestionCircleFill from "framework7-icons/react/esm/QuestionCircleFill.js";
 import { PushViewShell } from "./WalletNavigation";
+import { haptic } from "../lib/telegram";
 import "framework7/components/messagebar/css";
 import "framework7/components/messages/css";
 import "./WalletSupportChat.css";
@@ -108,6 +110,7 @@ export default function SupportChatPushView({
   function saveDraft() {
     const text = draft.trim();
     if (!text && !photos.length) return;
+    haptic("light");
     setMessages((previous) => [
       ...previous,
       {
@@ -130,6 +133,7 @@ export default function SupportChatPushView({
       title="Поддержка"
       subtitle="WPay"
       scrollContent={false}
+      assetSurface
       zClass="z-[12000]"
       onClose={onClose}
     >
@@ -144,7 +148,6 @@ export default function SupportChatPushView({
           aria-live="polite"
         >
           <Messages
-            autoLayout
             scrollMessages
             scrollMessagesOnEdge
             aria-label="Сообщения поддержки"
@@ -152,14 +155,27 @@ export default function SupportChatPushView({
             <MessagesTitle>Сегодня</MessagesTitle>
             <Message
               type="received"
+              first
+              last
+              tail
               name="Поддержка wPay"
               text="Опишите вопрос или прикрепите фото. Пока операторы не подключены, обращение останется черновиком."
               footer="Автоматическая подсказка"
-            />
-            {messages.map((message) => (
+            >
+              <span
+                slot="avatar"
+                className="block h-full w-full text-[#007aff] dark:text-[#0a84ff]"
+              >
+                <QuestionCircleFill className="h-full w-full" />
+              </span>
+            </Message>
+            {messages.map((message, index) => (
               <Message
                 key={message.id}
                 type="sent"
+                first={index === 0}
+                last={index === messages.length - 1}
+                tail={index === messages.length - 1}
                 text={message.text}
                 footer={`${message.time} · Не отправлено`}
               >
@@ -224,7 +240,7 @@ export default function SupportChatPushView({
               className="support-attach"
               onClick={() => fileInput.current?.click()}
             >
-              <Paperclip className="text-[25px]" />
+              <CameraFill className="text-[27px]" />
             </Link>
             <MessagebarAttachments
               {...{ role: "group" }}
@@ -248,10 +264,10 @@ export default function SupportChatPushView({
               aria-label="Отправить сообщение"
               aria-disabled={!canSend}
               {...{ tabIndex: canSend ? 0 : -1 }}
-              className={`support-send${!canSend ? " disabled" : ""}`}
+              className={`support-message-send${!canSend ? " disabled" : ""}`}
               onClick={saveDraft}
             >
-              <ArrowUpCircleFill className="text-[36px]" />
+              <ArrowUpCircleFill className="text-[27px]" />
             </Link>
           </Messagebar>
         </div>

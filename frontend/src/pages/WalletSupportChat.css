@@ -6,20 +6,29 @@
   --f7-messagebar-link-color: #007aff;
   --f7-messagebar-textarea-text-color: #111;
   --f7-messagebar-textarea-placeholder-color: #8e8e93;
-  --f7-messagebar-textarea-bg-color: #fff;
-  --f7-messagebar-textarea-border: 1px solid #3c3c4314;
-  --f7-glass-bg-color: #fff;
-  --f7-glass-backdrop: none;
-  --f7-glass-shadow: 0 1px 3px #00000008;
+  --f7-messagebar-textarea-bg-color: var(--f7-glass-bg-color);
+  --f7-messagebar-textarea-border: none;
+  --f7-messagebar-textarea-height: 44px;
+  --f7-glass-bg-color: rgba(255, 255, 255, 0.75);
+  --f7-glass-backdrop: saturate(180%) blur(16px);
+  --f7-glass-shadow:
+    inset -1px -1px 0px -0.5px #ffffff, inset 1px 1px 0px -0.5px #ffffff,
+    inset 3px 3px 10px -3px #ddd, inset -3px -3px 10px -3px #ddd,
+    inset 0 0 5px 1px #fff, inset 0 0 0 0.5px rgba(0, 0, 0, 0.25),
+    inset 0 0 24px 0 rgba(0, 0, 0, 0.1), 0 0 25px 0 rgba(0, 0, 0, 0.2);
 }
 .dark .wpay-support-chat .messagebar {
   --f7-messagebar-link-color: #0a84ff;
   --f7-messagebar-textarea-text-color: #fff;
   --f7-messagebar-textarea-placeholder-color: #98989f;
-  --f7-messagebar-textarea-bg-color: #252b36;
-  --f7-messagebar-textarea-border: 1px solid #ffffff14;
-  --f7-glass-bg-color: #252b36;
-  --f7-glass-shadow: none;
+  --f7-glass-bg-color: rgba(50, 50, 50, 0.5);
+  --f7-glass-shadow:
+    inset -2px -2px 0.5px -2.5px rgba(255, 255, 255, 0.4),
+    inset 3px 3px 0.5px -3.5px rgba(255, 255, 255, 0.4),
+    inset 2px 2px 0.5px -2px #262626, inset -2px -2px 0.5px -2px #262626,
+    inset 0 0 5px 1px #141414, inset 0 0 0 1px rgba(255, 255, 255, 0.15),
+    inset 0 0 10px 0 rgba(255, 255, 255, 0.075),
+    inset 0 0 24px 0 rgba(255, 255, 255, 0.05), 0 0 25px 0 rgba(0, 0, 0, 0.15);
 }
 .wpay-support-chat .messagebar .toolbar-inner {
   display: flex;
@@ -33,20 +42,27 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  justify-content: center;
+  position: relative;
+  border-radius: 32px;
+  backdrop-filter: saturate(180%) blur(16px);
+  box-shadow: var(--f7-glass-shadow);
+  background-color: var(--f7-glass-bg-color);
 }
 .wpay-support-chat .messagebar .link {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 36px;
+  min-width: 44px;
   height: 44px;
   color: var(--f7-messagebar-link-color);
 }
 .wpay-support-chat .messagebar textarea {
   max-height: 140px;
 }
-.wpay-support-chat .support-send.disabled {
-  opacity: 0.35;
+.wpay-support-chat .support-message-send.disabled {
+  opacity: 1;
+  color: #999;
   pointer-events: none;
 }
 .wpay-support-chat .messagebar-attachment-delete {
@@ -103,8 +119,10 @@
 .wpay-support-chat {
   --f7-theme-color: #007aff;
   --f7-messages-content-bg-color: transparent;
+  background: #fff;
 }
 .dark .wpay-support-chat {
+  background: #1c1c1e;
   --f7-theme-color: #0a84ff;
   --f7-message-received-bg-color: #26262a;
   --f7-message-received-text-color: #fff;
@@ -117,10 +135,16 @@
 }
 .wpay-support-chat .support-compose {
   padding-bottom: calc(var(--wpay-bottom-inset) + 16px);
-  background: rgba(239, 239, 244, 0.94);
-  border-top: 0.5px solid rgba(60, 60, 67, 0.08);
+  background: linear-gradient(to top, #fff 65%, #ffffff00);
+  border: 0;
 }
 .dark .wpay-support-chat .support-compose {
-  background: rgba(0, 0, 0, 0.94);
-  border-top-color: rgba(235, 235, 245, 0.1);
+  background: linear-gradient(to top, #1c1c1e 65%, #1c1c1e00);
+}
+
+.wpay-support-chat .support-attach {
+  color: #111 !important;
+}
+.dark .wpay-support-chat .support-attach {
+  color: #fff !important;
 }

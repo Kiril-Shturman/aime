@@ -44,6 +44,8 @@ async function openChat(page: Page, theme = "light") {
   await expect(chat.locator(".message-received")).toContainText(
     "Автоматическая подсказка",
   );
+  await expect(chat.locator(".message-received .message-avatar")).toBeVisible();
+  await expect(chat.locator(".message-received")).toHaveClass(/message-tail/);
   await expect(
     chat.getByRole("heading", { name: "Чем можем помочь?" }),
   ).toHaveCount(0);
@@ -67,6 +69,16 @@ for (const theme of ["light", "dark"]) {
     const { chat, writes } = await openChat(page, theme);
     const input = chat.getByRole("textbox", { name: "Сообщение поддержке" });
     await expect(input).toBeVisible();
+    const paneStyle = await chat
+      .locator(".messagebar .toolbar-pane")
+      .first()
+      .evaluate((node) => getComputedStyle(node).boxShadow);
+    expect(paneStyle).not.toBe("none");
+    expect(
+      await chat
+        .getByRole("link", { name: "Отправить сообщение" })
+        .evaluate((node) => getComputedStyle(node).color),
+    ).toBe("rgb(153, 153, 153)");
     const fieldStyle = await input.evaluate((node) => {
       const css = getComputedStyle(node);
       return {
@@ -75,7 +87,7 @@ for (const theme of ["light", "dark"]) {
       };
     });
     expect(fieldStyle.background).toBe(
-      theme === "dark" ? "rgb(37, 43, 54)" : "rgb(255, 255, 255)",
+      theme === "dark" ? "rgba(50, 50, 50, 0.5)" : "rgba(255, 255, 255, 0.75)",
     );
     expect(fieldStyle.radius).toBeGreaterThanOrEqual(20);
     await page.screenshot({
