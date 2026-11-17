@@ -1799,6 +1799,34 @@ class AuraService:
         customer_id = row["customer_id"]
         return self._store_kyc(uid, customer_id, await self.client.get_kyc(customer_id))
 
+    async def notification_otp(self, notice):
+        event_key = notice["source_key"].removesuffix(":notice")
+        row = self.ledger.db.execute(
+            "SELECT raw_body FROM wallet_webhook_inbox "
+            "WHERE event_key=? AND provider='aura' AND update_type='card.otp' AND signature_valid=1",
+            (event_key,),
+        ).fetchone()
+        if not row:
+            return None
+        data = json.loads(row["raw_body"])["data"]
+        otp_id = data.get("id")
+        if not otp_id or _aura_datetime(data.get("expires_at"), "OTP expiry").timestamp() <= time.time():
+            return None
+        card_id = data["card_id"]
+        owned = self.ledger.db.execute(
+            "SELECT 1 FROM aura_cards WHERE card_id=? AND user_id=? AND environment=?",
+            (card_id, notice["user_id"], self.environment),
+        ).fetchone()
+        if not owned:
+            return None
+        otp = await self.client.get_latest_card_otp(card_id)
+        if (
+            otp and otp["id"] == otp_id and otp["consumed_at"] is None
+            and _aura_datetime(otp["expires_at"], "OTP expiry").timestamp() > time.time()
+        ):
+            return otp["code"]
+        return None
+
     async def start_kyc(self, uid, client_ref, *, email=None, phone=None):
         customer_id = await self.ensure_customer(
             uid, client_ref, email=email, phone=phone
@@ -2539,6 +2567,7 @@ def store_webhook(ledger, raw, signature, headers, secret, partner_id=None):
                 **event,
                 "data": {
                     "card_id": data.get("card_id"),
+                    "id": data.get("id"),
                     "expires_at": data.get("expires_at"),
                     "redacted": True,
                     "sensitive_payload_sha256": hashlib.sha256(raw).hexdigest(),

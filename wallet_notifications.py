@@ -95,11 +95,12 @@ def snapshot(ledger):
 
 
 class NotificationWorker:
-    def __init__(self, ledger, bot_token, app_url, interval=2):
+    def __init__(self, ledger, bot_token, app_url, interval=2, *, otp_lookup=None):
         self.ledger = ledger
         self.bot_token = bot_token
         self.app_url = app_url
         self.interval = interval
+        self.otp_lookup = otp_lookup
 
     async def deliver_once(self, limit=25):
         if not self.bot_token:
@@ -123,9 +124,18 @@ class NotificationWorker:
                         ("BOT_NOT_AVAILABLE", time.time(), row["notification_id"]),
                     )
                     continue
+                message = html.escape(row["message"])
+                is_otp = row["event_type"] == "card_otp"
+                if is_otp and self.otp_lookup:
+                    try:
+                        code = await self.otp_lookup(row)
+                    except Exception:
+                        code = None
+                    if code:
+                        message = f"<code>{html.escape(code)}</code>\n\nКод действует две минуты с момента получения."
                 payload = {
                     "chat_id": int(row["user_id"].removeprefix("tg:")),
-                    "text": f"<b>{html.escape(row['title'])}</b>\n\n{html.escape(row['message'])}",
+                    "text": f"<b>{html.escape(row['title'])}</b>\n\n{message}",
                     "parse_mode": "HTML", "disable_web_page_preview": True,
                 }
                 url = row["button_url"] or self.app_url
@@ -145,6 +155,8 @@ class NotificationWorker:
                             blocked = response.status == 403
                 except (asyncio.TimeoutError, OSError, ValueError) as reason:
                     error = str(reason)[:300]
+                if error and is_otp:
+                    error = "TELEGRAM_3DS_DELIVERY_FAILED"
                 stamp = time.time()
                 attempts = row["attempts"] + 1
                 if error:

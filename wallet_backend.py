@@ -724,7 +724,8 @@ def install_wallet(app, root, owner_check):
     app['wpay_ledger'] = ledger
     app['wpay_broadcast_tasks'] = set()
     app['wpay_notification_worker'] = NotificationWorker(
-        ledger, bot_token, os.environ.get('WPAY_APP_URL', 'https://wallet.178-236-255-214.nip.io/wallet')
+        ledger, bot_token, os.environ.get('WPAY_APP_URL', 'https://wallet.178-236-255-214.nip.io/wallet'),
+        otp_lookup=aura_service.notification_otp if aura_enabled else None,
     )
 
     def identity(request):
