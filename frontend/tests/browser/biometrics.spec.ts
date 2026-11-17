@@ -5,6 +5,8 @@ async function setup(
   saved = false,
   avatar?: Buffer,
   infoResponsive = true,
+  platform = "ios",
+  available = true,
 ) {
   const vault = {
     token: saved ? "device-marker" : "",
@@ -24,8 +26,8 @@ async function setup(
       return {
         event: "biometry_info_received",
         data: {
-          available: true,
-          type: "face",
+          available,
+          type: available ? "face" : "unknown",
           access_requested: true,
           access_granted: true,
           token_saved: Boolean(vault.token),
@@ -81,7 +83,7 @@ async function setup(
     );
   const hash = new URLSearchParams({
     tgWebAppVersion: "9.6",
-    tgWebAppPlatform: "ios",
+    tgWebAppPlatform: platform,
     tgWebAppData: new URLSearchParams({
       user: JSON.stringify({ id: 123, first_name: "Test" }),
     }).toString(),
@@ -334,4 +336,77 @@ test("retry initializes a saved native lock and still requires authentication an
   await expect(
     page.getByRole("button", { name: "Профиль", exact: true }),
   ).toBeVisible();
+});
+
+for (const platform of ["tdesktop", "macos", "webk"]) {
+  test(`${platform}: unavailable biometrics do not block desktop with a saved lock hint`, async ({
+    page,
+  }) => {
+    await page.addInitScript(() =>
+      localStorage.setItem("wpay:biometric-lock:v1:123", "enabled"),
+    );
+    const vault = await setup(page, true, undefined, true, platform, false);
+    await expect(page.locator(".wpay-biometric-content")).toBeVisible();
+    await expect(
+      page.getByRole("main", { name: "Блокировка WPay" }),
+    ).toHaveCount(0);
+    expect(vault.posts).not.toContain("web_app_biometry_request_auth");
+    expect(vault.posts).not.toContain("web_app_biometry_update_token");
+    expect(vault.token).toBe("device-marker");
+    expect(
+      await page.evaluate(() =>
+        localStorage.getItem("wpay:biometric-lock:v1:123"),
+      ),
+    ).toBe("enabled");
+  });
+}
+
+test("desktop without a native biometric response opens instead of trapping the user", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem("wpay:biometric-lock:v1:123", "enabled"),
+  );
+  const vault = await setup(page, false, undefined, false, "tdesktop", false);
+  await expect(page.locator(".wpay-biometric-content")).toBeVisible({
+    timeout: 8000,
+  });
+  expect(vault.posts).not.toContain("web_app_biometry_request_auth");
+});
+
+test("desktop reporting available biometrics retains its existing lock", async ({
+  page,
+}) => {
+  const vault = await setup(page, true, undefined, true, "macos", true);
+  vault.authorized = false;
+  await expect(
+    page.getByRole("main", { name: "Блокировка WPay" }),
+  ).toBeVisible();
+  await expect(page.locator(".wpay-biometric-content")).toHaveCount(0);
+  expect(vault.posts).toContain("web_app_biometry_request_auth");
+});
+
+test("late desktop capability restores the saved lock when biometry becomes available", async ({
+  page,
+}) => {
+  const vault = await setup(page, true, undefined, false, "macos", false);
+  await expect(page.locator(".wpay-biometric-content")).toBeVisible({
+    timeout: 8000,
+  });
+  vault.authorized = false;
+  await page.evaluate(() =>
+    (window as any).Telegram.WebView.receiveEvent("biometry_info_received", {
+      available: true,
+      type: "finger",
+      access_requested: true,
+      access_granted: true,
+      token_saved: true,
+      device_id: "test-device",
+    }),
+  );
+  await expect(
+    page.getByRole("main", { name: "Блокировка WPay" }),
+  ).toBeVisible();
+  await expect(page.locator(".wpay-biometric-content")).not.toBeVisible();
+  expect(vault.posts).toContain("web_app_biometry_request_auth");
 });

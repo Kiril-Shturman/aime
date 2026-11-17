@@ -307,8 +307,37 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     alive.current = true;
     let cancelled = false;
     let initializing = true;
+    const desktopClient = () => {
+      const app = tg();
+      return (
+        !app ||
+        ["tdesktop", "macos", "unigram", "web", "weba", "webk"].includes(
+          app.platform || "",
+        ) ||
+        (app.platform === "unknown" &&
+          navigator.maxTouchPoints === 0 &&
+          !/Android|iPhone|iPad|iPod/i.test(navigator.userAgent))
+      );
+    };
+    const allowUnsupportedDesktop = (bio: TgBiometricManager | null) => {
+      if (cancelled || !desktopClient() || bio?.isBiometricAvailable)
+        return false;
+      initializing = false;
+      capability(bio);
+      remember(false);
+      setReady(true);
+      setAllowed(true);
+      setApproved(false);
+      setLocked(false);
+      setError("");
+      obscured(false);
+      // This is a capability decision for this client, not a change to the
+      // saved setting or native token on any device.
+      return true;
+    };
     const applyNativeState = (bio: TgBiometricManager) => {
       if (cancelled || !initializing || !bio.isInited) return;
+      if (allowUnsupportedDesktop(bio)) return;
       initializing = false;
       capability(bio);
       const protectedDevice = bio.isBiometricTokenSaved || hint();
@@ -340,6 +369,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
           obscured(false);
         }
         if (!bio) {
+          if (allowUnsupportedDesktop(bio)) return;
           if (cancelled) return;
           initializing = false;
           const protectedDevice = hint();
@@ -360,6 +390,7 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
         applyNativeState(bio);
       } catch {
         if (!cancelled && initializing) {
+          if (allowUnsupportedDesktop(manager())) return;
           setReady(true);
           if (
             confirmedDisabled() &&
@@ -406,6 +437,19 @@ export function WalletBiometricGate({ children }: { children: ReactNode }) {
     const updated = () => {
       const bio = manager();
       capability(bio);
+      if (
+        !initializing &&
+        desktopClient() &&
+        bio?.isInited &&
+        bio.isBiometricAvailable &&
+        !enabledRef.current &&
+        (bio.isBiometricTokenSaved || hint())
+      ) {
+        // A delayed native capability response must restore a saved lock.
+        initializing = true;
+        applyNativeState(bio);
+        return;
+      }
       if (initializing && bio?.isInited) {
         applyNativeState(bio);
         return;
