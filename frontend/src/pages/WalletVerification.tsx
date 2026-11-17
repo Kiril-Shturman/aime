@@ -15,7 +15,6 @@ import {
   ArrowUpRight,
   Mail,
   AtSign,
-  CircleAlert,
   Ban,
   MessageCircle,
 } from "lucide-react";
@@ -398,7 +397,9 @@ function VerificationIssue({
     <div className="wpay-verification-issue" role="alert">
       <div className="wpay-verification-issue-heading">
         <span className="wpay-verification-issue-icon">
-          <CircleAlert size={22} aria-hidden="true" />
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path fillRule="evenodd" clipRule="evenodd" d="M10.34 3.94c.77-1.333 2.55-1.333 3.32 0l7.82 13.55c.77 1.334-.192 3-1.731 3H4.25c-1.54 0-2.502-1.666-1.732-3l7.82-13.55ZM12 8a.75.75 0 0 0-.75.75v3.5a.75.75 0 0 0 1.5 0v-3.5A.75.75 0 0 0 12 8Zm0 8.5a1 1 0 1 0 0-2a1 1 0 0 0 0 2Z" />
+          </svg>
         </span>
         <h3>{title}</h3>
       </div>
