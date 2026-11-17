@@ -26,7 +26,7 @@ import "./WalletInputTheme.css";
 import "./WalletButtons.css";
 import WalletSheetClose from "./WalletSheetClose";
 import WalletAuraCards from "./WalletAuraCards";
-import { DesktopSidebar, DesktopOverview } from "./WalletDesktop";
+import { DesktopSidebar, DesktopOverview, DesktopProfileAside } from "./WalletDesktop";
 import "./WalletDesktop.css";
 import {
   ReferralProgram,
@@ -3040,6 +3040,10 @@ function ProfileSection({
           комиссию и реквизиты получателя.
         </p>
       </main>
+      <DesktopProfileAside
+        onVerification={() => setProfilePage("verification")}
+        onSupport={() => setProfilePage("support")}
+      />
       <ProfileSettingsPushView
         page={profilePage}
         onClose={() => setProfilePage(null)}

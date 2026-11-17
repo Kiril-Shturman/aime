@@ -1261,7 +1261,13 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
   await expect(logo).toHaveAttribute("src", "/brands/wpay-wordmark-light.svg");
   await brand.click();
   await expect(menu.getByRole("button", { name: "Кошелёк" })).toHaveAttribute("aria-current", "page");
+  await menu.getByRole("button", { name: "Профиль" }).click();
+  const profileAside = page.getByRole("complementary", { name: "Быстрые действия профиля" });
+  await expect(profileAside).toBeVisible();
+  await profileAside.getByRole("button", { name: "Открыть верификацию" }).click();
+  await expect(page.getByRole("region", { name: "Проверка личности", exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(menu).toBeHidden();
+  await expect(profileAside).toBeHidden();
   await expect(page.locator(".wpay-bottom-menu")).toBeVisible();
 });
