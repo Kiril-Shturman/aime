@@ -1,5 +1,3 @@
-import WalletFill from "framework7-icons/react/esm/WalletFill.js";
-import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
 import { Wallet, CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Bell, Headphones } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { walletRequest } from '../lib/wallet-api'
@@ -116,18 +114,16 @@ export function DesktopProfileAside({
 
   return (
     <aside className="wpay-desktop-profile-aside" aria-label="Сводка по балансам">
-      <section className="wpay-desktop-card wpay-desktop-profile-balances">
+      <section className="wpay-desktop-card">
         <div className="wpay-desktop-section-head"><h2>Мои балансы</h2></div>
-        <button type="button" onClick={onWallet}>
-          <span className="wpay-profile-shortcut-icon is-wallet"><WalletFill aria-hidden="true" /></span>
-          <span>Кошелёк<strong>{balanceHidden ? "••••••" : walletBalance === null ? "—" : usd(walletBalance)}</strong></span>
-          <ArrowUpRight size={16} aria-hidden="true" />
+        <button type="button" className="wpay-desktop-rate wpay-profile-balance-row" onClick={onWallet}>
+          <span>Кошелёк</span>
+          <strong>{balanceHidden ? "••••••" : walletBalance === null ? "—" : usd(walletBalance)}</strong>
         </button>
         {cardsEnabled && (
-          <button type="button" onClick={onCards}>
-            <span className="wpay-profile-shortcut-icon is-cards"><CreditcardFill aria-hidden="true" /></span>
-            <span>На картах<strong>{balanceHidden ? "••••••" : cardBalance ?? "—"}</strong></span>
-            <ArrowUpRight size={16} aria-hidden="true" />
+          <button type="button" className="wpay-desktop-rate wpay-profile-balance-row" onClick={onCards}>
+            <span>На картах</span>
+            <strong>{balanceHidden ? "••••••" : cardBalance ?? "—"}</strong>
           </button>
         )}
       </section>

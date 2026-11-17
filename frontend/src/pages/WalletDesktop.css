@@ -135,8 +135,6 @@
    color: white;
  }
  .wpay-profile-shortcut-icon svg { width: 20px; height: 20px; }
- .wpay-profile-shortcut-icon.is-wallet { background: linear-gradient(145deg, #4096ff, #235bd8); }
- .wpay-profile-shortcut-icon.is-cards { background: linear-gradient(145deg, #9477ff, #6445d6); }
  .wpay-profile-shortcut-icon.is-support { background: linear-gradient(145deg, #25bca7, #087e73); }
  .wpay-profile-shortcut-icon.is-notifications { background: linear-gradient(145deg, #ff9465, #d64c35); }
  .wpay-desktop-profile-balances strong {
@@ -167,6 +165,8 @@
  .dark .wpay-desktop-empty strong{color:#a2a5af}
  .wpay-desktop-empty p{max-width:200px;margin-top:7px;font-size:12px;line-height:1.6}
  .wpay-desktop-rate{display:flex;justify-content:space-between;gap:12px;padding-top:21px;font-size:14px;color:#858994}
+ .wpay-profile-balance-row { width: 100%; text-align: left; cursor: pointer; }
+ .wpay-profile-balance-row strong { text-align: right; overflow-wrap: anywhere; }
  .wpay-desktop-rate strong{font-weight:500;font-variant-numeric:tabular-nums;color:#20232a}
  .dark .wpay-desktop-rate strong{color:#e4e6ec}
  .wpay-desktop-quick{padding:26px;border-radius:28px;background:linear-gradient(145deg,#e8efff,#f0ecfa);color:#273a60}
