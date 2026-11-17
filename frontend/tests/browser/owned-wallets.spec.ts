@@ -108,7 +108,7 @@ for (const theme of ["light", "dark"]) {
     ).toBeVisible();
     await details.getByRole("button", { name: "Вывести", exact: true }).click();
     await expect(
-      page.getByText("Операции с собственными кошельками ещё не подключены", {
+      page.getByText("Вывод с собственного кошелька ещё не подключён", {
         exact: true,
       }),
     ).toBeVisible();
