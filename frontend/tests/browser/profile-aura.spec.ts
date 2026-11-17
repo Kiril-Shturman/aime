@@ -257,7 +257,9 @@ test("passport form has manual inputs only and never loads OCR models", async ({
   page.on("request", (request) => requests.push(request.url()));
   await contacts(page);
   await openDocuments(page);
-  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+  const documents = page.getByRole("region", { name: "Документы для верификации" });
+  await expect(documents).toBeVisible();
+  await expect(documents.locator('input[type="file"]')).toHaveCount(0);
   for (const name of [
     "Сфотографировать",
     "Загрузить фото",

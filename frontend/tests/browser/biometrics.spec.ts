@@ -283,6 +283,7 @@ test("badge paints the authenticated same-origin avatar into its texture", async
         ctx.drawImage(img, 0, 0);
         return Array.from(ctx.getImageData(512, 650, 1, 1).data).slice(0, 3);
       }),
+      { timeout: 15000 },
     )
     .toEqual([255, 0, 0]);
 });

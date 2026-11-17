@@ -3,6 +3,8 @@ export default function StartupWordmark() {
     <div
       className="wpay-startup-wordmark pointer-events-none absolute left-1/2 z-[2] w-[132px] -translate-x-1/2"
       style={{
+        width: 132,
+        aspectRatio: "282 / 116",
         top: "calc(max(24px, env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px) + 16px)",
       }}
     >
