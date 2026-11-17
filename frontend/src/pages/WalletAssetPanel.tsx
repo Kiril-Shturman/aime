@@ -1,3 +1,4 @@
+import WalletOwnedWallets from "./WalletOwnedWallets";
 import WalletAssetAvatar from "./WalletAssetAvatar";
 import {
   permanentAddressNetworks as addressNetworks,
@@ -289,9 +290,10 @@ export default function WalletAssetPanel({
           ))}
         </div>
       </Card>
+      <WalletOwnedWallets {...{ code, active, icon, color, iconColor }} />
       <section className="px-4 pb-3 pt-6">
         <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
-          Ваш портфель
+          Баланс приложения
         </h3>
         <Card className="!m-0 !rounded-[30px]" contentWrapPadding="px-4 py-0">
           <div

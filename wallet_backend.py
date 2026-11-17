@@ -5,6 +5,8 @@ Only this module sees the provider token; organization funds are never a user's
 balance. All money arithmetic uses Decimal and SQLite write transactions.
 """
 import asyncio
+from wallet_custody import Custody, custody_route, prepare as prepare_custody
+from wallet_chain import ChainReader
 from wallet_aura_errors import wallet_error_payload
 import hashlib
 import hmac
@@ -644,6 +646,7 @@ def install_wallet(app, root, owner_check):
                 key, sep, value = line.strip().partition('=')
                 if sep and key in {
                     'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS',
+                    'WPAY_CUSTODY_ENABLED', 'WPAY_CUSTODY_CHAIN_ENV', 'WPAY_CUSTODY_PUBLIC_KEY_FILE',
                     'AURA_API_KEY', 'AURA_ENVIRONMENT', 'AURA_BASE_URL',
                     'AURA_WEBHOOK_SECRET', 'AURA_PARTNER_ID', 'WPAY_AURA_ENABLED',
                 }:
@@ -664,6 +667,15 @@ def install_wallet(app, root, owner_check):
     prepare_aura(ledger)
     prepare_finance_worker(ledger)
     prepare_notifications(ledger)
+    prepare_custody(ledger)
+    custody = Custody(
+        ledger, ApiError,
+        enabled=os.environ.get('WPAY_CUSTODY_ENABLED', '0') == '1',
+        public_key_file=os.environ.get('WPAY_CUSTODY_PUBLIC_KEY_FILE', ''),
+        chain_env=os.environ.get('WPAY_CUSTODY_CHAIN_ENV', 'testnet'),
+    )
+    app['wpay_custody'] = custody
+    app['wpay_chain'] = ChainReader(ledger, ApiError)
     ledger.db.executescript('''
       CREATE TABLE IF NOT EXISTS wallet_asset_routes (
         asset TEXT NOT NULL, network TEXT NOT NULL, enabled INTEGER NOT NULL,
@@ -1169,6 +1181,9 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            custody_response = await custody_route(request, action, uid, custody)
+            if custody_response is not None:
+                return custody_response
             if action == 'profile-avatar' and request.method == 'GET':
                 if request.query:
                     raise ValueError('Avatar query parameters are not supported')
@@ -2078,6 +2093,7 @@ def install_wallet(app, root, owner_check):
         if app['wpay_broadcast_tasks']:
             await asyncio.gather(*app['wpay_broadcast_tasks'], return_exceptions=True)
         await provider.close()
+        await app['wpay_chain'].close()
         await aura_client.close()
         ledger.db.close()
 
