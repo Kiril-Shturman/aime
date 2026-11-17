@@ -147,6 +147,16 @@
  }
  .wpay-desktop-profile-balances button > svg { color: #3275e9; }
  .dark .wpay-desktop-profile-balances button > svg { color: #9ebeff; }
+ .wpay-desktop-fx-value { margin-top: 12px; font-size: 27px; font-weight: 650; letter-spacing: -.6px; font-variant-numeric: tabular-nums; }
+ .wpay-desktop-fx svg { display: block; width: 100%; margin-top: 8px; color: #3275e9; }
+ .dark .wpay-desktop-fx svg { color: #80acff; }
+ .wpay-desktop-fx-grid { fill: none; stroke: currentColor; stroke-opacity: .13; }
+ .wpay-desktop-fx-dates { display: flex; justify-content: space-between; }
+ .wpay-desktop-fx-dates, .wpay-desktop-fx a, .wpay-desktop-fx-status { color: #6e7584; font-size: 12px; }
+ .dark .wpay-desktop-fx-dates, .dark .wpay-desktop-fx a, .dark .wpay-desktop-fx-status { color: #a2a5af; }
+ .wpay-desktop-fx a { display: inline-block; margin-top: 12px; }
+ .wpay-desktop-fx a:hover { text-decoration: underline; }
+ .wpay-desktop-fx-status { margin-top: 14px; }
  .wpay-wallet-home{transform:none!important;opacity:1!important}
  .wpay-desktop-balance-card{padding:28px 16px 20px;border-radius:32px;background:#fff;box-shadow:0 3px 16px #16223a03}
  .dark .wpay-desktop-balance-card{background:#1c1e22;box-shadow:none}

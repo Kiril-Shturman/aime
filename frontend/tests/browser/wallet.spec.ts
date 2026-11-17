@@ -36,7 +36,7 @@ async function setup(
       return route.fulfill({
         json: { data: [
           { status: "opened", balance: "10.15", currency: "USD" },
-          { status: "opened", balance: "5.85", currency: "USD" },
+          { status: "opened", balance: "5.85", currency: "USDT" },
           { status: "cancelled", balance: "20", currency: "USD" },
         ] },
       });
@@ -1259,6 +1259,9 @@ test("card recharge history shows charged total and separate credited amount", a
 
 test("desktop sidebar navigates and switches the wPay wordmark with the theme", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
+  await page.route("https://api.frankfurter.dev/v2/providers/cbr/rates?**", (route) =>
+    route.fulfill({ json: [{ date: "2026-11-16", rate: 82 }, { date: "2026-11-17", rate: 83 }] }),
+  );
   await setup(page, "light", false, true);
   const menu = page.getByRole("navigation", { name: "Основное меню" });
   const brand = page.getByRole("button", { name: "wPay", exact: true });
@@ -1275,7 +1278,8 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
   const profileAside = page.getByRole("complementary", { name: "Сводка по балансам" });
   await expect(profileAside).toBeVisible();
   await expect(profileAside.getByRole("button", { name: /Кошелёк.*1,250/ })).toBeVisible();
-  await expect(profileAside.getByRole("button", { name: /На картах.*16.00/ })).toBeVisible();
+  await expect(profileAside.getByRole("button", { name: /На картах.*\$16\.00/ })).toBeVisible();
+  await expect(profileAside.getByRole("img", { name: "Динамика официального курса за месяц" })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(menu).toBeHidden();
   await expect(profileAside).toBeHidden();
