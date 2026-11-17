@@ -97,8 +97,10 @@ for (const theme of ["light", "dark"]) {
     await expect(
       chat.getByRole("link", { name: "Отправить сообщение" }),
     ).toHaveAttribute("aria-disabled", "true");
-    const chooserEvent = page.waitForEvent("filechooser");
     await chat.getByRole("link", { name: "Прикрепить фото" }).click();
+    await expect(chat.locator(".messagebar-sheet")).toBeVisible();
+    const chooserEvent = page.waitForEvent("filechooser");
+    await chat.getByRole("link", { name: "Выбрать фото с устройства" }).click();
     const chooser = await chooserEvent;
     await chooser.setFiles([
       { name: "screen-1.png", mimeType: "image/png", buffer: image },
@@ -165,9 +167,9 @@ test("photo-only drafts are supported, bad types and excessive attachment counts
   await expect(chat.getByRole("alert")).toContainText("до 5 фотографий");
   await expect(chat.locator(".messagebar-attachment")).toHaveCount(5);
   await chat.getByRole("link", { name: "Отправить сообщение" }).click();
-  await expect(
-    chat.getByRole("log").locator(".support-photo-grid img"),
-  ).toHaveCount(5);
+  await expect(chat.getByRole("log").locator(".message-image img")).toHaveCount(
+    5,
+  );
   await expect(chat.locator(".messagebar-attachment")).toHaveCount(0);
   expect(writes()).toBe(0);
 });

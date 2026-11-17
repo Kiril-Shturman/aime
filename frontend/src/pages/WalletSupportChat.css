@@ -60,7 +60,10 @@
 .wpay-support-chat .messagebar textarea {
   max-height: 140px;
 }
-.wpay-support-chat .support-message-send.disabled {
+.wpay-support-chat
+  .messagebar[data-can-send="false"]
+  .toolbar-pane:last-child
+  .link {
   opacity: 1;
   color: #999;
   pointer-events: none;
@@ -74,22 +77,6 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-}
-.wpay-support-chat .support-photo-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 4px;
-  max-width: 280px;
-}
-.wpay-support-chat .support-photo-grid--single {
-  grid-template-columns: 1fr;
-}
-.wpay-support-chat .support-photo-grid img {
-  display: block;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  object-fit: cover;
-  border-radius: 10px;
 }
 .wpay-support-chat .support-photo-error {
   margin: 0 0 10px;
@@ -147,4 +134,22 @@
 }
 .dark .wpay-support-chat .support-attach {
   color: #fff !important;
+}
+
+.wpay-support-chat .support-photo-picker {
+  padding: 18px 8px 8px;
+  color: #111;
+}
+.dark .wpay-support-chat .support-photo-picker {
+  color: #fff;
+}
+.wpay-support-chat .support-photo-picker > p {
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.wpay-support-chat .support-photo-picker > .link {
+  gap: 10px;
+  justify-content: flex-start;
+  width: 100%;
 }

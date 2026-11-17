@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   Messages,
   Message,
@@ -6,6 +6,8 @@ import {
   Messagebar,
   MessagebarAttachments,
   MessagebarAttachment,
+  MessagebarSheet,
+  Input,
   Link,
 } from "framework7-react";
 import ArrowUpCircleFill from "framework7-icons/react/esm/ArrowUpCircleFill.js";
@@ -33,9 +35,29 @@ export default function SupportChatPushView({
   const [messages, setMessages] = useState<DraftMessage[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [photoError, setPhotoError] = useState("");
-  const fileInput = useRef<HTMLInputElement | null>(null);
+  const fileInput = useRef<{ el: HTMLElement | null }>({ el: null });
+  const [photoSheet, setPhotoSheet] = useState(false);
   const objectUrls = useRef(new Set<string>());
   const canSend = Boolean(draft.trim() || photos.length);
+  const messageRows = useMemo(
+    () =>
+      messages.flatMap((message) => {
+        const rows: {
+          id: string;
+          photo?: Photo;
+          text?: string;
+          footer?: string;
+        }[] = message.photos.map((photo) => ({
+          id: `${message.id}:${photo.id}`,
+          photo,
+        }));
+        if (message.text) rows.push({ id: message.id, text: message.text });
+        if (rows.length)
+          rows[rows.length - 1].footer = `${message.time} · Не отправлено`;
+        return rows;
+      }),
+    [messages],
+  );
   useEffect(() => {
     const urls = objectUrls.current;
     return () => {
@@ -45,6 +67,39 @@ export default function SupportChatPushView({
   }, []);
   const mainRef = useRef<HTMLElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = mainRef.current;
+    root
+      ?.querySelectorAll<HTMLElement>(".messagebar-attachment")
+      .forEach((node, index) => {
+        const photo = photos[index];
+        if (!photo) return;
+        const image = node.querySelector("img");
+        if (image) image.alt = photo.name;
+        const remove = node.querySelector<HTMLElement>(
+          ".messagebar-attachment-delete",
+        );
+        if (remove) {
+          remove.setAttribute("role", "button");
+          remove.setAttribute("aria-label", `Удалить фото ${photo.name}`);
+          remove.tabIndex = 0;
+        }
+      });
+    const photoRows = messageRows.filter((row) => row.photo);
+    root
+      ?.querySelectorAll<HTMLImageElement>(".messages .message-image img")
+      .forEach((image, index) => {
+        image.alt = photoRows[index]?.photo?.name || "Фото к обращению";
+      });
+    const send = root?.querySelector<HTMLElement>(
+      ".messagebar .toolbar-pane:last-child .link",
+    );
+    if (send) {
+      send.setAttribute("aria-label", "Отправить сообщение");
+      send.setAttribute("aria-disabled", String(!canSend));
+      send.tabIndex = canSend ? 0 : -1;
+    }
+  }, [photos, messageRows, canSend]);
   useEffect(() => {
     if (open)
       endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -74,6 +129,7 @@ export default function SupportChatPushView({
     const selected = Array.from(event.target.files || []);
     event.target.value = "";
     if (!selected.length) return;
+    setPhotoSheet(false);
     const accepted: Photo[] = [];
     let error = "";
     for (const file of selected) {
@@ -169,55 +225,49 @@ export default function SupportChatPushView({
                 <QuestionCircleFill className="h-full w-full" />
               </span>
             </Message>
-            {messages.map((message, index) => (
+            {messageRows.map((row, index) => (
               <Message
-                key={message.id}
+                key={row.id}
                 type="sent"
+                image={row.photo?.url}
+                text={row.text}
                 first={index === 0}
-                last={index === messages.length - 1}
-                tail={index === messages.length - 1}
-                text={message.text}
-                footer={`${message.time} · Не отправлено`}
-              >
-                {message.photos.length > 0 && (
-                  <div
-                    slot="image"
-                    className={`support-photo-grid${message.photos.length === 1 ? " support-photo-grid--single" : ""}`}
-                  >
-                    {message.photos.map((photo) => (
-                      <img
-                        key={photo.id}
-                        src={photo.url}
-                        alt={photo.name}
-                        loading="lazy"
-                        onLoad={() => {
-                          if (open)
-                            endRef.current?.scrollIntoView({
-                              block: "nearest",
-                            });
-                        }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </Message>
+                last={index === messageRows.length - 1}
+                tail={index === messageRows.length - 1}
+                footer={row.footer}
+              />
             ))}
           </Messages>
           <div ref={endRef} />
         </div>
-        <div className="support-compose shrink-0 px-4 pt-3">
+        <div
+          className="support-compose shrink-0 px-4 pt-3"
+          onKeyDown={(event) => {
+            if (
+              (event.key === "Enter" || event.key === " ") &&
+              event.target instanceof HTMLElement &&
+              event.target.matches(".messagebar-attachment-delete")
+            ) {
+              event.preventDefault();
+              event.target.click();
+            }
+          }}
+        >
           {photoError && (
             <p className="support-photo-error" role="alert">
               {photoError}
             </p>
           )}
-          <input
+          <label htmlFor="wpay-support-photo-file" className="sr-only">
+            Выбрать фотографии
+          </label>
+          <Input
             ref={fileInput}
+            inputId="wpay-support-photo-file"
             type="file"
             accept="image/*"
             multiple
             className="sr-only"
-            aria-label="Выбрать фотографии"
             onChange={selectPhotos}
           />
           <label htmlFor="wpay-support-message" className="sr-only">
@@ -230,15 +280,22 @@ export default function SupportChatPushView({
             textareaId="wpay-support-message"
             value={draft}
             attachmentsVisible={photos.length > 0}
+            sheetVisible={photoSheet}
+            data-can-send={String(canSend)}
             placeholder="Сообщение…"
             onInput={(event) => setDraft(event.target.value)}
+            onFocus={() => setPhotoSheet(false)}
           >
             <Link
               slot="inner-start"
               iconOnly
               aria-label="Прикрепить фото"
               className="support-attach"
-              onClick={() => fileInput.current?.click()}
+              aria-expanded={photoSheet}
+              onClick={() => {
+                mainRef.current?.querySelector("textarea")?.blur();
+                setPhotoSheet((current) => !current);
+              }}
             >
               <CameraFill className="text-[27px]" />
             </Link>
@@ -247,28 +304,41 @@ export default function SupportChatPushView({
               aria-label="Прикреплённые фотографии"
             >
               {photos.map((photo) => (
-                <MessagebarAttachment key={photo.id} deletable={false}>
-                  <img src={photo.url} alt={photo.name} />
-                  <button
-                    type="button"
-                    className="messagebar-attachment-delete"
-                    aria-label={`Удалить фото ${photo.name}`}
-                    onClick={() => removePhoto(photo)}
-                  />
-                </MessagebarAttachment>
+                <MessagebarAttachment
+                  key={photo.id}
+                  image={photo.url}
+                  onAttachmentDelete={() => removePhoto(photo)}
+                />
               ))}
             </MessagebarAttachments>
+            {/* The 9.1.3 sendLink handler reads an unset unwrapped Input ref.
+                Framework7's Link slot keeps the native control and avoids that bug. */}
             <Link
               slot="inner-end"
               iconOnly
               aria-label="Отправить сообщение"
               aria-disabled={!canSend}
               {...{ tabIndex: canSend ? 0 : -1 }}
-              className={`support-message-send${!canSend ? " disabled" : ""}`}
               onClick={saveDraft}
             >
               <ArrowUpCircleFill className="text-[27px]" />
             </Link>
+            <MessagebarSheet aria-label="Выбор фотографий">
+              <div className="support-photo-picker">
+                <p>Фото к обращению</p>
+                <Link
+                  onClick={() =>
+                    fileInput.current?.el
+                      ?.querySelector<HTMLInputElement>("input[type=file]")
+                      ?.click()
+                  }
+                  aria-label="Выбрать фото с устройства"
+                >
+                  <CameraFill className="text-[25px]" /> Выбрать фото
+                </Link>
+                <Link onClick={() => setPhotoSheet(false)}>Отмена</Link>
+              </div>
+            </MessagebarSheet>
           </Messagebar>
         </div>
       </main>
