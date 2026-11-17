@@ -267,30 +267,32 @@
  }
  .wpay-viewport[data-wallet-surface="asset"] main.wpay-asset-layout {
    display: grid;
-   grid-template-columns: minmax(0, 1fr) minmax(285px, 32%);
-   gap: 20px 24px;
-   align-items: start;
-   max-width: 1240px;
-   padding: 24px 32px 32px;
+   grid-template-columns: minmax(0, 1fr);
+   gap: 20px;
+   max-width: none;
+   padding: 0 0 32px;
    background: transparent;
  }
  .wpay-asset-layout > .wpay-asset-chart-card {
+   grid-row: 1;
    min-width: 0;
-   border-radius: 28px !important;
+   border-radius: 0 !important;
  }
  .wpay-asset-sidebar {
+   grid-row: 3;
    display: grid;
-   gap: 18px;
+   grid-template-columns: repeat(2, minmax(0, 1fr));
+   align-items: start;
+   gap: 18px 24px;
    min-width: 0;
+   padding-inline: 32px;
  }
- .wpay-asset-sidebar > section { padding: 0; }
+ .wpay-asset-sidebar > section { min-width: 0; padding: 0; }
  .wpay-asset-layout > .wpay-asset-actions {
    position: static;
-   grid-column: 1;
    grid-row: 2;
    transform: none;
-   max-width: none;
-   padding: 0;
+   max-width: 560px;
+   padding: 0 32px;
  }
- .wpay-asset-sidebar { grid-column: 2; grid-row: 1 / span 2; }
 }
