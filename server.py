@@ -1784,9 +1784,12 @@ def _wpay_bot_snapshot(ledger, sender_id, environment):
 
 def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, referral=None):
     """Return rich HTML and a classic-message fallback for a bot screen."""
-    start_text_emoji_id = os.environ.get(
-        "WPAY_START_TEXT_EMOJI_ID", "5467913823631484285",
-    ).strip()
+    start_text_emoji_ids = [
+        value.strip() for value in os.environ.get(
+            "WPAY_START_TEXT_EMOJI_IDS",
+            "5467487951854284565,5467854462888484726,5467691756642415228",
+        ).split(",") if value.strip()
+    ]
     start_button_emoji_id = os.environ.get(
         "WPAY_START_BUTTON_EMOJI_ID", "5467871067232052983",
     ).strip()
@@ -1804,18 +1807,22 @@ def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, refer
     ] or ["USDT: 0 доступно"]
 
     if view == "start":
-        start_emoji = (
-            f'<tg-emoji emoji-id="{html.escape(start_text_emoji_id, quote=True)}">💸</tg-emoji> '
-            if start_text_emoji_id else ""
+        emoji_fallbacks = ("1️⃣", "2️⃣", "3️⃣")
+        start_emoji = "".join(
+            f'<tg-emoji emoji-id="{html.escape(emoji_id, quote=True)}">'
+            f'{emoji_fallbacks[index] if index < len(emoji_fallbacks) else "▫️"}</tg-emoji>'
+            for index, emoji_id in enumerate(start_text_emoji_ids)
         )
+        start_heading = f"{start_emoji}<br>" if start_emoji else ""
+        start_caption = f"{start_emoji}\n" if start_emoji else ""
         rich = (
-            f"<h1>{start_emoji}WPay</h1>"
+            f"<h1>{start_heading}WPay</h1>"
             "<p>Виртуальная карта для оплаты по всему миру.</p>"
             "<p>Пополняйте баланс в USDT, подключайте карту к Apple Pay "
             "и Google Pay и оплачивайте покупки онлайн и офлайн.</p>"
         )
         plain = (
-            f"{start_emoji}<b>WPay</b> — виртуальная карта для оплаты по всему миру.\n\n"
+            f"{start_caption}<b>WPay</b> — виртуальная карта для оплаты по всему миру.\n\n"
             "Пополняйте баланс в USDT, подключайте карту к Apple Pay и Google Pay "
             "и оплачивайте покупки онлайн и офлайн."
         )
