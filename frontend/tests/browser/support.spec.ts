@@ -69,6 +69,11 @@ for (const theme of ["light", "dark"]) {
     const { chat, writes } = await openChat(page, theme);
     const input = chat.getByRole("textbox", { name: "Сообщение поддержке" });
     await expect(input).toBeVisible();
+    const fieldBox = await input.boundingBox();
+    for (const label of ["Прикрепить фото", "Отправить сообщение"]) {
+      const buttonBox = await chat.getByRole("link", { name: label }).boundingBox();
+      expect(Math.abs(buttonBox!.y + buttonBox!.height - fieldBox!.y - fieldBox!.height)).toBeLessThan(1.5);
+    }
     const paneStyle = await chat
       .locator(".messagebar .toolbar-pane")
       .first()
