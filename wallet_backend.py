@@ -8,6 +8,7 @@ import asyncio
 from wallet_fixedfloat_orders import Orders
 from wallet_card_ui import CardUI
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
+from wallet_exchange_funding import Funding
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
 from wallet_chain import ChainReader
 from wallet_aura_errors import wallet_error_payload
@@ -655,7 +656,7 @@ def install_wallet(app, root, owner_check):
                 if sep and key in {
                     'GOSWAP_API_TOKEN', 'WPAY_BOT_TOKEN', 'WPAY_DB_PATH', 'WPAY_ADMIN_IDS',
                     'WPAY_CUSTODY_ENABLED', 'WPAY_CUSTODY_CHAIN_ENV', 'WPAY_CUSTODY_PUBLIC_KEY_FILE',
-                    'FIXEDFLOAT_API_KEY', 'FIXEDFLOAT_API_SECRET', 'WPAY_FIXEDFLOAT_ORDERS_ENABLED',
+                    'FIXEDFLOAT_API_KEY', 'FIXEDFLOAT_API_SECRET', 'WPAY_FIXEDFLOAT_ORDERS_ENABLED', 'WPAY_WALLET_FUNDING_ENABLED',
                     'AURA_API_KEY', 'AURA_ENVIRONMENT', 'AURA_BASE_URL',
                     'AURA_WEBHOOK_SECRET', 'AURA_PARTNER_ID', 'WPAY_AURA_ENABLED',
                 }:
@@ -690,6 +691,8 @@ def install_wallet(app, root, owner_check):
         chain_env=os.environ.get('WPAY_CUSTODY_CHAIN_ENV', 'testnet'),
     )
     app['wpay_custody'] = custody
+    exchange_funding = Funding(ledger, exchange_orders, custody, enabled=os.environ.get('WPAY_WALLET_FUNDING_ENABLED','0') == '1')
+    app['wpay_exchange_funding'] = exchange_funding
     app['wpay_chain'] = ChainReader(ledger, ApiError)
     prepare_tariffs(ledger)
     ledger.db.executescript('''
@@ -1605,6 +1608,8 @@ def install_wallet(app, root, owner_check):
             custody_response = await custody_route(request, action, uid, custody)
             if custody_response is not None:
                 return custody_response
+            funding_response = await exchange_funding.route(request, action, uid)
+            if funding_response is not None:return funding_response
             order_response = await exchange_orders.route(request, action, uid)
             if order_response is not None:
                 return order_response

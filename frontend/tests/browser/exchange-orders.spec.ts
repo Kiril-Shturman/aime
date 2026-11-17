@@ -6,9 +6,11 @@ async function setup(
   theme = "light",
   unknown = false,
   completed = false,
+  fundingMode = "disabled",
 ) {
   const calls: string[] = [];
   let stored: any = null;
+  let fundingJob: any = null;
   const prepared = () => ({
     intent_id: "a".repeat(32),
     state: "prepared",
@@ -79,6 +81,51 @@ async function setup(
           execution_enabled: false,
         },
       });
+    if (action === "exchange-funding")
+      return route.fulfill({
+        json: {
+          enabled: fundingMode !== "disabled",
+          signer_online: true,
+          job: fundingJob,
+        },
+      });
+    if (action === "exchange-funding-prepare") {
+      expect(request.postDataJSON()).toEqual({ intent_id: "a".repeat(32) });
+      fundingJob = {
+        job_id: "b".repeat(32),
+        state: fundingMode === "empty" ? "failed" : "quoted",
+        tx_hash: null,
+        error: fundingMode === "empty" ? "NO_FUNDS" : null,
+        detail:
+          fundingMode === "empty"
+            ? "На собственном адресе недостаточно USDT. Баланс приложения здесь не используется."
+            : null,
+        quote:
+          fundingMode === "empty"
+            ? null
+            : {
+                approval_id: "c".repeat(32),
+                amount: "100",
+                max_fee: "20",
+                fee_currency: "TRX",
+                source_address: "TOwnAddress",
+                expires_at: Date.now() / 1000 + 60,
+              },
+      };
+      return route.fulfill({ json: fundingJob });
+    }
+    if (action === "exchange-funding-confirm") {
+      expect(request.postDataJSON()).toEqual({
+        job_id: "b".repeat(32),
+        approval_id: "c".repeat(32),
+      });
+      fundingJob = {
+        ...fundingJob,
+        state: "broadcast",
+        tx_hash: "durable-signed-transaction-hash",
+      };
+      return route.fulfill({ json: fundingJob });
+    }
     if (action === "exchange-orders")
       return route.fulfill({ json: { items: stored ? [stored] : [] } });
     if (action === "exchange-prepare") {
@@ -239,4 +286,57 @@ test("confirmed payout hides pay-in QR and shows transaction proof", async ({
   await expect(
     panel.getByRole("button", { name: "Скопировать адрес оплаты" }),
   ).toHaveCount(0);
+});
+
+test("wallet payment shows fee and requires a separate confirmation; manual QR stays hidden after send", async ({
+  page,
+}) => {
+  const state = await setup(page, "light", false, false, "funded");
+  const panel = await confirm(page);
+  await panel
+    .getByRole("button", { name: "Создать обмен", exact: true })
+    .click();
+  await panel
+    .getByRole("button", { name: "Проверить баланс и комиссию", exact: true })
+    .click();
+  await expect(panel).toContainText("Комиссия сети — не более 20 TRX");
+  expect(
+    state.calls.filter((v) => v === "exchange-funding-confirm"),
+  ).toHaveLength(0);
+  await expect(
+    panel.getByRole("button", {
+      name: "Скопировать адрес оплаты",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await panel
+    .getByRole("button", { name: "Подтвердить и отправить", exact: true })
+    .click();
+  await expect(panel).toContainText("durable-signed-transaction-hash");
+  await expect(
+    panel.getByRole("button", { name: "Подтвердить и отправить", exact: true }),
+  ).toHaveCount(0);
+  expect(
+    state.calls.filter((v) => v === "exchange-funding-confirm"),
+  ).toHaveLength(1);
+});
+
+test("empty owned mainnet wallet does not spend the displayed test ledger balance", async ({
+  page,
+}) => {
+  const state = await setup(page, "dark", false, false, "empty");
+  const panel = await confirm(page);
+  await panel
+    .getByRole("button", { name: "Создать обмен", exact: true })
+    .click();
+  await panel
+    .getByRole("button", { name: "Проверить баланс и комиссию", exact: true })
+    .click();
+  await expect(panel).toContainText("На собственном адресе недостаточно USDT");
+  await expect(
+    panel.getByRole("button", { name: "Подтвердить и отправить", exact: true }),
+  ).toHaveCount(0);
+  expect(
+    state.calls.filter((v) => v === "exchange-funding-confirm"),
+  ).toHaveLength(0);
 });

@@ -1,0 +1,5 @@
+-r requirements.txt
+eth-account==0.13.7
+tronpy==0.6.1
+protobuf>=4,<7
+urllib3<2

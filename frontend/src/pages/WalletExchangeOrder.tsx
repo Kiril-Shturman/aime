@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Button, Card } from "konsta/react";
 import { Preloader } from "framework7-react";
 import QRCode from "react-qr-code";
+import WalletExchangeFunding from "./WalletExchangeFunding";
 import { Check, Copy } from "lucide-react";
 import { walletRequest } from "../lib/wallet-api";
 import WalletNetworkIcon from "./WalletNetworkIcon";
@@ -74,6 +75,7 @@ export default function WalletExchangeOrder({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [fundingLocked, setFundingLocked] = useState(true);
   const [now, setNow] = useState(Date.now());
   const scope = useRef(0),
     busyRef = useRef(false),
@@ -421,7 +423,13 @@ export default function WalletExchangeOrder({
             <p className="mt-1 text-sm opacity-50">
               Обмен № {snapshot.provider_id}
             </p>
-            {canPay ? (
+            <WalletExchangeFunding
+              key={intent!.intent_id}
+              intentId={intent!.intent_id}
+              canPay={canPay}
+              onLock={setFundingLocked}
+            />
+            {canPay && !fundingLocked ? (
               <>
                 <p className="mt-4 text-sm">
                   Отправьте ровно{" "}
@@ -471,13 +479,15 @@ export default function WalletExchangeOrder({
               </>
             ) : (
               <p className="mt-4 text-sm leading-6">
-                {statusUnavailable
-                  ? "Статус временно недоступен. Не отправляйте перевод повторно; дождитесь обновления."
-                  : snapshot.status === "NEW" || snapshot.status === "EXPIRED"
-                    ? "Срок оплаты истёк. Не отправляйте средства по этим реквизитам."
-                    : snapshot.status === "EMERGENCY"
-                      ? "Не отправляйте перевод повторно. Для продолжения обмена или возврата обратитесь в поддержку с номером заявки и хешем транзакции."
-                      : "Повторный перевод не требуется. Статус обновляется автоматически."}
+                {fundingLocked && canPay
+                  ? "Проверяйте оплату с кошелька выше. Пока её исход уточняется, повторный перевод не требуется."
+                  : statusUnavailable
+                    ? "Статус временно недоступен. Не отправляйте перевод повторно; дождитесь обновления."
+                    : snapshot.status === "NEW" || snapshot.status === "EXPIRED"
+                      ? "Срок оплаты истёк. Не отправляйте средства по этим реквизитам."
+                      : snapshot.status === "EMERGENCY"
+                        ? "Не отправляйте перевод повторно. Для продолжения обмена или возврата обратитесь в поддержку с номером заявки и хешем транзакции."
+                        : "Повторный перевод не требуется. Статус обновляется автоматически."}
               </p>
             )}
             <div className="mt-4 border-t border-black/10 pt-4 text-sm dark:border-white/10">
