@@ -224,17 +224,17 @@ function stateTotal(value: Record<string, number> | undefined) {
   return Object.values(value || {}).reduce((sum, item) => sum + item, 0);
 }
 
-const tabs: { id: Tab; label: string; icon: typeof Database }[] = [
-  { id: "overview", label: "Обзор", icon: LayoutDashboard },
-  { id: "data", label: "Пользователи", icon: Database },
-  { id: "payments", label: "Операции", icon: Activity },
-  { id: "crypto", label: "Криптовалюты", icon: Coins },
-  { id: "cards", label: "Карты", icon: CreditCard },
-  { id: "tariffs", label: "Тарифы", icon: Settings },
-  { id: "aura", label: "Aura API", icon: ShieldCheck },
-  { id: "goswap", label: "GoSwap API", icon: Server },
-  { id: "notifications", label: "Уведомления", icon: Bell },
-  { id: "audit", label: "Аудит", icon: Users },
+const tabs: { id: Tab; label: string; icon: typeof Database; color: string }[] = [
+  { id: "overview", label: "Обзор", icon: LayoutDashboard, color: "#5856D6" },
+  { id: "data", label: "Пользователи", icon: Database, color: "#AF52DE" },
+  { id: "payments", label: "Операции", icon: Activity, color: "#007AFF" },
+  { id: "crypto", label: "Криптовалюты", icon: Coins, color: "#FF9500" },
+  { id: "cards", label: "Карты", icon: CreditCard, color: "#30C759" },
+  { id: "tariffs", label: "Тарифы", icon: Settings, color: "#8E8E93" },
+  { id: "aura", label: "Aura API", icon: ShieldCheck, color: "#32ADE6" },
+  { id: "goswap", label: "GoSwap API", icon: Server, color: "#AF52DE" },
+  { id: "notifications", label: "Уведомления", icon: Bell, color: "#FF3B30" },
+  { id: "audit", label: "Аудит", icon: Users, color: "#5856D6" },
 ];
 const navGroups: { label: string; items: Tab[] }[] = [
   {
@@ -428,7 +428,11 @@ export default function WalletAdminPage() {
                           }}
                           className={`wpay-admin-navitem ${tab === item.id ? "is-active" : ""}`}
                         >
-                          <span className="wpay-admin-nav-icon" aria-hidden="true">
+                          <span
+                            className="wpay-admin-nav-icon"
+                            aria-hidden="true"
+                            style={{ "--nav-icon": item.color } as CSSProperties}
+                          >
                             <item.icon size={18} />
                           </span>
                           <span>{item.label}</span>
