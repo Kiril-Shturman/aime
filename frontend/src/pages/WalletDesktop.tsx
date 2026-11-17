@@ -37,7 +37,7 @@ export function DesktopSidebar({
       </button>
       <nav aria-label="Основное меню">
         {items.map(({ id, label, icon }) => (
-          <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => {
+          <button type="button" key={id} data-nav-tab={id} aria-current={tab === id ? "page" : undefined} onClick={() => {
             setAnimations((counts) => ({ ...counts, [id]: counts[id] + 1 }));
             onSelect(id);
           }}>

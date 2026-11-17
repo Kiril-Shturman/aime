@@ -76,18 +76,19 @@
  .wpay-desktop-sidebar button:focus-visible { outline: 2px solid var(--sidebar-accent); outline-offset: 2px; }
  .wpay-desktop-sidebar nav button:hover,
  .wpay-desktop-sidebar-footer > button:hover { background: var(--sidebar-hover); color: var(--sidebar-text); }
- .wpay-desktop-sidebar nav button[aria-current=page] {
-   background: var(--sidebar-active);
-   color: var(--sidebar-accent);
-   font-weight: 650;
+ .wpay-desktop-sidebar nav button {
+   --nav-accent: #3687f7;
+   padding-inline-start: 20px;
+   border-radius: 20px;
+   font-size: 16px;
  }
- .wpay-desktop-sidebar nav button[aria-current=page]::after {
-   content: "";
-   width: 6px;
-   height: 6px;
-   margin-left: auto;
-   border-radius: 50%;
-   background: currentColor;
+ .wpay-desktop-sidebar nav [data-nav-tab=cards] { --nav-accent: #26c76d; }
+ .wpay-desktop-sidebar nav [data-nav-tab=history] { --nav-accent: #f6a21b; }
+ .wpay-desktop-sidebar nav [data-nav-tab=profile] { --nav-accent: #a372f2; }
+ .wpay-desktop-sidebar nav button[aria-current=page] {
+   background: color-mix(in srgb, var(--nav-accent) 15%, transparent);
+   color: color-mix(in srgb, var(--nav-accent) 47%, var(--sidebar-text));
+   font-weight: 650;
  }
  .wpay-desktop-sidebar-footer {
    display: grid;
