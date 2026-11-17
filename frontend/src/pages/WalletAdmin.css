@@ -1764,9 +1764,12 @@
   padding: 0 11px;
   border: 1px solid transparent;
   border-radius: 14px;
-  color: var(--admin-sidebar-muted);
+  color: color-mix(in srgb, var(--admin-sidebar-text) 82%, var(--admin-sidebar-muted));
   background: transparent;
   box-shadow: none;
+  font-size: 14px;
+  font-weight: 680;
+  letter-spacing: -0.01em;
 }
 .wpay-admin-nav-icon {
   display: grid;

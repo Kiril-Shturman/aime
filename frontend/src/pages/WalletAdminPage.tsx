@@ -28,13 +28,13 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
-import AppFill from "framework7-icons/react/esm/AppFill.js";
+import HouseFill from "framework7-icons/react/esm/HouseFill.js";
 import Person2Fill from "framework7-icons/react/esm/Person2Fill.js";
-import ChartBarFill from "framework7-icons/react/esm/ChartBarFill.js";
+import SquareListFill from "framework7-icons/react/esm/SquareListFill.js";
 import BitcoinCircleFill from "framework7-icons/react/esm/BitcoinCircleFill.js";
 import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
 import GearAltFill from "framework7-icons/react/esm/GearAltFill.js";
-import CheckmarkShieldFill from "framework7-icons/react/esm/CheckmarkShieldFill.js";
+import BuildingColumnsFill from "framework7-icons/react/esm/BuildingColumnsFill.js";
 import ArrowRightArrowLeftCircleFill from "framework7-icons/react/esm/ArrowRightArrowLeftCircleFill.js";
 import BellFill from "framework7-icons/react/esm/BellFill.js";
 import DocTextFill from "framework7-icons/react/esm/DocTextFill.js";
@@ -238,13 +238,13 @@ const tabs: {
   icon: ComponentType<{ className?: string }>;
   color: string;
 }[] = [
-  { id: "overview", label: "Обзор", icon: AppFill, color: "#5856D6" },
+  { id: "overview", label: "Обзор", icon: HouseFill, color: "#5856D6" },
   { id: "data", label: "Пользователи", icon: Person2Fill, color: "#AF52DE" },
-  { id: "payments", label: "Операции", icon: ChartBarFill, color: "#007AFF" },
+  { id: "payments", label: "Операции", icon: SquareListFill, color: "#007AFF" },
   { id: "crypto", label: "Криптовалюты", icon: BitcoinCircleFill, color: "#FF9500" },
   { id: "cards", label: "Карты", icon: CreditcardFill, color: "#30C759" },
   { id: "tariffs", label: "Тарифы", icon: GearAltFill, color: "#8E8E93" },
-  { id: "aura", label: "Aura API", icon: CheckmarkShieldFill, color: "#32ADE6" },
+  { id: "aura", label: "Aura API", icon: BuildingColumnsFill, color: "#32ADE6" },
   { id: "goswap", label: "GoSwap API", icon: ArrowRightArrowLeftCircleFill, color: "#AF52DE" },
   { id: "notifications", label: "Уведомления", icon: BellFill, color: "#FF3B30" },
   { id: "audit", label: "Аудит", icon: DocTextFill, color: "#5856D6" },
