@@ -3408,9 +3408,20 @@ def process_inbox(ledger, environment, limit=20):
             elif kind == "card.operation":
                 _store_card_operation(ledger, environment, data)
             elif kind == "card.otp":
-                # OTP is deliberately discarded. The authenticated owner can fetch
-                # the current code directly from Aura while it is still valid.
-                pass
+                card_id = _safe_identifier(data.get("card_id"), "card id")
+                expires_at = _aura_datetime(data.get("expires_at"), "OTP expiry")
+                if expires_at.timestamp() > time.time():
+                    owner = ledger.db.execute(
+                        "SELECT user_id FROM aura_cards WHERE card_id=? AND environment=?",
+                        (card_id, environment),
+                    ).fetchone()
+                    if owner:
+                        enqueue_notification(
+                            ledger, f"{row['event_key']}:notice", owner["user_id"],
+                            "card_otp", "Код 3DS для карты",
+                            "Посмотрите код в wPay: Карты → Управление картой → Код 3DS. "
+                            "Код действует две минуты с момента получения.",
+                        )
             elif kind == "customer.kyc.updated":
                 customer_id = _safe_identifier(
                     data.get("customer_id") or data.get("id"), "customer id"

@@ -7,6 +7,7 @@ import tempfile
 import time
 import unittest
 import os
+from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
@@ -252,6 +253,21 @@ class AuraUnitTests(unittest.TestCase):
         self.assertNotIn(b"123456", bytes(inbox))
         self.assertIn(b"sensitive_payload_sha256", bytes(inbox))
         self.assertEqual(process_inbox(self.ledger, "test"), 1)
+
+        query = "SELECT user_id,title,message FROM notification_outbox WHERE event_type='card_otp'"
+        self.assertEqual(self.ledger.db.execute(query).fetchall(), [])
+        otp["event_id"] = "evt_fresh_otp"
+        otp["data"]["expires_at"] = datetime.fromtimestamp(
+            time.time() + 120, timezone.utc
+        ).isoformat()
+        raw, signature = signed(otp)
+        for _ in range(2):
+            store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+            process_inbox(self.ledger, "test")
+        notices = self.ledger.db.execute(query).fetchall()
+        self.assertEqual(len(notices), 1)
+        self.assertEqual(notices[0]["user_id"], self.uid)
+        self.assertNotIn("123456", notices[0]["title"] + notices[0]["message"])
 
         delivery = {
             "api_version": "3.16.0", "event": "card.delivery_updated",

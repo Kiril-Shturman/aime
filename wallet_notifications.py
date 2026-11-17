@@ -15,6 +15,7 @@ DEFAULT_EVENTS = {
     "kyc": ("Верификация", True),
     "card": ("Карты", True),
     "card_operation": ("Операции по картам", True),
+    "card_otp": ("Коды 3DS", True),
     "sbp": ("СБП", True),
     "qr": ("Оплата QR", True),
 }
