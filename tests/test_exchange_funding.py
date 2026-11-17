@@ -119,3 +119,10 @@ class FundingTests(unittest.TestCase):
                 db.close()
         with ThreadPoolExecutor(max_workers=4) as pool:
             self.assertEqual(sum(pool.map(claim, range(8))), 1)
+
+    def test_pending_retries_do_not_starve_other_due_jobs(self):
+        job = self.funding.estimate('tg:1', self.intent)
+        self.call('claim')
+        self.ledger.db.execute("UPDATE custody_funding_jobs SET state='unknown',signed_payload='{}',next_attempt_at=?,lease_until=0", (time.time()-1,))
+        self.ledger.db.execute("INSERT INTO custody_funding_jobs(id,intent_id,user_id,wallet_id,network,state,created_at,updated_at) VALUES (?,?,?,?,?,'estimating',?,?)", ('d'*32,self.intent,'tg:1','another-source','BSC',time.time(),time.time()))
+        self.assertEqual(self.call('claim')['job']['id'], 'd'*32)

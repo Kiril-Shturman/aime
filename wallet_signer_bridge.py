@@ -18,7 +18,7 @@ def bridge(db,body):
         db.execute('BEGIN IMMEDIATE')
         try:
             db.execute("UPDATE custody_funding_jobs SET state='expired',error='QUOTE_EXPIRED' WHERE state='quoted' AND json_extract(quote,'$.expires_at')<?",(time.time(),))
-            row=db.execute("SELECT * FROM custody_funding_jobs WHERE state IN ('estimating','confirmed','signing','signed','broadcast','unknown') AND lease_until<=? AND next_attempt_at<=? ORDER BY CASE WHEN state='estimating' THEN 2 ELSE 1 END,created_at LIMIT 1",(time.time(),time.time())).fetchone()
+            row=db.execute("SELECT * FROM custody_funding_jobs WHERE state IN ('estimating','confirmed','signing','signed','broadcast','unknown') AND lease_until<=? AND next_attempt_at<=? ORDER BY next_attempt_at,created_at LIMIT 1",(time.time(),time.time())).fetchone()
             if not row:db.execute('COMMIT');return {'job':None}
             db.execute("UPDATE custody_funding_jobs SET worker_id=?,lease_until=?,state=CASE WHEN state='confirmed' THEN 'signing' ELSE state END WHERE id=?",(worker,time.time()+120,row['id']))
             db.execute('COMMIT')
