@@ -2468,6 +2468,7 @@ def install_wallet(app, root, owner_check):
             financial = await finance_route(
                 request, action, uid, admin, ledger, provider, money, ApiError,
                 audit_callback=record_admin_action,
+                aura_test_client=aura_client if aura_enabled and aura_environment == 'test' else None,
             )
             if financial is not None:return financial
             aliases={'operations-transfers':'transfer-history','operations-invoices':'invoice-history'}

@@ -103,9 +103,38 @@ async def require_coverage(ledger, provider, asset, ApiError):
         )
 
 
+class TestBackingUnavailable(ValueError):
+    pass
+
+
+def apply_aura_test_backing(ledger, target, amount, event_id, actor, platform):
+    """Earmark existing test credits; never increase a user balance or call a payment API."""
+    if not ledger.db.in_transaction:raise ValueError("Allocation requires a transaction")
+    ledger.db.execute("""CREATE TABLE IF NOT EXISTS custody_test_allocation_audit (
+        event_id TEXT PRIMARY KEY,user_id TEXT NOT NULL,environment TEXT NOT NULL,asset TEXT NOT NULL,
+        amount TEXT NOT NULL,platform_available TEXT NOT NULL,prior_allocations TEXT NOT NULL,
+        actor TEXT NOT NULL,reason TEXT NOT NULL,created_at REAL NOT NULL)""")
+    prior=ledger.db.execute('SELECT user_id FROM custody_test_allocation_audit WHERE event_id=?',(event_id,)).fetchone()
+    if prior:
+        if prior['user_id']!=target:raise ValueError('Allocation owner mismatch')
+        return
+    event=ledger.db.execute("SELECT amount,type FROM wallet_events WHERE event_id=? AND user_id=? AND asset='USDT'",(event_id,target)).fetchone()
+    if not event or event['type'] not in {'adjustment','admin_adjustment'} or D(event['amount'])!=amount:raise ValueError('Existing administrative credit required')
+    row=ledger.db.execute("SELECT available FROM wallet_provider_positions WHERE provider='aura' AND environment='test' AND user_id=? AND asset='USDT'",(target,)).fetchone()
+    backed=D(row['available']) if row else D(0)
+    allocated=sum((D(r['available'])+D(r['reserved']) for r in ledger.db.execute("SELECT available,reserved FROM wallet_provider_positions WHERE provider='aura' AND environment='test' AND asset='USDT'")),D(0))
+    delta=amount if amount>0 else -min(backed,-amount)
+    if delta>0 and (platform is None or not platform.is_finite() or platform<allocated+delta):raise TestBackingUnavailable('Insufficient unallocated Aura test reserve')
+    available,_=ledger.balance(target,'USDT')
+    if backed+delta>available:raise ValueError('Allocation exceeds existing user balance')
+    from wallet_aura import _position_adjust
+    _position_adjust(ledger,'test',target,'USDT',delta,D(0))
+    ledger.db.execute('INSERT INTO custody_test_allocation_audit VALUES (?,?,?,?,?,?,?,?,?,?)',(event_id,target,'test','USDT',str(delta),str(platform) if platform is not None else 'not_required',str(allocated),actor,'Back existing administrative TEST credit with Aura reserve; no additional user credit',time.time()))
+
+
 async def finance_route(
     request, action, uid, admin, ledger, provider, money, ApiError,
-    audit_callback=None,
+    audit_callback=None, aura_test_client=None,
 ):
     if action == "finance-reconciliation" and request.method == "GET":
         if not admin:
@@ -146,6 +175,11 @@ async def finance_route(
                 409,
             )
         bucket = body.get("bucket", "available")
+        test_backing = aura_test_client is not None and aura_test_client.environment == "test" and asset == "USDT" and bucket == "available"
+        platform = None
+        if test_backing and amount > 0:
+            from wallet_aura import _platform_balance
+            platform = _platform_balance(await aura_test_client.get_balance())
         ledger.begin("admin_adjustment", uid, reason)
         try:
             if bucket == "available":
@@ -173,6 +207,10 @@ async def finance_route(
                     json.dumps({"reason": reason, "actor": uid, "bucket": bucket}),
                 ),
             )
+            if test_backing:
+                try:apply_aura_test_backing(ledger,target,amount,key,uid,platform)
+                except TestBackingUnavailable:
+                    raise ApiError('AURA_TEST_RESERVE_INSUFFICIENT','Недостаточно свободного тестового резерва Aura. Корректировка отменена.',409)
             if audit_callback:
                 audit_callback(
                     uid, "balance.adjust", target,
