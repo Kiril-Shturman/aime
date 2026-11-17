@@ -204,8 +204,9 @@ export default function WalletVerification({
     );
   return (
     <section
-      className={`wpay-verification${rejected ? " wpay-verification--issue" : ""}`}
+      className={`wpay-verification${rejected ? " wpay-verification--issue" : ""}${aura.loading ? " wpay-verification--loading" : ""}`}
       aria-label="Проверка личности"
+      aria-busy={aura.loading}
     >
       <div className="wpay-verification-body">
         <div className="wpay-verification-scene" aria-hidden="true">
@@ -240,133 +241,156 @@ export default function WalletVerification({
             draggable={false}
           />
           <span
-            className={`wpay-verification-seal${rejected ? " wpay-verification-seal--rejected" : ""}`}
+            className={`wpay-verification-seal${aura.loading ? " wpay-verification-seal--loading" : rejected ? " wpay-verification-seal--rejected" : ""}`}
           >
-            {rejected ? <Ban strokeWidth={3} /> : <Check strokeWidth={3.5} />}
+            {!aura.loading &&
+              (rejected ? (
+                <Ban strokeWidth={3} />
+              ) : (
+                <Check strokeWidth={3.5} />
+              ))}
           </span>
           <span className="wpay-verification-spark wpay-verification-spark--one" />
           <span className="wpay-verification-spark wpay-verification-spark--two" />
         </div>
         <div className="wpay-verification-copy">
-          {!rejected && (
-            <span className="wpay-verification-eyebrow">
-              ВАША ЛИЧНОСТЬ. ВАШИ ВОЗМОЖНОСТИ.
-            </span>
-          )}
-          <h2>
-            {verified
-              ? "Личность подтверждена"
-              : rejected
-                ? "Проверка не пройдена"
-                : "Больше доверия.\nБольше возможностей."}
-          </h2>
-          <p role="status">
-            {aura.loading
-              ? "Проверяем статус…"
-              : verified
-                ? "Проверка успешно пройдена. Всё готово к следующему шагу."
-                : pending
-                  ? "Документы на проверке. Мы обновим статус, когда проверка завершится."
-                  : rejected
-                    ? "Поможем разобраться в поддержке. Повторно отправлять документы не нужно."
-                    : "Подтвердите личность, чтобы пользоваться всеми возможностями wPay."}
-          </p>
-          {rejected && (
-            <VerificationIssue
-              reason={aura.kyc?.reason}
-              diagnostic={aura.error}
-            />
-          )}
-          {!verified && !pending && !rejected && (
-            <p className="wpay-verification-guidance">
-              Сохраните телефон и почту в личных данных, затем подтвердите
-              документы в защищённой форме.
-            </p>
-          )}
-          {!rejected && (
-            <span className="wpay-verification-trust">
-              <LockKeyhole size={14} /> Защищённая форма проверки
-            </span>
-          )}
-          {aura.error && !rejected && (
-            <p role="alert" className="wpay-verification-error">
-              {aura.error}
-            </p>
-          )}
-          {aura.sessionUrl && (
-            <button
-              type="button"
-              className="wpay-verification-text-action"
-              onClick={aura.resumeSession}
+          {aura.loading ? (
+            <div
+              className="wpay-verification-status-loading"
+              role="status"
+              aria-label="Загрузка статуса проверки"
             >
-              Продолжить проверку <ArrowUpRight size={16} />
-            </button>
+              <Preloader size={28} />
+            </div>
+          ) : (
+            <>
+              {!rejected && (
+                <span className="wpay-verification-eyebrow">
+                  ВАША ЛИЧНОСТЬ. ВАШИ ВОЗМОЖНОСТИ.
+                </span>
+              )}
+              <h2>
+                {verified
+                  ? "Личность подтверждена"
+                  : rejected
+                    ? "Проверка не пройдена"
+                    : "Больше доверия.\nБольше возможностей."}
+              </h2>
+              <p role="status">
+                {aura.loading
+                  ? "Проверяем статус…"
+                  : verified
+                    ? "Проверка успешно пройдена. Всё готово к следующему шагу."
+                    : pending
+                      ? "Документы на проверке. Мы обновим статус, когда проверка завершится."
+                      : rejected
+                        ? "Поможем разобраться в поддержке. Повторно отправлять документы не нужно."
+                        : "Подтвердите личность, чтобы пользоваться всеми возможностями wPay."}
+              </p>
+              {rejected && (
+                <VerificationIssue
+                  reason={aura.kyc?.reason}
+                  diagnostic={aura.error}
+                />
+              )}
+              {!verified && !pending && !rejected && (
+                <p className="wpay-verification-guidance">
+                  Сохраните телефон и почту в личных данных, затем подтвердите
+                  документы в защищённой форме.
+                </p>
+              )}
+              {!rejected && (
+                <span className="wpay-verification-trust">
+                  <LockKeyhole size={14} /> Защищённая форма проверки
+                </span>
+              )}
+              {aura.error && !rejected && (
+                <p role="alert" className="wpay-verification-error">
+                  {aura.error}
+                </p>
+              )}
+              {aura.sessionUrl && (
+                <button
+                  type="button"
+                  className="wpay-verification-text-action"
+                  onClick={aura.resumeSession}
+                >
+                  Продолжить проверку <ArrowUpRight size={16} />
+                </button>
+              )}
+              <div className="wpay-verification-links">
+                {!verified && !rejected && (
+                  <button type="button" onClick={onPersonal}>
+                    Личные данные
+                  </button>
+                )}
+                {aura.available && (
+                  <button
+                    type="button"
+                    disabled={aura.loading || aura.busy || refreshing}
+                    aria-busy={refreshing}
+                    onClick={() => void refreshStatus()}
+                  >
+                    {refreshing ? (
+                      <Preloader size={13} />
+                    ) : (
+                      <RefreshCw size={13} />
+                    )}{" "}
+                    Обновить статус
+                  </button>
+                )}
+              </div>
+            </>
           )}
-          <div className="wpay-verification-links">
-            {!verified && !rejected && (
-              <button type="button" onClick={onPersonal}>
-                Личные данные
-              </button>
-            )}
-            {aura.available && (
-              <button
-                type="button"
-                disabled={aura.loading || aura.busy || refreshing}
-                aria-busy={refreshing}
-                onClick={() => void refreshStatus()}
-              >
-                {refreshing ? <Preloader size={13} /> : <RefreshCw size={13} />}{" "}
-                Обновить статус
-              </button>
-            )}
-          </div>
         </div>
       </div>
-      <div className="wpay-verification-footer">
-        {rejected ? (
-          <Button
-            data-wpay-primary=""
-            rounded
-            className="!m-0 !w-full"
-            disabled={!onSupport && refreshing}
-            aria-busy={!onSupport && refreshing}
-            onClick={onSupport || (() => void refreshStatus())}
-          >
-            <span className="wpay-verification-button-content">
-              {onSupport && <MessageCircle size={20} aria-hidden="true" />}
-              {onSupport ? "Связаться с поддержкой" : "Обновить статус"}
-            </span>
-          </Button>
-        ) : !verified ? (
-          <Button
-            data-wpay-primary=""
-            rounded
-            disabled={
-              !aura.available ||
-              aura.loading ||
-              aura.busy ||
-              pending ||
-              Boolean(aura.kyc?.terminal)
-            }
-            className="!m-0 !w-full"
-            onClick={onContacts}
-          >
-            <span className="wpay-verification-button-content">
-              <span>
-                {aura.busy
-                  ? "Подготавливаем…"
-                  : pending
-                    ? "На проверке"
-                    : "Начать"}
+      {!aura.loading && (
+        <div className="wpay-verification-footer">
+          {rejected ? (
+            <Button
+              data-wpay-primary=""
+              rounded
+              className="!m-0 !w-full"
+              disabled={!onSupport && refreshing}
+              aria-busy={!onSupport && refreshing}
+              onClick={onSupport || (() => void refreshStatus())}
+            >
+              <span className="wpay-verification-button-content">
+                {onSupport && <MessageCircle size={20} aria-hidden="true" />}
+                {onSupport ? "Связаться с поддержкой" : "Обновить статус"}
               </span>
+            </Button>
+          ) : !verified ? (
+            <Button
+              data-wpay-primary=""
+              rounded
+              disabled={
+                !aura.available ||
+                aura.loading ||
+                aura.busy ||
+                pending ||
+                Boolean(aura.kyc?.terminal)
+              }
+              className="!m-0 !w-full"
+              onClick={onContacts}
+            >
+              <span className="wpay-verification-button-content">
+                <span>
+                  {aura.busy
+                    ? "Подготавливаем…"
+                    : pending
+                      ? "На проверке"
+                      : "Начать"}
+                </span>
+              </span>
+            </Button>
+          ) : (
+            <span className="wpay-verification-complete">
+              <Check size={20} /> Проверка пройдена
             </span>
-          </Button>
-        ) : (
-          <span className="wpay-verification-complete">
-            <Check size={20} /> Проверка пройдена
-          </span>
-        )}
-      </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -389,21 +413,33 @@ function VerificationIssue({
         ? "Данные нельзя изменить самостоятельно"
         : "Нужна помощь с проверкой";
   const description = alreadyUsed
-    ? "Этот паспорт связан с другим профилем. Поддержка поможет разобраться."
+    ? "Паспорт связан с другим профилем. Поддержка поможет разобраться."
     : locked
-      ? "Паспортные данные уже переданы. Уточнить причину отказа и внести изменения можно через поддержку."
-      : "Сервис проверки не подтвердил данные. Обратитесь в поддержку, чтобы уточнить причину и дальнейшие шаги.";
+      ? "Изменить переданные данные можно только через поддержку."
+      : "Поддержка поможет уточнить причину отказа и дальнейшие шаги.";
   return (
     <div className="wpay-verification-issue" role="alert">
       <div className="wpay-verification-issue-heading">
         <span className="wpay-verification-issue-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path fillRule="evenodd" clipRule="evenodd" d="M10.34 3.94c.77-1.333 2.55-1.333 3.32 0l7.82 13.55c.77 1.334-.192 3-1.731 3H4.25c-1.54 0-2.502-1.666-1.732-3l7.82-13.55ZM12 8a.75.75 0 0 0-.75.75v3.5a.75.75 0 0 0 1.5 0v-3.5A.75.75 0 0 0 12 8Zm0 8.5a1 1 0 1 0 0-2a1 1 0 0 0 0 2Z" />
+          <svg
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path
+              fillRule="evenodd"
+              clipRule="evenodd"
+              d="M10.34 3.94c.77-1.333 2.55-1.333 3.32 0l7.82 13.55c.77 1.334-.192 3-1.731 3H4.25c-1.54 0-2.502-1.666-1.732-3l7.82-13.55ZM12 8a.75.75 0 0 0-.75.75v3.5a.75.75 0 0 0 1.5 0v-3.5A.75.75 0 0 0 12 8Zm0 8.5a1 1 0 1 0 0-2a1 1 0 0 0 0 2Z"
+            />
           </svg>
         </span>
-        <h3>{title}</h3>
+        <div className="wpay-verification-issue-text">
+          <h3>{title}</h3>
+          <p>{description}</p>
+        </div>
       </div>
-      <p>{description}</p>
       {(reason || diagnostic) && (
         <details className="wpay-verification-diagnostics">
           <summary>Данные для поддержки</summary>

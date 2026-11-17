@@ -642,3 +642,59 @@ for (const theme of ["light", "dark"]) {
     expect(state.posts).toHaveLength(0);
   });
 }
+
+test("opening verification shows a skeleton badge and native loader until status is known", async ({
+  page,
+}) => {
+  const state = await setup(page);
+  state.contact = { email: "test@example.com", phone: "+79991234567" };
+  let finish!: () => void;
+  const waiting = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  await page.route("**/api/wallet/aura-kyc", async (route) => {
+    await waiting;
+    await route.fulfill({
+      json: {
+        status: "rejected",
+        verified: false,
+        terminal: true,
+        reason: "PassportFailed",
+      },
+    });
+  });
+  await page
+    .getByRole("link", { name: "Верификация Подтверждение личности" })
+    .click();
+  const region = page.getByRole("region", {
+    name: "Проверка личности",
+    exact: true,
+  });
+  await expect(region).toHaveAttribute("aria-busy", "true");
+  await expect(
+    region.locator(".wpay-verification-seal--loading"),
+  ).toBeVisible();
+  await expect(region.locator(".wpay-verification-seal svg")).toHaveCount(0);
+  await expect(
+    region
+      .getByRole("status", { name: "Загрузка статуса проверки" })
+      .locator(".preloader"),
+  ).toBeVisible();
+  await expect(
+    region.getByText("Проверяем статус…", { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    region.getByRole("button", { name: "Начать", exact: true }),
+  ).toHaveCount(0);
+  finish();
+  await expect(region).toHaveAttribute("aria-busy", "false");
+  await expect(region.locator(".wpay-verification-seal--loading")).toHaveCount(
+    0,
+  );
+  await expect(
+    region.locator(".wpay-verification-seal--rejected .lucide-ban"),
+  ).toBeVisible();
+  await expect(
+    region.getByRole("button", { name: "Связаться с поддержкой" }),
+  ).toBeVisible();
+});
