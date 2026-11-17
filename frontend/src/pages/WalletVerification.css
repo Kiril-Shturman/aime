@@ -1230,12 +1230,14 @@
   flex: 0 0 40px;
   height: 40px;
   border-radius: 14px;
-  background: #fff3df;
-  color: #ad691c;
+  background: linear-gradient(145deg, #ffe36b, #ffbd35);
+  color: #7a3c00;
+  box-shadow: inset 0 1px 1px #ffffff70, 0 3px 10px #ffb52d26;
 }
 .dark .wpay-verification-issue-icon {
-  background: #e6aa4520;
-  color: #eabd75;
+  background: linear-gradient(145deg, #ffd75a, #f5aa27);
+  color: #683100;
+  box-shadow: inset 0 1px 1px #ffffff55, 0 3px 12px #f5aa271a;
 }
 .wpay-verification-issue h3 {
   margin: 0;
