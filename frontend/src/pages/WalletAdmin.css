@@ -1404,8 +1404,8 @@
 .wpay-admin-mobile-list {
   border-radius: 20px;
 }
-.wpay-admin-content button[class*="bg-blue-500"],
-.wpay-admin-content button[class*="bg-red-500"],
+.wpay-admin-content button[class~="bg-blue-500"],
+.wpay-admin-content button[class~="bg-red-500"],
 .wpay-admin-sync button,
 .wpay-admin-operator-send,
 .wpay-admin-balance-adjustment > button,
@@ -1420,14 +1420,14 @@
   font-size: 13px;
   font-weight: 600;
 }
-.wpay-admin-content button[class*="bg-blue-500"]:not(:disabled):hover,
+.wpay-admin-content button[class~="bg-blue-500"]:not(:disabled):hover,
 .wpay-admin-sync button:not(:disabled):hover,
 .wpay-admin-operator-send:not(:disabled):hover,
 .wpay-admin-balance-adjustment > button:not(:disabled):hover,
 .wpay-admin-drawer-state button:not(:disabled):hover {
   background: var(--wpay-admin-action-hover);
 }
-.wpay-admin-content button[class*="bg-red-500"] {
+.wpay-admin-content button[class~="bg-red-500"] {
   background: var(--wpay-admin-danger);
   box-shadow: 0 5px 14px color-mix(in srgb, var(--wpay-admin-danger) 20%, transparent);
 }
@@ -1475,7 +1475,7 @@
 .wpay-admin-f7 .wpay-admin-mobile-item:is(button) {
   border-radius: 14px;
 }
-.wpay-admin-f7 .wpay-admin-section-title > button[class*="bg-blue-500"] {
+.wpay-admin-f7 .wpay-admin-section-title > button[class~="bg-blue-500"] {
   min-height: 40px;
   padding: 9px 16px;
 }
