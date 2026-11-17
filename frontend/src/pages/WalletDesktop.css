@@ -247,3 +247,50 @@
  .wpay-exchange-desktop>button{grid-column:2;grid-row:4}
  .wpay-exchange-desktop>p:last-child{grid-column:2;grid-row:5}
 }
+
+
+@media (min-width: 1100px) {
+ .wpay-viewport[data-wallet-surface="asset"] {
+   inset: 0 0 0 248px !important;
+   border: 0;
+   border-radius: 0;
+   box-shadow: none !important;
+ }
+ .wpay-viewport[data-wallet-surface="asset"] .wpay-asset-scroll {
+   background: #f5f6f8;
+ }
+ .dark .wpay-viewport[data-wallet-surface="asset"] .wpay-asset-scroll {
+   background: #101113;
+ }
+ .wpay-viewport[data-wallet-surface="asset"] .wpay-asset-scroll > .k-navbar {
+   --wpay-top-inset: 0px;
+ }
+ .wpay-viewport[data-wallet-surface="asset"] main.wpay-asset-layout {
+   display: grid;
+   grid-template-columns: minmax(0, 1fr) minmax(285px, 32%);
+   gap: 20px 24px;
+   align-items: start;
+   max-width: 1240px;
+   padding: 24px 32px 32px;
+   background: transparent;
+ }
+ .wpay-asset-layout > .wpay-asset-chart-card {
+   min-width: 0;
+   border-radius: 28px !important;
+ }
+ .wpay-asset-sidebar {
+   display: grid;
+   gap: 18px;
+   min-width: 0;
+ }
+ .wpay-asset-sidebar > section { padding: 0; }
+ .wpay-asset-layout > .wpay-asset-actions {
+   position: static;
+   grid-column: 1;
+   grid-row: 2;
+   transform: none;
+   max-width: none;
+   padding: 0;
+ }
+ .wpay-asset-sidebar { grid-column: 2; grid-row: 1 / span 2; }
+}

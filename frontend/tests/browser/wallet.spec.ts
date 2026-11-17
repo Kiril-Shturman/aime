@@ -1295,3 +1295,23 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
   await expect(profileAside).toBeHidden();
   await expect(page.locator(".wpay-bottom-menu")).toBeVisible();
 });
+
+test("desktop asset balances and chart sit side by side above the action buttons", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 860 });
+  await setup(page, "light");
+  await page.locator(".wpay-wallet-home span.font-semibold").filter({ hasText: /^Tether$/ }).first().click();
+  const surface = page.locator('[data-wallet-surface="asset"][aria-hidden="false"]');
+  const chart = surface.locator(".wpay-asset-chart-card");
+  const side = surface.locator(".wpay-asset-sidebar");
+  const actions = surface.locator(".wpay-asset-actions");
+  await expect(chart).toBeVisible();
+  await expect(side.getByText("Баланс приложения", { exact: true })).toBeVisible();
+  await expect(actions).toHaveCSS("position", "static");
+  await expect.poll(() => surface.evaluate((node) => {
+    const bounds = (selector: string) => node.querySelector(selector)!.getBoundingClientRect();
+    const chart = bounds(".wpay-asset-chart-card");
+    const sidebar = bounds(".wpay-asset-sidebar");
+    const actions = bounds(".wpay-asset-actions");
+    return chart.right < sidebar.left && actions.top > chart.bottom && sidebar.right <= window.innerWidth;
+  })).toBe(true);
+});

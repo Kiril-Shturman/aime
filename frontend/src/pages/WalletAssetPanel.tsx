@@ -242,9 +242,9 @@ export default function WalletAssetPanel({
   const reserved =
     wallet.data.balances.find((item) => item.asset === code)?.reserved ?? "0";
   return (
-    <main className="mx-auto w-full max-w-[560px] bg-[#efeff4] pb-0 dark:bg-black">
+    <main className="wpay-asset-layout mx-auto w-full max-w-[560px] bg-[#efeff4] pb-0 dark:bg-black">
       <Card
-        className="!mx-0 !mb-0 !mt-0 !rounded-none !shadow-none !bg-white dark:!bg-[#1c1c1e]"
+        className="wpay-asset-chart-card !mx-0 !mb-0 !mt-0 !rounded-none !shadow-none !bg-white dark:!bg-[#1c1c1e]"
         contentWrapPadding="px-5 pb-5 pt-4"
       >
         <div className="flex min-h-[33px] items-end justify-between gap-4 pt-0">
@@ -291,242 +291,244 @@ export default function WalletAssetPanel({
           ))}
         </div>
       </Card>
-      <section className="px-4 pb-3 pt-6">
-        <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
-          Баланс приложения
-        </h3>
-        <Card className="!m-0 !rounded-[30px]" contentWrapPadding="px-4 py-0">
-          <div
-            className="wpay-portfolio-row flex min-h-[80px] items-center py-4"
-            aria-label="Общий баланс актива"
-          >
-            <div className="min-w-0 text-left">
-              <span className="block text-[20px] leading-6 font-semibold tabular-nums text-black dark:text-white">
-                {demoPortfolio
-                  ? cryptoAmount(preview.amount)
-                  : wallet.ready
-                    ? cryptoAmount(balance)
-                    : "—"}{" "}
-                {code}
-              </span>
-              <span className="mt-1 flex flex-wrap items-center gap-2 text-[13px] leading-5 tabular-nums text-black/45 dark:text-white/45">
-                <span>{portfolioUsd !== null ? usd(portfolioUsd) : "$ —"}</span>
-                <span
-                  aria-label="Изменение за период графика"
-                  className={`shrink-0 rounded-md px-1.5 py-0.5 font-medium tabular-nums ${portfolioChange === null ? "bg-black/5 text-black/40 dark:bg-white/5 dark:text-white/40" : portfolioChange >= 0 ? "bg-green-500/10 text-green-600 dark:bg-green-400/10 dark:text-green-400" : "bg-red-500/10 text-red-600 dark:bg-red-400/10 dark:text-red-400"}`}
-                >
-                  {portfolioChange !== null
-                    ? (portfolioChange >= 0 ? "+" : "") +
-                      portfolioChange.toFixed(2) +
-                      "%"
-                    : "—%"}
+      <div className="wpay-asset-sidebar">
+        <section className="px-4 pb-3 pt-6">
+          <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
+            Баланс приложения
+          </h3>
+          <Card className="!m-0 !rounded-[30px]" contentWrapPadding="px-4 py-0">
+            <div
+              className="wpay-portfolio-row flex min-h-[80px] items-center py-4"
+              aria-label="Общий баланс актива"
+            >
+              <div className="min-w-0 text-left">
+                <span className="block text-[20px] leading-6 font-semibold tabular-nums text-black dark:text-white">
+                  {demoPortfolio
+                    ? cryptoAmount(preview.amount)
+                    : wallet.ready
+                      ? cryptoAmount(balance)
+                      : "—"}{" "}
+                  {code}
                 </span>
-                <span aria-label="Стоимость в рублях">
-                  {portfolioUsd !== null && rubRate !== null
-                    ? (portfolioUsd * rubRate).toLocaleString("en-US", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      }) + " ₽"
-                    : "— ₽"}
-                </span>
-              </span>
-            </div>
-          </div>
-          {Number(reserved) > 0 && (
-            <p className="mt-3 text-right text-[12px] text-black/40 dark:text-white/40">
-              В резерве {cryptoAmount(reserved)} {code}
-            </p>
-          )}
-          <div className="wpay-portfolio-networks">
-            <WalletOwnedWallets
-              {...{ code, active, icon, color, iconColor }}
-              onAvailability={setOwnedAvailable}
-              onOpenAddress={onOpenAddress}
-            />
-            {(!ownedAvailable ? (wallet.assetRoutes[code] ?? []) : []).map(
-              (network) => {
-                const item = demoPortfolio
-                  ? portfolioExamples[network]
-                  : addresses.find((row) => row.network === network);
-                return (
-                  <button
-                    key={network}
-                    type="button"
-                    aria-label={`Открыть адрес ${network}`}
-                    disabled={
-                      !demoPortfolio &&
-                      !(code === "USDT" && network === "TRON") &&
-                      !item &&
-                      (!(addressNetworks[code] ?? []).includes(network) ||
-                        !wallet.configured ||
-                        loadingAddresses ||
-                        addressBusy)
-                    }
-                    onClick={() => {
-                      setAddressError("");
-                      setCopiedAddress("");
-                      if (item)
-                        onOpenAddress({
-                          network,
-                          address: item.address,
-                          min_deposit:
-                            "min_deposit" in item
-                              ? item.min_deposit
-                              : undefined,
-                          demo: demoPortfolio,
-                          amount: demoPortfolio
-                            ? code === "USDT"
-                              ? portfolioExamples[network].amount
-                              : preview.amount
-                            : null,
-                          rate: demoPortfolio ? preview.rate : rate,
-                        });
-                      else if (network === "TRON" && code === "USDT")
-                        onDeposit("TRON");
-                      else if ((addressNetworks[code] ?? []).includes(network))
-                        void createAddress(network);
-                    }}
-                    className="wpay-address-row flex h-16 w-full items-center justify-between gap-3 border-b border-black/[.06] py-2 text-left dark:border-white/[.08]"
+                <span className="mt-1 flex flex-wrap items-center gap-2 text-[13px] leading-5 tabular-nums text-black/45 dark:text-white/45">
+                  <span>{portfolioUsd !== null ? usd(portfolioUsd) : "$ —"}</span>
+                  <span
+                    aria-label="Изменение за период графика"
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 font-medium tabular-nums ${portfolioChange === null ? "bg-black/5 text-black/40 dark:bg-white/5 dark:text-white/40" : portfolioChange >= 0 ? "bg-green-500/10 text-green-600 dark:bg-green-400/10 dark:text-green-400" : "bg-red-500/10 text-red-600 dark:bg-red-400/10 dark:text-red-400"}`}
                   >
-                    <span className="flex min-w-0 items-center gap-3">
-                      <WalletAssetAvatar
-                        icon={icon}
-                        color={color}
-                        iconColor={iconColor}
-                        network={network}
-                      />
-                      <span className="min-w-0">
-                        <span className="block truncate text-[15px] font-medium text-black dark:text-white">
-                          {code}
-                          {["BTC", "TRX"].includes(code)
-                            ? ""
-                            : " · " + (networkStandards[network] ?? network)}
-                        </span>
-                        <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
-                          {networkNames[network] ?? network}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-right">
-                      <span
-                        className="block text-[16px] leading-6 font-medium tabular-nums text-black dark:text-white"
-                        aria-label={
-                          demoPortfolio
-                            ? "Пример баланса сети"
-                            : "Баланс сети пока недоступен"
-                        }
-                      >
-                        {demoPortfolio
-                          ? code === "USDT"
-                            ? "$" +
-                              cryptoAmount(portfolioExamples[network].amount)
-                            : cryptoAmount(preview.amount)
-                          : "—"}
-                      </span>
-                      <span className="mt-0.5 block text-[12px] leading-5 text-black/45 dark:text-white/45">
-                        {network === "TRON" && !demoPortfolio
-                          ? "По точной сумме"
-                          : item
-                            ? item.address.slice(0, 7) +
-                              "…" +
-                              item.address.slice(-5)
-                            : loadingAddresses
-                              ? "Получаем адрес…"
-                              : wallet.configured
-                                ? "Получить адрес"
-                                : "Нет адреса"}
-                      </span>
-                    </span>
-                  </button>
-                );
-              },
-            )}
-
-            {addressError && (
-              <p
-                role="status"
-                className="pt-3 text-[13px] text-black/45 dark:text-white/45"
-              >
-                {addressError}
-              </p>
-            )}
-            {wallet.demo && (
-              <button
-                type="button"
-                onClick={() => {
-                  setAddressError("");
-                  setCreatingAddress(true);
-                }}
-                className="flex min-h-12 w-full items-center gap-3 py-2 text-left text-[16px] font-medium text-primary"
-              >
-                <span className="flex h-8 w-9 shrink-0 items-center justify-center">
-                  <Plus size={23} />
-                </span>
-                Создать ещё адрес
-              </button>
-            )}
-          </div>
-        </Card>
-      </section>
-      <section ref={historySection} className="scroll-mt-24 px-4 pb-3 pt-4">
-        <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
-          История транзакций
-        </h3>
-        <Card className="!m-0 !rounded-[30px]" contentWrapPadding="p-5">
-          {!transactions.length && (
-            <p className="py-3 text-center text-[14px] text-black/45 dark:text-white/45">
-              Операций в {code} пока нет
-            </p>
-          )}
-          {(allHistory ? transactions : transactions.slice(0, 3)).map(
-            (item) => (
-              <div
-                key={item.event_id}
-                className="flex items-center justify-between gap-3 border-b border-black/[.06] py-3 first:pt-0 last:border-0 last:pb-0 dark:border-white/[.08]"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-[15px] font-medium text-black dark:text-white">
-                    {item.type === "deposit"
-                      ? "Пополнение"
-                      : item.type === "qr_refunded"
-                        ? "Возврат"
-                        : item.type === "qr_failed"
-                          ? "Платёж не прошёл"
-                          : String(item.detail.merchant_name || "QR-оплата")}
+                    {portfolioChange !== null
+                      ? (portfolioChange >= 0 ? "+" : "") +
+                        portfolioChange.toFixed(2) +
+                        "%"
+                      : "—%"}
                   </span>
-                  <span className="mt-1 block text-[12px] text-black/40 dark:text-white/40">
-                    {new Date(item.created_at).toLocaleDateString("ru-RU")}
+                  <span aria-label="Стоимость в рублях">
+                    {portfolioUsd !== null && rubRate !== null
+                      ? (portfolioUsd * rubRate).toLocaleString("en-US", {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        }) + " ₽"
+                      : "— ₽"}
                   </span>
-                </span>
-                <span className="shrink-0 text-[14px] font-medium tabular-nums text-black dark:text-white">
-                  {Number(item.amount) > 0 ? "+" : ""}
-                  {cryptoAmount(item.amount)} {code}
                 </span>
               </div>
-            ),
-          )}
-          {transactions.length > 3 && (
-            <Button
-              clear
-              rounded
-              className="!mt-3 !w-full"
-              onClick={() => setAllHistory((value) => !value)}
-            >
-              {allHistory ? "Свернуть" : "Все транзакции"}
-            </Button>
-          )}
-        </Card>
-      </section>
-      <section className="px-4 pb-5 pt-4">
-        <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
-          {about.title}
-        </h3>
-        <Card className="!m-0 !rounded-[30px]" contentWrapPadding="p-5">
-          <p className="text-[15px] leading-relaxed text-black/65 dark:text-white/65">
-            {about.text}
-          </p>
-        </Card>
-      </section>
+            </div>
+            {Number(reserved) > 0 && (
+              <p className="mt-3 text-right text-[12px] text-black/40 dark:text-white/40">
+                В резерве {cryptoAmount(reserved)} {code}
+              </p>
+            )}
+            <div className="wpay-portfolio-networks">
+              <WalletOwnedWallets
+                {...{ code, active, icon, color, iconColor }}
+                onAvailability={setOwnedAvailable}
+                onOpenAddress={onOpenAddress}
+              />
+              {(!ownedAvailable ? (wallet.assetRoutes[code] ?? []) : []).map(
+                (network) => {
+                  const item = demoPortfolio
+                    ? portfolioExamples[network]
+                    : addresses.find((row) => row.network === network);
+                  return (
+                    <button
+                      key={network}
+                      type="button"
+                      aria-label={`Открыть адрес ${network}`}
+                      disabled={
+                        !demoPortfolio &&
+                        !(code === "USDT" && network === "TRON") &&
+                        !item &&
+                        (!(addressNetworks[code] ?? []).includes(network) ||
+                          !wallet.configured ||
+                          loadingAddresses ||
+                          addressBusy)
+                      }
+                      onClick={() => {
+                        setAddressError("");
+                        setCopiedAddress("");
+                        if (item)
+                          onOpenAddress({
+                            network,
+                            address: item.address,
+                            min_deposit:
+                              "min_deposit" in item
+                                ? item.min_deposit
+                                : undefined,
+                            demo: demoPortfolio,
+                            amount: demoPortfolio
+                              ? code === "USDT"
+                                ? portfolioExamples[network].amount
+                                : preview.amount
+                              : null,
+                            rate: demoPortfolio ? preview.rate : rate,
+                          });
+                        else if (network === "TRON" && code === "USDT")
+                          onDeposit("TRON");
+                        else if ((addressNetworks[code] ?? []).includes(network))
+                          void createAddress(network);
+                      }}
+                      className="wpay-address-row flex h-16 w-full items-center justify-between gap-3 border-b border-black/[.06] py-2 text-left dark:border-white/[.08]"
+                    >
+                      <span className="flex min-w-0 items-center gap-3">
+                        <WalletAssetAvatar
+                          icon={icon}
+                          color={color}
+                          iconColor={iconColor}
+                          network={network}
+                        />
+                        <span className="min-w-0">
+                          <span className="block truncate text-[15px] font-medium text-black dark:text-white">
+                            {code}
+                            {["BTC", "TRX"].includes(code)
+                              ? ""
+                              : " · " + (networkStandards[network] ?? network)}
+                          </span>
+                          <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
+                            {networkNames[network] ?? network}
+                          </span>
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span
+                          className="block text-[16px] leading-6 font-medium tabular-nums text-black dark:text-white"
+                          aria-label={
+                            demoPortfolio
+                              ? "Пример баланса сети"
+                              : "Баланс сети пока недоступен"
+                          }
+                        >
+                          {demoPortfolio
+                            ? code === "USDT"
+                              ? "$" +
+                                cryptoAmount(portfolioExamples[network].amount)
+                              : cryptoAmount(preview.amount)
+                            : "—"}
+                        </span>
+                        <span className="mt-0.5 block text-[12px] leading-5 text-black/45 dark:text-white/45">
+                          {network === "TRON" && !demoPortfolio
+                            ? "По точной сумме"
+                            : item
+                              ? item.address.slice(0, 7) +
+                                "…" +
+                                item.address.slice(-5)
+                              : loadingAddresses
+                                ? "Получаем адрес…"
+                                : wallet.configured
+                                  ? "Получить адрес"
+                                  : "Нет адреса"}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                },
+              )}
+
+              {addressError && (
+                <p
+                  role="status"
+                  className="pt-3 text-[13px] text-black/45 dark:text-white/45"
+                >
+                  {addressError}
+                </p>
+              )}
+              {wallet.demo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddressError("");
+                    setCreatingAddress(true);
+                  }}
+                  className="flex min-h-12 w-full items-center gap-3 py-2 text-left text-[16px] font-medium text-primary"
+                >
+                  <span className="flex h-8 w-9 shrink-0 items-center justify-center">
+                    <Plus size={23} />
+                  </span>
+                  Создать ещё адрес
+                </button>
+              )}
+            </div>
+          </Card>
+        </section>
+        <section ref={historySection} className="scroll-mt-24 px-4 pb-3 pt-4">
+          <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
+            История транзакций
+          </h3>
+          <Card className="!m-0 !rounded-[30px]" contentWrapPadding="p-5">
+            {!transactions.length && (
+              <p className="py-3 text-center text-[14px] text-black/45 dark:text-white/45">
+                Операций в {code} пока нет
+              </p>
+            )}
+            {(allHistory ? transactions : transactions.slice(0, 3)).map(
+              (item) => (
+                <div
+                  key={item.event_id}
+                  className="flex items-center justify-between gap-3 border-b border-black/[.06] py-3 first:pt-0 last:border-0 last:pb-0 dark:border-white/[.08]"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-[15px] font-medium text-black dark:text-white">
+                      {item.type === "deposit"
+                        ? "Пополнение"
+                        : item.type === "qr_refunded"
+                          ? "Возврат"
+                          : item.type === "qr_failed"
+                            ? "Платёж не прошёл"
+                            : String(item.detail.merchant_name || "QR-оплата")}
+                    </span>
+                    <span className="mt-1 block text-[12px] text-black/40 dark:text-white/40">
+                      {new Date(item.created_at).toLocaleDateString("ru-RU")}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-[14px] font-medium tabular-nums text-black dark:text-white">
+                    {Number(item.amount) > 0 ? "+" : ""}
+                    {cryptoAmount(item.amount)} {code}
+                  </span>
+                </div>
+              ),
+            )}
+            {transactions.length > 3 && (
+              <Button
+                clear
+                rounded
+                className="!mt-3 !w-full"
+                onClick={() => setAllHistory((value) => !value)}
+              >
+                {allHistory ? "Свернуть" : "Все транзакции"}
+              </Button>
+            )}
+          </Card>
+        </section>
+        <section className="px-4 pb-5 pt-4">
+          <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
+            {about.title}
+          </h3>
+          <Card className="!m-0 !rounded-[30px]" contentWrapPadding="p-5">
+            <p className="text-[15px] leading-relaxed text-black/65 dark:text-white/65">
+              {about.text}
+            </p>
+          </Card>
+        </section>
+      </div>
       {createPortal(
         <Sheet
           opened={selectedAddress !== null || creatingAddress}
