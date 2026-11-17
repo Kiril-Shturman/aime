@@ -545,8 +545,9 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
             ).status,
             400,
         )
+        self.assertEqual((await self.post("finance-adjustment", body, OWNER)).status, 409)
         self.assertEqual(
-            (await self.post("finance-adjustment", body, OWNER)).status, 200
+            (await self.post("finance-adjustment", {**body, "confirm": "ADJUST tg:123 USDT 2"}, OWNER)).status, 200
         )
         self.assertEqual(self.balance(), (D(102), D(0)))
         row = self.ledger.db.execute(

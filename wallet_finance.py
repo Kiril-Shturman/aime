@@ -103,7 +103,10 @@ async def require_coverage(ledger, provider, asset, ApiError):
         )
 
 
-async def finance_route(request, action, uid, admin, ledger, provider, money, ApiError):
+async def finance_route(
+    request, action, uid, admin, ledger, provider, money, ApiError,
+    audit_callback=None,
+):
     if action == "finance-reconciliation" and request.method == "GET":
         if not admin:
             raise ApiError("FORBIDDEN", "Только администратор", 403)
@@ -118,7 +121,7 @@ async def finance_route(request, action, uid, admin, ledger, provider, money, Ap
         if not admin:
             raise ApiError("FORBIDDEN", "Только администратор", 403)
         body = await request.json()
-        if set(body) - {"account_id", "asset", "amount", "reason", "bucket"}:
+        if set(body) - {"account_id", "asset", "amount", "reason", "bucket", "confirm"}:
             raise ValueError("Unknown parameter")
         target = body.get("account_id")
         asset = str(body.get("asset", "")).upper()
@@ -131,19 +134,30 @@ async def finance_route(request, action, uid, admin, ledger, provider, money, Ap
             or len(reason) > 1000
         ):
             raise ValueError("Existing account and reason required")
-        amount = money(body.get("amount"), positive=False)
+        confirmation_amount = str(body.get("amount", "")).strip()
+        amount = money(confirmation_amount, positive=False)
         if not asset.isalnum() or not 2 <= len(asset) <= 12 or not amount:
             raise ValueError("Invalid adjustment")
+        confirmation = f"ADJUST {target} {asset} {confirmation_amount}"
+        if body.get("confirm") != confirmation:
+            raise ApiError(
+                "CONFIRMATION_REQUIRED",
+                "Подтвердите корректировку баланса точной контрольной строкой",
+                409,
+            )
         bucket = body.get("bucket", "available")
         ledger.begin("admin_adjustment", uid, reason)
         try:
             if bucket == "available":
                 available, reserved = ledger.balance(target, asset)
+                before, after = available, available + amount
                 ledger.put_balance(target, asset, available + amount, reserved)
             elif bucket == "debt":
                 from wallet_withdrawals import debt
 
-                ledger.set_debt(target, asset, debt(ledger, target, asset) + amount)
+                before = debt(ledger, target, asset)
+                after = before + amount
+                ledger.set_debt(target, asset, after)
             else:
                 raise ValueError("Only available/debt can be adjusted")
             key = "adjustment:" + uuid.uuid4().hex
@@ -159,8 +173,20 @@ async def finance_route(request, action, uid, admin, ledger, provider, money, Ap
                     json.dumps({"reason": reason, "actor": uid, "bucket": bucket}),
                 ),
             )
+            if audit_callback:
+                audit_callback(
+                    uid, "balance.adjust", target,
+                    detail={
+                        "asset": asset, "amount": str(amount), "bucket": bucket,
+                        "before": str(before), "after": str(after),
+                        "event_id": key, "reason_characters": len(reason),
+                    },
+                )
             ledger.commit()
-            return web.json_response({"event_id": key})
+            return web.json_response({
+                "event_id": key, "asset": asset, "bucket": bucket,
+                "before": str(before), "after": str(after),
+            })
         except Exception:
             ledger.rollback()
             raise

@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
   type CSSProperties,
+  type ComponentType,
 } from "react";
 import {
   Activity,
@@ -13,16 +14,13 @@ import {
   ArrowLeft,
   Bell,
   Coins,
-  CreditCard,
   Database,
-  LayoutDashboard,
   Menu,
   Play,
   RefreshCw,
   Search,
   Send,
   Server,
-  Settings,
   ShieldCheck,
   Users,
   X,
@@ -30,6 +28,16 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
+import HouseFill from "framework7-icons/react/esm/HouseFill.js";
+import Person2Fill from "framework7-icons/react/esm/Person2Fill.js";
+import SquareListFill from "framework7-icons/react/esm/SquareListFill.js";
+import BitcoinCircleFill from "framework7-icons/react/esm/BitcoinCircleFill.js";
+import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
+import GearAltFill from "framework7-icons/react/esm/GearAltFill.js";
+import BuildingColumnsFill from "framework7-icons/react/esm/BuildingColumnsFill.js";
+import ArrowRightArrowLeftCircleFill from "framework7-icons/react/esm/ArrowRightArrowLeftCircleFill.js";
+import BellFill from "framework7-icons/react/esm/BellFill.js";
+import DocTextFill from "framework7-icons/react/esm/DocTextFill.js";
 import Framework7 from "framework7/lite-bundle";
 import Framework7React, {
   App as F7App,
@@ -224,17 +232,37 @@ function stateTotal(value: Record<string, number> | undefined) {
   return Object.values(value || {}).reduce((sum, item) => sum + item, 0);
 }
 
-const tabs: { id: Tab; label: string; icon: typeof Database }[] = [
-  { id: "overview", label: "Обзор", icon: LayoutDashboard },
-  { id: "data", label: "Пользователи", icon: Database },
-  { id: "payments", label: "Операции", icon: Activity },
-  { id: "crypto", label: "Криптовалюты", icon: Coins },
-  { id: "cards", label: "Карты", icon: CreditCard },
-  { id: "tariffs", label: "Тарифы", icon: Settings },
-  { id: "aura", label: "Aura API", icon: ShieldCheck },
-  { id: "goswap", label: "GoSwap API", icon: Server },
-  { id: "notifications", label: "Уведомления", icon: Bell },
-  { id: "audit", label: "Аудит", icon: Users },
+const tabs: {
+  id: Tab;
+  label: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  color: string;
+}[] = [
+  { id: "overview", label: "Обзор", description: "Сводка и контроль", icon: HouseFill, color: "#5856D6" },
+  { id: "data", label: "Пользователи", description: "Аккаунты и KYC", icon: Person2Fill, color: "#AF52DE" },
+  { id: "payments", label: "Операции", description: "Платежи и переводы", icon: SquareListFill, color: "#007AFF" },
+  { id: "crypto", label: "Криптовалюты", description: "Активы и сети", icon: BitcoinCircleFill, color: "#FF9500" },
+  { id: "cards", label: "Карты", description: "Выпуск и управление", icon: CreditcardFill, color: "#30C759" },
+  { id: "tariffs", label: "Тарифы", description: "Цены и комиссии", icon: GearAltFill, color: "#8E8E93" },
+  { id: "aura", label: "Aura API", description: "Карты и платежи", icon: BuildingColumnsFill, color: "#32ADE6" },
+  { id: "goswap", label: "GoSwap API", description: "Обмен и ликвидность", icon: ArrowRightArrowLeftCircleFill, color: "#AF52DE" },
+  { id: "notifications", label: "Уведомления", description: "Доставка и рассылки", icon: BellFill, color: "#FF3B30" },
+  { id: "audit", label: "Аудит", description: "Действия администраторов", icon: DocTextFill, color: "#5856D6" },
+];
+const navGroups: { label: string; items: Tab[] }[] = [
+  {
+    label: "Управление",
+    items: ["overview", "data", "payments", "cards", "tariffs"],
+  },
+  {
+    label: "Инфраструктура",
+    items: ["crypto", "aura", "goswap"],
+  },
+  {
+    label: "Контроль",
+    items: ["notifications", "audit"],
+  },
 ];
 
 export default function WalletAdminPage() {
@@ -393,25 +421,47 @@ export default function WalletAdminPage() {
             <ArrowLeft size={19} />
             <span>В кошелёк</span>
           </F7Button>
-          <div className="wpay-admin-nav-caption">Рабочее пространство</div>
-          <nav className="wpay-admin-nav" aria-label="Разделы админки">
-            {tabs.map((item) => (
-              <F7Button
-                large
-                fill={tab === item.id}
-                aria-current={tab === item.id ? "page" : undefined}
-                key={item.id}
-                onClick={() => {
-                  setTab(item.id);
-                  setMobileNavOpen(false);
-                }}
-                className={`wpay-admin-navitem ${tab === item.id ? "is-active" : ""}`}
-              >
-                <item.icon size={20} />
-                <span>{item.label}</span>
-              </F7Button>
-            ))}
-          </nav>
+          <div className="wpay-admin-nav-scroll">
+            <div className="wpay-admin-nav-caption">Рабочее пространство</div>
+            <nav className="wpay-admin-nav" aria-label="Разделы админки">
+              {navGroups.map((group) => (
+                <section className="wpay-admin-nav-group" key={group.label}>
+                  <div className="wpay-admin-nav-group-title">{group.label}</div>
+                  <div className="wpay-admin-nav-group-items">
+                    {group.items.map((id) => {
+                      const item = tabs.find((candidate) => candidate.id === id)!;
+                      return (
+                        <F7Button
+                          aria-label={item.label}
+                          large
+                          fill={tab === item.id}
+                          aria-current={tab === item.id ? "page" : undefined}
+                          key={item.id}
+                          onClick={() => {
+                            setTab(item.id);
+                            setMobileNavOpen(false);
+                          }}
+                          className={`wpay-admin-navitem ${tab === item.id ? "is-active" : ""}`}
+                        >
+                          <span
+                            className="wpay-admin-nav-icon"
+                            aria-hidden="true"
+                            style={{ "--nav-icon": item.color } as CSSProperties}
+                          >
+                            <item.icon className="wpay-admin-nav-glyph" />
+                          </span>
+                          <span className="wpay-admin-nav-copy">
+                            <span className="wpay-admin-nav-title">{item.label}</span>
+                            <span className="wpay-admin-nav-description">{item.description}</span>
+                          </span>
+                        </F7Button>
+                      );
+                    })}
+                  </div>
+                </section>
+              ))}
+            </nav>
+          </div>
           <div className="wpay-admin-secure">
             <ShieldCheck size={18} />
             <span>
@@ -685,11 +735,14 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
               <small className="mt-1 block opacity-50">
                 {item.enforced ? (item.enabled ? "Включён" : "Выключен") : "Подключение расчёта готовится"}
               </small>
-              {item.provider_fee !== undefined && item.provider_fee !== null && (
+              {Boolean(item.card_plan) && (
                 <small className="mt-2 block text-blue-500">
-                  База Aura: {amount(item.provider_fee)} {text(item.provider_fee_unit)}
-                  {item.provider_minimum ? ` · минимум ${amount(item.provider_minimum)} USDT` : ""}
+                  Aura: выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
+                  {item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}
                 </small>
+              )}
+              {Array.isArray(item.conditions) && (
+                <small className="mt-2 block opacity-55">{item.conditions.join(" · ")}</small>
               )}
               <span className="mt-3 block text-xs">
                 {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум {amount(item.minimum_fee)}
@@ -703,9 +756,9 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
           <div className="wpay-admin-section-title"><div><span>{current.product}</span><h2>{current.label}</h2></div></div>
           {!current.enforced && <p className="mb-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-600">Параметры видны для планирования, но включение заблокировано до подключения безопасного расчёта к settlement.</p>}
           <div className="grid gap-3 md:grid-cols-3">
-            <label><span className="text-xs font-semibold">Фиксированная комиссия</span><input className={`${input} mt-2`} value={fixed} onChange={(e) => setFixed(e.target.value)} /></label>
-            <label><span className="text-xs font-semibold">Процент</span><input className={`${input} mt-2`} value={percent} onChange={(e) => setPercent(e.target.value)} /></label>
-            <label><span className="text-xs font-semibold">Минимальная комиссия</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">{current.card_plan ? "Наценка за выпуск" : "Фиксированная комиссия"}</span><input className={`${input} mt-2`} value={fixed} onChange={(e) => setFixed(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">{current.card_plan ? "Наша комиссия пополнения, %" : "Процент"}</span><input className={`${input} mt-2`} value={percent} onChange={(e) => setPercent(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">{current.card_plan ? "Минимальная наша комиссия пополнения" : "Минимальная комиссия"}</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
           </div>
           <label className="mt-3 block"><span className="text-xs font-semibold">Комментарий к версии</span><input className={`${input} mt-2`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Причина изменения" /></label>
           <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять к новым операциям</label>

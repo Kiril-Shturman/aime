@@ -45,3 +45,8 @@ Deployment uses scripts/apply_card_ui.py to preserve concurrent backend/admin
 work. Additive table: wallet_card_quotes. Existing wallet_tariffs and plan_id
 changes from the deployed backend are included in source. No live card orders or
 real topups were performed in verification; monetary scenarios use local mocks.
+
+Validated: 226 backend tests; 22 card and 4 admin Playwright cases; 20 frontend
+unit tests; TypeScript/Vite production build. Current production admin source,
+audit-backed balance adjustment confirmation, and manual identity API semantics
+are preserved in this branch so a future checkout retains the deployed tools.

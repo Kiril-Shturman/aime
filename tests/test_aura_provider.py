@@ -1540,7 +1540,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for secret in ("4510123456", "123456789012", "Иван", "Петров"):
             self.assertNotIn(secret, persisted)
 
-    async def test_customer_kyc_session_status_and_webhook(self):
+    async def test_customer_identity_status_and_webhook(self):
         registered = await self.wpay.post(
             "/api/wallet/aura-customer", headers=self.owner,
             json={"email": "owner@example.com", "phone": "+79991234567"},
@@ -1548,10 +1548,11 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(registered.status, 200, await registered.text())
         customer_id = (await registered.json())["customer_id"]
         started = await self.wpay.post(
-            "/api/wallet/aura-kyc", headers=self.owner, json={}
+            "/api/wallet/aura-kyc", headers=self.owner,
+            json={"first_name":"Иван","last_name":"Петров","birth_date":"1990-05-20","passport":"4510123457","passport_issue_date":"2010-06-01"}
         )
         self.assertEqual(started.status, 200, await started.text())
-        self.assertEqual((await started.json())["status"], "pending")
+        self.assertTrue((await started.json())["verified"])
         changed = await self.mock.post(
             "/mock/kyc", json={"customer_id": customer_id, "status": "verified"}
         )
