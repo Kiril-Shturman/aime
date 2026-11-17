@@ -47,6 +47,7 @@ import Framework7React, {
   Preloader as F7Preloader,
   TextEditor as F7TextEditor,
 } from "framework7-react";
+import "framework7-icons/css/framework7-icons.css";
 import { walletIdempotentRequest, walletRequest } from "../lib/wallet-api";
 import { useTheme } from "../store/ThemeStore";
 import "./WalletFramework7.css";
