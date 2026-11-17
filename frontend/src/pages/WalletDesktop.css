@@ -360,13 +360,13 @@
     .wpay-desktop-nav-icon[data-playing] svg * { animation: none !important; }
   }
 
-.wpay-desktop-nav-icon :is(.card-lift, .clock-minute, .clock-hour, .clock-arrow, .profile-figure) {transform-box:view-box;}
-.wpay-desktop-nav-icon .card-lift {transform-origin:80px 115px;}
+.wpay-desktop-nav-icon :is(.wpay-nav-card-lift, .clock-minute, .clock-hour, .clock-arrow, .profile-figure) {transform-box:view-box;}
+.wpay-desktop-nav-icon .wpay-nav-card-lift {transform-origin:80px 115px;}
 .wpay-desktop-nav-icon :is(.clock-minute, .clock-hour) {transform-origin:84px 91px;}
 .wpay-desktop-nav-icon .clock-arrow {transform-origin:84px 89px;}
 .wpay-desktop-nav-icon .profile-figure {transform-origin:88px 146px;}
-.wpay-desktop-nav-icon[data-playing] .card-lift {animation:cards-tap 480ms ease-in-out;}
-.wpay-desktop-nav-icon[data-playing] .card-front {animation:card-front-tap 480ms ease-in-out;}
+.wpay-desktop-nav-icon[data-playing] .wpay-nav-card-lift {animation:cards-tap 480ms ease-in-out;}
+.wpay-desktop-nav-icon[data-playing] .wpay-nav-card-front {animation:card-front-tap 480ms ease-in-out;}
 @keyframes card-front-tap {50% {transform:translateY(2px);}}
 .wpay-desktop-nav-icon[data-playing] .clock-minute {animation:minute-tap 480ms cubic-bezier(.45,.05,.25,1);}
 .wpay-desktop-nav-icon[data-playing] .clock-hour {animation:hour-tap 480ms ease-in-out;}

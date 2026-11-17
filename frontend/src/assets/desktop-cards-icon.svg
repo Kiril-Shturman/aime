@@ -25,9 +25,9 @@
     <rect x="17" y="61" width="146" height="98" rx="27" fill="black"/>
   </mask>
 </defs>
-<g mask="url(#cards-outside)"><use class="card-lift" href="#cards-back-shape"/></g>
-<g class="card-front">
-<g clip-path="url(#cards-front-clip)"><use class="card-lift" href="#cards-back-shape" filter="url(#cards-frost)"/></g>
+<g mask="url(#cards-outside)"><use class="wpay-nav-card-lift" href="#cards-back-shape"/></g>
+<g class="wpay-nav-card-front">
+<g clip-path="url(#cards-front-clip)"><use class="wpay-nav-card-lift" href="#cards-back-shape" filter="url(#cards-frost)"/></g>
 <g>
   <rect x="17" y="61" width="146" height="98" rx="27" fill="url(#cards-glass)"/>
   <rect x="17" y="61" width="146" height="98" rx="27" fill="url(#cards-color)" stroke="url(#cards-rim)" stroke-width="1.6"/>
