@@ -26,7 +26,7 @@ export function DesktopSidebar({
   name: string;
   cardsEnabled: boolean;
 }) {
-  const [animations, setAnimations] = useState({ wallet: 0, cards: 0, history: 0, profile: 0 });
+  const [animation, setAnimation] = useState<{ tab: Tab; count: number } | null>(null);
   const ThemeIcon = dark ? Sun : Moon;
   const items = desktopLinks.filter(({ id }) => id !== "cards" || cardsEnabled);
 
@@ -35,17 +35,18 @@ export function DesktopSidebar({
       <button type="button" className="wpay-desktop-brand" onClick={() => onSelect("wallet")}>
         <img src={dark ? "/brands/wpay-wordmark-light.svg" : "/brands/wpay-wordmark.svg"} alt="wPay" width={104} height={43} />
       </button>
-      <nav aria-label="Основное меню">
+      <nav aria-labelledby="wpay-desktop-nav-heading">
+        <h2 id="wpay-desktop-nav-heading" className="wpay-desktop-nav-heading">Основное</h2>
         {items.map(({ id, label, icon }) => (
           <button type="button" key={id} data-nav-tab={id} aria-current={tab === id ? "page" : undefined} onClick={() => {
-            setAnimations((counts) => ({ ...counts, [id]: counts[id] + 1 }));
+            setAnimation((previous) => ({ tab: id, count: (previous?.count ?? 0) + 1 }));
             onSelect(id);
           }}>
             <span
-              key={animations[id]}
+              key={animation?.tab === id ? animation.count : 0}
               aria-hidden="true"
               className="wpay-desktop-nav-icon"
-              data-playing={animations[id] > 0 ? "" : undefined}
+              data-playing={animation?.tab === id ? "" : undefined}
               dangerouslySetInnerHTML={{ __html: icon }}
             />
             <span>{label}</span>

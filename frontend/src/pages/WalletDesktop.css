@@ -57,6 +57,13 @@
  }
  .wpay-desktop-brand img { display: block; width: 104px; height: auto; }
  .wpay-desktop-sidebar nav { display: grid; gap: 5px; margin: 28px 0; }
+ .wpay-desktop-nav-heading {
+   margin: 0 0 4px;
+   padding-inline: 20px;
+   color: var(--sidebar-muted);
+   font-size: 12px;
+   font-weight: 600;
+ }
  .wpay-desktop-sidebar nav button,
  .wpay-desktop-sidebar-footer > button {
    position: relative;

@@ -1272,19 +1272,26 @@ test("card recharge history shows charged total and separate credited amount", a
 test("desktop sidebar navigates and switches the wPay wordmark with the theme", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await setup(page, "light", false, true);
-  const menu = page.getByRole("navigation", { name: "Основное меню" });
+  const menu = page.getByRole("navigation", { name: "Основное" });
   const brand = page.getByRole("button", { name: "wPay", exact: true });
   const logo = brand.getByRole("img", { name: "wPay" });
   await expect(logo).toHaveAttribute("src", "/brands/wpay-wordmark.svg");
   await expect(page.locator(".wpay-bottom-menu")).toBeHidden();
   await expect(page.getByRole("region", { name: "Официальный курс ЦБ" }).getByText(/82,45/)).toBeVisible();
+  await expect(menu.getByRole("heading", { name: "Основное" })).toBeVisible();
+  const playing = menu.locator(".wpay-desktop-nav-icon[data-playing]");
+  await expect(playing).toHaveCount(0);
   await menu.getByRole("button", { name: "История" }).click();
+  await expect(playing).toHaveCount(1);
+  await expect(playing.locator(".clock-minute")).toHaveCSS("animation-name", "minute-tap");
   await expect(menu.getByRole("button", { name: "История" })).toHaveAttribute("aria-current", "page");
   await page.locator(".wpay-desktop-sidebar").getByRole("button", { name: "Тёмная тема" }).click();
   await expect(logo).toHaveAttribute("src", "/brands/wpay-wordmark-light.svg");
   await brand.click();
   await expect(menu.getByRole("button", { name: "Кошелёк" })).toHaveAttribute("aria-current", "page");
   await menu.getByRole("button", { name: "Профиль" }).click();
+  await expect(playing).toHaveCount(1);
+  await expect(playing.locator(".profile-figure")).toHaveCSS("animation-name", "profile-tap");
   const profileAside = page.getByRole("complementary", { name: "Сводка по балансам" });
   await expect(profileAside).toBeVisible();
   await expect(profileAside.getByRole("button", { name: /Кошелёк.*1,250/ })).toBeVisible();
