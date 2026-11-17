@@ -227,3 +227,16 @@
     transition: none;
   }
 }
+
+.wpay-card-face-balance {
+  position: absolute;
+  left: 8%;
+  top: 36%;
+  z-index: 1;
+  max-width: 72%;
+  font-size: clamp(28px, 7vw, 36px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.8px;
+  font-variant-numeric: tabular-nums;
+}

@@ -78,17 +78,18 @@ export default function WalletCardFace({
         <span className="wpay-card-face-status">{status}</span>
         {!offer && (
           <span
-            className="absolute right-[8%] top-[29%] z-10 text-[22px] font-semibold tabular-nums "
+            className="wpay-card-face-balance"
             aria-label="Баланс карты"
             style={{ color: dark ? "#fff" : "#152030" }}
           >
             {balance !== undefined && balance !== null
-              ? Number(balance).toLocaleString("en-US", {
+              ? `${currency === "USDT" || currency === "USD" ? "$" : currency + " "}${Number(
+                  balance,
+                ).toLocaleString("en-US", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
-                })
-              : "—"}{" "}
-            <span className="text-[12px] opacity-60">{currency}</span>
+                })}`
+              : "—"}
           </span>
         )}
         <img
@@ -101,49 +102,51 @@ export default function WalletCardFace({
           alt="wPay"
           draggable={false}
         />
-        <svg
-          className="wpay-card-face-chip"
-          viewBox="0 0 56 44"
-          fill="none"
-          aria-hidden="true"
-        >
-          <defs>
-            <linearGradient
-              id={`${id}-metal`}
-              x1="0"
-              y1="0"
-              x2="56"
-              y2="44"
-              gradientUnits="userSpaceOnUse"
-            >
-              <stop stopColor="#f4f5f6" />
-              <stop offset=".35" stopColor="#bec1c4" />
-              <stop offset=".65" stopColor="#eeeeed" />
-              <stop offset="1" stopColor="#989da3" />
-            </linearGradient>
-          </defs>
-          <rect
-            x="1"
-            y="1"
-            width="54"
-            height="42"
-            rx="9"
-            fill={`url(#${id}-metal)`}
-            stroke="#6e7479"
-            strokeWidth="1"
-          />
-          <path
-            d="M19 1v11l-6 6H1m54 0H43l-6-6V1M1 27h12l6 6v10m18 0V33l6-6h12M19 12h18v21H19z"
-            stroke="#7d8288"
-            strokeWidth="1"
-          />
-          <path
-            d="M3 21.5h16m18 0h16M28 1v11m0 21v10"
-            stroke="#ffffff"
-            strokeOpacity=".35"
-            strokeWidth=".8"
-          />
-        </svg>
+        {offer && (
+          <svg
+            className="wpay-card-face-chip"
+            viewBox="0 0 56 44"
+            fill="none"
+            aria-hidden="true"
+          >
+            <defs>
+              <linearGradient
+                id={`${id}-metal`}
+                x1="0"
+                y1="0"
+                x2="56"
+                y2="44"
+                gradientUnits="userSpaceOnUse"
+              >
+                <stop stopColor="#f4f5f6" />
+                <stop offset=".35" stopColor="#bec1c4" />
+                <stop offset=".65" stopColor="#eeeeed" />
+                <stop offset="1" stopColor="#989da3" />
+              </linearGradient>
+            </defs>
+            <rect
+              x="1"
+              y="1"
+              width="54"
+              height="42"
+              rx="9"
+              fill={`url(#${id}-metal)`}
+              stroke="#6e7479"
+              strokeWidth="1"
+            />
+            <path
+              d="M19 1v11l-6 6H1m54 0H43l-6-6V1M1 27h12l6 6v10m18 0V33l6-6h12M19 12h18v21H19z"
+              stroke="#7d8288"
+              strokeWidth="1"
+            />
+            <path
+              d="M3 21.5h16m18 0h16M28 1v11m0 21v10"
+              stroke="#ffffff"
+              strokeOpacity=".35"
+              strokeWidth=".8"
+            />
+          </svg>
+        )}
         <svg
           className="wpay-card-face-contactless"
           viewBox="0 0 25 34"
