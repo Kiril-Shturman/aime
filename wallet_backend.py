@@ -57,15 +57,34 @@ WALLET_ASSET_NETWORKS = {
 
 
 class _TelegramHtmlSanitizer(HTMLParser):
-    """Reduce rich-editor HTML to the subset accepted by Telegram."""
+    """Allowlist the HTML subset accepted by Telegram Rich Messages."""
 
     TAGS = {
         'b': 'b', 'strong': 'b', 'i': 'i', 'em': 'i', 'u': 'u',
         's': 's', 'strike': 's', 'del': 's', 'code': 'code',
-        'pre': 'pre', 'blockquote': 'blockquote', 'a': 'a',
-        'tg-spoiler': 'tg-spoiler',
+        'pre': 'pre', 'blockquote': 'blockquote', 'a': 'a', 'mark': 'mark',
+        'sub': 'sub', 'sup': 'sup', 'tg-spoiler': 'tg-spoiler',
+        'tg-reference': 'tg-reference', 'tg-emoji': 'tg-emoji',
+        'tg-time': 'tg-time', 'tg-math': 'tg-math',
+        'h1': 'h1', 'h2': 'h2', 'h3': 'h3', 'h4': 'h4', 'h5': 'h5',
+        'h6': 'h6', 'p': 'p', 'footer': 'footer', 'hr': 'hr', 'br': 'br',
+        'ul': 'ul', 'ol': 'ol', 'li': 'li', 'input': 'input', 'cite': 'cite',
+        'aside': 'aside', 'img': 'img', 'video': 'video', 'audio': 'audio',
+        'tg-document': 'tg-document', 'figure': 'figure',
+        'figcaption': 'figcaption', 'tg-map': 'tg-map',
+        'tg-collage': 'tg-collage', 'tg-slideshow': 'tg-slideshow',
+        'table': 'table', 'caption': 'caption', 'tr': 'tr', 'th': 'th',
+        'td': 'td', 'details': 'details', 'summary': 'summary',
+        'tg-math-block': 'tg-math-block', 'tg-button': 'tg-button',
+        'tg-button-row': 'tg-button-row',
     }
-    BLOCKS = {'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+    BLOCKS = {'div'}
+    VOID = {'br', 'hr', 'input', 'img', 'tg-map'}
+    BOOLEAN = {
+        'expandable', 'reversed', 'checked', 'bordered', 'striped', 'compact',
+        'open', 'tg-spoiler', 'request-write-access', 'allow-user-chats',
+        'allow-bot-chats', 'allow-group-chats', 'allow-channel-chats',
+    }
 
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -87,13 +106,6 @@ class _TelegramHtmlSanitizer(HTMLParser):
         if tag in self.BLOCKS:
             self.newline()
             return
-        if tag == 'br':
-            self.parts.append('\n')
-            return
-        if tag == 'li':
-            self.newline()
-            self.parts.append('• ')
-            return
         if tag == 'span':
             classes = set(dict(attrs).get('class', '').split())
             if 'tg-spoiler' in classes:
@@ -103,17 +115,143 @@ class _TelegramHtmlSanitizer(HTMLParser):
         mapped = self.TAGS.get(tag)
         if not mapped:
             return
-        if mapped == 'a':
-            href = dict(attrs).get('href', '').strip()
-            scheme = urlsplit(href).scheme.lower()
-            if scheme not in {'http', 'https', 'tg', 'mailto'}:
-                return
-            self.parts.append('<a href="' + html.escape(href, quote=True) + '">')
-        elif mapped == 'blockquote' and any(name == 'expandable' for name, _ in attrs):
-            self.parts.append('<blockquote expandable>')
-        else:
-            self.parts.append('<' + mapped + '>')
-        self.open_tags.append((tag, mapped))
+        safe_attrs = self._attrs(mapped, attrs)
+        if safe_attrs is None:
+            return
+        self.parts.append('<' + mapped + safe_attrs + '>')
+        if mapped not in self.VOID:
+            self.open_tags.append((tag, mapped))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+
+    @staticmethod
+    def _url(value, *, media=False):
+        value = str(value or '').strip()
+        if not value:
+            return ''
+        if value.startswith('#') and not media:
+            return value if re.fullmatch(r'#[A-Za-z0-9_-]{1,64}', value) else ''
+        split = urlsplit(value)
+        allowed = {'http', 'https'} if media else {'http', 'https', 'tg', 'mailto', 'tel'}
+        return value if split.scheme.lower() in allowed else ''
+
+    def _attrs(self, tag, attrs):
+        source = {str(key).lower(): value for key, value in attrs}
+        out = []
+
+        def add(name, value):
+            if value is not None and value != '':
+                out.append(f' {name}="{html.escape(str(value), quote=True)}"')
+
+        def boolean(name):
+            if name in source:
+                out.append(' ' + name)
+
+        if tag == 'a':
+            href = self._url(source.get('href'))
+            name = str(source.get('name') or '')
+            if href:
+                add('href', href)
+            elif re.fullmatch(r'[A-Za-z0-9_-]{1,64}', name):
+                add('name', name)
+            else:
+                return None
+        elif tag == 'blockquote':
+            boolean('expandable')
+        elif tag == 'code':
+            language = str(source.get('class') or '')
+            if re.fullmatch(r'language-[A-Za-z0-9_+-]{1,32}', language):
+                add('class', language)
+        elif tag == 'tg-reference':
+            name = str(source.get('name') or '')
+            if re.fullmatch(r'[A-Za-z0-9_-]{1,64}', name):
+                add('name', name)
+            else:
+                return None
+        elif tag == 'tg-emoji':
+            if re.fullmatch(r'\d{1,32}', str(source.get('emoji-id') or '')):
+                add('emoji-id', source['emoji-id'])
+            else:
+                return None
+        elif tag == 'tg-time':
+            if re.fullmatch(r'-?\d{1,16}', str(source.get('unix') or '')):
+                add('unix', source['unix'])
+            if re.fullmatch(r'[A-Za-z]{1,16}', str(source.get('format') or '')):
+                add('format', source['format'])
+        elif tag == 'ol':
+            if re.fullmatch(r'-?\d{1,9}', str(source.get('start') or '')):
+                add('start', source['start'])
+            if source.get('type') in {'1', 'a', 'A', 'i', 'I'}:
+                add('type', source['type'])
+            boolean('reversed')
+        elif tag == 'li':
+            if re.fullmatch(r'-?\d{1,9}', str(source.get('value') or '')):
+                add('value', source['value'])
+            if source.get('type') in {'1', 'a', 'A', 'i', 'I'}:
+                add('type', source['type'])
+        elif tag == 'input':
+            if source.get('type') == 'checkbox':
+                add('type', 'checkbox')
+                boolean('checked')
+            else:
+                return None
+        elif tag in {'img', 'video', 'audio', 'tg-document'}:
+            src = self._url(source.get('src'), media=True)
+            if str(source.get('src') or '').startswith('tg://'):
+                src = self._url(source.get('src'))
+            if not src:
+                return None
+            add('src', src)
+            if tag == 'img' and source.get('alt'):
+                add('alt', str(source['alt'])[:128])
+            boolean('tg-spoiler')
+        elif tag == 'tg-map':
+            try:
+                lat = float(source.get('lat'))
+                lon = float(source.get('long'))
+                zoom = int(source.get('zoom', 13))
+                if -90 <= lat <= 90 and -180 <= lon <= 180 and 0 <= zoom <= 20:
+                    add('lat', lat); add('long', lon); add('zoom', zoom)
+            except (TypeError, ValueError):
+                pass
+        elif tag == 'table':
+            for name in ('bordered', 'striped', 'compact'):
+                boolean(name)
+        elif tag in {'td', 'th'}:
+            for name in ('colspan', 'rowspan'):
+                if re.fullmatch(r'\d{1,2}', str(source.get(name) or '')):
+                    add(name, max(1, min(20, int(source[name]))))
+            if source.get('align') in {'left', 'center', 'right'}:
+                add('align', source['align'])
+            if source.get('valign') in {'top', 'middle', 'bottom'}:
+                add('valign', source['valign'])
+        elif tag == 'details':
+            boolean('open')
+        elif tag == 'tg-button-row':
+            if source.get('align') in {'left', 'center', 'right'}:
+                add('align', source['align'])
+        elif tag == 'tg-button':
+            button_type = str(source.get('type') or '')
+            if button_type in {
+                'url', 'callback_data', 'web_app', 'login_url',
+                'switch_inline_query', 'switch_inline_query_current_chat',
+                'switch_inline_query_chosen_chat', 'copy_text', 'disabled',
+            }:
+                add('type', button_type)
+            else:
+                return None
+            if source.get('style') in {'danger', 'success', 'primary', 'link'}:
+                add('style', source['style'])
+            url = self._url(source.get('url'))
+            if url:
+                add('url', url)
+            for name in ('data', 'query', 'text', 'forward-text'):
+                if source.get(name):
+                    add(name, str(source[name])[:256])
+            for name in self.BOOLEAN:
+                boolean(name)
+        return ''.join(out)
 
     def handle_endtag(self, tag):
         tag = tag.lower()
@@ -122,7 +260,7 @@ class _TelegramHtmlSanitizer(HTMLParser):
             return
         if self.skip_depth:
             return
-        if tag in self.BLOCKS or tag == 'li':
+        if tag in self.BLOCKS:
             self.newline()
             return
         for index in range(len(self.open_tags) - 1, -1, -1):
@@ -168,6 +306,26 @@ def _broadcast_image(value):
         raise ValueError('Изображение должно быть не больше 600 КБ после обработки')
     extension = 'jpg' if match.group(1) == 'image/jpeg' else 'png'
     return payload, match.group(1), 'broadcast.' + extension
+
+
+def _telegram_uploaded_photo_file_id(value):
+    """Find the largest uploaded photo variant in a sendRichMessage response."""
+    candidates = []
+
+    def visit(node):
+        if isinstance(node, dict):
+            file_id = node.get('file_id')
+            if file_id and isinstance(file_id, str):
+                score = int(node.get('width') or 0) * int(node.get('height') or 0)
+                candidates.append((score, file_id))
+            for child in node.values():
+                visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+
+    visit(value)
+    return max(candidates, default=(0, None))[1]
 
 ADMIN_GOSWAP_METHODS = {
     'getMe': {'title': 'Приложение', 'post': False, 'params': [], 'required': [], 'example': {}},
@@ -1535,29 +1693,37 @@ def install_wallet(app, root, owner_check):
         image_file_id = None
         async with ClientSession(timeout=ClientTimeout(total=15)) as session:
             for uid in targets:
+                rich_html = text
+                rich_message = {'html': rich_html}
+                if image:
+                    rich_html += '<img src="tg://photo?id=broadcast_image">'
+                    rich_message = {
+                        'html': rich_html,
+                        'media': [{
+                            'id': 'broadcast_image',
+                            'media': {
+                                'type': 'photo',
+                                'media': image_file_id or 'attach://photo',
+                            },
+                        }],
+                    }
                 payload = {
                     'chat_id': int(uid.removeprefix('tg:')),
-                    ('caption' if image else 'text'): text,
-                    'parse_mode': 'HTML',
+                    'rich_message': rich_message,
                 }
                 if button_text and button_url:
                     payload['reply_markup'] = {'inline_keyboard': [[{'text': button_text, 'url': button_url}]]}
                 error = None
                 blocked = False
                 try:
-                    method = 'sendPhoto' if image else 'sendMessage'
+                    method = 'sendRichMessage'
                     request_kwargs = {'json': payload}
-                    if image and image_file_id:
-                        payload['photo'] = image_file_id
-                    elif image:
+                    if image and not image_file_id:
                         image_bytes, image_mime, image_name = image
                         form = FormData()
                         for key, value in payload.items():
                             form.add_field(key, json.dumps(value) if isinstance(value, dict) else str(value))
-                        form.add_field(
-                            'photo', image_bytes, filename=image_name,
-                            content_type=image_mime,
-                        )
+                        form.add_field('photo', image_bytes, filename=image_name, content_type=image_mime)
                         request_kwargs = {'data': form}
                     async with session.post(
                         f'https://api.telegram.org/bot{bot_token}/{method}', **request_kwargs
@@ -1567,9 +1733,8 @@ def install_wallet(app, root, owner_check):
                             error = str(body.get('description') or 'Telegram error')[:300]
                             blocked = response.status == 403
                         elif image and not image_file_id:
-                            photos = (body.get('result') or {}).get('photo') or []
-                            if photos:
-                                image_file_id = str(photos[-1].get('file_id') or '') or None
+                            image_file_id = _telegram_uploaded_photo_file_id(body.get('result'))
+                            if image_file_id:
                                 ledger.db.execute(
                                     'UPDATE admin_broadcasts SET image_file_id=? WHERE broadcast_id=?',
                                     (image_file_id, broadcast_id),
@@ -1592,7 +1757,7 @@ def install_wallet(app, root, owner_check):
         body = await request.json()
         text = _telegram_html(body.get('text'))
         image = _broadcast_image(body.get('image_data'))
-        text_limit = 1024 if image else 4096
+        text_limit = 32768
         if not 1 <= _telegram_text_length(text) <= text_limit:
             raise ValueError(
                 f'Текст рассылки должен быть от 1 до {text_limit} символов'
@@ -1616,7 +1781,7 @@ def install_wallet(app, root, owner_check):
             'broadcast_id,admin_id,target,text,button_text,button_url,status,total,created_at,'
             'parse_mode,has_image) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
             (broadcast_id, uid, target, text, button_text or None, button_url or None,
-             'queued', len(targets), now(), 'HTML', int(bool(image))),
+             'queued', len(targets), now(), 'RICH_HTML', int(bool(image))),
         )
         record_admin_action(
             uid, 'broadcast.create',

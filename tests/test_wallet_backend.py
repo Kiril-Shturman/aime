@@ -14,6 +14,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
 from wallet_backend import (
     ApiError, Ledger, _broadcast_image, _telegram_html, _telegram_text_length,
+    _telegram_uploaded_photo_file_id,
     install_wallet, telegram_user,
 )
 from wallet_operations import prepare_operations, save_address
@@ -106,13 +107,13 @@ class AuthenticationTests(unittest.TestCase):
             self.assertEqual(str(ledger.balance('one', 'ETH')[0]), '123456789012.123456789012345679')
             ledger.db.close()
 
-    def test_broadcast_rich_text_is_reduced_to_safe_telegram_html(self):
+    def test_broadcast_rich_text_is_reduced_to_safe_telegram_rich_html(self):
         result = _telegram_html(
             '<p>Hello <strong>world</strong></p>'
             '<script>hidden()</script><a href="javascript:alert(1)">safe</a>'
         )
-        self.assertEqual(result, 'Hello <b>world</b>\nsafe')
-        self.assertEqual(_telegram_text_length(result), 16)
+        self.assertEqual(result, '<p>Hello <b>world</b></p>safe')
+        self.assertEqual(_telegram_text_length(result), 15)
 
     def test_broadcast_rich_text_keeps_telegram_spoilers_quotes_and_code(self):
         result = _telegram_html(
@@ -129,11 +130,37 @@ class AuthenticationTests(unittest.TestCase):
             '<pre><code>print(&quot;ok&quot;)</code></pre>',
         )
 
+    def test_broadcast_rich_text_keeps_new_blocks_and_filters_attributes(self):
+        result = _telegram_html(
+            '<h1>Title</h1><mark>hot</mark><sub>2</sub>'
+            '<details open><summary>More</summary>'
+            '<table bordered striped compact><tr><td colspan="99" onclick="bad()">x</td></tr></table>'
+            '</details><tg-button-row align="center">'
+            '<tg-button type="url" style="primary" url="https://t.me">Open</tg-button>'
+            '</tg-button-row>'
+        )
+        self.assertEqual(
+            result,
+            '<h1>Title</h1><mark>hot</mark><sub>2</sub>'
+            '<details open><summary>More</summary>'
+            '<table bordered striped compact><tr><td colspan="20">x</td></tr></table>'
+            '</details><tg-button-row align="center">'
+            '<tg-button type="url" style="primary" url="https://t.me">Open</tg-button>'
+            '</tg-button-row>',
+        )
+
     def test_broadcast_image_accepts_only_small_jpeg_or_png_data_urls(self):
         image = _broadcast_image('data:image/jpeg;base64,/9j/2Q==')
         self.assertEqual(image, (b'\xff\xd8\xff\xd9', 'image/jpeg', 'broadcast.jpg'))
         with self.assertRaisesRegex(ValueError, 'JPEG и PNG'):
             _broadcast_image('data:image/gif;base64,R0lGODlh')
+
+    def test_rich_message_upload_reuses_largest_photo_file_id(self):
+        result = {'rich_message': {'blocks': [{'photo': {'sizes': [
+            {'file_id': 'small', 'width': 100, 'height': 100},
+            {'file_id': 'large', 'width': 1000, 'height': 800},
+        ]}}]}}
+        self.assertEqual(_telegram_uploaded_photo_file_id(result), 'large')
 
     def test_existing_broadcast_table_gets_additive_columns(self):
         with tempfile.TemporaryDirectory() as path:
