@@ -1,6 +1,6 @@
 .wpay-desktop-page{overflow-x:hidden!important}
 .wpay-wallet-home{overflow-x:clip}
-.wpay-desktop-sidebar,.wpay-desktop-overview-side,.wpay-desktop-profile-aside{display:none}
+.wpay-desktop-sidebar,.wpay-desktop-overview-side,.wpay-desktop-profile-aside,.wpay-card-tariff-aside{display:none}
 @media(min-width:1100px){
  .wpay-desktop-page{padding-left:248px!important;padding-bottom:32px!important;background:#f5f6f8!important}
  .dark .wpay-desktop-page{background:#101113!important}
@@ -98,7 +98,16 @@
    white-space: nowrap;
  }
  .wpay-desktop-body{max-width:1240px;margin:24px auto 0;padding:0 32px}
- .wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=profile]{display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:24px;align-items:start}
+ .wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=profile],.wpay-desktop-body[data-tab=cards]:has(.wpay-card-tariff-aside){display:grid;grid-template-columns:minmax(0,1fr) 310px;gap:24px;align-items:start}
+ .wpay-desktop-body[data-tab=cards] > .wpay-aura-cards { min-width: 0; }
+ .wpay-card-tariff-aside { display: block; }
+ .wpay-card-tariff-name { margin-top: 12px; font-size: 19px; font-weight: 650; }
+ .wpay-card-tariff-aside dd { margin: 0; text-align: right; color: #20232a; }
+ .wpay-card-tariff-aside dd small { display: block; margin-top: 2px; font-size: 11px; color: #6e7584; }
+ .dark .wpay-card-tariff-aside dd { color: #f4f4f5; }
+ .dark .wpay-card-tariff-aside dd small { color: #a2a5af; }
+ .wpay-card-tariff-link { display: flex; align-items: center; gap: 6px; margin-top: 20px; color: #225dc6; font-size: 13px; font-weight: 600; cursor: pointer; }
+ .dark .wpay-card-tariff-link { color: #9ebeff; }
  .wpay-desktop-body>main{max-width:none!important}
  .wpay-desktop-body[data-tab=history]>main{max-width:850px!important;margin-left:0!important}
  .wpay-desktop-body[data-tab=profile] {
@@ -205,7 +214,7 @@
  .wpay-exchange-sheet.sheet-modal{left:50%;width:520px;max-width:calc(100% - 48px);margin-left:-260px;border-radius:32px 32px 0 0}
  .wpay-profile-popup{max-width:760px!important}
 }
-@media(min-width:1600px){.wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=profile]{grid-template-columns:minmax(0,1fr) 340px;gap:32px}}
+@media(min-width:1600px){.wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=profile],.wpay-desktop-body[data-tab=cards]:has(.wpay-card-tariff-aside){grid-template-columns:minmax(0,1fr) 340px;gap:32px}}
 
 @media(min-width:1100px){
  .wpay-viewport[data-wallet-surface][aria-hidden=true]{visibility:hidden;pointer-events:none}

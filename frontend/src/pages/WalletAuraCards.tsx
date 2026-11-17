@@ -590,6 +590,17 @@ export default function WalletAuraCards({
   const travelOffer = currentKind === "virtual" && activeOffer?.skin === "navy";
   const premiumOffer =
     currentKind === "physical" && activeOffer?.skin === "ice";
+  const tariffKind = showOffer ? currentKind : selected?.kind;
+  const tariffPlan = fees?.plans?.find((plan) =>
+    showOffer
+      ? plan.kind === tariffKind && plan.skin === (activeOffer?.skin ?? skin)
+      : plan.plan_id === selected?.plan_id,
+  );
+  const tariffIssueFee = tariffPlan
+    ? tariffPlan.issue_fee
+    : tariffKind === "physical" ? fees?.open_physical_card_fee : fees?.open_virtual_card_fee;
+  const tariffRechargeFee = tariffKind === "physical"
+    ? fees?.physical_recharge_fee_pct : fees?.recharge_fee_pct;
   const physical = selected?.kind === "physical";
   const canUse = selected?.status === "opened";
   const slideLeft = (el: HTMLDivElement, index: number) => {
@@ -1292,6 +1303,34 @@ export default function WalletAuraCards({
           )
         )}
       </main>
+      <aside className="wpay-desktop-card wpay-card-tariff-aside" aria-label="Тариф выбранной карты">
+        <div className="wpay-desktop-section-head">
+          <h2>Тариф карты</h2><span>USDT</span>
+        </div>
+        {fees && tariffKind ? (
+          <>
+            <p className="wpay-card-tariff-name">
+              {tariffPlan?.label ?? (tariffKind === "physical" ? "Физическая карта" : "Виртуальная карта")}
+            </p>
+            <dl>
+              {showOffer && <div className="wpay-desktop-rate"><dt>Выпуск</dt><dd>{tariffIssueFee ? `${tariffIssueFee} USDT` : "Недоступен"}</dd></div>}
+              <div className="wpay-desktop-rate"><dt>Минимум пополнения</dt><dd>{fees.minimum_recharge_amount} USDT</dd></div>
+              <div className="wpay-desktop-rate"><dt>Комиссия за пополнение</dt><dd>{tariffRechargeFee ? `${tariffRechargeFee}%` : "—"}</dd></div>
+              {tariffPlan && (
+                <div className="wpay-desktop-rate">
+                  <dt>Комиссия wPay</dt>
+                  <dd>{tariffPlan.service_recharge_pct}%<small>от {tariffPlan.service_minimum_fee} USDT</small></dd>
+                </div>
+              )}
+            </dl>
+            <button type="button" className="wpay-card-tariff-link" onClick={() => openPanel("fees")}>
+              Все тарифы <ArrowUpRight size={16} aria-hidden="true" />
+            </button>
+          </>
+        ) : (
+          <p className="wpay-desktop-fx-status" role="status">{loading ? "Тариф загружается…" : "Тариф пока недоступен"}</p>
+        )}
+      </aside>
       <Popup
         push
         opened={panel !== null}
