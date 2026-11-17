@@ -114,6 +114,21 @@ class AuthenticationTests(unittest.TestCase):
         self.assertEqual(result, 'Hello <b>world</b>\nsafe')
         self.assertEqual(_telegram_text_length(result), 16)
 
+    def test_broadcast_rich_text_keeps_telegram_spoilers_quotes_and_code(self):
+        result = _telegram_html(
+            '<span class="tg-spoiler extra">secret</span>'
+            '<blockquote>quote</blockquote>'
+            '<blockquote expandable="">long quote</blockquote>'
+            '<pre><code>print(&quot;ok&quot;)</code></pre>'
+        )
+        self.assertEqual(
+            result,
+            '<tg-spoiler>secret</tg-spoiler>'
+            '<blockquote>quote</blockquote>'
+            '<blockquote expandable>long quote</blockquote>'
+            '<pre><code>print(&quot;ok&quot;)</code></pre>',
+        )
+
     def test_broadcast_image_accepts_only_small_jpeg_or_png_data_urls(self):
         image = _broadcast_image('data:image/jpeg;base64,/9j/2Q==')
         self.assertEqual(image, (b'\xff\xd8\xff\xd9', 'image/jpeg', 'broadcast.jpg'))

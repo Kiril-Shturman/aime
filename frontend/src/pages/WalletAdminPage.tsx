@@ -57,6 +57,12 @@ import "./WalletAdmin.css";
 Framework7.use(Framework7React);
 
 type Json = Record<string, unknown>;
+type RichEditor = {
+  contentEl: HTMLElement;
+  getSelectionRange: () => Range | null;
+  setSelectionRange: (range: Range) => void;
+  onInput: () => void;
+};
 type Tab =
   | "overview"
   | "data"
@@ -2912,6 +2918,86 @@ function Notifications({
   const messageLimit = imageData ? 1024 : 4096;
   const canSend =
     messageLength > 0 && messageLength <= messageLimit && !sending && !imageBusy;
+  function finishEditorCommand(editor: RichEditor, range?: Range | null) {
+    if (range) editor.setSelectionRange(range);
+    editor.contentEl.focus();
+    editor.onInput();
+  }
+  function wrapEditorSelection(editor: RichEditor, tag: "code" | "span") {
+    const range = editor.getSelectionRange();
+    if (!range || !editor.contentEl.contains(range.commonAncestorContainer)) return;
+    const wrapper = document.createElement(tag);
+    if (tag === "span") wrapper.className = "tg-spoiler";
+    if (range.collapsed) {
+      wrapper.textContent = tag === "span" ? "скрытый текст" : "код";
+      range.insertNode(wrapper);
+      const contents = document.createRange();
+      contents.selectNodeContents(wrapper);
+      finishEditorCommand(editor, contents);
+      return;
+    }
+    try {
+      range.surroundContents(wrapper);
+    } catch {
+      wrapper.append(range.extractContents());
+      range.insertNode(wrapper);
+    }
+    const after = document.createRange();
+    after.selectNodeContents(wrapper);
+    finishEditorCommand(editor, after);
+  }
+  function formatEditorBlock(
+    editor: RichEditor,
+    tag: "blockquote" | "pre",
+    expandable = false,
+  ) {
+    editor.contentEl.focus();
+    document.execCommand("formatBlock", false, tag);
+    if (tag === "blockquote") {
+      const selection = window.getSelection();
+      const anchor = selection?.anchorNode;
+      const element =
+        anchor instanceof Element ? anchor : anchor?.parentElement || null;
+      const quote = element?.closest("blockquote");
+      if (quote && editor.contentEl.contains(quote)) {
+        if (expandable) quote.setAttribute("expandable", "");
+        else quote.removeAttribute("expandable");
+      }
+    }
+    finishEditorCommand(editor);
+  }
+  const telegramEditorButtons = useMemo(
+    () => ({
+      spoiler: {
+        content:
+          '<span class="wpay-admin-editor-tool" title="Скрытый текст"><i class="f7-icons">eye_slash</i><small>Скрытый</small></span>',
+        onClick: (editor: RichEditor) => wrapEditorSelection(editor, "span"),
+      },
+      quote: {
+        content:
+          '<span class="wpay-admin-editor-tool" title="Цитата"><i class="f7-icons">text_quote</i><small>Цитата</small></span>',
+        onClick: (editor: RichEditor) =>
+          formatEditorBlock(editor, "blockquote"),
+      },
+      expandableQuote: {
+        content:
+          '<span class="wpay-admin-editor-tool" title="Сворачиваемая цитата"><i class="f7-icons">rectangle_expand_vertical</i><small>Свернуть</small></span>',
+        onClick: (editor: RichEditor) =>
+          formatEditorBlock(editor, "blockquote", true),
+      },
+      inlineCode: {
+        content:
+          '<span class="wpay-admin-editor-tool" title="Моноширинный код"><i class="f7-icons">chevron_left_slash_chevron_right</i><small>Код</small></span>',
+        onClick: (editor: RichEditor) => wrapEditorSelection(editor, "code"),
+      },
+      codeBlock: {
+        content:
+          '<span class="wpay-admin-editor-tool" title="Блок кода"><i class="f7-icons">doc_plaintext</i><small>Блок</small></span>',
+        onClick: (editor: RichEditor) => formatEditorBlock(editor, "pre"),
+      },
+    }),
+    [],
+  );
   async function pickImage(file?: File) {
     if (!file) return;
     setImageBusy(true);
@@ -3079,31 +3165,42 @@ function Notifications({
           <Empty />
         )}
       </section>
-      <section className={card}>
+      <section className={`${card} wpay-admin-broadcast-card`}>
         <div className="wpay-admin-section-title">
           <div>
             <span>Ручная отправка</span>
             <h2>Новая рассылка</h2>
           </div>
+          <i className="wpay-admin-telegram-badge">Telegram HTML</i>
         </div>
-        <F7TextEditor
-          value={message}
-          onTextEditorInput={(value) => setMessage(String(value || ""))}
-          mode="toolbar"
-          buttons={[
-            ["bold", "italic", "underline", "strikeThrough"],
-            ["orderedList", "unorderedList"],
-            ["link"],
-          ]}
-          clearFormattingOnPaste
-          resizable
-          className="wpay-admin-message-editor mt-3"
-          placeholder="Текст сообщения"
-        />
-        <div
-          className={`mt-2 text-right text-xs ${messageLength > messageLimit ? "text-red-500" : "opacity-40"}`}
-        >
-          {messageLength}/{messageLimit}
+        <p className="wpay-admin-composer-hint">
+          Оформление сохранится в Telegram. Выдели текст и выбери действие.
+        </p>
+        <div className="wpay-admin-composer-shell">
+          <div className="wpay-admin-composer-label">
+            <span>Сообщение</span>
+            <span
+              className={messageLength > messageLimit ? "is-over-limit" : ""}
+            >
+              {messageLength}/{messageLimit}
+            </span>
+          </div>
+          <F7TextEditor
+            value={message}
+            onTextEditorInput={(value) => setMessage(String(value || ""))}
+            mode="toolbar"
+            buttons={[
+              ["bold", "italic", "underline", "strikeThrough"],
+              ["link", "orderedList", "unorderedList"],
+              ["spoiler", "quote", "expandableQuote"],
+              ["inlineCode", "codeBlock"],
+            ]}
+            customButtons={telegramEditorButtons}
+            clearFormattingOnPaste
+            resizable
+            className="wpay-admin-message-editor"
+            placeholder="Напишите сообщение…"
+          />
         </div>
         <div className="mt-3">
           <input

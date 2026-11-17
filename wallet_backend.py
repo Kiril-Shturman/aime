@@ -63,6 +63,7 @@ class _TelegramHtmlSanitizer(HTMLParser):
         'b': 'b', 'strong': 'b', 'i': 'i', 'em': 'i', 'u': 'u',
         's': 's', 'strike': 's', 'del': 's', 'code': 'code',
         'pre': 'pre', 'blockquote': 'blockquote', 'a': 'a',
+        'tg-spoiler': 'tg-spoiler',
     }
     BLOCKS = {'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
 
@@ -93,6 +94,12 @@ class _TelegramHtmlSanitizer(HTMLParser):
             self.newline()
             self.parts.append('• ')
             return
+        if tag == 'span':
+            classes = set(dict(attrs).get('class', '').split())
+            if 'tg-spoiler' in classes:
+                self.parts.append('<tg-spoiler>')
+                self.open_tags.append((tag, 'tg-spoiler'))
+            return
         mapped = self.TAGS.get(tag)
         if not mapped:
             return
@@ -102,6 +109,8 @@ class _TelegramHtmlSanitizer(HTMLParser):
             if scheme not in {'http', 'https', 'tg', 'mailto'}:
                 return
             self.parts.append('<a href="' + html.escape(href, quote=True) + '">')
+        elif mapped == 'blockquote' and any(name == 'expandable' for name, _ in attrs):
+            self.parts.append('<blockquote expandable>')
         else:
             self.parts.append('<' + mapped + '>')
         self.open_tags.append((tag, mapped))
