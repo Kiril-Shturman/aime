@@ -2,12 +2,34 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { Button } from 'konsta/react'
 import { chartPeriods, getMarketHistory, type MarketHistory } from '../lib/market-data'
 export { chartPeriods }
-const W=360,H=207,L=3,R=357,T=14,B=191
+const L=3,T=14
 const number = (value:number) => value.toLocaleString('en-US',{maximumFractionDigits:value>=1000?2:value>=1?4:6})
 const date = (time:number) => new Date(time).toLocaleString('ru-RU',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})
 export default function WalletMarketChart({code,period,active=true,icon,onPeriodChange}: {code:string;period:number;active?:boolean;icon?:ReactNode;onPeriodChange?:(percent:number|null)=>void}) {
   const [data,setData]=useState<MarketHistory|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false),[attempt,setAttempt]=useState(0),[selected,setSelected]=useState<number|null>(null)
   const finger=useRef(false)
+  const chartRef = useRef<HTMLElement>(null)
+  const [desktopWidth, setDesktopWidth] = useState(0)
+  const W = desktopWidth || 360
+  const H = desktopWidth ? 280 : 207
+  const R = W - 3
+  const B = H - 16
+
+  useEffect(() => {
+    const chart = chartRef.current
+    if (!chart || !active) return
+    const media = window.matchMedia("(min-width: 1100px)")
+    const resize = () => setDesktopWidth(media.matches ? Math.round(chart.clientWidth) : 0)
+    const observer = new ResizeObserver(resize)
+    observer.observe(chart)
+    media.addEventListener("change", resize)
+    resize()
+    return () => {
+      observer.disconnect()
+      media.removeEventListener("change", resize)
+    }
+  }, [active])
+
   const gradient=useId().replace(/:/g,'')
   useEffect(()=>{
     if(!active){setSelected(null);return}
@@ -33,7 +55,7 @@ export default function WalletMarketChart({code,period,active=true,icon,onPeriod
     setSelected(Math.max(0,Math.min(points.length-1,Math.round((local-L)/(R-L)*(points.length-1)))))
   }
   function end(){finger.current=false;setSelected(null)}
-  return <section aria-label={`Рыночный график ${code}`} aria-busy={loading} className="mt-2">
+  return <section ref={chartRef} aria-label={`Рыночный график ${code}`} aria-busy={loading} className="mt-2">
     <p aria-live="off" className="text-[31px] font-semibold leading-tight tracking-tight tabular-nums text-black dark:text-white">{point?`${number(point.value)} ${data?.quote}`:'—'}</p>
     <div className="mt-2 flex min-h-6 items-center gap-2 text-[13px]">
       {point&&first?<><span className={`shrink-0 rounded-md px-1.5 py-0.5 font-medium tabular-nums ${positive?'bg-green-500/10 text-green-600 dark:bg-green-400/10 dark:text-green-400':'bg-red-500/10 text-red-500 dark:bg-red-400/10 dark:text-red-400'}`}>{positive?'+':''}{percent.toFixed(2)}%</span><span className="min-w-0 truncate text-black/40 dark:text-white/40">{selected!==null?date(point.time):`За период · ${chartPeriods[period].label}`}</span></>:<span role="status" className="text-black/40 dark:text-white/40">{loading?'Загружаем котировки…':error?'Котировки недоступны':''}</span>}
