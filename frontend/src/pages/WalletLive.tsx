@@ -1,4 +1,4 @@
-import { Search } from "lucide-react";
+import { Search, CreditCard } from "lucide-react";
 import WalletOperations from "./WalletOperations";
 import {
   TransactionDetails,
@@ -280,8 +280,8 @@ export function LiveHistory() {
       (filter === "all" ||
         (filter === "income"
           ? Number(x.amount) > 0
-          : x.type.startsWith("qr_"))) &&
-      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""}`
+          : Number(x.amount) < 0 || x.type === "qr_failed")) &&
+      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${x.type === "card_issue" ? "Выпуск карты" : x.type === "card_issue_refund" ? "Возврат за выпуск карты" : ""} ${x.detail.plan ?? ""}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -364,15 +364,28 @@ export function LiveHistory() {
                 {transactions.map((item) => {
                   const income = Number(item.amount) > 0;
                   const failed = item.type === "qr_failed";
-                  const Icon = income ? ArrowDownCircleFill : Qrcode;
+                  const cardIssue =
+                    item.type === "card_issue" ||
+                    item.type === "card_issue_refund";
+                  const Icon = cardIssue
+                    ? CreditCard
+                    : income
+                      ? ArrowDownCircleFill
+                      : Qrcode;
                   const title =
-                    item.type === "deposit"
-                      ? "Пополнение"
-                      : item.type === "qr_refunded"
-                        ? "Возврат QR"
-                        : failed
-                          ? "Платёж не прошёл"
-                          : String(item.detail.merchant_name || "Оплата QR");
+                    item.type === "card_issue"
+                      ? "Выпуск карты"
+                      : item.type === "card_issue_refund"
+                        ? "Возврат за выпуск карты"
+                        : item.type === "deposit"
+                          ? "Пополнение"
+                          : item.type === "qr_refunded"
+                            ? "Возврат QR"
+                            : failed
+                              ? "Платёж не прошёл"
+                              : String(
+                                  item.detail.merchant_name || "Оплата QR",
+                                );
                   return (
                     <ListItem
                       key={item.event_id}
@@ -408,8 +421,9 @@ export function LiveHistory() {
                             <span
                               className={`block text-[16px] font-medium leading-6 tabular-nums ${income ? "text-green-600 dark:text-green-400" : "text-black dark:text-white"}`}
                             >
-                              {income ? "+" : ""}
-                              {cryptoAmount(item.amount)}
+                              {cardIssue
+                                ? `${income ? "+" : ""}${usd(Number(item.amount))}`
+                                : `${income ? "+" : ""}${cryptoAmount(item.amount)}`}
                             </span>
                             <span className="block text-[12px] leading-5 text-black/40 dark:text-white/40">
                               {item.asset}

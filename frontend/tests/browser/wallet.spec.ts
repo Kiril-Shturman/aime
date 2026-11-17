@@ -1218,3 +1218,18 @@ test("closing an in-flight exchange calculation allows a fresh quote on reopen",
     panel.getByLabel("Сумма получения USDT", { exact: true }),
   ).toBeVisible();
 });
+
+
+test("card issuance appears in all history and payments with amount and tariff details", async ({page}) => {
+  await setup(page,"light");
+  await page.route("**/api/wallet/overview",route=>route.fulfill({json:{balances:[{asset:"USDT",available:"0",reserved:"0"}],rates:[],transactions:[{event_id:"aura:test:card_issue:fixture",asset:"USDT",amount:"-25",type:"card_issue",created_at:new Date().toISOString(),detail:{status:"completed",card:"Виртуальная · •• 4242",plan:"Для подписок",provider_fee:"15",service_fee:"10"}}]}}));
+  await page.reload();
+  await page.getByRole("link",{name:"История",exact:true}).click();
+  await expect(page.getByText("Выпуск карты",{exact:true})).toBeVisible();
+  await expect(page.getByText("-$25.00",{exact:true})).toBeVisible();
+  await page.getByRole("button",{name:"Платежи",exact:true}).click();
+  await expect(page.getByText("Выпуск карты",{exact:true})).toBeVisible();
+  await page.getByText("Выпуск карты",{exact:true}).click();
+  await expect(page.getByText("Для подписок",{exact:true})).toBeVisible();
+  await expect(page.getByText("Виртуальная · •• 4242",{exact:true})).toBeVisible();
+});

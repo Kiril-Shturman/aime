@@ -123,3 +123,38 @@ class CardUITests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(caught.exception.name,'AURA_FUNDS_UNAVAILABLE')
         self.client.create_card.assert_not_awaited();self.assertEqual(self.ledger.balance(self.uid,'USDT'),(Decimal(300),Decimal(0)))
         self.assertFalse(self.ledger.db.execute("SELECT 1 FROM wallet_provider_entities WHERE local_id='unbacked'").fetchone())
+
+    async def test_card_issue_history_backfill_is_idempotent_and_never_spends_again(self):
+        from wallet_aura import backfill_card_issue_history
+        self.tariff(fixed='5')
+        result=await self.service.create_card_request(self.uid,self.ref,idempotency_key='history-issue',plan_id='card_subscriptions')
+        before=self.ledger.balance(self.uid,'USDT')
+        event=self.ledger.db.execute("SELECT * FROM wallet_events WHERE user_id=? AND type='card_issue'",(self.uid,)).fetchone()
+        self.assertEqual(Decimal(event['amount']),Decimal('-25'))
+        self.assertEqual(json.loads(event['detail'])['status'],'processing')
+        owner=await self.service.ensure_customer(self.uid,self.ref)
+        self.ledger.begin('test_card_opened','test','history status')
+        try:_store_card_event(self.ledger,'test','card.opened',{'card_id':result['card_id'],'owner_id':owner,'kind':'virtual','status':'opened'});self.ledger.commit()
+        except Exception:self.ledger.rollback();raise
+        event=self.ledger.db.execute("SELECT * FROM wallet_events WHERE user_id=? AND type='card_issue'",(self.uid,)).fetchone()
+        self.assertEqual(json.loads(event['detail'])['status'],'completed')
+        stamp=event['created_at']
+        self.ledger.db.execute("DELETE FROM wallet_events WHERE type='card_issue'")
+        for _ in range(2):backfill_card_issue_history(self.ledger)
+        self.assertEqual(self.ledger.balance(self.uid,'USDT'),before)
+        rows=self.ledger.db.execute("SELECT * FROM wallet_events WHERE type='card_issue'").fetchall()
+        self.assertEqual(len(rows),1);self.assertEqual(rows[0]['created_at'],stamp)
+        self.assertNotIn('number',json.loads(rows[0]['detail']));self.assertNotIn('cvv',json.loads(rows[0]['detail']))
+
+    async def test_failed_card_issue_records_charge_and_exactly_one_refund(self):
+        self.tariff(fixed='5')
+        result=await self.service.create_card_request(self.uid,self.ref,idempotency_key='history-refund',plan_id='card_subscriptions')
+        owner=await self.service.ensure_customer(self.uid,self.ref)
+        payload={'card_id':result['card_id'],'owner_id':owner,'kind':'virtual','status':'failed_to_open'}
+        for _ in range(2):
+            self.ledger.begin('test_card_failed','test','failed issue history')
+            try:_store_card_event(self.ledger,'test','card.failed',payload);self.ledger.commit()
+            except Exception:self.ledger.rollback();raise
+        self.assertEqual(self.ledger.balance(self.uid,'USDT'),(Decimal(300),Decimal(0)))
+        events=self.ledger.db.execute("SELECT amount,type FROM wallet_events WHERE user_id=? AND type LIKE 'card_issue%'",(self.uid,)).fetchall()
+        self.assertEqual(len(events),2);self.assertEqual(sum(Decimal(r['amount']) for r in events),Decimal(0))

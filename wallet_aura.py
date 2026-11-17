@@ -2216,6 +2216,7 @@ class AuraService:
                 "WHERE provider='aura' AND environment=? AND entity_type='card_request' "
                 "AND local_id=?", (card_id, time.time(), self.environment, idempotency_key),
             )
+            record_card_issue_history(self.ledger,self.environment,idempotency_key)
             self.ledger.commit()
         except Exception:
             self.ledger.rollback()
@@ -2599,6 +2600,34 @@ def _position_adjust(ledger, environment, uid, asset, available_delta, reserved_
     )
 
 
+def record_card_issue_history(ledger, environment, local_id):
+    """History projection only. Never debit or credit a balance here."""
+    entity=ledger.db.execute("SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? AND entity_type='card_request' AND local_id=?",(environment,local_id)).fetchone()
+    if not entity or not entity['remote_id'] or entity['status'] not in {'processing','opened','refunded'}:return
+    stored=json.loads(entity['request_body']);fee=_decimal(stored['fee'],allow_zero=True)
+    card=ledger.db.execute('SELECT kind,masked_pan,status FROM aura_cards WHERE environment=? AND user_id=? AND card_id=?',(environment,entity['user_id'],entity['remote_id'])).fetchone()
+    kind=(card['kind'] if card else None) or stored.get('kind','virtual')
+    plan_id,plan=resolve_card_plan(stored.get('plan_id'),kind)
+    digits=re.sub(r'\D','',(card['masked_pan'] if card else None) or '')[-4:]
+    detail={'status':'processing' if entity['status']=='processing' else 'completed',
+            'card_id':entity['remote_id'],'card':('Физическая' if kind=='physical' else 'Виртуальная')+(' · •• '+digits if digits else ''),
+            'plan_id':plan_id,'plan':plan['label'],'provider_fee':str(stored.get('provider_fee',fee)),
+            'service_fee':str(stored.get('service_fee','0')),'environment':environment}
+    event_id='aura:'+environment+':card_issue:'+local_id
+    stamp=datetime.fromtimestamp(entity['created_at'],timezone.utc).isoformat()
+    ledger.db.execute("INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?) ON CONFLICT(event_id) DO UPDATE SET detail=excluded.detail",(event_id,entity['user_id'],'USDT',str(-fee),'card_issue',stamp,json.dumps(detail,ensure_ascii=False)))
+    if entity['status']=='refunded':
+        refund={**detail,'status':'completed','reason':'Возврат стоимости выпуска карты'}
+        refund_stamp=datetime.fromtimestamp(entity['updated_at'],timezone.utc).isoformat()
+        ledger.db.execute('INSERT OR IGNORE INTO wallet_events VALUES (?,?,?,?,?,?,?)',(event_id+':refund',entity['user_id'],'USDT',str(fee),'card_issue_refund',refund_stamp,json.dumps(refund,ensure_ascii=False)))
+
+
+def backfill_card_issue_history(ledger):
+    rows=ledger.db.execute("SELECT environment,local_id FROM wallet_provider_entities WHERE provider='aura' AND entity_type='card_request' AND remote_id IS NOT NULL AND status IN ('processing','opened','refunded')").fetchall()
+    for row in rows:record_card_issue_history(ledger,row['environment'],row['local_id'])
+    return len(rows)
+
+
 def _settle_card_request(ledger, environment, card_id, status):
     entity = ledger.db.execute(
         "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
@@ -2968,6 +2997,8 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
          json.dumps(safe, separators=(",", ":"), ensure_ascii=False), stamp, stamp),
     )
     _settle_card_request(ledger, environment, card_id, status)
+    issue=ledger.db.execute("SELECT local_id FROM wallet_provider_entities WHERE provider='aura' AND environment=? AND entity_type='card_request' AND remote_id=?",(environment,card_id)).fetchone()
+    if issue:record_card_issue_history(ledger,environment,issue['local_id'])
     card_text = {
         "opened": "Карта выпущена и появилась в WPay.",
         "failed_to_open": "Выпустить карту не удалось. Средства будут обработаны по статусу заявки.",
