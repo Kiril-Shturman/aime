@@ -1295,3 +1295,32 @@
   width: 76%;
   max-width: 340px;
 }
+.wpay-verification-seal--rejected {
+  clip-path: none;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 28% 14%, #ffffffcc, transparent 55%),
+    linear-gradient(145deg, #fff7f7, #ffe1df);
+  color: #df3e45;
+  box-shadow:
+    inset 0 2px 3px #ffffffcc,
+    inset -3px -4px 6px #b92f3526;
+}
+.wpay-verification-seal--rejected svg {
+  width: 78%;
+  height: 78%;
+  filter: drop-shadow(0 2px 1px #b92f3526);
+}
+.dark .wpay-verification-seal--rejected {
+  background:
+    radial-gradient(circle at 28% 14%, #ffffff22, transparent 55%),
+    linear-gradient(145deg, #62383c, #382024);
+  color: #ff7973;
+  box-shadow:
+    inset 0 2px 3px #ffffff26,
+    inset -3px -4px 6px #18070a66;
+}
+.wpay-verification-links .preloader {
+  --f7-preloader-color: currentColor;
+  flex-shrink: 0;
+}

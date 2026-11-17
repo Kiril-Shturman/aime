@@ -588,6 +588,34 @@ for (const theme of ["light", "dark"]) {
     await expect(
       region.getByRole("button", { name: "Начать", exact: true }),
     ).toHaveCount(0);
+    await expect(
+      region.locator(".wpay-verification-seal--rejected .lucide-ban"),
+    ).toBeVisible();
+    await expect(
+      region.locator(".wpay-verification-seal .lucide-check"),
+    ).toHaveCount(0);
+    let finish!: () => void;
+    const pendingRefresh = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    await page.route("**/api/wallet/aura-kyc", async (route) => {
+      await pendingRefresh;
+      await route.fulfill({
+        json: { status: "rejected", verified: false, terminal: false, reason },
+      });
+    });
+    const refreshButton = region.getByRole("button", {
+      name: "Обновить статус",
+      exact: true,
+    });
+    await refreshButton.click();
+    await expect(refreshButton).toBeDisabled();
+    await expect(refreshButton).toHaveAttribute("aria-busy", "true");
+    await expect(refreshButton.locator(".preloader")).toBeVisible();
+    await expect(refreshButton.locator(".lucide-refresh-cw")).toHaveCount(0);
+    finish();
+    await expect(refreshButton).toBeEnabled();
+    await expect(refreshButton.locator(".preloader")).toHaveCount(0);
     await expect(region.locator("code")).not.toBeVisible();
     await expect(
       region.getByText("Защищённая форма проверки", { exact: true }),

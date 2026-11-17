@@ -1,10 +1,12 @@
+import { useState } from "react";
+import "framework7/components/preloader/css";
 import { useKeyboardFormScroll } from "../wallet/useKeyboardFormScroll";
 import WalletVerificationIdentity from "./WalletVerificationIdentity";
 import telephoneArtwork from "../assets/verification/telephone.webp";
 import mailboxArtwork from "../assets/verification/mailbox-envelope.webp";
 import passportArtwork from "../assets/verification/passport.webp";
 import cardArtwork from "../assets/verification/wpay-card.webp";
-import { List, ListInput } from "framework7-react";
+import { List, ListInput, Preloader } from "framework7-react";
 import { Button } from "konsta/react";
 import {
   Check,
@@ -14,6 +16,7 @@ import {
   Mail,
   AtSign,
   CircleAlert,
+  Ban,
   MessageCircle,
 } from "lucide-react";
 import type { useAuraProfile } from "../wallet/useAuraProfile";
@@ -46,6 +49,16 @@ export default function WalletVerification({
   contacts,
   onContacts,
 }: Props) {
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshStatus = async () => {
+    if (refreshing) return;
+    setRefreshing(true);
+    try {
+      await aura.refresh();
+    } finally {
+      setRefreshing(false);
+    }
+  };
   const verified = Boolean(aura.kyc?.verified);
   const pending = ["pending", "in_review"].includes(aura.kyc?.status || "");
   const rejected = aura.kyc?.status === "rejected";
@@ -227,8 +240,10 @@ export default function WalletVerification({
             alt=""
             draggable={false}
           />
-          <span className="wpay-verification-seal">
-            <Check strokeWidth={3.5} />
+          <span
+            className={`wpay-verification-seal${rejected ? " wpay-verification-seal--rejected" : ""}`}
+          >
+            {rejected ? <Ban strokeWidth={3} /> : <Check strokeWidth={3.5} />}
           </span>
           <span className="wpay-verification-spark wpay-verification-spark--one" />
           <span className="wpay-verification-spark wpay-verification-spark--two" />
@@ -297,10 +312,12 @@ export default function WalletVerification({
             {aura.available && (
               <button
                 type="button"
-                disabled={aura.loading || aura.busy}
-                onClick={() => void aura.refresh()}
+                disabled={aura.loading || aura.busy || refreshing}
+                aria-busy={refreshing}
+                onClick={() => void refreshStatus()}
               >
-                <RefreshCw size={13} /> Обновить статус
+                {refreshing ? <Preloader size={13} /> : <RefreshCw size={13} />}{" "}
+                Обновить статус
               </button>
             )}
           </div>
@@ -312,7 +329,9 @@ export default function WalletVerification({
             data-wpay-primary=""
             rounded
             className="!m-0 !w-full"
-            onClick={onSupport || (() => void aura.refresh())}
+            disabled={!onSupport && refreshing}
+            aria-busy={!onSupport && refreshing}
+            onClick={onSupport || (() => void refreshStatus())}
           >
             <span className="wpay-verification-button-content">
               {onSupport && <MessageCircle size={20} aria-hidden="true" />}
