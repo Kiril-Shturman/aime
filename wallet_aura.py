@@ -8,6 +8,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import logging
 import re
 import socket
 import time
@@ -2496,7 +2497,7 @@ def verify_signature(secret, raw, header, now_seconds=None, tolerance=300):
 
 
 def store_webhook(ledger, raw, signature, headers, secret, partner_id=None):
-    valid = verify_signature(secret, raw, signature)
+    failures = [] if verify_signature(secret, raw, signature) else ["hmac_or_timestamp_window"]
     try:
         event = json.loads(raw)
         if not isinstance(event, dict):
@@ -2513,24 +2514,24 @@ def store_webhook(ledger, raw, signature, headers, secret, partner_id=None):
             "event id",
         )
         if headers.get("X-Aura-Event-Id") not in {None, "", event_id}:
-            valid = False
+            failures.append("event_id_header")
         if headers.get("X-Aura-Event") not in {None, "", kind}:
-            valid = False
+            failures.append("event_type_header")
         signature_timestamp = next(
             (part.strip().partition("=")[2] for part in signature.split(",")
              if part.strip().startswith("t=")), None
         )
         header_timestamp = headers.get("X-Aura-Timestamp")
         if header_timestamp not in {None, ""} and str(header_timestamp) != signature_timestamp:
-            valid = False
+            failures.append("timestamp_header")
         attempt = headers.get("X-Aura-Attempt")
         if attempt not in {None, ""} and (not str(attempt).isdigit() or int(attempt) < 1):
-            valid = False
+            failures.append("attempt_header")
         event_partner_id = event.get("partner_id")
         if is_test and event_partner_id is None:
             event_partner_id = event.get("partnerId")
         if partner_id and str(event_partner_id) != partner_id:
-            valid = False
+            failures.append("partner_id")
         stored_event = event
         if kind == "card.otp":
             data = event.get("data") or {}
@@ -2547,8 +2548,14 @@ def store_webhook(ledger, raw, signature, headers, secret, partner_id=None):
             stored_event, separators=(",", ":"), ensure_ascii=False
         ).encode()
     except (ValueError, TypeError, json.JSONDecodeError):
-        event, event_id, kind, valid = {}, hashlib.sha256(raw).hexdigest(), "invalid", False
-        stored_raw = raw
+        event_id, kind = hashlib.sha256(raw).hexdigest(), "invalid"
+        failures.append("envelope")
+        stored_raw = b"{}"
+    valid = not failures
+    if failures:
+        logging.getLogger(__name__).warning(
+            "Aura webhook rejected: %s", ",".join(failures)
+        )
     key = "aura:" + event_id if valid else "aura:invalid:" + hashlib.sha256(raw + signature.encode()).hexdigest()
     ledger.begin("aura_webhook_receive", "aura", key)
     try:
