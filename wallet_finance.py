@@ -122,11 +122,14 @@ def apply_aura_test_backing(ledger, target, amount, event_id, actor, platform):
     if not event or event['type'] not in {'adjustment','admin_adjustment'} or D(event['amount'])!=amount:raise ValueError('Existing administrative credit required')
     row=ledger.db.execute("SELECT available FROM wallet_provider_positions WHERE provider='aura' AND environment='test' AND user_id=? AND asset='USDT'",(target,)).fetchone()
     backed=D(row['available']) if row else D(0)
-    allocated=sum((D(r['available'])+D(r['reserved']) for r in ledger.db.execute("SELECT available,reserved FROM wallet_provider_positions WHERE provider='aura' AND environment='test' AND asset='USDT'")),D(0))
-    delta=amount if amount>0 else -min(backed,-amount)
-    if delta>0 and (platform is None or not platform.is_finite() or platform<allocated+delta):raise TestBackingUnavailable('Insufficient unallocated Aura test reserve')
+    with localcontext() as ctx:
+        ctx.prec=80
+        allocated=sum((D(r['available'])+D(r['reserved']) for r in ledger.db.execute("SELECT available,reserved FROM wallet_provider_positions WHERE provider='aura' AND environment='test' AND asset='USDT'")),D(0))
+        delta=amount if amount>0 else -min(backed,-amount)
+        if delta>0 and (platform is None or not platform.is_finite() or platform<allocated+delta):raise TestBackingUnavailable('Insufficient unallocated Aura test reserve')
+        after_backing=backed+delta
     available,_=ledger.balance(target,'USDT')
-    if backed+delta>available:raise ValueError('Allocation exceeds existing user balance')
+    if after_backing>available:raise ValueError('Allocation exceeds existing user balance')
     from wallet_aura import _position_adjust
     _position_adjust(ledger,'test',target,'USDT',delta,D(0))
     ledger.db.execute('INSERT INTO custody_test_allocation_audit VALUES (?,?,?,?,?,?,?,?,?,?)',(event_id,target,'test','USDT',str(delta),str(platform) if platform is not None else 'not_required',str(allocated),actor,'Back existing administrative TEST credit with Aura reserve; no additional user credit',time.time()))
