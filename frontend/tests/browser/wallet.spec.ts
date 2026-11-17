@@ -5,6 +5,7 @@ async function setup(
   page: import("@playwright/test").Page,
   theme: string,
   outage = false,
+  cards = false,
 ) {
   await page.addInitScript((theme) => {
     localStorage.setItem("ui-theme", theme);
@@ -31,10 +32,19 @@ async function setup(
       return route.fulfill({
         json: { can_withdraw: true, can_transfer: true, currencies: [] },
       });
+    if (cards && path.endsWith("/aura-cards"))
+      return route.fulfill({
+        json: { data: [
+          { status: "opened", balance: "10.15", currency: "USD" },
+          { status: "opened", balance: "5.85", currency: "USD" },
+          { status: "cancelled", balance: "20", currency: "USD" },
+        ] },
+      });
     if (path.endsWith("/status"))
       return route.fulfill({
         json: {
           configured: true,
+          ...(cards ? { capabilities: { cards: true } } : {}),
           asset_routes: {
             USDT: ["BSC", "ETH", "TON", "SOL", "TRON"],
             TRX: ["TRON"],
@@ -1249,7 +1259,7 @@ test("card recharge history shows charged total and separate credited amount", a
 
 test("desktop sidebar navigates and switches the wPay wordmark with the theme", async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
-  await setup(page, "light");
+  await setup(page, "light", false, true);
   const menu = page.getByRole("navigation", { name: "Основное меню" });
   const brand = page.getByRole("button", { name: "wPay", exact: true });
   const logo = brand.getByRole("img", { name: "wPay" });
@@ -1262,10 +1272,10 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
   await brand.click();
   await expect(menu.getByRole("button", { name: "Кошелёк" })).toHaveAttribute("aria-current", "page");
   await menu.getByRole("button", { name: "Профиль" }).click();
-  const profileAside = page.getByRole("complementary", { name: "Быстрые действия профиля" });
+  const profileAside = page.getByRole("complementary", { name: "Сводка по балансам" });
   await expect(profileAside).toBeVisible();
-  await profileAside.getByRole("button", { name: "Открыть верификацию" }).click();
-  await expect(page.getByRole("region", { name: "Проверка личности", exact: true })).toBeVisible();
+  await expect(profileAside.getByRole("button", { name: /Кошелёк.*1,250/ })).toBeVisible();
+  await expect(profileAside.getByRole("button", { name: /На картах.*16.00/ })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(menu).toBeHidden();
   await expect(profileAside).toBeHidden();

@@ -764,6 +764,15 @@ function WalletScreen() {
           ))}
         {activeTab === "profile" && (
           <ProfileSection
+            balanceAside={
+              <DesktopProfileAside
+                walletBalance={live.ready ? live.total : null}
+                balanceHidden={balanceHidden}
+                cardsEnabled={live.capabilities.cards && !live.demo}
+                onWallet={() => selectTab("wallet")}
+                onCards={() => selectTab("cards")}
+              />
+            }
             user={user}
             initials={initials}
             showNotice={showNotice}
@@ -2907,7 +2916,9 @@ function ProfileSection({
   user,
   initials,
   showNotice,
+  balanceAside,
 }: {
+  balanceAside: React.ReactNode;
   user: ReturnType<typeof getUser>;
   initials: string;
   showNotice: NoticeHandler;
@@ -3040,10 +3051,7 @@ function ProfileSection({
           комиссию и реквизиты получателя.
         </p>
       </main>
-      <DesktopProfileAside
-        onVerification={() => setProfilePage("verification")}
-        onSupport={() => setProfilePage("support")}
-      />
+      {balanceAside}
       <ProfileSettingsPushView
         page={profilePage}
         onClose={() => setProfilePage(null)}

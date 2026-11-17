@@ -1,5 +1,7 @@
-import { Wallet, CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, ShieldCheck, MessageCircle } from 'lucide-react'
-import { useLiveWallet, cryptoAmount, usdPrice } from './WalletLive'
+import { Wallet, CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { walletRequest } from '../lib/wallet-api'
+import { useLiveWallet, cryptoAmount, usd, usdPrice } from './WalletLive'
 
 type Tab = "wallet" | "cards" | "history" | "profile";
 
@@ -58,29 +60,72 @@ export function DesktopOverview({onHistory,onDeposit,onExchange}:{onHistory:()=>
 
 
 export function DesktopProfileAside({
-  onVerification,
-  onSupport,
+  walletBalance, balanceHidden, cardsEnabled, onWallet, onCards,
 }: {
-  onVerification: () => void;
-  onSupport: () => void;
+  walletBalance: number | null;
+  balanceHidden: boolean;
+  cardsEnabled: boolean;
+  onWallet: () => void;
+  onCards: () => void;
 }) {
+  const [cardBalance, setCardBalance] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!cardsEnabled || balanceHidden) return;
+    const desktop = window.matchMedia("(min-width: 1100px)");
+    let request: AbortController | undefined;
+    const update = () => {
+      request?.abort();
+      setCardBalance(null);
+      if (!desktop.matches) return;
+      const controller = new AbortController();
+      request = controller;
+      void walletRequest<{ data: { status: string; balance?: string | null; currency?: string }[] }>(
+        "aura-cards", undefined, controller.signal,
+      ).then(({ data }) => {
+        if (controller.signal.aborted) return;
+        const cards = data.filter((card) => card.status === "opened");
+        if (cards.length === 0) {
+          setCardBalance("Нет активных карт");
+          return;
+        }
+        const totals = new Map<string, number>();
+        for (const card of cards) {
+          if (!card.balance?.trim() || !Number.isFinite(Number(card.balance))) return;
+          const currency = card.currency || "USD";
+          totals.set(currency, (totals.get(currency) ?? 0) + Number(card.balance));
+        }
+        setCardBalance([...totals].map(([currency, total]) =>
+          currency === "USD" ? usd(total) : `${cryptoAmount(String(total))} ${currency}`,
+        ).join(" · "));
+      }).catch(() => {
+        // Leave the amount unavailable if the card service cannot report it.
+      });
+    };
+    update();
+    desktop.addEventListener("change", update);
+    return () => {
+      request?.abort();
+      desktop.removeEventListener("change", update);
+    };
+  }, [cardsEnabled, balanceHidden]);
+
   return (
-    <aside className="wpay-desktop-profile-aside" aria-label="Быстрые действия профиля">
-      <section className="wpay-desktop-card wpay-desktop-profile-verification">
-        <span className="wpay-desktop-quick-icon"><ShieldCheck size={23} aria-hidden="true" /></span>
-        <h2>Подтверждение личности</h2>
-        <p>Проверьте статус верификации или заполните данные, чтобы получить доступ к услугам, требующим подтверждения личности.</p>
-        <button type="button" onClick={onVerification}>
-          Открыть верификацию <ArrowUpRight size={17} aria-hidden="true" />
+    <aside className="wpay-desktop-profile-aside" aria-label="Сводка по балансам">
+      <section className="wpay-desktop-card wpay-desktop-profile-balances">
+        <div className="wpay-desktop-section-head"><h2>Мои балансы</h2></div>
+        <button type="button" onClick={onWallet}>
+          <span className="wpay-desktop-quick-icon"><Wallet size={19} aria-hidden="true" /></span>
+          <span>Кошелёк<strong>{balanceHidden ? "••••••" : walletBalance === null ? "—" : usd(walletBalance)}</strong></span>
+          <ArrowUpRight size={16} aria-hidden="true" />
         </button>
-      </section>
-      <section className="wpay-desktop-card">
-        <span className="wpay-desktop-quick-icon"><MessageCircle size={23} aria-hidden="true" /></span>
-        <h2>Нужна помощь?</h2>
-        <p>Напишите нам, если возник вопрос по кошельку или аккаунту.</p>
-        <button type="button" onClick={onSupport}>
-          Связаться с поддержкой <ArrowUpRight size={17} aria-hidden="true" />
-        </button>
+        {cardsEnabled && (
+          <button type="button" onClick={onCards}>
+            <span className="wpay-desktop-quick-icon"><CreditCard size={19} aria-hidden="true" /></span>
+            <span>На картах<strong>{balanceHidden ? "••••••" : cardBalance ?? "—"}</strong></span>
+            <ArrowUpRight size={16} aria-hidden="true" />
+          </button>
+        )}
       </section>
     </aside>
   );
