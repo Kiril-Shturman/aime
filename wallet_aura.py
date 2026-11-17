@@ -1020,6 +1020,10 @@ class AuraClient:
         await self._throttle()
         if self.session is None:
             self.session = ClientSession(timeout=ClientTimeout(total=20), connector=TCPConnector(family=socket.AF_INET))
+        # Mutation endpoints such as freeze/unfreeze still require a JSON
+        # representation when they have no fields. Never send a bodyless POST.
+        if method.upper() == "POST" and body is None:
+            body = {}
         headers = {"X-API-Key": self.api_key, "Accept": "application/json"}
         if body is not None:
             headers["Content-Type"] = "application/json"
@@ -1063,6 +1067,8 @@ class AuraClient:
         await self._throttle()
         if self.session is None:
             self.session = ClientSession(timeout=ClientTimeout(total=20), connector=TCPConnector(family=socket.AF_INET))
+        if method.upper() == 'POST' and body is None:
+            body = {}
         headers = {'X-API-Key': self.api_key, 'Accept': 'application/json'}
         if body is not None:
             headers['Content-Type'] = 'application/json'
