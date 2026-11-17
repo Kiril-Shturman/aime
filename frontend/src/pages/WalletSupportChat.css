@@ -118,10 +118,10 @@
   position: relative;
   width: 100%;
   height: auto;
-  padding: 12px 0 20px;
+  padding: 16px 12px 24px;
 }
 .wpay-support-chat .support-compose {
-  padding-bottom: calc(var(--wpay-bottom-inset) + 16px);
+  padding-bottom: calc(var(--wpay-bottom-inset) + 28px);
   background: linear-gradient(to top, #fff 65%, #ffffff00);
   border: 0;
 }
@@ -152,4 +152,13 @@
   gap: 10px;
   justify-content: flex-start;
   width: 100%;
+}
+
+.wpay-support-chat .messages {
+  --f7-message-margin: 20px;
+  --f7-message-bubble-padding-vertical: 10px;
+  --f7-message-bubble-padding-horizontal: 18px;
+}
+.wpay-support-chat .messages > .message:not(.message-first) {
+  margin-top: 8px;
 }
