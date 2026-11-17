@@ -292,6 +292,7 @@ export default function WalletVerification({
                   reason={aura.kyc?.reason}
                   diagnostic={aura.error}
                   errorCode={aura.errorCode}
+                  httpStatus={aura.errorHttpStatus}
                 />
               )}
               {!verified && !pending && !rejected && (
@@ -400,10 +401,12 @@ function VerificationIssue({
   reason,
   diagnostic,
   errorCode,
+  httpStatus,
 }: {
   reason?: string | null;
   diagnostic?: string;
   errorCode?: string;
+  httpStatus?: number | null;
 }) {
   const passportFailed = /PassportFailed/i.test(reason || "");
   const alreadyUsed = /already_used|already_verified/i.test(reason || "");
@@ -441,19 +444,23 @@ function VerificationIssue({
         <div className="wpay-verification-issue-text">
           <h3>{title}</h3>
           <p>{description}</p>
-          {(errorCode || reason) && (
-            <p className="wpay-verification-visible-code">
-              <span>{errorCode ? "Код ошибки" : "Код проверки"}</span>
-              <code>{errorCode || reason}</code>
-            </p>
-          )}
         </div>
       </div>
-      {(reason || diagnostic) && (
+      {(reason || diagnostic || errorCode || httpStatus) && (
         <details className="wpay-verification-diagnostics">
           <summary>Данные для поддержки</summary>
-          {reason && (
+          <p className="wpay-verification-http-status">
+            <span>HTTP-код ошибки</span>
+            <code>{httpStatus || "Не сохранён для этого статуса"}</code>
+          </p>
+          {errorCode && (
             <p>
+              <span>Код API</span>
+              <code>{errorCode}</code>
+            </p>
+          )}
+          {reason && (
+            <p className="wpay-verification-provider-reason">
               <span>Код проверки</span>
               <code>{reason}</code>
             </p>

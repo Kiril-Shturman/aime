@@ -31,6 +31,7 @@ export function useAuraProfile(page: string | null) {
   const [available, setAvailable] = useState(false);
   const [error, setError] = useState("");
   const [errorCode, setErrorCode] = useState("");
+  const [errorHttpStatus, setErrorHttpStatus] = useState<number | null>(null);
   const [kyc, setKyc] = useState<KycState | null>(null);
   const [sessionUrl, setSessionUrl] = useState("");
   const [sessionOpen, setSessionOpen] = useState(false);
@@ -52,6 +53,7 @@ export function useAuraProfile(page: string | null) {
     setLoading(true);
     setError("");
     setErrorCode("");
+    setErrorHttpStatus(null);
     setSessionUrl("");
     setSessionOpen(false);
     void (async () => {
@@ -199,10 +201,14 @@ export function useAuraProfile(page: string | null) {
       const result = await walletRequest<KycState>("aura-kyc", identity);
       setKyc(result);
       setErrorCode("");
+      setErrorHttpStatus(null);
       setSessionOpen(false);
       return true;
     } catch (e) {
-      if (e instanceof WalletApiError) setErrorCode(e.code);
+      if (e instanceof WalletApiError) {
+        setErrorCode(e.code);
+        setErrorHttpStatus(e.httpStatus >= 400 ? e.httpStatus : null);
+      }
       if (
         e instanceof WalletApiError &&
         ([
@@ -273,6 +279,7 @@ export function useAuraProfile(page: string | null) {
     available,
     error,
     errorCode,
+    errorHttpStatus,
     kyc,
     sessionUrl,
     sessionOpen,

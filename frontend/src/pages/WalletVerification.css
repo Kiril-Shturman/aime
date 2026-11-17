@@ -1367,27 +1367,3 @@
     opacity: 1;
   }
 }
-.wpay-verification-issue-text > .wpay-verification-visible-code {
-  margin-top: 10px;
-  font-size: 11px;
-  line-height: 1.5;
-}
-.wpay-verification-visible-code > span {
-  display: block;
-  margin-bottom: 3px;
-}
-.wpay-verification-visible-code > code {
-  display: inline-block;
-  max-width: 100%;
-  padding: 3px 7px;
-  border-radius: 7px;
-  background: #17243d08;
-  color: var(--verify-ink);
-  font-size: 11px;
-  overflow-wrap: anywhere;
-  user-select: text;
-  -webkit-user-select: text;
-}
-.dark .wpay-verification-visible-code > code {
-  background: #ffffff0c;
-}

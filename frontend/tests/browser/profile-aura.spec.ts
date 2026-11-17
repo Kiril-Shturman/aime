@@ -498,10 +498,14 @@ for (const code of [
       code === "kyc_pending" ? "Дождитесь результата" : "поддержку",
     );
     await expect(page.getByRole("alert")).toContainText("checks_failed");
-    if (code !== "kyc_pending")
+    if (code !== "kyc_pending") {
       await expect(
-        page.locator(".wpay-verification-visible-code code"),
-      ).toHaveText(code);
+        page.locator(".wpay-verification-http-status code"),
+      ).toHaveText("422");
+      await expect(page.locator(".wpay-verification-visible-code")).toHaveCount(
+        0,
+      );
+    }
     await expect(
       page.getByRole("button", { name: "Отправить на проверку" }),
     ).toHaveCount(0);
@@ -608,12 +612,12 @@ for (const theme of ["light", "dark"]) {
         json: { status: "rejected", verified: false, terminal: false, reason },
       });
     });
+    await expect(region.locator(".wpay-verification-visible-code")).toHaveCount(
+      0,
+    );
     await expect(
-      region.locator(".wpay-verification-visible-code code"),
-    ).toHaveText(reason);
-    await expect(
-      region.locator(".wpay-verification-visible-code code"),
-    ).toBeVisible();
+      region.locator(".wpay-verification-http-status code"),
+    ).toHaveText("Не сохранён для этого статуса");
     const refreshButton = region.getByRole("button", {
       name: "Обновить статус",
       exact: true,
@@ -627,7 +631,7 @@ for (const theme of ["light", "dark"]) {
     await expect(refreshButton).toBeEnabled();
     await expect(refreshButton.locator(".preloader")).toHaveCount(0);
     await expect(
-      region.locator(".wpay-verification-diagnostics code"),
+      region.locator(".wpay-verification-provider-reason code"),
     ).not.toBeVisible();
     await expect(
       region.getByText("Защищённая форма проверки", { exact: true }),
@@ -646,10 +650,10 @@ for (const theme of ["light", "dark"]) {
     });
     await region.getByText("Данные для поддержки", { exact: true }).click();
     await expect(
-      region.locator(".wpay-verification-diagnostics code"),
+      region.locator(".wpay-verification-provider-reason code"),
     ).toHaveText(reason);
     await expect(
-      region.locator(".wpay-verification-diagnostics code"),
+      region.locator(".wpay-verification-provider-reason code"),
     ).toBeVisible();
     await region
       .getByRole("button", { name: "Связаться с поддержкой" })
