@@ -14,7 +14,7 @@ jobs:
         with:
           python-version: '3.12'
       - run: npm ci --prefix frontend
-      - run: python -m pip install aiohttp
+      - run: python -m pip install -r requirements.txt
       - run: npm run lint --prefix frontend
       - run: npm test --prefix frontend
       - run: python -m unittest discover -s tests
