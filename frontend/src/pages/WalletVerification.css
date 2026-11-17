@@ -1187,3 +1187,10 @@
 .wpay-passport-loading .preloader {
   --f7-preloader-color: #007aff;
 }
+
+.wpay-verification-contact-body {
+  scroll-padding-block: 16px;
+}
+.wpay-verification-contact-inputs .item-content {
+  scroll-margin-block: 16px;
+}

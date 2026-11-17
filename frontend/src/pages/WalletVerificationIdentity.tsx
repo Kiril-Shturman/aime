@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useKeyboardFormScroll } from "../wallet/useKeyboardFormScroll";
 import { List, ListInput } from "framework7-react";
 import { Button } from "konsta/react";
 import { FileText, Fingerprint, ScanFace, ScanLine } from "lucide-react";
@@ -20,6 +21,7 @@ export default function WalletVerificationIdentity({
 }: {
   aura: ReturnType<typeof useAuraProfile>;
 }) {
+  const formRef = useKeyboardFormScroll();
   const [values, setValues] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [reviewed, setReviewed] = useState(false);
@@ -35,6 +37,7 @@ export default function WalletVerificationIdentity({
       aria-label="Документы для верификации"
     >
       <form
+        ref={formRef}
         className="wpay-verification-contact-form"
         onSubmit={async (event) => {
           event.preventDefault();

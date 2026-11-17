@@ -26,6 +26,7 @@ export interface TgBiometricManager {
 interface TG {
   BiometricManager?: TgBiometricManager
   platform?: string
+  viewportHeight?: number
   isActive?: boolean
   isFullscreen?: boolean
   requestFullscreen?: () => void

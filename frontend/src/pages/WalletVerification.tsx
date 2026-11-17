@@ -1,3 +1,4 @@
+import { useKeyboardFormScroll } from "../wallet/useKeyboardFormScroll";
 import WalletVerificationIdentity from "./WalletVerificationIdentity";
 import telephoneArtwork from "../assets/verification/telephone.webp";
 import mailboxArtwork from "../assets/verification/mailbox-envelope.webp";
@@ -44,6 +45,9 @@ export default function WalletVerification({
   const verified = Boolean(aura.kyc?.verified);
   const pending = ["pending", "in_review"].includes(aura.kyc?.status || "");
   const rejected = aura.kyc?.status === "rejected";
+  const contactFormRef = useKeyboardFormScroll(
+    contacts && !aura.sessionOpen && !verified && !pending && !rejected,
+  );
   if (aura.sessionOpen && !verified)
     return <WalletVerificationIdentity aura={aura} />;
   if (contacts && !verified && !pending && !rejected)
@@ -53,6 +57,7 @@ export default function WalletVerification({
         aria-label="Контакты для верификации"
       >
         <form
+          ref={contactFormRef}
           className="wpay-verification-contact-form"
           onSubmit={async (event) => {
             event.preventDefault();

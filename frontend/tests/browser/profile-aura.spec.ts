@@ -281,3 +281,134 @@ test("passport form has manual inputs only and never loads OCR models", async ({
     ),
   ).toBe(false);
 });
+
+test("passport fields follow keyboard resize inside their own scroller", async ({
+  page,
+}) => {
+  await contacts(page, true);
+  await openDocuments(page);
+  await page.evaluate(() => {
+    const w = window as any;
+    w.keyboardHeight = window.innerHeight;
+    Object.defineProperty(window.visualViewport!, "height", {
+      configurable: true,
+      get: () => w.keyboardHeight,
+    });
+    w.backCalls = [];
+    const back = w.Telegram.WebApp.BackButton;
+    for (const name of ["show", "hide"]) {
+      const original = back[name].bind(back);
+      back[name] = () => {
+        w.backCalls.push(name);
+        return original();
+      };
+    }
+  });
+  await page
+    .locator("#identity-passport_issue_date")
+    .evaluate((input: HTMLInputElement) =>
+      input.focus({ preventScroll: true }),
+    );
+  await page.evaluate(() => {
+    (window as any).keyboardHeight = 450;
+    window.visualViewport!.dispatchEvent(new Event("resize"));
+  });
+  await expect
+    .poll(() =>
+      page
+        .locator("#identity-passport_issue_date")
+        .evaluate((el) => el.getBoundingClientRect().bottom),
+    )
+    .toBeLessThanOrEqual(434);
+  await expect
+    .poll(() =>
+      page
+        .locator(".wpay-verification-identity-body")
+        .evaluate((el) => el.scrollTop),
+    )
+    .toBeGreaterThan(0);
+  await page
+    .locator("#identity-first_name")
+    .evaluate((input: HTMLInputElement) =>
+      input.focus({ preventScroll: true }),
+    );
+  await expect
+    .poll(() =>
+      page
+        .locator("#identity-first_name")
+        .evaluate((el) => el.getBoundingClientRect().top),
+    )
+    .toBeGreaterThanOrEqual(12);
+  await expect
+    .poll(() =>
+      page
+        .locator("#identity-first_name")
+        .evaluate((el) => el.getBoundingClientRect().bottom),
+    )
+    .toBeLessThanOrEqual(434);
+  expect(await page.evaluate(() => (window as any).backCalls)).toEqual([]);
+  await page.evaluate(() => {
+    (document.activeElement as HTMLElement)?.blur();
+    (window as any).keyboardHeight = window.innerHeight;
+    window.visualViewport!.dispatchEvent(new Event("resize"));
+  });
+  await expect
+    .poll(() =>
+      page
+        .locator(".wpay-verification-contact-form")
+        .evaluate((el) => (el as HTMLElement).style.maxHeight),
+    )
+    .toBe("");
+});
+test("contacts scroll focused email above the Telegram keyboard", async ({
+  page,
+}) => {
+  await contacts(page, true);
+  await page.evaluate(() => {
+    const w = window as any;
+    w.keyboardHeight = window.innerHeight;
+    Object.defineProperty(window.visualViewport!, "height", {
+      configurable: true,
+      get: () => w.keyboardHeight,
+    });
+  });
+  await page
+    .locator("#verification-email")
+    .evaluate((el: HTMLInputElement) => el.focus({ preventScroll: true }));
+  await page.evaluate(() => {
+    (window as any).keyboardHeight = 430;
+    window.visualViewport!.dispatchEvent(new Event("resize"));
+  });
+  await expect
+    .poll(() =>
+      page
+        .locator("#verification-email")
+        .evaluate((el) => el.getBoundingClientRect().bottom),
+    )
+    .toBeLessThanOrEqual(414);
+  await page.locator("#verification-email").fill("test@example.com");
+  await expect(page.locator("#verification-email")).toBeFocused();
+});
+
+test("Telegram viewport events keep fields visible when visual viewport is unchanged", async ({
+  page,
+}) => {
+  await contacts(page, true);
+  await page
+    .locator("#verification-email")
+    .evaluate((el: HTMLInputElement) => el.focus({ preventScroll: true }));
+  await page.evaluate(() =>
+    (window as any).Telegram.WebView.receiveEvent("viewport_changed", {
+      height: 420,
+      is_state_stable: false,
+      is_expanded: true,
+    }),
+  );
+  await expect
+    .poll(() =>
+      page
+        .locator("#verification-email")
+        .evaluate((el) => el.getBoundingClientRect().bottom),
+    )
+    .toBeLessThanOrEqual(404);
+});
