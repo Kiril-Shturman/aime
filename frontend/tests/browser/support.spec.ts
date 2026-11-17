@@ -69,6 +69,19 @@ for (const theme of ["light", "dark"]) {
     const { chat, writes } = await openChat(page, theme);
     const input = chat.getByRole("textbox", { name: "Сообщение поддержке" });
     await expect(input).toBeVisible();
+    const screenHeight = page.viewportSize()!.height;
+    const initialFieldBox = await input.boundingBox();
+    expect(screenHeight - initialFieldBox!.y - initialFieldBox!.height).toBeLessThanOrEqual(5.5);
+    await chat.evaluate(node => {
+      document.documentElement.style.setProperty("--tg-safe-area-inset-bottom", "34px");
+      (node as HTMLElement).style.setProperty("--f7-safe-area-bottom", "34px");
+    });
+    const insetFieldBox = await input.boundingBox();
+    expect(screenHeight - insetFieldBox!.y - insetFieldBox!.height).toBeCloseTo(38, 0);
+    await chat.evaluate(node => {
+      document.documentElement.style.removeProperty("--tg-safe-area-inset-bottom");
+      (node as HTMLElement).style.removeProperty("--f7-safe-area-bottom");
+    });
     const fieldBox = await input.boundingBox();
     for (const label of ["Прикрепить фото", "Отправить сообщение"]) {
       const buttonBox = await chat.getByRole("link", { name: label }).boundingBox();
