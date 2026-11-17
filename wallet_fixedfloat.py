@@ -337,7 +337,8 @@ async def exchange_route(request, action, uid, provider):
                 "provider": "fixedfloat",
                 "execution_enabled": False,
                 "orders_enabled": provider.orders_enabled and provider.configured,
-                "funding_modes": ["external"] if provider.orders_enabled else [],
+                "funding_modes": (["external", "own_wallet"] if getattr(provider, "wallet_funding_enabled", False) else ["external"]) if provider.orders_enabled else [],
+                "wallet_funding_enabled": bool(getattr(provider, "wallet_funding_enabled", False)),
                 "networks": await provider.networks() if provider.configured else [],
             }
         )

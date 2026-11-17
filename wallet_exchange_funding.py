@@ -39,6 +39,7 @@ class Funding:
     def __init__(self,ledger,orders,custody,enabled=False):
         self.ledger,self.orders,self.custody=ledger,orders,custody
         self.enabled=bool(enabled and orders.enabled)
+        orders.provider.wallet_funding_enabled=self.enabled
         self.error=orders.provider.error
         prepare(ledger)
 
