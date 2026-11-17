@@ -1,10 +1,12 @@
 import json
 import unittest
+import zlib
 from unittest import mock
 
 from server import (
     _wpay_amount, _wpay_audit_line, _wpay_audit_response_detail,
-    _wpay_bot_view, _wpay_presence_payload,
+    _wpay_bot_view, _wpay_card_widget_payload, _wpay_card_widget_state,
+    _wpay_presence_payload,
 )
 
 
@@ -76,6 +78,37 @@ class WPayRichBotTests(unittest.TestCase):
         self.assertIn("4444 **** **** 1111", rich)
         self.assertNotIn("CVV", rich.upper())
         self.assertNotIn("PIN", plain.upper())
+
+    def test_card_widget_is_small_safe_and_refreshable(self):
+        card = {
+            "card_id": "card-secret-provider-id", "kind": "virtual",
+            "status": "opened", "frozen": 0,
+            "masked_pan": "4444 •••• •••• 1111", "delivery_status": None,
+            "cvv": "123", "pin": "9999",
+        }
+        payload = _wpay_card_widget_payload(
+            123, card, "https://wallet.example/wallet",
+        )
+        state = json.loads(payload["chat_data"])
+        self.assertEqual(state["status"], "Активна")
+        self.assertEqual(state["masked"], "4444 •••• •••• 1111")
+        self.assertNotIn("card-secret-provider-id", payload["chat_data"])
+        self.assertNotIn("123", payload["chat_data"])
+        self.assertNotIn("9999", payload["chat_data"])
+        self.assertIn("card:refresh", payload["html"])
+        self.assertTrue(payload["allow_queries"])
+        self.assertTrue(payload["protect_content"])
+        self.assertLessEqual(len(payload["html"].encode()), 32768)
+        self.assertLessEqual(len(zlib.compress(payload["html"].encode(), 9)), 4096)
+
+    def test_frozen_card_widget_has_danger_state(self):
+        state = json.loads(_wpay_card_widget_state({
+            "kind": "physical", "status": "opened", "frozen": 1,
+            "masked_pan": None,
+        }))
+        self.assertEqual(state["kind"], "Физическая карта")
+        self.assertEqual(state["status"], "Заморожена")
+        self.assertEqual(state["tone"], "danger")
 
     def test_referral_view_exposes_only_personal_link_and_count(self):
         rich, plain, markup = _wpay_bot_view(
