@@ -1757,19 +1757,44 @@
 .wpay-admin-f7 .wpay-admin-navitem.button,
 .wpay-admin-f7 .wpay-admin-navitem.button:nth-child(5) {
   position: relative;
-  height: 50px;
-  min-height: 50px;
+  height: 62px;
+  min-height: 62px;
   margin: 0 !important;
   gap: 11px;
   padding: 0 11px;
   border: 1px solid transparent;
   border-radius: 14px;
-  color: color-mix(in srgb, var(--admin-sidebar-text) 82%, var(--admin-sidebar-muted));
+  color: var(--admin-sidebar-text);
   background: transparent;
   box-shadow: none;
-  font-size: 14px;
-  font-weight: 680;
-  letter-spacing: -0.01em;
+}
+.wpay-admin-f7 .wpay-admin-navitem.button .wpay-admin-nav-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  text-align: left;
+}
+.wpay-admin-f7 .wpay-admin-navitem.button .wpay-admin-nav-title {
+  display: block;
+  width: 100%;
+  color: var(--admin-sidebar-text);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 22px;
+  letter-spacing: 0;
+}
+.wpay-admin-f7 .wpay-admin-navitem.button .wpay-admin-nav-description {
+  display: block;
+  width: 100%;
+  color: var(--admin-sidebar-muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+  letter-spacing: 0;
 }
 .wpay-admin-nav-icon {
   display: grid;

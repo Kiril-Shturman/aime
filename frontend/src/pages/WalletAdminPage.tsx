@@ -235,19 +235,20 @@ function stateTotal(value: Record<string, number> | undefined) {
 const tabs: {
   id: Tab;
   label: string;
+  description: string;
   icon: ComponentType<{ className?: string }>;
   color: string;
 }[] = [
-  { id: "overview", label: "Обзор", icon: HouseFill, color: "#5856D6" },
-  { id: "data", label: "Пользователи", icon: Person2Fill, color: "#AF52DE" },
-  { id: "payments", label: "Операции", icon: SquareListFill, color: "#007AFF" },
-  { id: "crypto", label: "Криптовалюты", icon: BitcoinCircleFill, color: "#FF9500" },
-  { id: "cards", label: "Карты", icon: CreditcardFill, color: "#30C759" },
-  { id: "tariffs", label: "Тарифы", icon: GearAltFill, color: "#8E8E93" },
-  { id: "aura", label: "Aura API", icon: BuildingColumnsFill, color: "#32ADE6" },
-  { id: "goswap", label: "GoSwap API", icon: ArrowRightArrowLeftCircleFill, color: "#AF52DE" },
-  { id: "notifications", label: "Уведомления", icon: BellFill, color: "#FF3B30" },
-  { id: "audit", label: "Аудит", icon: DocTextFill, color: "#5856D6" },
+  { id: "overview", label: "Обзор", description: "Сводка и контроль", icon: HouseFill, color: "#5856D6" },
+  { id: "data", label: "Пользователи", description: "Аккаунты и KYC", icon: Person2Fill, color: "#AF52DE" },
+  { id: "payments", label: "Операции", description: "Платежи и переводы", icon: SquareListFill, color: "#007AFF" },
+  { id: "crypto", label: "Криптовалюты", description: "Активы и сети", icon: BitcoinCircleFill, color: "#FF9500" },
+  { id: "cards", label: "Карты", description: "Выпуск и управление", icon: CreditcardFill, color: "#30C759" },
+  { id: "tariffs", label: "Тарифы", description: "Цены и комиссии", icon: GearAltFill, color: "#8E8E93" },
+  { id: "aura", label: "Aura API", description: "Карты и платежи", icon: BuildingColumnsFill, color: "#32ADE6" },
+  { id: "goswap", label: "GoSwap API", description: "Обмен и ликвидность", icon: ArrowRightArrowLeftCircleFill, color: "#AF52DE" },
+  { id: "notifications", label: "Уведомления", description: "Доставка и рассылки", icon: BellFill, color: "#FF3B30" },
+  { id: "audit", label: "Аудит", description: "Действия администраторов", icon: DocTextFill, color: "#5856D6" },
 ];
 const navGroups: { label: string; items: Tab[] }[] = [
   {
@@ -448,7 +449,10 @@ export default function WalletAdminPage() {
                           >
                             <item.icon className="wpay-admin-nav-glyph" />
                           </span>
-                          <span>{item.label}</span>
+                          <span className="wpay-admin-nav-copy">
+                            <span className="wpay-admin-nav-title">{item.label}</span>
+                            <span className="wpay-admin-nav-description">{item.description}</span>
+                          </span>
                         </F7Button>
                       );
                     })}
