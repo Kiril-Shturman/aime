@@ -20,18 +20,6 @@
 .wpay-f7-profile .item-after { flex-shrink: 0; max-width: 48%; font-size: 15px; line-height: 20px; color: var(--f7-list-item-after-text-color); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 
-.wpay-support-chat .messages { display: flex; flex-direction: column; gap: 16px; padding: 22px 0 24px; }
-.wpay-support-chat .messages-title { text-align: center; margin-bottom: 4px; font-size: 11px; color: #8e8e93; }
-.wpay-support-chat .messages-title span { padding: 5px 12px; border-radius: 20px; background: rgba(120,120,128,.08); }
-.wpay-support-chat .message { max-width: 85%; align-self: flex-end; min-width: 0; }
-.wpay-support-chat .message-content { display: flex; flex-direction: column; align-items: flex-end; }
-.wpay-support-chat .message-bubble { max-width: 100%; width: fit-content; padding: 11px 16px; border-radius: 22px 22px 7px 22px; background: linear-gradient(150deg,#1688ff,#007aff); color: #fff; box-shadow: 0 2px 4px rgb(0 122 255 / .08); }
-.wpay-support-chat .message-text { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 17px; line-height: 23px; }
-.wpay-support-chat .message-footer { margin-top: 6px; text-align: right; font-size: 11px; line-height: 16px; color: #8e8e93; }
-.wpay-support-chat .support-compose { padding-bottom: calc(var(--wpay-bottom-inset) + 16px); background: rgba(239,239,244,.94); border-top: .5px solid rgba(60,60,67,.08); backdrop-filter: blur(20px); }
-.dark .wpay-support-chat .support-compose { background: rgba(0,0,0,.94); border-top-color: rgba(235,235,245,.1); }
-.dark .wpay-support-chat .message-bubble { background: linear-gradient(150deg,#2595ff,#0a84ff); }
-.dark .wpay-support-chat .message-footer, .dark .wpay-support-chat .messages-title { color: #98989f; }
 
 .wpay-f7-profile .profile-legal-list .item-inner { margin-left: 14px; }
 .wpay-f7-profile .profile-legal-list .item-title { color: #007aff; font-size: 16px; font-weight: 600; white-space: normal; }

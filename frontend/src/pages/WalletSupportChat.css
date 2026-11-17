@@ -98,10 +98,29 @@
   resize: none;
   outline: none;
 }
-.wpay-support-chat .messagebar-area:has(textarea:focus-visible) {
-  outline: 2px solid #007aff55;
-  outline-offset: 2px;
+/* Keep the native Messages bubble layout and grouping; only the host page
+   and theme variables are adapted to the wallet's push-view container. */
+.wpay-support-chat {
+  --f7-theme-color: #007aff;
+  --f7-messages-content-bg-color: transparent;
 }
-.dark .wpay-support-chat .messagebar-area:has(textarea:focus-visible) {
-  outline-color: #0a84ff66;
+.dark .wpay-support-chat {
+  --f7-theme-color: #0a84ff;
+  --f7-message-received-bg-color: #26262a;
+  --f7-message-received-text-color: #fff;
+}
+.wpay-support-chat .support-thread.page-content {
+  position: relative;
+  width: 100%;
+  height: auto;
+  padding: 12px 0 20px;
+}
+.wpay-support-chat .support-compose {
+  padding-bottom: calc(var(--wpay-bottom-inset) + 16px);
+  background: rgba(239, 239, 244, 0.94);
+  border-top: 0.5px solid rgba(60, 60, 67, 0.08);
+}
+.dark .wpay-support-chat .support-compose {
+  background: rgba(0, 0, 0, 0.94);
+  border-top-color: rgba(235, 235, 245, 0.1);
 }

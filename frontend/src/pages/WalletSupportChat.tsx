@@ -2,12 +2,12 @@ import { useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   Messages,
   Message,
+  MessagesTitle,
   Messagebar,
   MessagebarAttachments,
   MessagebarAttachment,
   Link,
 } from "framework7-react";
-import QuestionCircleFill from "framework7-icons/react/esm/QuestionCircleFill.js";
 import ArrowUpCircleFill from "framework7-icons/react/esm/ArrowUpCircleFill.js";
 import Paperclip from "framework7-icons/react/esm/Paperclip.js";
 import { PushViewShell } from "./WalletNavigation";
@@ -46,7 +46,7 @@ export default function SupportChatPushView({
   useEffect(() => {
     if (open)
       endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [messages, open]);
+  }, [open]);
   useEffect(() => {
     if (!open) return;
     const viewport = window.visualViewport;
@@ -138,65 +138,29 @@ export default function SupportChatPushView({
         className="wpay-support-chat ios mx-auto flex min-h-0 w-full max-w-[560px] flex-1 flex-col"
       >
         <div
-          className="support-thread min-h-0 flex-1 overflow-y-auto overscroll-contain px-4"
+          className="support-thread page-content min-h-0 flex-1 overflow-y-auto overscroll-contain"
           role="log"
           aria-label="Переписка с поддержкой"
           aria-live="polite"
         >
-          <div className="support-contact mt-4 flex items-center gap-3 rounded-[24px] bg-white p-4 dark:bg-[#1c1c1e]">
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[17px] bg-gradient-to-br from-blue-300 via-blue-500 to-indigo-600 text-white">
-              <QuestionCircleFill className="text-[30px]" />
-            </span>
-            <div>
-              <h2 className="text-[17px] font-semibold text-black dark:text-white">
-                Команда WPay
-              </h2>
-              <p className="mt-0.5 text-[13px] leading-5 text-black/45 dark:text-white/45">
-                Поможем разобраться с кошельком
-              </p>
-            </div>
-          </div>
-          {!messages.length && (
-            <div className="support-welcome px-3 pb-5 pt-10">
-              <h3 className="text-[26px] font-semibold tracking-tight text-black dark:text-white">
-                Чем можем помочь?
-              </h3>
-              <p className="mt-2 max-w-[290px] text-[15px] leading-6 text-black/45 dark:text-white/45">
-                Выберите тему или опишите вопрос своими словами.
-              </p>
-              <div className="mt-5 flex flex-wrap gap-2">
-                {["Пополнение", "Оплата по QR", "Карты", "Другой вопрос"].map(
-                  (topic) => (
-                    <button
-                      key={topic}
-                      type="button"
-                      className="rounded-full bg-white px-4 py-2.5 text-[14px] font-medium text-primary dark:bg-[#1c1c1e]"
-                      onClick={() => {
-                        setDraft(`Вопрос: ${topic.toLowerCase()}. `);
-                        mainRef.current?.querySelector("textarea")?.focus();
-                      }}
-                    >
-                      {topic}
-                    </button>
-                  ),
-                )}
-              </div>
-            </div>
-          )}
-          <Messages init={false} aria-label="Сообщения поддержки">
-            {messages.length > 0 && (
-              <div className="messages-title">
-                <span>Сегодня</span>
-              </div>
-            )}
+          <Messages
+            autoLayout
+            scrollMessages
+            scrollMessagesOnEdge
+            aria-label="Сообщения поддержки"
+          >
+            <MessagesTitle>Сегодня</MessagesTitle>
+            <Message
+              type="received"
+              name="Поддержка wPay"
+              text="Опишите вопрос или прикрепите фото. Пока операторы не подключены, обращение останется черновиком."
+              footer="Автоматическая подсказка"
+            />
             {messages.map((message) => (
               <Message
                 key={message.id}
                 type="sent"
                 text={message.text}
-                first
-                last
-                tail
                 footer={`${message.time} · Не отправлено`}
               >
                 {message.photos.length > 0 && (
@@ -222,16 +186,10 @@ export default function SupportChatPushView({
                 )}
               </Message>
             ))}
-            <div ref={endRef} />
           </Messages>
+          <div ref={endRef} />
         </div>
         <div className="support-compose shrink-0 px-4 pt-3">
-          <p
-            className="mb-3 text-center text-[12px] leading-4 text-black/45 dark:text-white/45"
-            role="status"
-          >
-            Операторы пока не подключены · режим черновика
-          </p>
           {photoError && (
             <p className="support-photo-error" role="alert">
               {photoError}

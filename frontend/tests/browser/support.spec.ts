@@ -35,6 +35,21 @@ async function openChat(page: Page, theme = "light") {
   await expect
     .poll(() =>
       chat
+        .locator(".messages")
+        .evaluate((node) =>
+          Boolean((node as HTMLElement & { f7Messages?: unknown }).f7Messages),
+        ),
+    )
+    .toBe(true);
+  await expect(chat.locator(".message-received")).toContainText(
+    "Автоматическая подсказка",
+  );
+  await expect(
+    chat.getByRole("heading", { name: "Чем можем помочь?" }),
+  ).toHaveCount(0);
+  await expect
+    .poll(() =>
+      chat
         .locator(".messagebar")
         .evaluate((node) =>
           Boolean(
@@ -52,13 +67,21 @@ for (const theme of ["light", "dark"]) {
     const { chat, writes } = await openChat(page, theme);
     const input = chat.getByRole("textbox", { name: "Сообщение поддержке" });
     await expect(input).toBeVisible();
-    const fieldStyle = await input.evaluate(node => {
+    const fieldStyle = await input.evaluate((node) => {
       const css = getComputedStyle(node);
-      return { background: css.backgroundColor, radius: parseFloat(css.borderTopLeftRadius) };
+      return {
+        background: css.backgroundColor,
+        radius: parseFloat(css.borderTopLeftRadius),
+      };
     });
-    expect(fieldStyle.background).toBe(theme === "dark" ? "rgb(37, 43, 54)" : "rgb(255, 255, 255)");
+    expect(fieldStyle.background).toBe(
+      theme === "dark" ? "rgb(37, 43, 54)" : "rgb(255, 255, 255)",
+    );
     expect(fieldStyle.radius).toBeGreaterThanOrEqual(20);
-    await page.screenshot({ path: test.info().outputPath(`support-empty-${theme}.png`), animations: "disabled" });
+    await page.screenshot({
+      path: test.info().outputPath(`support-empty-${theme}.png`),
+      animations: "disabled",
+    });
     await expect(
       chat.getByRole("link", { name: "Отправить сообщение" }),
     ).toHaveAttribute("aria-disabled", "true");
