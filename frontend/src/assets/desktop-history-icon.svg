@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 177 177">
+<defs>
+  <linearGradient id="history-dial" x2=".8" y2="1">
+    <stop stop-color="#fff5df"/><stop offset="1" stop-color="#ffedd0" stop-opacity=".74"/>
+  </linearGradient>
+  <linearGradient id="history-ring" x1=".2" y1=".05" x2=".66" y2=".92">
+    <stop stop-color="#ffcd61"/><stop offset=".44" stop-color="#ffa624"/><stop offset="1" stop-color="#ffd38d" stop-opacity=".34"/>
+  </linearGradient>
+  <clipPath id="history-face"><circle cx="84" cy="89" r="54"/></clipPath>
+  <filter id="history-frost"><feGaussianBlur stdDeviation="5"/></filter>
+  <linearGradient id="history-arrow" x2=".6" y2="1">
+    <stop stop-color="#ffc653"/><stop offset="1" stop-color="#ff8911"/>
+  </linearGradient>
+</defs>
+
+<circle cx="84" cy="89" r="64" fill="none" stroke="url(#history-ring)" stroke-width="21"/>
+<g clip-path="url(#history-face)">
+  <circle cx="84" cy="89" r="53" fill="none" stroke="url(#history-ring)" stroke-width="17" filter="url(#history-frost)"/>
+  <circle cx="84" cy="89" r="54" fill="url(#history-dial)" opacity=".77"/>
+</g>
+<circle cx="84" cy="89" r="74" fill="none" stroke="#fff5dd" stroke-opacity=".56"/>
+<circle cx="84" cy="89" r="53" fill="none" stroke="#fff8e9" stroke-opacity=".76"/>
+<path class="clock-minute" d="M84 62v29" fill="none" stroke="#ffbe53" stroke-width="12" stroke-linecap="round"/>
+<path class="clock-hour" d="M84 91h20" fill="none" stroke="#ffad38" stroke-width="11" stroke-linecap="round"/>
+<circle cx="84" cy="91" r="4" fill="#ffb347"/>
+<g class="clock-arrow">
+  <path d="M131 75h30a4.5 4.5 0 0 1 3.6 7.2l-14.8 19a5 5 0 0 1-7.8.1l-14.5-18.8a4.7 4.7 0 0 1 3.5-7.5Z" fill="url(#history-arrow)" stroke="#fff4dd" stroke-width="1.3"/>
+</g>
+</svg>

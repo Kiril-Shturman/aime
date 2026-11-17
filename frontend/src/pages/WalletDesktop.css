@@ -324,21 +324,21 @@
  }
 }
 
-.wpay-desktop-wallet-icon { display: block; width: 30px; height: 30px; flex: none; margin-inline: -5px; }
-.wpay-desktop-wallet-icon svg { display: block; width: 100%; height: 100%; }
-  .wpay-desktop-wallet-icon #wallet-clasp {
+.wpay-desktop-nav-icon { display: block; width: 30px; height: 30px; flex: none; margin-inline: -5px; }
+.wpay-desktop-nav-icon svg { display: block; width: 100%; height: 100%; }
+  .wpay-desktop-nav-icon #wallet-clasp {
     transform-box: fill-box;
     transform-origin: right center;
   }
-  .wpay-desktop-wallet-icon :is(.back-motion, .front-motion) {
+  .wpay-desktop-nav-icon :is(.back-motion, .front-motion) {
     transform-box: fill-box;
     transform-origin: center bottom;
   }
-  .wpay-desktop-wallet-icon .wallet-opening { opacity: 0; }
-  .wpay-desktop-wallet-icon[data-playing] .back-motion { animation: wallet-lift 480ms ease-in-out; }
-  .wpay-desktop-wallet-icon[data-playing] .front-motion { animation: wallet-front 480ms ease-in-out; }
-  .wpay-desktop-wallet-icon[data-playing] #wallet-clasp { animation: wallet-clasp 480ms ease-in-out; }
-  .wpay-desktop-wallet-icon[data-playing] .wallet-opening { animation: wallet-gap 480ms ease-in-out; }
+  .wpay-desktop-nav-icon .wallet-opening { opacity: 0; }
+  .wpay-desktop-nav-icon[data-playing] .back-motion { animation: wallet-lift 480ms ease-in-out; }
+  .wpay-desktop-nav-icon[data-playing] .front-motion { animation: wallet-front 480ms ease-in-out; }
+  .wpay-desktop-nav-icon[data-playing] #wallet-clasp { animation: wallet-clasp 480ms ease-in-out; }
+  .wpay-desktop-nav-icon[data-playing] .wallet-opening { animation: wallet-gap 480ms ease-in-out; }
   @keyframes wallet-lift {
     0%, 100% { transform: translateY(0) skewX(0deg) scale(1); }
     40% { transform: translateY(-5px) skewX(2deg) scale(.99, .975); }
@@ -357,6 +357,22 @@
     44% { opacity: .18; }
   }
   @media (prefers-reduced-motion: reduce) {
-    .wpay-desktop-wallet-icon[data-playing] .back-motion, .wpay-desktop-wallet-icon[data-playing] .front-motion, .wpay-desktop-wallet-icon[data-playing] #wallet-clasp,
-    .wpay-desktop-wallet-icon[data-playing] .wallet-opening { animation: none; }
+    .wpay-desktop-nav-icon[data-playing] svg * { animation: none !important; }
   }
+
+.wpay-desktop-nav-icon :is(.card-lift, .clock-minute, .clock-hour, .clock-arrow, .profile-figure) {transform-box:view-box;}
+.wpay-desktop-nav-icon .card-lift {transform-origin:80px 115px;}
+.wpay-desktop-nav-icon :is(.clock-minute, .clock-hour) {transform-origin:84px 91px;}
+.wpay-desktop-nav-icon .clock-arrow {transform-origin:84px 89px;}
+.wpay-desktop-nav-icon .profile-figure {transform-origin:88px 146px;}
+.wpay-desktop-nav-icon[data-playing] .card-lift {animation:cards-tap 480ms ease-in-out;}
+.wpay-desktop-nav-icon[data-playing] .card-front {animation:card-front-tap 480ms ease-in-out;}
+@keyframes card-front-tap {50% {transform:translateY(2px);}}
+.wpay-desktop-nav-icon[data-playing] .clock-minute {animation:minute-tap 480ms cubic-bezier(.45,.05,.25,1);}
+.wpay-desktop-nav-icon[data-playing] .clock-hour {animation:hour-tap 480ms ease-in-out;}
+.wpay-desktop-nav-icon[data-playing] .clock-arrow {animation:minute-tap 480ms ease-in-out;}
+.wpay-desktop-nav-icon[data-playing] .profile-figure {animation:profile-tap 480ms ease-in-out;}
+@keyframes cards-tap {50% {transform:translateY(-5px) rotate(-4deg);}}
+@keyframes minute-tap {to {transform:rotate(360deg);}}
+@keyframes hour-tap {55% {transform:rotate(14deg);}}
+@keyframes profile-tap {48% {transform:translateY(-4px) scale(1.025);}}

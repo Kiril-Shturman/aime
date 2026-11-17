@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 177 177">
+<defs>
+  <linearGradient id="cards-back" x2=".55" y2="1" x1="0" y1="0">
+    <stop stop-color="#91f8cc"/><stop offset=".48" stop-color="#23d779"/><stop offset="1" stop-color="#0bae43"/>
+  </linearGradient>
+  <linearGradient id="cards-glass" x2="1" y2=".85">
+    <stop stop-color="#c7f8d8" stop-opacity=".49"/><stop offset="1" stop-color="#53c45e" stop-opacity=".43"/>
+  </linearGradient>
+  <radialGradient id="cards-color" cx=".8" cy=".14" r=".65">
+    <stop stop-color="#23b944" stop-opacity=".54"/><stop offset="1" stop-color="#61d67b" stop-opacity="0"/>
+  </radialGradient>
+  <clipPath id="cards-front-clip"><rect x="17" y="61" width="146" height="98" rx="27"/></clipPath>
+  <filter id="cards-frost" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="5"/></filter>
+  <linearGradient id="cards-rim" x2=".8" y2="1">
+    <stop stop-color="#f3fff7"/><stop offset="1" stop-color="#f3fff7" stop-opacity=".16"/>
+  </linearGradient>
+</defs>
+<defs>
+  <g id="cards-back-shape" transform="rotate(-17 81 86)">
+    <rect x="8" y="29" width="146" height="98" rx="26" fill="url(#cards-back)" stroke="#d4ffea" stroke-width="1"/>
+    <path d="M8 59h146v16H8z" fill="#eaffee" opacity=".59"/>
+  </g>
+  <mask id="cards-outside" maskUnits="userSpaceOnUse" x="0" y="0" width="177" height="177">
+    <rect width="177" height="177" fill="white"/>
+    <rect x="17" y="61" width="146" height="98" rx="27" fill="black"/>
+  </mask>
+</defs>
+<g mask="url(#cards-outside)"><use class="card-lift" href="#cards-back-shape"/></g>
+<g class="card-front">
+<g clip-path="url(#cards-front-clip)"><use class="card-lift" href="#cards-back-shape" filter="url(#cards-frost)"/></g>
+<g>
+  <rect x="17" y="61" width="146" height="98" rx="27" fill="url(#cards-glass)"/>
+  <rect x="17" y="61" width="146" height="98" rx="27" fill="url(#cards-color)" stroke="url(#cards-rim)" stroke-width="1.6"/>
+  <path d="M17 86h146v15H17z" fill="#ecfff0" opacity=".52"/>
+  <rect x="35" y="126" width="32" height="7" rx="3.5" fill="#e5ffec" opacity=".29"/>
+  <rect x="113" y="111" width="32" height="24" rx="5" fill="#dcfae6" opacity=".88"/>
+  <path d="M123 112v22m12-22v22m-21-15h9m-9 8h9m12-8h9m-9 8h9" fill="none" stroke="#8fdb9f" stroke-opacity=".55"/>
+</g>
+</g>
+</svg>

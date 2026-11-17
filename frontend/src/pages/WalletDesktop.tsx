@@ -1,16 +1,19 @@
-import { CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Bell, Headphones } from 'lucide-react'
+import { Clock3, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Bell, Headphones } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import desktopWalletIcon from '../assets/desktop-wallet-icon.svg?raw'
+import desktopCardsIcon from '../assets/desktop-cards-icon.svg?raw'
+import desktopHistoryIcon from '../assets/desktop-history-icon.svg?raw'
+import desktopProfileIcon from '../assets/desktop-profile-icon.svg?raw'
 import { walletRequest } from '../lib/wallet-api'
 import { useLiveWallet, cryptoAmount, usd, usdPrice } from './WalletLive'
 
 type Tab = "wallet" | "cards" | "history" | "profile";
 
 const desktopLinks = [
-  { id: "wallet", label: "Кошелёк", Icon: null },
-  { id: "cards", label: "Карты", Icon: CreditCard },
-  { id: "history", label: "История", Icon: Clock3 },
-  { id: "profile", label: "Профиль", Icon: UserRound },
+  { id: "wallet", label: "Кошелёк", icon: desktopWalletIcon },
+  { id: "cards", label: "Карты", icon: desktopCardsIcon },
+  { id: "history", label: "История", icon: desktopHistoryIcon },
+  { id: "profile", label: "Профиль", icon: desktopProfileIcon },
 ] as const;
 
 export function DesktopSidebar({
@@ -23,7 +26,7 @@ export function DesktopSidebar({
   name: string;
   cardsEnabled: boolean;
 }) {
-  const [walletAnimation, setWalletAnimation] = useState(0);
+  const [animations, setAnimations] = useState({ wallet: 0, cards: 0, history: 0, profile: 0 });
   const ThemeIcon = dark ? Sun : Moon;
   const items = desktopLinks.filter(({ id }) => id !== "cards" || cardsEnabled);
 
@@ -33,22 +36,18 @@ export function DesktopSidebar({
         <img src={dark ? "/brands/wpay-wordmark-light.svg" : "/brands/wpay-wordmark.svg"} alt="wPay" width={104} height={43} />
       </button>
       <nav aria-label="Основное меню">
-        {items.map(({ id, label, Icon }) => (
+        {items.map(({ id, label, icon }) => (
           <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => {
-            if (id === "wallet") setWalletAnimation((count) => count + 1);
+            setAnimations((counts) => ({ ...counts, [id]: counts[id] + 1 }));
             onSelect(id);
           }}>
-            {Icon ? (
-              <Icon size={20} strokeWidth={1.8} aria-hidden="true" />
-            ) : (
-              <span
-                key={walletAnimation}
-                aria-hidden="true"
-                className="wpay-desktop-wallet-icon"
-                data-playing={walletAnimation > 0 ? "" : undefined}
-                dangerouslySetInnerHTML={{ __html: desktopWalletIcon }}
-              />
-            )}
+            <span
+              key={animations[id]}
+              aria-hidden="true"
+              className="wpay-desktop-nav-icon"
+              data-playing={animations[id] > 0 ? "" : undefined}
+              dangerouslySetInnerHTML={{ __html: icon }}
+            />
             <span>{label}</span>
           </button>
         ))}
