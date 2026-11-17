@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
   type CSSProperties,
+  type ComponentType,
 } from "react";
 import {
   Activity,
@@ -13,16 +14,13 @@ import {
   ArrowLeft,
   Bell,
   Coins,
-  CreditCard,
   Database,
-  LayoutDashboard,
   Menu,
   Play,
   RefreshCw,
   Search,
   Send,
   Server,
-  Settings,
   ShieldCheck,
   Users,
   X,
@@ -30,6 +28,16 @@ import {
   Sun,
   Moon,
 } from "lucide-react";
+import AppFill from "framework7-icons/react/esm/AppFill.js";
+import Person2Fill from "framework7-icons/react/esm/Person2Fill.js";
+import ChartBarFill from "framework7-icons/react/esm/ChartBarFill.js";
+import BitcoinCircleFill from "framework7-icons/react/esm/BitcoinCircleFill.js";
+import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
+import GearAltFill from "framework7-icons/react/esm/GearAltFill.js";
+import CheckmarkShieldFill from "framework7-icons/react/esm/CheckmarkShieldFill.js";
+import ArrowRightArrowLeftCircleFill from "framework7-icons/react/esm/ArrowRightArrowLeftCircleFill.js";
+import BellFill from "framework7-icons/react/esm/BellFill.js";
+import DocTextFill from "framework7-icons/react/esm/DocTextFill.js";
 import Framework7 from "framework7/lite-bundle";
 import Framework7React, {
   App as F7App,
@@ -224,17 +232,22 @@ function stateTotal(value: Record<string, number> | undefined) {
   return Object.values(value || {}).reduce((sum, item) => sum + item, 0);
 }
 
-const tabs: { id: Tab; label: string; icon: typeof Database; color: string }[] = [
-  { id: "overview", label: "Обзор", icon: LayoutDashboard, color: "#5856D6" },
-  { id: "data", label: "Пользователи", icon: Database, color: "#AF52DE" },
-  { id: "payments", label: "Операции", icon: Activity, color: "#007AFF" },
-  { id: "crypto", label: "Криптовалюты", icon: Coins, color: "#FF9500" },
-  { id: "cards", label: "Карты", icon: CreditCard, color: "#30C759" },
-  { id: "tariffs", label: "Тарифы", icon: Settings, color: "#8E8E93" },
-  { id: "aura", label: "Aura API", icon: ShieldCheck, color: "#32ADE6" },
-  { id: "goswap", label: "GoSwap API", icon: Server, color: "#AF52DE" },
-  { id: "notifications", label: "Уведомления", icon: Bell, color: "#FF3B30" },
-  { id: "audit", label: "Аудит", icon: Users, color: "#5856D6" },
+const tabs: {
+  id: Tab;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  color: string;
+}[] = [
+  { id: "overview", label: "Обзор", icon: AppFill, color: "#5856D6" },
+  { id: "data", label: "Пользователи", icon: Person2Fill, color: "#AF52DE" },
+  { id: "payments", label: "Операции", icon: ChartBarFill, color: "#007AFF" },
+  { id: "crypto", label: "Криптовалюты", icon: BitcoinCircleFill, color: "#FF9500" },
+  { id: "cards", label: "Карты", icon: CreditcardFill, color: "#30C759" },
+  { id: "tariffs", label: "Тарифы", icon: GearAltFill, color: "#8E8E93" },
+  { id: "aura", label: "Aura API", icon: CheckmarkShieldFill, color: "#32ADE6" },
+  { id: "goswap", label: "GoSwap API", icon: ArrowRightArrowLeftCircleFill, color: "#AF52DE" },
+  { id: "notifications", label: "Уведомления", icon: BellFill, color: "#FF3B30" },
+  { id: "audit", label: "Аудит", icon: DocTextFill, color: "#5856D6" },
 ];
 const navGroups: { label: string; items: Tab[] }[] = [
   {
@@ -433,7 +446,7 @@ export default function WalletAdminPage() {
                             aria-hidden="true"
                             style={{ "--nav-icon": item.color } as CSSProperties}
                           >
-                            <item.icon size={18} />
+                            <item.icon className="wpay-admin-nav-glyph" />
                           </span>
                           <span>{item.label}</span>
                         </F7Button>
