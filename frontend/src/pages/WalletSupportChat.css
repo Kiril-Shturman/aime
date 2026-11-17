@@ -1,0 +1,98 @@
+.wpay-support-chat .messagebar {
+  position: relative;
+  width: 100%;
+  height: auto;
+  background: transparent;
+  --f7-messagebar-link-color: #007aff;
+  --f7-messagebar-textarea-text-color: #111;
+  --f7-messagebar-textarea-placeholder-color: #8e8e93;
+}
+.dark .wpay-support-chat .messagebar {
+  --f7-messagebar-link-color: #0a84ff;
+  --f7-messagebar-textarea-text-color: #fff;
+  --f7-messagebar-textarea-placeholder-color: #98989f;
+}
+.wpay-support-chat .messagebar .toolbar-inner {
+  display: flex;
+  position: relative;
+  align-items: flex-end;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+}
+.wpay-support-chat .messagebar .toolbar-pane {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.wpay-support-chat .messagebar .link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 44px;
+  color: var(--f7-messagebar-link-color);
+}
+.wpay-support-chat .messagebar textarea {
+  max-height: 140px;
+}
+.wpay-support-chat .support-send.disabled {
+  opacity: 0.35;
+  pointer-events: none;
+}
+.wpay-support-chat .messagebar-attachment-delete {
+  cursor: pointer;
+  padding: 0;
+  border: 0;
+}
+.wpay-support-chat .messagebar-attachment img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.wpay-support-chat .support-photo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  max-width: 280px;
+}
+.wpay-support-chat .support-photo-grid--single {
+  grid-template-columns: 1fr;
+}
+.wpay-support-chat .support-photo-grid img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+}
+.wpay-support-chat .support-photo-error {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #c13434;
+}
+.dark .wpay-support-chat .support-photo-error {
+  color: #ff8b86;
+}
+.wpay-support-chat .messages {
+  min-height: 0;
+  background: transparent;
+}
+.wpay-support-chat .messagebar {
+  --f7-messagebar-attachments-height: 88px;
+  --f7-messagebar-attachment-height: 88px;
+  --f7-messagebar-attachment-landscape-height: 88px;
+}
+.wpay-support-chat .messagebar textarea {
+  box-sizing: border-box;
+  resize: none;
+  outline: none;
+}
+.wpay-support-chat .messagebar-area:has(textarea:focus-visible) {
+  outline: 2px solid #007aff55;
+  outline-offset: 2px;
+}
+.dark .wpay-support-chat .messagebar-area:has(textarea:focus-visible) {
+  outline-color: #0a84ff66;
+}

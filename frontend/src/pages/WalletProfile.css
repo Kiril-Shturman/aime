@@ -32,15 +32,6 @@
 .dark .wpay-support-chat .support-compose { background: rgba(0,0,0,.94); border-top-color: rgba(235,235,245,.1); }
 .dark .wpay-support-chat .message-bubble { background: linear-gradient(150deg,#2595ff,#0a84ff); }
 .dark .wpay-support-chat .message-footer, .dark .wpay-support-chat .messages-title { color: #98989f; }
-.wpay-support-chat .toolbar-inner { display: flex; align-items: flex-end; gap: 10px; }
-.wpay-support-chat .messagebar-area { min-width: 0; flex: 1; }
-.wpay-support-chat textarea { box-sizing: border-box; display: block; resize: none; width: 100%; height: 46px; min-height: 46px; max-height: 120px; border-radius: 23px; padding: 10px 16px; font-size: 17px; line-height: 24px; background: #fff; color: #000; border: 1px solid rgba(60,60,67,.1); outline: none; }
-.wpay-support-chat textarea:focus { border-color: rgba(0,122,255,.5); }
-.dark .wpay-support-chat textarea { background: #1c1c1e; color: #fff; border-color: rgba(235,235,245,.15); }
-.dark .wpay-support-chat textarea:focus { border-color: #0a84ff; }
-.wpay-support-chat .support-send { transition: opacity .15s, transform .15s; }
-.wpay-support-chat .support-send:active { transform: scale(.92); }
-@media (prefers-reduced-motion: reduce) { .wpay-support-chat .support-send { transition: none; } }
 
 .wpay-f7-profile .profile-legal-list .item-inner { margin-left: 14px; }
 .wpay-f7-profile .profile-legal-list .item-title { color: #007aff; font-size: 16px; font-weight: 600; white-space: normal; }
