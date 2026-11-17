@@ -4,7 +4,22 @@
 @media(min-width:1100px){
  .wpay-desktop-page{padding-left:248px!important;padding-bottom:32px!important;background:#f5f6f8!important}
  .dark .wpay-desktop-page{background:#101113!important}
- .wpay-desktop-page>.k-navbar{margin:0 auto!important;max-width:1240px;width:calc(100% - 64px)!important;background:transparent!important;box-shadow:none!important;--wpay-top-inset:0px}
+ :is(.wpay-desktop-page,.wpay-asset-scroll) > .k-navbar {
+   --wpay-top-inset: 0px;
+   background: transparent;
+   box-shadow: none;
+ }
+ :is(.wpay-desktop-page,.wpay-asset-scroll) > .k-navbar > .wpay-navbar-inner {
+   width: calc(100% - 64px);
+   max-width: 1240px;
+   margin-inline: auto;
+ }
+ .wpay-asset-scroll .wpay-asset-navbar-bg {
+   background: linear-gradient(to bottom, var(--color-ios-light-surface, #fff), transparent);
+ }
+ .dark .wpay-asset-scroll .wpay-asset-navbar-bg {
+   background: linear-gradient(to bottom, color-mix(in srgb, var(--color-ios-dark-surface, #000) 50%, transparent), transparent);
+ }
  .wpay-desktop-page>.k-navbar:before,.wpay-desktop-page>.k-navbar:after{display:none}
  .wpay-desktop-page>.wpay-bottom-menu{display:none!important}
  .wpay-desktop-sidebar {
@@ -266,12 +281,6 @@
  }
  .dark .wpay-viewport[data-wallet-surface="asset"] .wpay-asset-scroll {
    --wpay-lower-surface: #101113;
- }
- .wpay-viewport[data-wallet-surface="asset"] .wpay-asset-scroll > .k-navbar {
-   position: relative;
- }
- .wpay-asset-scroll .wpay-asset-navbar-bg {
-   background: transparent !important;
  }
  .wpay-viewport[data-wallet-surface="asset"] main.wpay-asset-layout {
    display: grid;

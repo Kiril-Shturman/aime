@@ -42,6 +42,7 @@ export function WalletNavbar({
     <>
       <Navbar
         title={title}
+        innerClassName="wpay-navbar-inner"
         bgClassName={assetSurface ? "wpay-asset-navbar-bg" : undefined}
         subtitle={subtitle}
         left={left}
