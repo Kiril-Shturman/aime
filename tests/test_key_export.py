@@ -42,6 +42,7 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
     async def test_stale_session_owner_and_unsupported_network_rejected(self):
         response=await self.request_job(headers={'X-Telegram-Init-Data':'auth_date=1'})
         self.assertEqual(response.status,403)
+        self.assertIn('no-store',response.headers['Cache-Control'])
         response=await self.request_job(headers={**self.headers,'X-Test-User':'tg:2'})
         self.assertEqual(response.status,404)
         tron=self.custody.create('tg:1','TRON')

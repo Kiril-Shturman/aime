@@ -38,7 +38,7 @@ def cleanup(db):
     db.execute("UPDATE custody_key_exports SET state='expired',ciphertext=NULL,public_key='' WHERE expires_at<=? AND state NOT IN ('consumed','expired')",(time.time(),))
 
 
-async def route(request, action, uid, custody):
+async def _route(request, action, uid, custody):
     if action not in {'custody-export-prepare','custody-export-status','custody-export-reveal'}:
         return None
     error=custody.error;db=custody.ledger.db
@@ -115,3 +115,18 @@ def bridge(db, body):
         db.execute("UPDATE custody_key_exports SET state=?,ciphertext=?,error=? WHERE id=? AND worker_id=? AND state='processing' AND expires_at>?",('ready' if ciphertext else 'failed',ciphertext,None if ciphertext else 'EXPORT_FAILED',body['job_id'],worker,time.time()))
         return {'ok':True}
     raise ValueError('Invalid export operation')
+
+
+async def route(request, action, uid, custody):
+    if action not in {'custody-export-prepare','custody-export-status','custody-export-reveal'}:return None
+    headers={'Cache-Control':'no-store, private','Pragma':'no-cache','Referrer-Policy':'no-referrer'}
+    try:
+        return await _route(request,action,uid,custody)
+    except Exception as error:
+        if hasattr(error,'name') and hasattr(error,'status'):
+            from wallet_aura_errors import wallet_error_payload
+            if error.retry_after:headers['Retry-After']=str(error.retry_after)
+            return web.json_response(wallet_error_payload(error),status=error.status,headers=headers)
+        if isinstance(error,(ValueError,KeyError,TypeError)):
+            return web.json_response({'ok':False,'error':{'name':'INVALID_REQUEST'},'detail':'Некорректный запрос экспорта'},status=400,headers=headers)
+        raise
