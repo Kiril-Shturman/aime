@@ -18,6 +18,7 @@ import {
 import "framework7/components/dialog/css";
 import {
   CreditCard,
+  Copy,
   Truck,
   KeyRound,
   ShieldCheck,
@@ -398,6 +399,15 @@ export default function WalletAuraCards({
       window.removeEventListener("focus", refresh);
     };
   }, [panel]);
+  const copyCardValue = async (value: string, message: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      haptic("light");
+      showNotice(message);
+    } catch {
+      showNotice("Не удалось скопировать реквизиты");
+    }
+  };
   const mutate = async (
     name: string,
     task: () => Promise<unknown>,
@@ -977,6 +987,40 @@ export default function WalletAuraCards({
                         </span>
                       </span>
                     </button>
+                    {credentials?.card_id === card.card_id && (
+                      <>
+                        <button
+                          type="button"
+                          className="wpay-card-copy wpay-card-copy--number"
+                          aria-label="Скопировать номер карты"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void copyCardValue(
+                              credentials.number.replace(/\s/g, ""),
+                              "Номер карты скопирован",
+                            );
+                          }}
+                        >
+                          <Copy size={17} />
+                        </button>
+                        <button
+                          type="button"
+                          className="wpay-card-copy wpay-card-copy--expiry"
+                          aria-label="Скопировать срок действия"
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void copyCardValue(
+                              credentials.expiry,
+                              "Срок действия скопирован",
+                            );
+                          }}
+                        >
+                          <Copy size={17} />
+                        </button>
+                      </>
+                    )}
                     {credentials?.card_id === card.card_id && (
                       <button
                         type="button"

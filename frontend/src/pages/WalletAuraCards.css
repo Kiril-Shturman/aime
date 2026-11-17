@@ -906,3 +906,39 @@
 .dark .wpay-card-setting-icon--red {
   background: linear-gradient(#e98088, #bd4253);
 }
+
+.wpay-card-copy {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+  color: #4d596b;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.wpay-card-copy--number {
+  right: 7%;
+  top: calc(40% + 10px);
+}
+.wpay-card-copy--expiry {
+  left: calc(7% + 58px);
+  top: calc(65% + 7px);
+}
+.wpay-card-copy:active {
+  background: #00000012;
+}
+.wpay-card-copy:focus-visible {
+  outline: 2px solid #2476df;
+  outline-offset: 1px;
+}
+.wpay-card-back-number {
+  padding-right: 36px;
+  font-size: clamp(16px, 5vw, 26px);
+}

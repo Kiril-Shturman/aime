@@ -851,3 +851,22 @@ test("open issue sheet refreshes its funding quote when returning to the app", a
   await expect(popup(page)).not.toContainText("Для оплаты карты доступно 0 USDT");
   expect(calls).toBeGreaterThan(1);expect(state.calls).toHaveLength(0);
 });
+
+
+test("card number and expiry copy separately without hiding details or revealing CVV", async ({page}) => {
+  await page.addInitScript(()=>{Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async(value:string)=>{const w=window as unknown as {copiedCardValues?:string[]};w.copiedCardValues??=[];w.copiedCardValues.push(value)}}})});
+  await setup(page);
+  const main=page.getByRole("main",{name:"Мои карты"});
+  await expect(main.getByRole("button",{name:"Скопировать номер карты",exact:true})).toHaveCount(0);
+  await main.getByRole("button",{name:"Реквизиты",exact:true}).click();
+  const back=main.getByRole("group",{name:"Реквизиты карты",exact:true});
+  const number=(await back.locator('.wpay-card-back-number > span').innerText()).replace(/\s/g,'');
+  const expiry=await back.locator('.wpay-card-back-fields > span').first().locator('b').innerText();
+  await main.getByRole("button",{name:"Скопировать номер карты",exact:true}).click();
+  await main.getByRole("button",{name:"Скопировать срок действия",exact:true}).click();
+  expect(await page.evaluate(()=>(window as unknown as {copiedCardValues:string[]}).copiedCardValues)).toEqual([number,expiry]);
+  await expect(main.locator('.wpay-card-flip--revealed')).toHaveCount(1);
+  await expect(main.getByRole("button",{name:"Показать CVV",exact:true})).toBeVisible();
+  await main.getByRole("button",{name:"Скрыть",exact:true}).click();
+  await expect(main.getByRole("button",{name:"Скопировать номер карты",exact:true})).toHaveCount(0);
+});
