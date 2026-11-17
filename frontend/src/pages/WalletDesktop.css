@@ -126,12 +126,19 @@
    cursor: pointer;
  }
  .wpay-desktop-profile-balances button:hover { background: #3275e914; }
- .wpay-desktop-profile-balances .wpay-desktop-quick-icon {
+ .wpay-profile-shortcut-icon {
+   display: grid;
    width: 38px;
    height: 38px;
+   place-items: center;
    border-radius: 12px;
-   background: #3275e914;
+   color: white;
  }
+ .wpay-profile-shortcut-icon svg { width: 20px; height: 20px; }
+ .wpay-profile-shortcut-icon.is-wallet { background: linear-gradient(145deg, #4096ff, #235bd8); }
+ .wpay-profile-shortcut-icon.is-cards { background: linear-gradient(145deg, #9477ff, #6445d6); }
+ .wpay-profile-shortcut-icon.is-support { background: linear-gradient(145deg, #25bca7, #087e73); }
+ .wpay-profile-shortcut-icon.is-notifications { background: linear-gradient(145deg, #ff9465, #d64c35); }
  .wpay-desktop-profile-balances strong {
    display: block;
    margin-top: 3px;

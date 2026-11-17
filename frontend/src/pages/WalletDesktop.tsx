@@ -1,4 +1,6 @@
-import { Wallet, CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight } from 'lucide-react'
+import WalletFill from "framework7-icons/react/esm/WalletFill.js";
+import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
+import { Wallet, CreditCard, Clock3, UserRound, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Bell, Headphones } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { walletRequest } from '../lib/wallet-api'
 import { useLiveWallet, cryptoAmount, usd, usdPrice } from './WalletLive'
@@ -60,13 +62,15 @@ export function DesktopOverview({onHistory,onDeposit,onExchange}:{onHistory:()=>
 
 
 export function DesktopProfileAside({
-  walletBalance, balanceHidden, cardsEnabled, onWallet, onCards,
+  walletBalance, balanceHidden, cardsEnabled, onWallet, onCards, onSupport, onNotifications,
 }: {
   walletBalance: number | null;
   balanceHidden: boolean;
   cardsEnabled: boolean;
   onWallet: () => void;
   onCards: () => void;
+  onSupport: () => void;
+  onNotifications: () => void;
 }) {
   const [cardBalance, setCardBalance] = useState<string | null>(null);
 
@@ -115,17 +119,30 @@ export function DesktopProfileAside({
       <section className="wpay-desktop-card wpay-desktop-profile-balances">
         <div className="wpay-desktop-section-head"><h2>Мои балансы</h2></div>
         <button type="button" onClick={onWallet}>
-          <span className="wpay-desktop-quick-icon"><Wallet size={19} aria-hidden="true" /></span>
+          <span className="wpay-profile-shortcut-icon is-wallet"><WalletFill aria-hidden="true" /></span>
           <span>Кошелёк<strong>{balanceHidden ? "••••••" : walletBalance === null ? "—" : usd(walletBalance)}</strong></span>
           <ArrowUpRight size={16} aria-hidden="true" />
         </button>
         {cardsEnabled && (
           <button type="button" onClick={onCards}>
-            <span className="wpay-desktop-quick-icon"><CreditCard size={19} aria-hidden="true" /></span>
+            <span className="wpay-profile-shortcut-icon is-cards"><CreditcardFill aria-hidden="true" /></span>
             <span>На картах<strong>{balanceHidden ? "••••••" : cardBalance ?? "—"}</strong></span>
             <ArrowUpRight size={16} aria-hidden="true" />
           </button>
         )}
+      </section>
+      <section className="wpay-desktop-card wpay-desktop-profile-balances">
+        <div className="wpay-desktop-section-head"><h2>Помощь и настройки</h2></div>
+        <button type="button" onClick={onSupport}>
+          <span className="wpay-profile-shortcut-icon is-support"><Headphones aria-hidden="true" /></span>
+          <span>Поддержка</span>
+          <ArrowUpRight size={16} aria-hidden="true" />
+        </button>
+        <button type="button" onClick={onNotifications}>
+          <span className="wpay-profile-shortcut-icon is-notifications"><Bell aria-hidden="true" /></span>
+          <span>Уведомления</span>
+          <ArrowUpRight size={16} aria-hidden="true" />
+        </button>
       </section>
     </aside>
   );
