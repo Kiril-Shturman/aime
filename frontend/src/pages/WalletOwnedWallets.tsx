@@ -1,13 +1,9 @@
+import type { WalletAddressSelection } from "./WalletAddressDetails";
 import { useEffect, useState, type ReactNode } from "react";
-import { createPortal } from "react-dom";
-import { Sheet, Preloader } from "framework7-react";
-import { Button } from "konsta/react";
-import { Copy, Check } from "lucide-react";
-import QRCode from "react-qr-code";
+import { Preloader } from "framework7-react";
 import { walletRequest } from "../lib/wallet-api";
 import WalletAssetAvatar from "./WalletAssetAvatar";
-import WalletSheetClose from "./WalletSheetClose";
-import { cryptoAmount } from "./WalletLive";
+import { cryptoAmount, useLiveWallet } from "./WalletLive";
 
 const networks: Record<string, string[]> = {
   BTC: ["BTC"],
@@ -44,20 +40,21 @@ export default function WalletOwnedWallets({
   color,
   iconColor,
   onAvailability,
+  onOpenAddress,
 }: {
   onAvailability: (available: boolean) => void;
+  onOpenAddress: (entry: WalletAddressSelection) => void;
   code: string;
   active: boolean;
   icon: ReactNode;
   color: string;
   iconColor: string;
 }) {
+  const wallet = useLiveWallet();
   const [rows, setRows] = useState<Owned[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [retry, setRetry] = useState(0);
-  const [selected, setSelected] = useState<Owned | null>(null);
-  const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!active) return;
     onAvailability(false);
@@ -68,7 +65,6 @@ export default function WalletOwnedWallets({
     setRows([]);
     setError("");
     setLoading(true);
-    setSelected(null);
     async function balances() {
       try {
         const result = await walletRequest<{ items: Owned[] }>(
@@ -130,9 +126,6 @@ export default function WalletOwnedWallets({
       clearTimeout(timer);
     };
   }, [active, code, retry, onAvailability]);
-  useEffect(() => {
-    setCopied(false);
-  }, [selected]);
   if (!networks[code]) return null;
 
   return (
@@ -141,7 +134,19 @@ export default function WalletOwnedWallets({
         <button
           key={row.id}
           type="button"
-          onClick={() => setSelected(row)}
+          onClick={() =>
+            onOpenAddress({
+              network: row.network,
+              address: row.address,
+              demo: false,
+              amount:
+                row.balance?.status === "ok" && row.balance.amount !== null
+                  ? Number(row.balance.amount)
+                  : null,
+              rate: wallet.rate(code),
+              custody: { id: row.id, chain_env: row.chain_env },
+            })
+          }
           aria-label={`Открыть собственный адрес ${row.network}`}
           className="wpay-address-row flex h-16 w-full items-center justify-between gap-3 border-b border-black/[.06] py-2 text-left dark:border-white/[.08]"
         >
@@ -197,68 +202,6 @@ export default function WalletOwnedWallets({
             Повторить
           </button>
         </div>
-      )}
-      {createPortal(
-        <Sheet
-          opened={selected !== null}
-          onSheetClosed={() => setSelected(null)}
-          backdrop
-          closeByBackdropClick
-          closeOnEscape
-          swipeToClose
-          swipeHandler=".owned-address-header"
-          className="wpay-exchange-sheet"
-        >
-          <header className="owned-address-header px-5 pb-4 pt-3">
-            <div className="mx-auto mb-4 h-1 w-9 rounded-full bg-black/15 dark:bg-white/20" />
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Адрес {code}</h2>
-                <p className="text-sm opacity-50">
-                  {selected && names[selected.network]} ·{" "}
-                  {selected?.chain_env === "mainnet" ? "Mainnet" : "Testnet"} ·
-                  wPay
-                </p>
-              </div>
-              <WalletSheetClose onClick={() => setSelected(null)} />
-            </div>
-          </header>
-          {selected && (
-            <div className="overflow-y-auto px-5 pb-8">
-              <div className="mx-auto my-4 w-fit rounded-[24px] bg-white p-4">
-                <QRCode value={selected.address} size={192} />
-              </div>
-              <p className="break-all rounded-2xl bg-black/5 p-4 text-center text-sm dark:bg-white/10">
-                {selected.address}
-              </p>
-              <p className="my-4 text-sm opacity-60">
-                Это собственный адрес wPay в сети {names[selected.network]}.
-                Средства на нём пока нельзя использовать для оплаты карт и
-                операций приложения.{" "}
-                {selected.chain_env !== "mainnet" &&
-                  "Не отправляйте настоящие монеты в тестовую сеть."}
-              </p>
-              <Button
-                large
-                rounded
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(selected.address);
-                    setCopied(true);
-                  } catch {
-                    setError("Не удалось скопировать адрес");
-                  }
-                }}
-              >
-                <span className="flex items-center gap-2">
-                  {copied ? <Check size={18} /> : <Copy size={18} />}
-                  {copied ? "Скопировано" : "Скопировать адрес"}
-                </span>
-              </Button>
-            </div>
-          )}
-        </Sheet>,
-        document.body,
       )}
     </section>
   );

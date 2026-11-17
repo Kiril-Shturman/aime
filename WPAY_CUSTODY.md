@@ -10,8 +10,10 @@ GRAM is not treated as native TON and is not assigned an invented token contract
 Opening a supported asset ensures one free address per authenticated user,
 network and environment. Existing network rows beneath the application balance
 show the own address and the observed blockchain balance; a second portfolio
-block is not added. Opening a row shows wPay and Mainnet/Testnet, the full address
-and QR. Network failures show an
+block is not added. Opening a row uses the existing WalletAddressDetails Push View with its
+standard avatar, balance, actions, requisites, copy toast and back navigation.
+It identifies wPay and Mainnet/Testnet; its deposit action reveals that address
+QR. Own-wallet actions never route into provider spending or deposit history. Network failures show an
 unknown balance, never a fabricated zero. The same address is returned on repeats.
 Private keys and recovery seeds never reach the browser.
 

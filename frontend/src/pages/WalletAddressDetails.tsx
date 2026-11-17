@@ -1,3 +1,4 @@
+import QRCode from "react-qr-code";
 import {
   networkStandards as addressNetworkStandards,
   networkNames as addressNetworkNames,
@@ -22,6 +23,8 @@ export interface WalletAddressSelection {
   amount: number | null;
   rate: number | null;
   min_deposit?: string;
+  custody?: { id: string; chain_env: string };
+  show_qr?: boolean;
 }
 export {
   networkStandards as addressNetworkStandards,
@@ -67,7 +70,8 @@ export default function WalletAddressDetails({
     setDeposits([]);
     setCopied(false);
     setCopyError("");
-    if (entry.demo) return;
+    setLoading(false);
+    if (entry.demo || entry.custody) return;
     setLoading(true);
     walletRequest<{
       items?: {
@@ -221,7 +225,21 @@ export default function WalletAddressDetails({
           </span>
         </div>
       </section>
+      {entry.custody && (
+        <p className="text-center text-xs text-black/45 dark:text-white/45">
+          wPay · {entry.custody.chain_env === "mainnet" ? "Mainnet" : "Testnet"}{" "}
+          · Баланс в сети
+        </p>
+      )}
       {actions}
+      {entry.custody && entry.show_qr && (
+        <section
+          aria-label="QR-код адреса"
+          className="mx-auto rounded-[24px] bg-white p-4"
+        >
+          <QRCode value={entry.address} size={220} />
+        </section>
+      )}
       <section aria-label="Реквизиты кошелька">
         <h2 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
           Реквизиты кошелька
@@ -265,6 +283,12 @@ export default function WalletAddressDetails({
           </dl>
         </Card>
       </section>
+      {entry.custody && (
+        <p className="px-2 text-xs leading-5 text-black/45 dark:text-white/45">
+          Собственный кошелёк wPay. Автоматическое зачисление на баланс
+          приложения, вывод и обмен с этого адреса ещё не подключены.
+        </p>
+      )}
       <section>
         <h2 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
           История транзакций
@@ -287,7 +311,11 @@ export default function WalletAddressDetails({
         ) : (
           <Card className="!m-0 !rounded-[30px]" contentWrapPadding="px-4 py-2">
             <p className="py-5 text-center text-[14px] text-black/45 dark:text-white/45">
-              {loading ? "Загружаем историю…" : error || "Транзакций пока нет"}
+              {entry.custody
+                ? "История блокчейн-операций ещё не подключена"
+                : loading
+                  ? "Загружаем историю…"
+                  : error || "Транзакций пока нет"}
             </p>
           </Card>
         )}

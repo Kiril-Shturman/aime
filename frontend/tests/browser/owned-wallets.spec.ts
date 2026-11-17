@@ -63,21 +63,57 @@ for (const theme of ["light", "dark"]) {
       .click();
     const own = page.getByRole("region", { name: "Собственные кошельки" });
     await expect(own).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Мои адреса в сети" })).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: "Мои адреса в сети" }),
+    ).toHaveCount(0);
     await expect(own.getByRole("button")).toHaveCount(5);
     await expect(own.getByRole("button").first()).toContainText("owned-BSC");
     expect(created).toEqual(["BSC", "ETH", "TON", "SOL", "TRON"]);
     await expect(
-      own.getByRole("button", { name: "Открыть собственный адрес TRON", exact: true }),
+      own.getByRole("button", {
+        name: "Открыть собственный адрес TRON",
+        exact: true,
+      }),
     ).toContainText("—");
-    await own.getByRole("button", { name: "Открыть собственный адрес TRON", exact: true }).click();
-    const sheet = page.locator(".sheet-modal.modal-in");
-    await expect(sheet).toContainText(rows[4].address);
-    await expect(sheet).toContainText("Mainnet · wPay");
-    await expect(sheet.locator("svg")).not.toHaveCount(0);
-    await expect(sheet).toContainText("пока нельзя использовать");
+    await own
+      .getByRole("button", {
+        name: "Открыть собственный адрес TRON",
+        exact: true,
+      })
+      .click();
+    const hero = page.getByRole("region", {
+      name: "Баланс адреса",
+      exact: true,
+    });
+    await expect(hero).toBeVisible();
+    await expect(hero).toContainText("—");
     await expect(
-      sheet.getByRole("button", { name: "Вывести", exact: true }),
-    ).toHaveCount(0);
+      page.getByText("wPay · Mainnet · Баланс в сети", { exact: true }),
+    ).toBeVisible();
+    const requisites = page.getByRole("region", {
+      name: "Реквизиты кошелька",
+      exact: true,
+    });
+    await expect(requisites).toContainText("Tron");
+    await expect(
+      requisites.getByRole("button", { name: "Скопировать полный адрес" }),
+    ).toBeVisible();
+    await expect(page.locator(".sheet-modal.modal-in")).toHaveCount(0);
+    const details = hero.locator("..");
+    await details
+      .getByRole("button", { name: "Пополнить", exact: true })
+      .click();
+    await expect(
+      page.getByRole("region", { name: "QR-код адреса" }).locator("svg"),
+    ).toBeVisible();
+    await details.getByRole("button", { name: "Вывести", exact: true }).click();
+    await expect(
+      page.getByText("Операции с собственными кошельками ещё не подключены", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(details).toContainText(
+      "История блокчейн-операций ещё не подключена",
+    );
   });
 }

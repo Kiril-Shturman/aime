@@ -341,6 +341,7 @@ export default function WalletAssetPanel({
             <WalletOwnedWallets
               {...{ code, active, icon, color, iconColor }}
               onAvailability={setOwnedAvailable}
+              onOpenAddress={onOpenAddress}
             />
             {(!ownedAvailable ? (wallet.assetRoutes[code] ?? []) : []).map(
               (network) => {
