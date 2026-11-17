@@ -52,6 +52,13 @@ for (const theme of ["light", "dark"]) {
     const { chat, writes } = await openChat(page, theme);
     const input = chat.getByRole("textbox", { name: "Сообщение поддержке" });
     await expect(input).toBeVisible();
+    const fieldStyle = await input.evaluate(node => {
+      const css = getComputedStyle(node);
+      return { background: css.backgroundColor, radius: parseFloat(css.borderTopLeftRadius) };
+    });
+    expect(fieldStyle.background).toBe(theme === "dark" ? "rgb(37, 43, 54)" : "rgb(255, 255, 255)");
+    expect(fieldStyle.radius).toBeGreaterThanOrEqual(20);
+    await page.screenshot({ path: test.info().outputPath(`support-empty-${theme}.png`), animations: "disabled" });
     await expect(
       chat.getByRole("link", { name: "Отправить сообщение" }),
     ).toHaveAttribute("aria-disabled", "true");
