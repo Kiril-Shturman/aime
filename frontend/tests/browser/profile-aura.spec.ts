@@ -413,21 +413,30 @@ test("Telegram viewport events keep fields visible when visual viewport is uncha
     .toBeLessThanOrEqual(404);
 });
 
- test("identity submission shows native preloader and never offers retry after rejection", async ({ page }) => {
+test("identity submission shows native preloader and never offers retry after rejection", async ({
+  page,
+}) => {
   await contacts(page);
   await openDocuments(page);
   await fillDocuments(page);
   let finish!: () => void;
-  const pending = new Promise<void>(resolve => { finish = resolve; });
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
   let posts = 0;
-  await page.route("**/api/wallet/aura-kyc", async route => {
+  await page.route("**/api/wallet/aura-kyc", async (route) => {
     if (route.request().method() !== "POST") {
-      await route.fulfill({ json: { status: "rejected", verified: false, terminal: true } });
+      await route.fulfill({
+        json: { status: "rejected", verified: false, terminal: true },
+      });
       return;
     }
     posts++;
     await pending;
-    await route.fulfill({ status: 422, json: { error: { name: "kyc_rejected" } } });
+    await route.fulfill({
+      status: 422,
+      json: { error: { name: "kyc_rejected" } },
+    });
   });
   await page.getByRole("button", { name: "Отправить на проверку" }).click();
   const sending = page.getByRole("button", { name: "Отправляем…" });
@@ -436,8 +445,106 @@ test("Telegram viewport events keep fields visible when visual viewport is uncha
   await expect(sending.locator(".preloader")).toBeVisible();
   expect(posts).toBe(1);
   finish();
-  await expect(page.getByRole("alert")).toContainText("Данные верификации отклонены");
-  await expect(page.getByRole("button", { name: "Отправить на проверку" })).toHaveCount(0);
-  await expect(page.locator("p[role=status]").filter({ hasText: "Проверка не пройдена" })).toContainText("Обратитесь в поддержку");
+  await expect(page.getByRole("alert")).toContainText(
+    "Данные верификации отклонены",
+  );
+  await expect(
+    page.getByRole("button", { name: "Отправить на проверку" }),
+  ).toHaveCount(0);
+  await expect(
+    page.locator("p[role=status]").filter({ hasText: "Проверка не пройдена" }),
+  ).toContainText("Обратитесь в поддержку");
   expect(posts).toBe(1);
+});
+
+for (const code of [
+  "kyc_identity_locked",
+  "kyc_passport_already_used",
+  "kyc_pending",
+]) {
+  test(`Aura ${code} preserves reason and blocks another identity submission`, async ({
+    page,
+  }) => {
+    await contacts(page);
+    await openDocuments(page);
+    await fillDocuments(page);
+    let posts = 0;
+    await page.route("**/api/wallet/aura-kyc", async (route) => {
+      if (route.request().method() === "POST") {
+        posts++;
+        return route.fulfill({
+          status: code === "kyc_pending" ? 412 : 422,
+          json: {
+            error: {
+              name: code,
+              type: "kyc_error",
+              request_id: "test-request-1",
+              param: "passport",
+              details: {
+                reason: "checks_failed",
+                terminal: code !== "kyc_pending",
+                status: code === "kyc_pending" ? "pending" : "rejected",
+              },
+            },
+          },
+        });
+      }
+      return route.fulfill({
+        json: { status: "none", verified: false, terminal: false },
+      });
+    });
+    await page.getByRole("button", { name: "Отправить на проверку" }).click();
+    await expect(page.getByRole("alert")).toContainText(
+      code === "kyc_pending" ? "Дождитесь результата" : "поддержку",
+    );
+    await expect(page.getByRole("alert")).toContainText("checks_failed");
+    await expect(
+      page.getByRole("button", { name: "Отправить на проверку" }),
+    ).toHaveCount(0);
+    expect(posts).toBe(1);
+  });
+}
+
+test("Aura invalid_argument identifies the field and permits correction", async ({
+  page,
+}) => {
+  await contacts(page);
+  await openDocuments(page);
+  await fillDocuments(page);
+  await page.route("**/api/wallet/aura-kyc", (route) =>
+    route.fulfill({
+      status: 400,
+      json: {
+        error: {
+          code: "invalid_argument",
+          type: "invalid_request_error",
+          param: "passport_issue_date",
+          details: {},
+        },
+      },
+    }),
+  );
+  await page.getByRole("button", { name: "Отправить на проверку" }).click();
+  await expect(page.getByRole("alert")).toContainText("Дата выдачи паспорта");
+  await expect(page.locator("#identity-first_name")).toHaveValue("Иван");
+  await expect(
+    page.getByRole("button", { name: "Отправить на проверку" }),
+  ).toBeEnabled();
+});
+
+test("Aura rejected email returns to editable contacts", async ({ page }) => {
+  await contacts(page);
+  await openDocuments(page);
+  await fillDocuments(page);
+  await page.route("**/api/wallet/aura-kyc", (route) =>
+    route.fulfill({
+      status: 412,
+      json: {
+        error: { name: "kyc_email_rejected", details: {} },
+      },
+    }),
+  );
+  await page.getByRole("button", { name: "Отправить на проверку" }).click();
+  await expect(page.getByRole("alert")).toContainText("Укажите другой адрес");
+  await expect(page.locator('input[type="email"]')).toBeVisible();
 });

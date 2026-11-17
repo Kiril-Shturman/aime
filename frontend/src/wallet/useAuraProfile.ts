@@ -9,18 +9,11 @@ export type KycState = {
 };
 const messages: Record<string, string> = {
   NOT_CONFIGURED: "Подключение профиля пока недоступно. Попробуйте позже.",
-  sbp_buy_not_enabled: "Проверка личности пока недоступна для этого сервиса.",
-  kyc_email_required: "Сначала сохраните электронную почту в личных данных.",
-  kyc_rejected: "Данные верификации отклонены. Обратитесь в поддержку — повторно отправлять документы не нужно.",
-  kyc_pending: "Документы уже на проверке.",
-  kyc_identity_locked: "Данные проверки заблокированы. Обратитесь в поддержку.",
-  kyc_session_unavailable:
-    "Сервис проверки временно недоступен. Попробуйте позже.",
   INVALID_REQUEST: "Проверьте телефон и электронную почту.",
 };
 function message(error: unknown) {
   return error instanceof WalletApiError
-    ? messages[error.code] || "Не удалось обновить профиль. Попробуйте позже."
+    ? messages[error.code] || error.message
     : "Нет связи с сервисом. Попробуйте ещё раз.";
 }
 // iOS contact suggestions can insert a complete number after our default +7.
@@ -206,21 +199,57 @@ export function useAuraProfile(page: string | null) {
       setSessionOpen(false);
       return true;
     } catch (e) {
-      if (e instanceof WalletApiError && e.code === "kyc_rejected") {
-        // A rejection is not a retryable validation error. Refresh the provider
-        // state for its reason, but keep submission closed even if GET fails.
-        setKyc({ status: "rejected", verified: false, terminal: true });
+      if (
+        e instanceof WalletApiError &&
+        ([
+          "kyc_rejected",
+          "kyc_identity_locked",
+          "kyc_passport_already_used",
+          "kyc_pending",
+        ].includes(e.code) ||
+          (e.code === "kyc_session_unavailable" && e.recovery !== "fix"))
+      ) {
+        const pending =
+          e.code === "kyc_pending" ||
+          e.details.status === "pending" ||
+          e.details.status === "in_review";
+        const fallback: KycState = {
+          status: pending ? "pending" : "rejected",
+          verified: false,
+          terminal: !pending,
+          reason:
+            typeof e.details.reason === "string" ? e.details.reason : null,
+        };
+        setKyc(fallback);
         setSessionOpen(false);
         try {
           const current = await refresh();
-          if (!current.verified && current.status !== "pending" && current.status !== "in_review")
-            setKyc({ ...current, status: "rejected" });
-        } catch { /* Keep the known rejection. */ }
-        setError(messages.kyc_rejected);
+          setKyc(
+            current.verified ||
+              ["pending", "in_review", "rejected"].includes(current.status)
+              ? current
+              : fallback,
+          );
+        } catch {
+          /* Keep the authoritative error state if refresh is unavailable. */
+        }
+        setError(e.message);
         return false;
       }
+      if (
+        e instanceof WalletApiError &&
+        ([
+          "kyc_email_required",
+          "kyc_email_rejected",
+          "sbp_buy_phone_required",
+        ].includes(e.code) ||
+          (e.code === "kyc_session_unavailable" && e.recovery === "fix"))
+      ) {
+        setSessionOpen(false);
+        setKyc({ status: "not_started", verified: false, terminal: false });
+      }
       setError(
-        e instanceof WalletApiError && (e.code === "INVALID_REQUEST" || e.code === "invalid_argument")
+        e instanceof WalletApiError && e.code === "INVALID_REQUEST"
           ? "Проверьте данные паспорта и даты."
           : message(e),
       );

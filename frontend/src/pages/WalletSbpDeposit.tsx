@@ -32,18 +32,9 @@ type Order = Omit<Quote, "quote_token"> & {
 };
 const format = (value: string, digits = 2) =>
   Number(value).toLocaleString("en-US", { maximumFractionDigits: digits });
-const labels: Record<string, string> = {
-  kyc_required: "Сначала подтвердите личность.",
-  kyc_pending: "Документы ещё на проверке.",
-  sbp_buy_phone_required: "Добавьте телефон в личных данных.",
-  quote_expired: "Курс изменился. Запросите новый расчёт.",
-  sbp_buy_not_enabled: "Пополнение через СБП пока не включено.",
-  sbp_buy_blocked: "Пополнение ограничено. Обратитесь в поддержку.",
-  rate_limited: "Слишком много запросов. Подождите и повторите.",
-};
 function describe(error: unknown) {
   return error instanceof WalletApiError
-    ? labels[error.code] || "Не удалось выполнить запрос. Попробуйте ещё раз."
+    ? error.message
     : "Нет связи с сервисом. Попробуйте ещё раз.";
 }
 function paymentUrl(value: string | null) {
@@ -67,6 +58,7 @@ export default function WalletSbpDeposit() {
   const [loading, setLoading] = useState(true),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [blocked, setBlocked] = useState(false);
   const [unknown, setUnknown] = useState(false),
     [pendingCreation, setPendingCreation] = useState(false),
     [clock, setClock] = useState(() => Date.now());
@@ -196,7 +188,14 @@ export default function WalletSbpDeposit() {
     };
   }, [pendingCreation, order, recover]);
   async function calculate() {
-    if (working.current || !rate || !verified || !recovered || pendingCreation)
+    if (
+      working.current ||
+      blocked ||
+      !rate ||
+      !verified ||
+      !recovered ||
+      pendingCreation
+    )
       return;
     const value = amount.replace(",", ".").trim();
     if (
@@ -222,7 +221,11 @@ export default function WalletSbpDeposit() {
         setClock(Date.now());
       }
     } catch (e) {
-      if (alive.current) setError(describe(e));
+      if (alive.current) {
+        setError(describe(e));
+        if (e instanceof WalletApiError && e.recovery === "support")
+          setBlocked(true);
+      }
     } finally {
       working.current = false;
       if (alive.current) setBusy(false);
@@ -231,6 +234,7 @@ export default function WalletSbpDeposit() {
   async function confirm() {
     if (
       working.current ||
+      blocked ||
       !quote ||
       !key.current ||
       (!unknown && Date.parse(quote.expires_at) <= Date.now())
@@ -255,15 +259,19 @@ export default function WalletSbpDeposit() {
         const ambiguous =
           !(e instanceof WalletApiError) ||
           e.httpStatus >= 500 ||
-          e.httpStatus === 0 ||
-          e.httpStatus === 429;
+          e.httpStatus === 0;
         setUnknown(ambiguous);
         setError(
-          ambiguous
-            ? "Ответ не получен. Проверьте заявку повторно — новая создана не будет."
-            : describe(e),
+          e instanceof WalletApiError
+            ? describe(e)
+            : "Ответ не получен. Проверьте заявку повторно — новая создана не будет.",
         );
-        if (!ambiguous) {
+        if (e instanceof WalletApiError && e.recovery === "support")
+          setBlocked(true);
+        const retrySame =
+          e instanceof WalletApiError &&
+          ["delay", "wait", "later", "same_request"].includes(e.recovery || "");
+        if (!ambiguous && !retrySame) {
           setQuote(null);
           key.current = "";
         }
@@ -506,7 +514,7 @@ export default function WalletSbpDeposit() {
                   <Button
                     data-wpay-primary=""
                     rounded
-                    disabled={busy || (Boolean(expired) && !unknown)}
+                    disabled={blocked || busy || (Boolean(expired) && !unknown)}
                     onClick={() => void confirm()}
                   >
                     {busy
@@ -536,7 +544,7 @@ export default function WalletSbpDeposit() {
                 <Button
                   data-wpay-primary=""
                   rounded
-                  disabled={busy || !rate || !amount || !recovered}
+                  disabled={blocked || busy || !rate || !amount || !recovered}
                   onClick={() => void calculate()}
                 >
                   {busy ? "Рассчитываем…" : "Рассчитать пополнение"}

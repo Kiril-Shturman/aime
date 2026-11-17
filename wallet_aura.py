@@ -16,6 +16,8 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import quote, urlsplit
 
+from wallet_aura_errors import CATALOG as ERROR_CATALOG, retry_policy as aura_retry_policy
+
 from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
 from wallet_notifications import enqueue as enqueue_notification, prepare as prepare_notifications
 
@@ -933,15 +935,7 @@ def _card_control_result(payload, expected_card_id, expected_frozen):
 
 
 def _retry_policy(code, status):
-    if code in FINAL_ERROR_CODES:
-        return "no"
-    if code in WAIT_ERROR_CODES:
-        return "wait"
-    if code in DELAY_ERROR_CODES:
-        return "after_delay"
-    if code in LATER_ERROR_CODES or status >= 500:
-        return "later"
-    return "after_fix"
+    return aura_retry_policy(code, status)
 
 
 class AuraClient:
@@ -1007,7 +1001,12 @@ class AuraClient:
         error.doc_url = str(envelope.get("doc_url") or "")[:1000]
         error.param = str(envelope.get("param") or "")[:200]
         error.details = envelope.get("details") if isinstance(envelope.get("details"), dict) else {}
-        error.retry_policy = _retry_policy(code, response.status)
+        error.retry_policy = aura_retry_policy(code, response.status, error.details)
+        rule = ERROR_CATALOG.get(code, {})
+        if rule.get("recovery") in {"support", "fix"} or code in {"kyc_pending", "card_paused"}:
+            error.retry_after = None
+        elif not error.retry_after and rule.get("retrySeconds"):
+            error.retry_after = str(rule["retrySeconds"])
         return error
 
     async def request(self, method, path, *, params=None, body=None, idempotency_key=None,

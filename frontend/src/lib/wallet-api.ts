@@ -1,22 +1,10 @@
 import { boardKey, initData } from "./telegram";
 
-export class WalletApiError extends Error {
-  code: string;
-  retryAfter: string | null;
-  httpStatus: number;
-  constructor(
-    code: string,
-    message: string,
-    retryAfter: string | null = null,
-    httpStatus = 0,
-  ) {
-    super(message);
-    this.code = code;
-    this.retryAfter = retryAfter;
-    this.httpStatus = httpStatus;
-  }
-}
+import { WalletApiError, auraBackoff } from "./aura-errors";
+export { WalletApiError } from "./aura-errors";
+
 const cooldowns = new Map<string, number>();
+const failures = new Map<string, number>();
 async function requestOnce<T>(
   action: string,
   body?: unknown,
@@ -49,26 +37,44 @@ async function requestOnce<T>(
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const retryAfter = response.headers.get("Retry-After");
-  if (!response.ok && retryAfter) {
-    const seconds = Number(retryAfter);
-    const until = Number.isFinite(seconds)
-      ? Date.now() + seconds * 1000
-      : Date.parse(retryAfter);
-    if (Number.isFinite(until)) cooldowns.set(cooldownKey, until);
-  }
   const data = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new WalletApiError(
-      data?.error?.name ?? "UNAVAILABLE",
-      data?.detail ?? "Не удалось связаться с кошельком",
-      response.headers.get("Retry-After"),
+  if (!response.ok) {
+    const envelope = data?.error || {};
+    const code = envelope.name ?? envelope.code ?? "UNAVAILABLE";
+    const attempt = (failures.get(cooldownKey) || 0) + 1;
+    if (code === "unavailable" || code === "internal")
+      failures.set(cooldownKey, attempt);
+    const error = new WalletApiError(
+      code,
+      data?.detail ?? envelope.message ?? "Не удалось связаться с кошельком",
+      auraBackoff(code, retryAfter, attempt),
       response.status,
+      {
+        details: envelope.details ?? data?.details,
+        param: envelope.param ?? data?.param,
+        request_id:
+          envelope.request_id ??
+          data?.request_id ??
+          response.headers.get("X-Request-ID"),
+        type: envelope.type,
+      },
     );
+    if (error.retryAfter) {
+      const seconds = Number(error.retryAfter);
+      const until = Number.isFinite(seconds)
+        ? Date.now() + seconds * 1000
+        : Date.parse(error.retryAfter);
+      if (Number.isFinite(until)) cooldowns.set(cooldownKey, until);
+    }
+    throw error;
+  }
   if (data === null && !allowNull)
     throw new WalletApiError(
       "INVALID_RESPONSE",
       "Сервис вернул некорректный ответ",
     );
+  failures.delete(cooldownKey);
+  cooldowns.delete(cooldownKey);
   return data as T;
 }
 export function walletNullableRequest<T>(

@@ -5,6 +5,7 @@ Only this module sees the provider token; organization funds are never a user's
 balance. All money arithmetic uses Decimal and SQLite write transactions.
 """
 import asyncio
+from wallet_aura_errors import wallet_error_payload
 import hashlib
 import hmac
 import json
@@ -2058,7 +2059,7 @@ def install_wallet(app, root, owner_check):
                     action, request.method, error.status, error.name,
                     getattr(error, 'request_id', '') or '-',
                 )
-            return web.json_response({'ok': False, 'error': {'name': error.name}, 'detail': error.detail}, status=error.status, headers={'Retry-After': str(error.retry_after)} if error.retry_after else None)
+            return web.json_response(wallet_error_payload(error), status=error.status, headers={'Retry-After': str(error.retry_after)} if error.retry_after else None)
         except (ValueError, KeyError, TypeError):
             return web.json_response({'ok': False, 'error': {'name': 'INVALID_REQUEST'}, 'detail': 'Некорректные данные запроса или ответа провайдера'}, status=400)
 

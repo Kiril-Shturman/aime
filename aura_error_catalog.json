@@ -1,0 +1,270 @@
+{
+  "invalid_argument": {
+    "recovery": "fix",
+    "message": "Проверьте указанное поле и исправьте данные."
+  },
+  "amount_required": {
+    "recovery": "fix",
+    "message": "Введите сумму."
+  },
+  "amount_out_of_range": {
+    "recovery": "fix",
+    "message": "Сумма вне допустимого диапазона."
+  },
+  "insufficient_funds": {
+    "recovery": "fix",
+    "message": "Недостаточно средств для операции с учётом комиссии."
+  },
+  "kyc_required": {
+    "recovery": "fix",
+    "message": "Сначала пройдите верификацию."
+  },
+  "kyc_pending": {
+    "recovery": "wait",
+    "message": "Документы на проверке. Дождитесь результата, повторно отправлять их не нужно."
+  },
+  "kyc_rejected": {
+    "recovery": "support",
+    "message": "Данные верификации отклонены. Обратитесь в поддержку — повторно отправлять документы не нужно."
+  },
+  "card_paused": {
+    "recovery": "wait",
+    "message": "Выпуск карт временно приостановлен. Дождитесь возобновления."
+  },
+  "card_kind_unavailable": {
+    "recovery": "support",
+    "message": "Этот вид карты сейчас недоступен. Выберите другой."
+  },
+  "card_already_requested": {
+    "recovery": "support",
+    "message": "Карта этого вида уже есть или оформляется. Проверьте список карт."
+  },
+  "card_fee_changed": {
+    "recovery": "fix",
+    "message": "Стоимость выпуска изменилась. Обновите расчёт и подтвердите новую цену."
+  },
+  "card_float_exhausted": {
+    "recovery": "later",
+    "message": "Пополнение карты на эту сумму временно недоступно. Попробуйте позже или уменьшите сумму."
+  },
+  "card_request_not_cancelable": {
+    "recovery": "support",
+    "message": "Заявку уже нельзя отменить: карта выпускается или выпущена."
+  },
+  "card_not_active": {
+    "recovery": "support",
+    "message": "Карта ещё не активна. Управление и пополнение недоступны."
+  },
+  "card_frozen": {
+    "recovery": "fix",
+    "message": "Карта заморожена. Сначала разморозьте её."
+  },
+  "card_controls_unavailable": {
+    "recovery": "support",
+    "message": "Управление картой доступно только через поддержку. Сообщите номер запроса."
+  },
+  "pin_change_rate_limited": {
+    "recovery": "delay",
+    "message": "Код для смены PIN пока нельзя отправить повторно. Дождитесь указанного срока; PIN менять не нужно."
+  },
+  "address_invalid": {
+    "recovery": "fix",
+    "message": "Укажите корректный внешний адрес TRON."
+  },
+  "withdrawal_limit_exceeded": {
+    "recovery": "wait",
+    "message": "Достигнут суточный лимит вывода. Дождитесь его восстановления."
+  },
+  "customer_not_found": {
+    "recovery": "fix",
+    "message": "Профиль клиента не зарегистрирован. Сохраните личные данные; если ошибка повторяется, обратитесь в поддержку."
+  },
+  "deposit_address_not_found": {
+    "recovery": "fix",
+    "message": "Адрес пополнения не найден. Обновите список адресов."
+  },
+  "deposit_not_found": {
+    "recovery": "fix",
+    "message": "Пополнение не найдено. Обновите историю."
+  },
+  "deposit_address_limit_reached": {
+    "recovery": "fix",
+    "message": "Достигнут лимит адресов (100). Используйте существующий адрес."
+  },
+  "not_found": {
+    "recovery": "fix",
+    "message": "Объект не найден. Обновите страницу; если ошибка повторяется, обратитесь в поддержку."
+  },
+  "already_exists": {
+    "recovery": "fix",
+    "message": "Объект уже существует. Обновите список, чтобы найти его."
+  },
+  "failed_precondition": {
+    "recovery": "fix",
+    "message": "Операция недоступна в текущем состоянии. Обновите данные перед продолжением."
+  },
+  "resource_exhausted": {
+    "recovery": "delay",
+    "message": "Достигнут лимит ёмкости сервиса. Дождитесь указанного срока, не отправляйте запросы подряд.",
+    "retrySeconds": 60
+  },
+  "unavailable": {
+    "recovery": "same_request",
+    "message": "Сервис временно недоступен. Исход операции может быть неизвестен. Проверьте её статус; повтор возможен только с тем же номером операции.",
+    "retrySeconds": 5
+  },
+  "internal": {
+    "recovery": "same_request",
+    "message": "Ошибка сервиса. Проверьте статус операции; повтор возможен только с тем же номером операции."
+  },
+  "unauthenticated": {
+    "recovery": "support",
+    "message": "Не удалось авторизовать сервис. Обратитесь в поддержку; повтор операции не поможет."
+  },
+  "ip_not_allowed": {
+    "recovery": "support",
+    "message": "Доступ сервера к платёжному сервису ограничен. Обратитесь в поддержку."
+  },
+  "rate_limited": {
+    "recovery": "delay",
+    "message": "Достигнут лимит запросов. Дождитесь указанного срока перед повтором."
+  },
+  "idempotency_key_required": {
+    "recovery": "fix",
+    "message": "Не задан безопасный номер операции. Обратитесь в поддержку — повторять платёж без него нельзя."
+  },
+  "idempotency_key_reused": {
+    "recovery": "fix",
+    "message": "Номер операции уже связан с другими данными. Обратитесь в поддержку; не создавайте платёж повторно."
+  },
+  "payload_too_large": {
+    "recovery": "fix",
+    "message": "Передано слишком много данных. Уменьшите размер запроса."
+  },
+  "method_not_allowed": {
+    "recovery": "fix",
+    "message": "Этот способ запроса не поддерживается. Обратитесь в поддержку."
+  },
+  "unsupported_media_type": {
+    "recovery": "fix",
+    "message": "Неверный формат данных запроса. Обратитесь в поддержку."
+  },
+  "feature_not_enabled": {
+    "recovery": "fix",
+    "message": "Эта функция недоступна в текущем окружении. Обновите страницу или обратитесь в поддержку."
+  },
+  "rate_unavailable": {
+    "recovery": "later",
+    "message": "Свежий курс недоступен. Повторите расчёт через минуту.",
+    "retrySeconds": 60
+  },
+  "quote_expired": {
+    "recovery": "fix",
+    "message": "Котировка истекла. Получите новый расчёт и подтвердите новую цену."
+  },
+  "sbp_buy_amount_unavailable": {
+    "recovery": "fix",
+    "message": "Пополнение через СБП на эту сумму недоступно. Укажите другую сумму."
+  },
+  "sbp_buy_temporarily_unavailable": {
+    "recovery": "later",
+    "message": "Пополнение через СБП временно недоступно. Попробуйте позже; при повторении ошибки обратитесь в поддержку."
+  },
+  "sbp_buy_blocked": {
+    "recovery": "support",
+    "message": "Пополнение через СБП недоступно для вашего профиля. Обратитесь в поддержку."
+  },
+  "sbp_buy_phone_required": {
+    "recovery": "fix",
+    "message": "Добавьте российский мобильный номер в личных данных."
+  },
+  "sbp_buy_bank_not_found": {
+    "recovery": "support",
+    "message": "Банк плательщика не найден. Обратитесь в поддержку."
+  },
+  "sbp_buy_bank_unsupported": {
+    "recovery": "support",
+    "message": "Банк плательщика не поддерживается. Обратитесь в поддержку."
+  },
+  "sbp_buy_daily_qr_limit": {
+    "recovery": "later",
+    "message": "Достигнут дневной лимит созданных QR. Попробуйте завтра."
+  },
+  "sbp_buy_daily_paid_qr_limit": {
+    "recovery": "later",
+    "message": "Достигнут дневной лимит оплаченных QR. Попробуйте через час.",
+    "retrySeconds": 3600
+  },
+  "sbp_buy_pending_qr_limit": {
+    "recovery": "support",
+    "message": "Слишком много неоплаченных QR. Новые QR создавать нельзя — обратитесь в поддержку."
+  },
+  "sbp_buy_fiat_daily_limit": {
+    "recovery": "wait",
+    "message": "Достигнут суточный лимит пополнения в рублях. Дождитесь восстановления лимита."
+  },
+  "sbp_buy_fiat_monthly_limit": {
+    "recovery": "wait",
+    "message": "Достигнут лимит пополнения в рублях за 31 день. Дождитесь восстановления лимита."
+  },
+  "kyc_passport_already_used": {
+    "recovery": "support",
+    "message": "Этот паспорт уже связан с другим профилем. Обратитесь в поддержку — повторная отправка не поможет."
+  },
+  "kyc_email_required": {
+    "recovery": "fix",
+    "message": "Добавьте электронную почту в личных данных перед верификацией."
+  },
+  "kyc_email_rejected": {
+    "recovery": "fix",
+    "message": "Эта электронная почта отклонена. Укажите другой адрес в личных данных."
+  },
+  "qr_unresolvable": {
+    "recovery": "fix",
+    "message": "QR-код не прочитан или уже недействителен. Отсканируйте его заново."
+  },
+  "qr_unsupported": {
+    "recovery": "support",
+    "message": "Этот QR-код оплатить нельзя: тип платежа не поддерживается или сумма не указана."
+  },
+  "shipping_address_invalid": {
+    "recovery": "fix",
+    "message": "Проверьте адрес доставки: используйте латиницу и допустимую длину полей."
+  },
+  "card_activation_code_invalid": {
+    "recovery": "fix",
+    "message": "Код активации отклонён. Проверьте код в конверте и повторите."
+  },
+  "card_not_activatable": {
+    "recovery": "support",
+    "message": "Карту сейчас нельзя активировать. Проверьте её статус; при необходимости обратитесь в поддержку."
+  },
+  "kyc_identity_locked": {
+    "recovery": "support",
+    "message": "Паспортные данные уже переданы, изменить их через приложение нельзя. Обратитесь в поддержку и сообщите номер запроса."
+  },
+  "kyc_session_unavailable": {
+    "recovery": "support",
+    "message": "Сессию проверки нельзя открыть. Проверьте статус верификации или обратитесь в поддержку."
+  },
+  "sbp_buy_not_enabled": {
+    "recovery": "support",
+    "message": "Пополнение через СБП не включено для этого сервиса. Обратитесь в поддержку."
+  },
+  "cards_not_enabled": {
+    "recovery": "support",
+    "message": "Карты не включены для этого сервиса. Обратитесь в поддержку."
+  },
+  "crypto_processing_not_enabled": {
+    "recovery": "support",
+    "message": "Криптопроцессинг не включён для этого сервиса. Обратитесь в поддержку."
+  },
+  "qr_pay_not_enabled": {
+    "recovery": "support",
+    "message": "Оплата QR не включена для этого сервиса. Обратитесь в поддержку."
+  },
+  "insufficient_scope": {
+    "recovery": "fix",
+    "message": "У серверного ключа нет прав для этой операции. Обратитесь в поддержку."
+  }
+}

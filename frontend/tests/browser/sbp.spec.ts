@@ -141,7 +141,15 @@ for (const theme of ["light", "dark"])
     await page
       .getByRole("button", { name: "Подтвердить и получить QR" })
       .click();
-    await expect(page.getByRole("alert")).toContainText("Ответ не получен");
+    await expect(page.getByRole("alert")).toContainText(
+      "Исход операции может быть неизвестен",
+    );
+    await page.getByRole("button", { name: "Проверить заявку" }).click();
+    // A click during Retry-After must never send another monetary POST.
+    expect(
+      state.posts.filter((p) => p.action === "aura-sbp-order"),
+    ).toHaveLength(1);
+    await page.waitForTimeout(5100);
     await page.getByRole("button", { name: "Проверить заявку" }).click();
     await expect(
       page.getByRole("heading", { name: "Оплатите по QR-коду" }),
@@ -185,4 +193,90 @@ test("SBP resumes an existing payment without another POST", async ({
   await expect(
     page.getByRole("button", { name: "Открыть оплату" }),
   ).toBeVisible();
+});
+
+test("capacity error honors Retry-After without sending repeated quote requests", async ({
+  page,
+}) => {
+  await setup(page);
+  let posts = 0;
+  await page.route("**/api/wallet/aura-sbp-quote", (route) => {
+    posts++;
+    return route.fulfill({
+      status: 429,
+      headers: { "Retry-After": "60" },
+      json: {
+        error: { name: "resource_exhausted", details: {} },
+      },
+    });
+  });
+  await page.getByLabel("Сумма в рублях").fill("1000");
+  await page.getByRole("button", { name: "Рассчитать пополнение" }).click();
+  await expect(page.getByRole("alert")).toContainText("лимит ёмкости");
+  await page.getByRole("button", { name: "Рассчитать пополнение" }).click();
+  await expect(page.getByRole("alert")).toContainText("Повторите через");
+  expect(posts).toBe(1);
+});
+
+test("pending QR limit is terminal for this flow, not an unknown payment outcome", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByLabel("Сумма в рублях").fill("1000");
+  await page.getByRole("button", { name: "Рассчитать пополнение" }).click();
+  let posts = 0;
+  await page.route("**/api/wallet/aura-sbp-order", (route) => {
+    posts++;
+    return route.fulfill({
+      status: 429,
+      json: { error: { name: "sbp_buy_pending_qr_limit", details: {} } },
+    });
+  });
+  await page.getByRole("button", { name: "Подтвердить и получить QR" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Слишком много неоплаченных QR",
+  );
+  await expect(
+    page.getByRole("button", { name: "Проверить заявку" }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Рассчитать пополнение" }),
+  ).toBeDisabled();
+  expect(posts).toBe(1);
+});
+
+test("rate limit on order keeps the exact payload and key after Retry-After", async ({
+  page,
+}) => {
+  await setup(page);
+  await page.getByLabel("Сумма в рублях").fill("1000");
+  await page.getByRole("button", { name: "Рассчитать пополнение" }).click();
+  const requests: { body: unknown; key: string }[] = [];
+  await page.route("**/api/wallet/aura-sbp-order", (route) => {
+    requests.push({
+      body: route.request().postDataJSON(),
+      key: route.request().headers()["idempotency-key"],
+    });
+    return route.fulfill({
+      status: 429,
+      headers: { "Retry-After": "1" },
+      json: {
+        error: { name: "rate_limited", details: { scope: "sbp_buy" } },
+      },
+    });
+  });
+  await page.getByRole("button", { name: "Подтвердить и получить QR" }).click();
+  await expect(page.getByRole("alert")).toContainText(
+    "Достигнут лимит запросов",
+  );
+  await page.getByRole("button", { name: "Подтвердить и получить QR" }).click();
+  expect(requests).toHaveLength(1);
+  await page.waitForTimeout(1100);
+  // The cooldown response is local and leaves the same intent intact.
+  await page
+    .getByRole("button", { name: /Проверить заявку|Подтвердить и получить QR/ })
+    .click();
+  await expect.poll(() => requests.length).toBe(2);
+  expect(requests[0].key).toBeTruthy();
+  expect(requests[1]).toEqual(requests[0]);
 });
