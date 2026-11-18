@@ -2,6 +2,12 @@
 .wpay-wallet-home{overflow-x:clip}
 .wpay-desktop-sidebar,.wpay-desktop-overview-side,.wpay-desktop-profile-aside,.wpay-card-tariff-aside,.wpay-support-guide{display:none}
 @media(min-width:1100px){
+ .wpay-viewport {
+   --wpay-content-gutter: 48px;
+   --wpay-side-column: clamp(310px, calc(100vw - 1130px), 430px);
+   --wpay-column-gap: clamp(24px, calc(24px + (100vw - 1560px) / 5), 32px);
+   --wpay-desktop-max-width: calc(930px + var(--wpay-side-column));
+ }
  .wpay-desktop-page{padding-left:248px!important;padding-bottom:32px!important;background:#f5f6f8!important}
  .dark .wpay-desktop-page{background:#101113!important}
  :is(.wpay-desktop-page,.wpay-asset-scroll) > .k-navbar {
@@ -11,7 +17,7 @@
  }
  :is(.wpay-desktop-page,.wpay-asset-scroll) > .k-navbar > .wpay-navbar-inner {
    width: calc(100% - 64px);
-   max-width: 1240px;
+   max-width: var(--wpay-desktop-max-width);
    margin-inline: auto;
  }
  .wpay-asset-scroll .wpay-asset-navbar-bg {
@@ -127,12 +133,7 @@
    text-overflow: ellipsis;
    white-space: nowrap;
  }
- .wpay-desktop-body,.wpay-asset-layout{
-   --wpay-content-gutter:48px;
-   --wpay-side-column:310px;
-   --wpay-column-gap:24px;
- }
- .wpay-desktop-body,.wpay-asset-sidebar{width:100%;max-width:1240px;margin-inline:auto;padding-inline:var(--wpay-content-gutter)}
+ .wpay-desktop-body,.wpay-asset-sidebar{width:100%;max-width:var(--wpay-desktop-max-width);margin-inline:auto;padding-inline:var(--wpay-content-gutter)}
  .wpay-desktop-body{margin-top:24px}
  .wpay-wallet-home > .k-list,.wpay-wallet-home > section > .k-list,.wpay-wallet-home > .wpay-promos{margin-inline:0}
  .wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=history],.wpay-desktop-body[data-tab=profile],.wpay-desktop-body[data-tab=support],.wpay-desktop-body[data-tab=cards]:has(.wpay-card-tariff-aside){display:grid;grid-template-columns:minmax(0,1fr) var(--wpay-side-column);gap:var(--wpay-column-gap);align-items:start}
@@ -325,9 +326,6 @@
  .wpay-exchange-sheet.sheet-modal{left:50%;width:520px;max-width:calc(100% - 48px);margin-left:-260px;border-radius:32px 32px 0 0}
  .wpay-profile-popup{max-width:760px!important}
 }
-@media (min-width:1600px) {
- .wpay-desktop-body,.wpay-asset-layout{--wpay-side-column:340px;--wpay-column-gap:32px}
-}
 
 @media(min-width:1100px){
  .wpay-viewport[data-wallet-surface][aria-hidden=true]{visibility:hidden;pointer-events:none}
@@ -369,7 +367,7 @@
    border-radius: 0 !important;
  }
  .wpay-asset-chart-card > div {
-   max-width: 1240px;
+   max-width: var(--wpay-desktop-max-width);
    margin-inline: auto;
    padding-inline: var(--wpay-content-gutter);
  }
@@ -390,7 +388,7 @@
    grid-row: 2;
    transform: none;
    max-width: 512px;
-   margin-inline-start: max(var(--wpay-content-gutter), calc((100% - 1240px) / 2 + var(--wpay-content-gutter)));
+   margin-inline-start: max(var(--wpay-content-gutter), calc((100% - var(--wpay-desktop-max-width)) / 2 + var(--wpay-content-gutter)));
    padding: 0;
  }
 }

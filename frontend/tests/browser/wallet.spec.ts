@@ -1378,7 +1378,18 @@ test("desktop verification shows the steps and goes back from contacts", async (
 test("desktop asset chart fills the page above actions and balances", async ({ page }) => {
   await page.setViewportSize({ width: 1720, height: 860 });
   await setup(page, "light");
-  const home = await page.locator(".wpay-desktop-body[data-tab=wallet]").boundingBox();
+  const walletGrid = page.locator(".wpay-desktop-body[data-tab=wallet]");
+  for (const [width, rightColumn] of [[1440, 310], [1500, 370], [1560, 430]]) {
+    await page.setViewportSize({ width, height: 860 });
+    await expect(walletGrid).toHaveCSS("grid-template-columns", new RegExp(` ${rightColumn}px$`));
+    const workspace = page.locator(".wpay-desktop-sidebar");
+    const sidebar = (await workspace.boundingBox())!;
+    const grid = (await walletGrid.boundingBox())!;
+    expect(grid.x - sidebar.x - sidebar.width).toBeCloseTo(0);
+    await expect(walletGrid).toHaveCSS("padding-left", "48px");
+  }
+  await page.setViewportSize({ width: 1720, height: 860 });
+  const home = await walletGrid.boundingBox();
   expect(home).not.toBeNull();
   await page.locator(".wpay-wallet-home span.font-semibold").filter({ hasText: /^Tether$/ }).first().click();
   const surface = page.locator('[data-wallet-surface="asset"][aria-hidden="false"]');
