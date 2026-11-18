@@ -138,8 +138,7 @@
  .wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=history],.wpay-desktop-body[data-tab=profile],.wpay-desktop-body[data-tab=support],.wpay-desktop-body[data-tab=cards]:has(.wpay-card-tariff-aside){display:grid;grid-template-columns:minmax(0,1fr) var(--wpay-side-column);gap:var(--wpay-column-gap);align-items:start}
  .wpay-desktop-body[data-tab=cards] > .wpay-aura-cards { min-width: 0; }
  .wpay-card-tariff-aside { display: grid; gap: 16px; min-width: 0; }
- .wpay-desktop-add-card { color: #225dc6; font-size: 14px; font-weight: 600; }
- .dark .wpay-desktop-add-card { color: #80acff; }
+ .wpay-desktop-add-card { color: var(--color-primary); font-size: 14px; font-weight: 600; }
  .wpay-desktop-add-card:hover { text-decoration: underline; }
  #wpay-desktop-card-issuance { scroll-margin-top: 78px; }
  .wpay-desktop-card-offers { display: grid; margin-top: 10px; }
