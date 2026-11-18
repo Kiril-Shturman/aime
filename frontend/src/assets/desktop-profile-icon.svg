@@ -1,20 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 177 177">
 <defs>
-  <linearGradient id="profile-glass" x1=".35" x2=".65" y2="1">
-    <stop stop-color="#f6f0ff" stop-opacity=".78"/><stop offset=".6" stop-color="#eee0ff" stop-opacity=".85"/><stop offset="1" stop-color="#d1adfc" stop-opacity=".78"/>
+  <linearGradient id="profile-head" x1="0" y1=".87" x2="1" y2=".13">
+    <stop stop-color="#9858ef" stop-opacity=".98"/>
+    <stop offset=".47" stop-color="#b989f9" stop-opacity=".72"/>
+    <stop offset=".8" stop-color="#d7befc" stop-opacity=".28"/>
+    <stop offset="1" stop-color="#f1e7ff" stop-opacity=".08"/>
   </linearGradient>
-  <filter id="profile-frost" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="8"/></filter>
-  <radialGradient id="profile-purple" cx=".8" cy=".63" r=".75">
-    <stop stop-color="#8c43f2"/><stop offset=".68" stop-color="#ae7af8"/><stop offset="1" stop-color="#d3b8ff"/>
-  </radialGradient>
+  <linearGradient id="profile-head-rim" x1="0" y1="1" x2="1" y2="0">
+    <stop stop-color="#ede0ff" stop-opacity=".32"/>
+    <stop offset=".68" stop-color="#d8bafa" stop-opacity=".72"/>
+    <stop offset="1" stop-color="#f5ebff" stop-opacity=".94"/>
+  </linearGradient>
   <radialGradient id="profile-body" cx=".69" cy=".35" r=".8">
     <stop stop-color="#995bf0"/><stop offset="1" stop-color="#bb8cf9" stop-opacity=".82"/>
   </radialGradient>
 </defs>
-<ellipse cx="88" cy="103" rx="61" ry="41" fill="#a66af5" opacity=".72" filter="url(#profile-frost)"/>
-<path d="M88 20c43 0 79 32 79 73 0 35-22 62-55 62H63c-33 0-54-28-54-62 0-41 34-73 79-73Z" fill="url(#profile-glass)" stroke="#fff" stroke-opacity=".55"/>
 <g class="profile-figure">
-  <circle cx="88" cy="44" r="31.3" fill="url(#profile-purple)" stroke="#efe2ff" stroke-width=".8"/>
+  <circle cx="88" cy="44" r="31.3" fill="url(#profile-head)" stroke="url(#profile-head-rim)" stroke-width="1.4"/>
   <path d="M29 119c0-22 19-35 41-35h36c23 0 42 14 42 35 0 17-11 27-29 27H57c-17 0-28-10-28-27Z" fill="url(#profile-body)" stroke="#f3e5ff" stroke-opacity=".8" stroke-width="1.5"/>
 </g>
 </svg>

@@ -4,23 +4,29 @@ import desktopWalletIcon from '../assets/desktop-wallet-icon.svg?raw'
 import desktopCardsIcon from '../assets/desktop-cards-icon.svg?raw'
 import desktopHistoryIcon from '../assets/desktop-history-icon.svg?raw'
 import desktopProfileIcon from '../assets/desktop-profile-icon.svg?raw'
+import desktopReferralIcon from '../assets/desktop-referral-icon.svg?raw'
+import desktopSupportIcon from '../assets/desktop-support-icon.svg?raw'
 import { walletRequest } from '../lib/wallet-api'
 import { useLiveWallet, cryptoAmount, usd, usdPrice } from './WalletLive'
 
 type Tab = "wallet" | "cards" | "history" | "profile";
+type SidebarPage = "referral" | "support";
 
 const desktopLinks = [
   { id: "wallet", label: "Кошелёк", icon: desktopWalletIcon },
   { id: "cards", label: "Карты", icon: desktopCardsIcon },
   { id: "history", label: "История", icon: desktopHistoryIcon },
   { id: "profile", label: "Профиль", icon: desktopProfileIcon },
+  { id: "referral", label: "Реферальная программа", icon: desktopReferralIcon },
+  { id: "support", label: "Поддержка", icon: desktopSupportIcon },
 ] as const;
 
 export function DesktopSidebar({
-  tab, onSelect, dark, onTheme, name, username, photoUrl, cardsEnabled,
+  tab, onSelect, onOpenPage, dark, onTheme, name, username, photoUrl, cardsEnabled,
 }: {
   tab: Tab;
   onSelect: (tab: Tab) => void;
+  onOpenPage: (page: SidebarPage) => void;
   dark: boolean;
   onTheme: () => void;
   name: string;
@@ -28,7 +34,7 @@ export function DesktopSidebar({
   photoUrl?: string;
   cardsEnabled: boolean;
 }) {
-  const [animation, setAnimation] = useState<{ tab: Tab; count: number } | null>(null);
+  const [animation, setAnimation] = useState<{ tab: Tab | SidebarPage; count: number } | null>(null);
   const ThemeIcon = dark ? Sun : Moon;
   const items = desktopLinks.filter(({ id }) => id !== "cards" || cardsEnabled);
 
@@ -42,7 +48,8 @@ export function DesktopSidebar({
         {items.map(({ id, label, icon }) => (
           <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => {
             setAnimation((previous) => ({ tab: id, count: (previous?.count ?? 0) + 1 }));
-            onSelect(id);
+            if (id === "referral" || id === "support") onOpenPage(id);
+            else onSelect(id);
           }}>
             <span
               key={animation?.tab === id ? animation.count : 0}

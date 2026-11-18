@@ -539,6 +539,7 @@ function WalletScreen() {
       <DesktopSidebar
         tab={activeTab}
         onSelect={selectTab}
+        onOpenPage={setHomeProfilePage}
         dark={theme === "dark"}
         onTheme={toggleTheme}
         name={[user?.first_name, user?.last_name].filter(Boolean).join(" ") || "Ваш аккаунт"}

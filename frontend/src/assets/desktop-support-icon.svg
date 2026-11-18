@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 177 177">
+<defs>
+  <linearGradient id="support-band" x2=".84" y2="1">
+    <stop stop-color="#a4f7e8"/><stop offset=".54" stop-color="#2ad6c0"/><stop offset="1" stop-color="#079caa"/>
+  </linearGradient>
+  <linearGradient id="support-glass" x2=".93" y2="1">
+    <stop stop-color="#e5fff8" stop-opacity=".9"/><stop offset=".43" stop-color="#89ecde" stop-opacity=".78"/><stop offset="1" stop-color="#36c1bd" stop-opacity=".8"/>
+  </linearGradient>
+  <radialGradient id="support-depth" cx=".75" cy=".51" r=".69">
+    <stop stop-color="#0aafa9" stop-opacity=".73"/><stop offset="1" stop-color="#46dace" stop-opacity="0"/>
+  </radialGradient>
+</defs>
+<path d="M27 96V77a61.5 61.5 0 0 1 123 0v20" fill="none" stroke="url(#support-band)" stroke-width="16" stroke-linecap="round"/>
+<path d="M37 66a52.5 52.5 0 0 1 98-10" fill="none" stroke="#edfff9" stroke-opacity=".6" stroke-width="1.6" stroke-linecap="round"/>
+<g class="support-mic">
+  <path d="M147 110v9c0 15-13 25-29 25H99" fill="none" stroke="url(#support-band)" stroke-width="8" stroke-linecap="round"/>
+  <rect x="84" y="136" width="27" height="16" rx="8" fill="url(#support-glass)" stroke="#e8fff9" stroke-width="1.1"/>
+</g>
+<g fill="url(#support-glass)">
+  <rect x="13" y="77" width="45" height="53" rx="19"/>
+  <rect x="119" y="77" width="45" height="53" rx="19"/>
+</g>
+<g fill="url(#support-depth)" stroke="#eafffb" stroke-width="1.5" stroke-opacity=".78">
+  <rect x="13" y="77" width="45" height="53" rx="19"/>
+  <rect x="119" y="77" width="45" height="53" rx="19"/>
+</g>
+
+</svg>

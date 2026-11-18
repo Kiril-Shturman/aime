@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 177 177">
+<defs>
+  <linearGradient id="gift-back" x2=".85" y2="1">
+    <stop stop-color="#ffc0aa"/><stop offset=".55" stop-color="#ff785f"/><stop offset="1" stop-color="#e74954"/>
+  </linearGradient>
+  <linearGradient id="gift-glass" x2="1" y2="1">
+    <stop stop-color="#ffa28b" stop-opacity=".76"/><stop offset=".53" stop-color="#f77368" stop-opacity=".71"/><stop offset="1" stop-color="#e24a58" stop-opacity=".77"/>
+  </linearGradient>
+  <linearGradient id="gift-ribbon" x2="1" y2=".73">
+    <stop stop-color="#ffdbbf"/><stop offset="1" stop-color="#ff9b89"/>
+  </linearGradient>
+  <filter id="gift-frost"><feGaussianBlur stdDeviation="5"/></filter>
+  <clipPath id="gift-box-clip"><rect x="23" y="62" width="131" height="91" rx="24"/></clipPath>
+</defs>
+<g class="gift-lid">
+  <path d="M88 57C75 55 51 49 50 35c-1-10 9-15 18-11 11 5 17 18 20 33Zm0 0c13-2 37-8 38-22 1-10-9-15-18-11-11 5-17 18-20 33Z" fill="none" stroke="url(#gift-back)" stroke-width="11" stroke-linejoin="round"/>
+  <rect x="14" y="52" width="149" height="30" rx="13" fill="url(#gift-back)" stroke="#fff0e9" stroke-opacity=".79" stroke-width="1.5"/>
+  <rect x="78" y="53" width="21" height="28" rx="4" fill="url(#gift-ribbon)" opacity=".91"/>
+</g>
+<g clip-path="url(#gift-box-clip)">
+  <rect x="33" y="67" width="112" height="80" rx="24" fill="url(#gift-back)" filter="url(#gift-frost)" opacity=".77"/>
+</g>
+<path d="M23 83h131v46c0 13-11 24-24 24H47c-13 0-24-11-24-24Z" fill="url(#gift-glass)" stroke="#ffd2c3" stroke-opacity=".78" stroke-width="1.4"/>
+<path d="M78 83h21v69H78Z" fill="url(#gift-ribbon)" opacity=".88"/>
+
+</svg>

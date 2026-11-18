@@ -394,3 +394,10 @@
 @keyframes minute-tap {to {transform:rotate(360deg);}}
 @keyframes hour-tap {55% {transform:rotate(14deg);}}
 @keyframes profile-tap {48% {transform:translateY(-4px) scale(1.025);}}
+
+.wpay-desktop-nav-icon .gift-lid {transform-box:view-box; transform-origin:88px 68px;}
+.wpay-desktop-nav-icon .support-mic {transform-box:view-box; transform-origin:147px 110px;}
+.wpay-desktop-nav-icon[data-playing] .gift-lid {animation:gift-tap 480ms ease-in-out;}
+.wpay-desktop-nav-icon[data-playing] .support-mic {animation:support-tap 480ms ease-in-out;}
+@keyframes gift-tap {46% {transform:translateY(-7px) rotate(-4deg);}}
+@keyframes support-tap {45% {transform:rotate(11deg);}}
