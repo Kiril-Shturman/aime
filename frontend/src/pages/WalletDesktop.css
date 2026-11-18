@@ -151,6 +151,35 @@
  .wpay-desktop-card-offers button:disabled { opacity: .5; }
  .wpay-desktop-card-offers small { display: block; margin-top: 3px; opacity: .6; }
  .wpay-desktop-card-offers svg { flex: none; opacity: .45; }
+ .wpay-desktop-card-offers .wpay-desktop-owned-card { justify-content: flex-start; }
+ .wpay-desktop-card-preview {
+   position: relative;
+   width: 52px;
+   height: 33px;
+   flex: none;
+   overflow: hidden;
+ }
+ .wpay-desktop-card-preview > span {
+   position: absolute;
+   display: block;
+   width: 330px;
+   inset: 0 auto auto 0;
+   transform: scale(.1575);
+   transform-origin: top left;
+   pointer-events: none;
+ }
+ .wpay-desktop-owned-card-name { min-width: 0; flex: 1; }
+ .wpay-desktop-card-check {
+   display: grid;
+   width: 22px;
+   height: 22px;
+   flex: none;
+   place-items: center;
+   border-radius: 50%;
+   background: #007aff;
+   color: #fff;
+ }
+ .wpay-desktop-card-check svg { opacity: 1; }
  .wpay-card-tariff-name { margin-top: 12px; font-size: 19px; font-weight: 650; }
  .wpay-card-tariff-aside dd { margin: 0; text-align: right; color: #20232a; }
  .wpay-card-tariff-aside dd small { display: block; margin-top: 2px; font-size: 11px; color: #6e7584; }

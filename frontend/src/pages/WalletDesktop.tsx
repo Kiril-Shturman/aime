@@ -1,5 +1,5 @@
-import { Clock3, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Bell, Headphones } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Check, Clock3, Sun, Moon, ArrowUpRight, ArrowDownLeft, ArrowLeftRight, Bell, Headphones } from 'lucide-react'
+import { useEffect, useState, type ReactNode } from 'react'
 import desktopWalletIcon from '../assets/desktop-wallet-icon.svg?raw'
 import desktopCardsIcon from '../assets/desktop-cards-icon.svg?raw'
 import desktopHistoryIcon from '../assets/desktop-history-icon.svg?raw'
@@ -93,6 +93,46 @@ export function DesktopSidebar({
         </button>
       </div>
     </aside>
+  );
+}
+
+export function DesktopOwnedCards({
+  cards, selectedId, onSelect,
+}: {
+  cards: { id: string; label: string; number?: string | null; artwork: ReactNode }[];
+  selectedId: string | null;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <section className="wpay-desktop-card" aria-label="Мои карты">
+      <div className="wpay-desktop-section-head"><h2>Мои карты</h2></div>
+      {cards.length ? (
+        <div className="wpay-desktop-card-offers">
+          {cards.map((card, index) => {
+            const selected = selectedId === card.id;
+            return (
+              <button key={card.id} type="button" aria-pressed={selected}
+                className="wpay-desktop-owned-card" onClick={() => onSelect(index)}>
+                <span className="wpay-desktop-card-preview" aria-hidden="true">
+                  <span>{card.artwork}</span>
+                </span>
+                <span className="wpay-desktop-owned-card-name">
+                  <strong>{card.label}</strong>
+                  {card.number && <small>{card.number}</small>}
+                </span>
+                {selected && (
+                  <span className="wpay-desktop-card-check" aria-hidden="true">
+                    <Check size={13} strokeWidth={3} />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="wpay-desktop-fx-status">У вас пока нет карт</p>
+      )}
+    </section>
   );
 }
 

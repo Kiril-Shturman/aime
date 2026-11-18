@@ -26,7 +26,7 @@ import "./WalletInputTheme.css";
 import "./WalletButtons.css";
 import WalletSheetClose from "./WalletSheetClose";
 import WalletAuraCards from "./WalletAuraCards";
-import { DesktopSidebar, DesktopOverview, DesktopProfileAside, useDesktopWalletLayout } from "./WalletDesktop";
+import { DesktopSidebar, DesktopOverview, DesktopProfileAside, DesktopOwnedCards, useDesktopWalletLayout } from "./WalletDesktop";
 import "./WalletDesktop.css";
 import {
   ReferralProgram,
@@ -2503,6 +2503,7 @@ function CardPurchaseView({
 
 function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
   const desktop = useDesktopWalletLayout();
+  const carousel = useRef<HTMLDivElement>(null);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const cardDrag = useRef({
     active: false,
@@ -2550,6 +2551,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
         <div className={activeOffer ? undefined : "wpay-desktop-balance-card wpay-desktop-card-selection"}>
           <section aria-label="Ваши карты" className="pt-5">
             <div
+              ref={carousel}
               className={`wpay-card-peek-carousel wpay-demo-card-carousel flex snap-x snap-mandatory gap-3 overflow-x-auto select-none px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${draggingCard ? "cursor-grabbing" : "cursor-grab"}`}
               onDragStart={(event) => event.preventDefault()}
               onPointerDown={(event) => {
@@ -2766,7 +2768,25 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
           </>
         )}
       </main>
-      <aside className="wpay-desktop-card wpay-card-tariff-aside" aria-label="Тарифы карт">
+      <aside className="wpay-card-tariff-aside" aria-label="Тарифы карт">
+        {desktop && (
+          <DesktopOwnedCards
+            cards={bankCards.map((card) => ({
+              id: card.id,
+              label: card.name,
+              number: `•••• ${card.last4}`,
+              artwork: <BankCardArtwork card={card} />,
+            }))}
+            selectedId={activeCard.id}
+            onSelect={(index) => {
+              const rail = carousel.current;
+              const first = rail?.firstElementChild;
+              if (rail && first) rail.scrollTo({ left: index * (first.getBoundingClientRect().width + 12), behavior: "instant" });
+              setActiveCardIndex(index);
+            }}
+          />
+        )}
+        <section className="wpay-desktop-card">
         <div className="wpay-desktop-section-head"><h2>Тарифы и выпуск</h2></div>
         <div className="wpay-desktop-card-offers">
           {cardOffers.map((offer) => (
@@ -2776,6 +2796,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
             </button>
           ))}
         </div>
+        </section>
       </aside>
       <CardPurchaseView
         offer={purchaseOffer}

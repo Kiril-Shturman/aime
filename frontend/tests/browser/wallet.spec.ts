@@ -1318,7 +1318,8 @@ test("desktop cards keep issued cards in the carousel and put new offers in tari
   await page.setViewportSize({ width: 1366, height: 768 });
   await setup(page, "light", false, true);
   await page.route("**/api/wallet/aura-cards", (route) => route.fulfill({
-    json: { data: [{ card_id: "test-card", kind: "virtual", status: "opened", masked_pan: "•••• 1234", balance: "10", currency: "USD" }] },
+    json: { data: [{ card_id: "test-card", kind: "virtual", status: "opened", masked_pan: "•••• 1234", balance: "10", currency: "USD" },
+      { card_id: "test-card-2", kind: "virtual", status: "opened", masked_pan: "•••• 5678", balance: "20", currency: "USD" }] },
   }));
   await page.route("**/api/wallet/aura-card-fees", (route) => route.fulfill({
     json: { currency: "USDT", open_virtual_card_fee: "25", open_physical_card_fee: "50", minimum_recharge_amount: "5", recharge_fee_pct: "2", physical_recharge_fee_pct: "3" },
@@ -1326,13 +1327,18 @@ test("desktop cards keep issued cards in the carousel and put new offers in tari
   await page.route("**/api/wallet/aura-card-operations?*", (route) => route.fulfill({ json: { data: [] } }));
   await page.getByRole("navigation", { name: "Основное" }).getByRole("button", { name: "Карты", exact: true }).click();
   const carousel = page.locator(".wpay-aura-carousel");
-  await expect(carousel.locator(".wpay-aura-carousel-item")).toHaveCount(1);
+  await expect(carousel.locator(".wpay-aura-carousel-item")).toHaveCount(2);
   await expect(page.getByRole("region", { name: "Действия с картой" })).toBeVisible();
   const tariffs = page.getByRole("complementary", { name: "Тарифы карт" });
   await expect(tariffs.getByRole("button", { name: /Для подписок.*25 USDT/ })).toBeVisible();
   expect((await tariffs.boundingBox())!.x).toBeGreaterThan((await carousel.boundingBox())!.x);
+  const owned = tariffs.getByRole("region", { name: "Мои карты" });
+  await expect(owned.getByRole("button", { name: /1234/ })).toHaveAttribute("aria-pressed", "true");
+  await owned.getByRole("button", { name: /5678/ }).click();
+  await expect(owned.getByRole("button", { name: /5678/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(owned.getByRole("button", { name: /1234/ })).toHaveAttribute("aria-pressed", "false");
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(carousel.locator(".wpay-aura-carousel-item")).toHaveCount(5);
+  await expect(carousel.locator(".wpay-aura-carousel-item")).toHaveCount(6);
   await expect(tariffs).toBeHidden();
 });
 

@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import { haptic } from "../lib/telegram";
 import "./WalletAuraCards.css";
-import { useDesktopWalletLayout } from "./WalletDesktop";
+import { DesktopOwnedCards, useDesktopWalletLayout } from "./WalletDesktop";
 import {
   walletIdempotentRequest,
   walletNullableRequest,
@@ -946,16 +946,7 @@ export default function WalletAuraCards({
                             >
                               <LiveCardArtwork
                                 card={card}
-                                skin={
-                                  card.skin ??
-                                  (card.plan_id === "card_travel"
-                                    ? "navy"
-                                    : card.plan_id === "card_platinum"
-                                      ? "graphite"
-                                      : card.kind === "physical"
-                                        ? "ice"
-                                        : "silver")
-                                }
+                                skin={issuedCardSkin(card)}
                               />
                             </span>
                             <span
@@ -1318,6 +1309,19 @@ export default function WalletAuraCards({
         )}
       </main>
       <aside className="wpay-card-tariff-aside" aria-label="Тарифы карт">
+        {desktop && (
+          <DesktopOwnedCards
+            cards={cards.map((card) => ({
+              id: card.card_id,
+              label: fees?.plans?.find((plan) => plan.plan_id === card.plan_id)?.label
+                ?? (card.kind === "physical" ? "Физическая карта" : "Виртуальная карта"),
+              number: card.masked_pan,
+              artwork: <LiveCardArtwork card={card} skin={issuedCardSkin(card)} />,
+            }))}
+            selectedId={selectedId}
+            onSelect={jumpTo}
+          />
+        )}
         <section className="wpay-desktop-card">
           <div className="wpay-desktop-section-head"><h2>Тарифы и выпуск</h2></div>
           {fees ? (
@@ -2091,6 +2095,13 @@ function PanelRow({
     </button>
   );
 }
+function issuedCardSkin(card: AuraCard): CardSkin {
+  if (card.skin) return card.skin;
+  if (card.plan_id === "card_travel") return "navy";
+  if (card.plan_id === "card_platinum") return "graphite";
+  return card.kind === "physical" ? "ice" : "silver";
+}
+
 function LiveCardArtwork({
   card,
   kind,
