@@ -2524,7 +2524,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
         <div className={activeOffer ? undefined : "wpay-desktop-balance-card wpay-desktop-card-selection"}>
           <section aria-label="Ваши карты" className="pt-5">
             <div
-              className={`flex snap-x snap-mandatory gap-3 overflow-x-auto select-none px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${draggingCard ? "cursor-grabbing" : "cursor-grab"}`}
+              className={`wpay-card-peek-carousel wpay-demo-card-carousel flex snap-x snap-mandatory gap-3 overflow-x-auto select-none px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${draggingCard ? "cursor-grabbing" : "cursor-grab"}`}
               onDragStart={(event) => event.preventDefault()}
               onPointerDown={(event) => {
                 if (event.pointerType !== "mouse" || event.button !== 0) return;
@@ -2588,7 +2588,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
                   type="button"
                   aria-label={`Открыть ${card.name}`}
                   onClick={() => setSettingsCardId(card.id)}
-                  className="min-w-0 shrink-0 basis-full snap-center rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  className="min-w-0 shrink-0 snap-start rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
                   <BankCardArtwork card={card} />
                 </button>
@@ -2599,7 +2599,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
                   type="button"
                   aria-label={`Заказать ${offer.name}`}
                   onClick={() => setPurchaseOffer(offer)}
-                  className="min-w-0 shrink-0 basis-full snap-center rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  className="min-w-0 shrink-0 snap-start rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                 >
                   <CardOfferArtwork offer={offer} />
                 </button>

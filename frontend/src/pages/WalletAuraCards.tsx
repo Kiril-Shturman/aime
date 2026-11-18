@@ -822,7 +822,7 @@ export default function WalletAuraCards({
               <>
                 <div
                   ref={carousel}
-                  className="wpay-aura-carousel"
+                  className="wpay-aura-carousel wpay-card-peek-carousel"
                   onTouchStart={() => {
                     touchingCarousel.current = true;
                     scrollTarget.current = null;

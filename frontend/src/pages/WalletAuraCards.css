@@ -1,3 +1,20 @@
+.wpay-card-peek-carousel {
+  --wpay-next-card-peek: 24px;
+}
+.wpay-card-peek-carousel::after {
+  content: "";
+  flex: 0 0 var(--wpay-next-card-peek);
+}
+@media (min-width: 1100px) {
+  .wpay-card-peek-carousel { --wpay-next-card-peek: 40px; }
+}
+.wpay-demo-card-carousel {
+  scroll-padding-inline-start: 16px;
+}
+.wpay-demo-card-carousel > button {
+  flex-basis: calc(100% - 12px - var(--wpay-next-card-peek));
+}
+
 .wpay-aura-carousel {
   display: flex;
   gap: 12px;
@@ -16,7 +33,7 @@
 }
 .wpay-aura-carousel-item {
   display: block;
-  flex: 0 0 100%;
+  flex: 0 0 calc(100% - 12px - var(--wpay-next-card-peek));
   min-width: 0;
   border: 0;
   padding: 0;
