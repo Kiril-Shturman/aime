@@ -1297,6 +1297,13 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
   await expect(profileAside.getByRole("button", { name: /Кошелёк.*1,250/ })).toBeVisible();
   await expect(profileAside.getByRole("button", { name: /На картах.*\$16\.00/ })).toBeVisible();
   await expect(profileAside.getByRole("region", { name: "Стакан Rapira" }).getByText(/86,39/)).toBeVisible();
+  await expect(menu.getByRole("button", { name: "Партнерка" })).toBeVisible();
+  const support = menu.getByRole("button", { name: "Поддержка" });
+  await support.click();
+  await expect(support).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("log", { name: "Переписка с поддержкой" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Сообщение поддержке" })).toBeVisible();
+  await menu.getByRole("button", { name: "Профиль" }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(menu).toBeHidden();
   await expect(profileAside).toBeHidden();

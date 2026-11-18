@@ -10,21 +10,21 @@ import { walletRequest } from '../lib/wallet-api'
 import { useLiveWallet, cryptoAmount, usd, usdPrice } from './WalletLive'
 
 type Tab = "wallet" | "cards" | "history" | "profile";
-type SidebarPage = "referral" | "support";
+export type SidebarPage = "referral" | "support";
 
 const desktopLinks = [
   { id: "wallet", label: "Кошелёк", icon: desktopWalletIcon },
   { id: "cards", label: "Карты", icon: desktopCardsIcon },
   { id: "history", label: "История", icon: desktopHistoryIcon },
   { id: "profile", label: "Профиль", icon: desktopProfileIcon },
-  { id: "referral", label: "Реферальная программа", icon: desktopReferralIcon },
+  { id: "referral", label: "Партнерка", icon: desktopReferralIcon },
   { id: "support", label: "Поддержка", icon: desktopSupportIcon },
 ] as const;
 
 export function DesktopSidebar({
   tab, onSelect, onOpenPage, dark, onTheme, name, username, photoUrl, cardsEnabled,
 }: {
-  tab: Tab;
+  tab: Tab | SidebarPage;
   onSelect: (tab: Tab) => void;
   onOpenPage: (page: SidebarPage) => void;
   dark: boolean;

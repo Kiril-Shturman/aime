@@ -166,3 +166,20 @@
 .wpay-support-chat .messages > .message:not(.message-first) {
   margin-top: 8px;
 }
+
+@media (min-width: 1100px) {
+  .wpay-desktop-body > .wpay-support-chat--inline {
+    height: calc(100dvh - 116px);
+    min-height: 360px;
+    padding: 0;
+    overflow: hidden;
+  }
+  .wpay-support-chat--inline .support-thread.page-content {
+    padding: 24px 24px 28px;
+  }
+  .wpay-support-chat--inline .support-compose {
+    padding: 16px 24px;
+    background: inherit;
+    border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
+  }
+}

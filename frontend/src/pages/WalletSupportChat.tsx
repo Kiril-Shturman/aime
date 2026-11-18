@@ -27,9 +27,11 @@ const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 export default function SupportChatPushView({
   open,
   onClose,
+  inline = false,
 }: {
   open: boolean;
   onClose: () => void;
+  inline?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<DraftMessage[]>([]);
@@ -105,7 +107,7 @@ export default function SupportChatPushView({
       endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [open]);
   useEffect(() => {
-    if (!open) return;
+    if (!open || inline) return;
     const viewport = window.visualViewport;
     const panel = mainRef.current?.closest("section");
     if (!viewport || !panel) return;
@@ -124,7 +126,7 @@ export default function SupportChatPushView({
       panel.style.top = "";
       panel.style.bottom = "";
     };
-  }, [open]);
+  }, [open, inline]);
   function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files || []);
     event.target.value = "";
@@ -183,19 +185,10 @@ export default function SupportChatPushView({
     setPhotos([]);
     setPhotoError("");
   }
-  return (
-    <PushViewShell
-      open={open}
-      title="Поддержка"
-      subtitle="WPay"
-      scrollContent={false}
-      assetSurface
-      zClass="z-[12000]"
-      onClose={onClose}
-    >
+  const chat = (
       <main
         ref={mainRef}
-        className="wpay-support-chat ios mx-auto flex min-h-0 w-full max-w-[560px] flex-1 flex-col"
+        className={`wpay-support-chat ios mx-auto flex min-h-0 w-full max-w-[560px] flex-1 flex-col${inline ? " wpay-support-chat--inline wpay-desktop-card" : ""}`}
       >
         <div
           className="support-thread page-content min-h-0 flex-1 overflow-y-auto overscroll-contain"
@@ -342,6 +335,19 @@ export default function SupportChatPushView({
           </Messagebar>
         </div>
       </main>
+  );
+  if (inline) return chat;
+  return (
+    <PushViewShell
+      open={open}
+      title="Поддержка"
+      subtitle="WPay"
+      scrollContent={false}
+      assetSurface
+      zClass="z-[12000]"
+      onClose={onClose}
+    >
+      {chat}
     </PushViewShell>
   );
 }
