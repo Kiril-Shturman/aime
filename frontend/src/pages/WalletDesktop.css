@@ -243,7 +243,7 @@
  .wpay-desktop-balance-card{padding:28px 16px 20px;border-radius:32px;background:#fff;box-shadow:0 3px 16px #16223a03}
  .wpay-desktop-balance-card>section{padding-top:4px;text-align:left}
  .wpay-desktop-balance-card .grid{margin-top:12px}
- .wpay-desktop-balance-card.wpay-desktop-card-selection { padding-block: 18px 16px; }
+ .wpay-desktop-balance-card.wpay-desktop-card-selection { padding-block-start: 18px; }
  .wpay-desktop-card-selection > section:not(.grid) {
    max-width: 380px;
    margin-inline: 0 auto;
