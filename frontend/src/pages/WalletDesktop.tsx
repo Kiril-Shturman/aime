@@ -40,7 +40,7 @@ export function DesktopSidebar({
       <nav aria-labelledby="wpay-desktop-nav-heading">
         <h2 id="wpay-desktop-nav-heading" className="wpay-desktop-nav-heading">Основное</h2>
         {items.map(({ id, label, icon }) => (
-          <button type="button" key={id} data-nav-tab={id} aria-current={tab === id ? "page" : undefined} onClick={() => {
+          <button type="button" key={id} aria-current={tab === id ? "page" : undefined} onClick={() => {
             setAnimation((previous) => ({ tab: id, count: (previous?.count ?? 0) + 1 }));
             onSelect(id);
           }}>
