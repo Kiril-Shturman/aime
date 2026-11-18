@@ -12,6 +12,18 @@ import { useLiveWallet, cryptoAmount, usd, usdPrice } from './WalletLive'
 type Tab = "wallet" | "cards" | "history" | "profile";
 export type SidebarPage = "referral" | "support";
 
+export function useDesktopWalletLayout() {
+  const [desktop, setDesktop] = useState(() => window.matchMedia("(min-width: 1100px)").matches);
+  useEffect(() => {
+    const media = window.matchMedia("(min-width: 1100px)");
+    const update = () => setDesktop(media.matches);
+    media.addEventListener("change", update);
+    update();
+    return () => media.removeEventListener("change", update);
+  }, []);
+  return desktop;
+}
+
 const desktopLinks = [
   { id: "wallet", label: "Кошелёк", icon: desktopWalletIcon },
   { id: "cards", label: "Карты", icon: desktopCardsIcon },

@@ -26,7 +26,7 @@ import "./WalletInputTheme.css";
 import "./WalletButtons.css";
 import WalletSheetClose from "./WalletSheetClose";
 import WalletAuraCards from "./WalletAuraCards";
-import { DesktopSidebar, DesktopOverview, DesktopProfileAside } from "./WalletDesktop";
+import { DesktopSidebar, DesktopOverview, DesktopProfileAside, useDesktopWalletLayout } from "./WalletDesktop";
 import "./WalletDesktop.css";
 import {
   ReferralProgram,
@@ -2502,6 +2502,7 @@ function CardPurchaseView({
 }
 
 function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
+  const desktop = useDesktopWalletLayout();
   const [activeCardIndex, setActiveCardIndex] = useState(0);
   const cardDrag = useRef({
     active: false,
@@ -2536,8 +2537,9 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
     }, 0);
   };
   const [purchaseOffer, setPurchaseOffer] = useState<CardOffer | null>(null);
-  const activeOffer = cardOffers[activeCardIndex - bankCards.length];
-  const carouselCount = bankCards.length + cardOffers.length;
+  const carouselOffers = desktop ? [] : cardOffers;
+  const activeOffer = carouselOffers[activeCardIndex - bankCards.length];
+  const carouselCount = bankCards.length + carouselOffers.length;
   const [settingsCardId, setSettingsCardId] = useState<string | null>(null);
   const activeCard = bankCards[activeCardIndex] ?? bankCards[0];
   const selectedCard =
@@ -2617,7 +2619,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
                   <BankCardArtwork card={card} />
                 </button>
               ))}
-              {cardOffers.map((offer) => (
+              {carouselOffers.map((offer) => (
                 <button
                   key={offer.id}
                   type="button"
@@ -2633,7 +2635,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
               className="mt-2 flex justify-center gap-1.5"
               aria-label={`Карта ${activeCardIndex + 1} из ${carouselCount}`}
             >
-              {[...bankCards, ...cardOffers].map((card, index) => (
+              {[...bankCards, ...carouselOffers].map((card, index) => (
                 <span
                   key={card.id}
                   className={`h-1.5 w-1.5 rounded-full ${index === activeCardIndex ? "bg-black/60 dark:bg-white/70" : "bg-black/15 dark:bg-white/20"}`}
@@ -2726,7 +2728,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
                   }
                 />
               ))}
-              <ListItem
+              {!desktop && <ListItem
                 link
                 title="Выпустить карту"
                 subtitle="Новая виртуальная карта"
@@ -2742,7 +2744,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
                   </span>
                 }
                 onClick={() => setPurchaseOffer(cardOffers[0])}
-              />
+              />}
             </List>
             <h2 className="mb-2 mt-7 px-safe-4 text-[21px] font-semibold tracking-tight text-black dark:text-white">
               Оплата телефоном
@@ -2764,6 +2766,17 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
           </>
         )}
       </main>
+      <aside className="wpay-desktop-card wpay-card-tariff-aside" aria-label="Тарифы карт">
+        <div className="wpay-desktop-section-head"><h2>Тарифы и выпуск</h2></div>
+        <div className="wpay-desktop-card-offers">
+          {cardOffers.map((offer) => (
+            <button key={offer.id} type="button" onClick={() => setPurchaseOffer(offer)}>
+              <span><strong>{offer.name}</strong><small>{offer.caption}</small></span>
+              <ChevronRight className="text-[18px]" aria-hidden="true" />
+            </button>
+          ))}
+        </div>
+      </aside>
       <CardPurchaseView
         offer={purchaseOffer}
         onSelect={setPurchaseOffer}

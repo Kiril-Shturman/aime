@@ -1314,6 +1314,28 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
   await expect(page.locator(".wpay-bottom-menu")).toBeVisible();
 });
 
+test("desktop cards keep issued cards in the carousel and put new offers in tariffs", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await setup(page, "light", false, true);
+  await page.route("**/api/wallet/aura-cards", (route) => route.fulfill({
+    json: { data: [{ card_id: "test-card", kind: "virtual", status: "opened", masked_pan: "•••• 1234", balance: "10", currency: "USD" }] },
+  }));
+  await page.route("**/api/wallet/aura-card-fees", (route) => route.fulfill({
+    json: { currency: "USDT", open_virtual_card_fee: "25", open_physical_card_fee: "50", minimum_recharge_amount: "5", recharge_fee_pct: "2", physical_recharge_fee_pct: "3" },
+  }));
+  await page.route("**/api/wallet/aura-card-operations?*", (route) => route.fulfill({ json: { data: [] } }));
+  await page.getByRole("navigation", { name: "Основное" }).getByRole("button", { name: "Карты", exact: true }).click();
+  const carousel = page.locator(".wpay-aura-carousel");
+  await expect(carousel.locator(".wpay-aura-carousel-item")).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Действия с картой" })).toBeVisible();
+  const tariffs = page.getByRole("complementary", { name: "Тарифы карт" });
+  await expect(tariffs.getByRole("button", { name: /Для подписок.*25 USDT/ })).toBeVisible();
+  expect((await tariffs.boundingBox())!.x).toBeGreaterThan((await carousel.boundingBox())!.x);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(carousel.locator(".wpay-aura-carousel-item")).toHaveCount(5);
+  await expect(tariffs).toBeHidden();
+});
+
 test("desktop asset chart fills the page above actions and balances", async ({ page }) => {
   await page.setViewportSize({ width: 1720, height: 860 });
   await setup(page, "light");

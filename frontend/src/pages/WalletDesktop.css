@@ -137,7 +137,20 @@
  .wpay-wallet-home > .k-list,.wpay-wallet-home > section > .k-list,.wpay-wallet-home > .wpay-promos{margin-inline:0}
  .wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=history],.wpay-desktop-body[data-tab=profile],.wpay-desktop-body[data-tab=support],.wpay-desktop-body[data-tab=cards]:has(.wpay-card-tariff-aside){display:grid;grid-template-columns:minmax(0,1fr) var(--wpay-side-column);gap:var(--wpay-column-gap);align-items:start}
  .wpay-desktop-body[data-tab=cards] > .wpay-aura-cards { min-width: 0; }
- .wpay-card-tariff-aside { display: block; }
+ .wpay-card-tariff-aside { display: grid; gap: 16px; min-width: 0; }
+ .wpay-desktop-card-offers { display: grid; margin-top: 10px; }
+ .wpay-desktop-card-offers button {
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 12px;
+   padding: 12px 0;
+   text-align: left;
+ }
+ .wpay-desktop-card-offers button + button { border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+ .wpay-desktop-card-offers button:disabled { opacity: .5; }
+ .wpay-desktop-card-offers small { display: block; margin-top: 3px; opacity: .6; }
+ .wpay-desktop-card-offers svg { flex: none; opacity: .45; }
  .wpay-card-tariff-name { margin-top: 12px; font-size: 19px; font-weight: 650; }
  .wpay-card-tariff-aside dd { margin: 0; text-align: right; color: #20232a; }
  .wpay-card-tariff-aside dd small { display: block; margin-top: 2px; font-size: 11px; color: #6e7584; }

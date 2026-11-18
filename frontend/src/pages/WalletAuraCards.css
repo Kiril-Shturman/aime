@@ -1,7 +1,7 @@
 .wpay-card-peek-carousel {
   --wpay-next-card-peek: 24px;
 }
-.wpay-card-peek-carousel::after {
+.wpay-card-peek-carousel:has(> :nth-child(2))::after {
   content: "";
   flex: 0 0 var(--wpay-next-card-peek);
 }
@@ -43,6 +43,9 @@
   scroll-snap-align: start;
   scroll-snap-stop: always;
   cursor: inherit;
+}
+@media (min-width: 1100px) {
+  .wpay-aura-carousel-item:only-child { flex-basis: 100%; }
 }
 .wpay-aura-carousel-item:focus-visible {
   outline: 2px solid #007aff;
