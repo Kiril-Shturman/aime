@@ -1301,7 +1301,11 @@ test("desktop sidebar navigates and switches the wPay wordmark with the theme", 
   const support = menu.getByRole("button", { name: "Поддержка" });
   await support.click();
   await expect(support).toHaveAttribute("aria-current", "page");
-  await expect(page.getByRole("log", { name: "Переписка с поддержкой" })).toBeVisible();
+  const thread = page.getByRole("log", { name: "Переписка с поддержкой" });
+  const guide = page.getByRole("complementary", { name: "Как описать вопрос" });
+  await expect(thread).toBeVisible();
+  await expect(guide).toBeVisible();
+  expect((await guide.boundingBox())!.x).toBeGreaterThan((await thread.boundingBox())!.x);
   await expect(page.getByRole("textbox", { name: "Сообщение поддержке" })).toBeVisible();
   await menu.getByRole("button", { name: "Профиль" }).click();
   await page.setViewportSize({ width: 390, height: 844 });

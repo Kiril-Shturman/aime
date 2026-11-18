@@ -1,6 +1,6 @@
 .wpay-desktop-page{overflow-x:hidden!important}
 .wpay-wallet-home{overflow-x:clip}
-.wpay-desktop-sidebar,.wpay-desktop-overview-side,.wpay-desktop-profile-aside,.wpay-card-tariff-aside{display:none}
+.wpay-desktop-sidebar,.wpay-desktop-overview-side,.wpay-desktop-profile-aside,.wpay-card-tariff-aside,.wpay-support-guide{display:none}
 @media(min-width:1100px){
  .wpay-desktop-page{padding-left:248px!important;padding-bottom:32px!important;background:#f5f6f8!important}
  .dark .wpay-desktop-page{background:#101113!important}
@@ -135,7 +135,7 @@
  .wpay-desktop-body,.wpay-asset-sidebar{width:100%;max-width:1240px;margin-inline:auto;padding-inline:var(--wpay-content-gutter)}
  .wpay-desktop-body{margin-top:24px}
  .wpay-wallet-home > .k-list,.wpay-wallet-home > section > .k-list,.wpay-wallet-home > .wpay-promos{margin-inline:0}
- .wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=history],.wpay-desktop-body[data-tab=profile],.wpay-desktop-body[data-tab=cards]:has(.wpay-card-tariff-aside){display:grid;grid-template-columns:minmax(0,1fr) var(--wpay-side-column);gap:var(--wpay-column-gap);align-items:start}
+ .wpay-desktop-body[data-tab=wallet],.wpay-desktop-body[data-tab=history],.wpay-desktop-body[data-tab=profile],.wpay-desktop-body[data-tab=support],.wpay-desktop-body[data-tab=cards]:has(.wpay-card-tariff-aside){display:grid;grid-template-columns:minmax(0,1fr) var(--wpay-side-column);gap:var(--wpay-column-gap);align-items:start}
  .wpay-desktop-body[data-tab=cards] > .wpay-aura-cards { min-width: 0; }
  .wpay-card-tariff-aside { display: block; }
  .wpay-card-tariff-name { margin-top: 12px; font-size: 19px; font-weight: 650; }

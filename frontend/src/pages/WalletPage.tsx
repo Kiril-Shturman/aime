@@ -617,7 +617,19 @@ function WalletScreen() {
         }
       >
         {supportSelected ? (
-          <SupportChatPushView open inline onClose={() => setHomeProfilePage(null)} />
+          <>
+            <SupportChatPushView open inline onClose={() => setHomeProfilePage(null)} />
+            <aside className="wpay-desktop-card wpay-support-guide" aria-labelledby="wpay-support-guide-title">
+              <div className="wpay-desktop-section-head">
+                <h2 id="wpay-support-guide-title">Как описать вопрос</h2>
+              </div>
+              <ul>
+                <li>Расскажите, что произошло и когда.</li>
+                <li>Если вопрос об операции, укажите сумму, валюту и номер операции.</li>
+                <li>Можно приложить скриншот. Скройте реквизиты карты и коды подтверждения.</li>
+              </ul>
+            </aside>
+          </>
         ) : (
           <>
             {activeTab === "wallet" && (
