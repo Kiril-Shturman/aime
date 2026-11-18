@@ -1376,8 +1376,17 @@
 @media (min-width: 1100px) {
   .wpay-viewport.wpay-verification-surface[data-wallet-surface] {
     inset: 0 0 0 248px !important;
+    height: 100dvh;
     border: 0;
     border-radius: 0;
+    background: #f5f6f8;
+    box-shadow: none !important;
+  }
+  .dark .wpay-viewport.wpay-verification-surface[data-wallet-surface] {
+    background: #101113;
+  }
+  body:has(.wpay-verification-surface[aria-hidden="false"]) .wpay-desktop-body[data-tab="profile"] {
+    visibility: hidden;
   }
   .wpay-viewport[data-wallet-surface] > .wpay-verification-layout {
     display: grid;

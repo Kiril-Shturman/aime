@@ -1357,6 +1357,11 @@ test("desktop verification shows the steps and goes back from contacts", async (
   const verification = page.locator("main.wpay-verification-layout");
   const surface = page.locator(".wpay-verification-surface[aria-hidden=false]");
   await expect(surface).toHaveCSS("top", "0px");
+  await expect(surface).toHaveCSS("bottom", "0px");
+  await expect(page.locator('.wpay-desktop-body[data-tab="profile"]')).toBeHidden();
+  await expect.poll(() => surface.evaluate((panel) =>
+    panel.contains(document.elementFromPoint(window.innerWidth - 2, window.innerHeight - 2)),
+  )).toBe(true);
   await expect(surface).toHaveCSS("border-top-left-radius", "0px");
   const header = verification.locator(".k-navbar");
   await expect(header.getByText("Верификация", { exact: true })).toBeVisible();
