@@ -54,7 +54,7 @@ import "./WalletFramework7.css";
 import "framework7/components/popup/css";
 import "framework7/components/sheet/css";
 import "./WalletExchange.css";
-import { Search, Check, Delete } from "lucide-react";
+import { ArrowLeft, Search, Check, Delete } from "lucide-react";
 import "./WalletProfile.css";
 import "./WalletCard.css";
 import {
@@ -3305,6 +3305,14 @@ function ProfileSettingsPushView({
     </F7List>
   );
   const popupPages = ["notifications", "security", "currency", "support"];
+  const backFromProfilePage = () => {
+    if (displayPage === "verification" && aura.sessionOpen) aura.closeSession();
+    else if (displayPage === "verification" && verificationContacts) setVerificationContacts(false);
+    else onClose();
+  };
+  const verificationStep = aura.kyc?.verified || ["pending", "in_review", "rejected"].includes(aura.kyc?.status ?? "")
+    ? 2
+    : aura.sessionOpen ? 1 : 0;
   return (
     <>
       <PushViewShell
@@ -3314,17 +3322,11 @@ function ProfileSettingsPushView({
         scrollContent={displayPage !== "verification"}
         hideNavbar={displayPage === "verification"}
         nativeBack={displayPage === "verification"}
-        onClose={() => {
-          if (displayPage === "verification" && aura.sessionOpen)
-            aura.closeSession();
-          else if (displayPage === "verification" && verificationContacts)
-            setVerificationContacts(false);
-          else onClose();
-        }}
+        onClose={backFromProfilePage}
         onRefreshed={() => showNotice("Данные профиля обновлены")}
       >
         <main
-          className={`wpay-f7-profile ios mx-auto w-full max-w-[560px] ${displayPage === "verification" ? "flex min-h-0 flex-1" : "pb-5 pt-3"}`}
+          className={`wpay-f7-profile ios mx-auto w-full max-w-[560px] ${displayPage === "verification" ? "wpay-verification-layout flex min-h-0 flex-1" : "pb-5 pt-3"}`}
         >
           {displayPage === "personal" && (
             <>
@@ -3471,13 +3473,36 @@ function ProfileSettingsPushView({
           )}
 
           {displayPage === "verification" && (
-            <WalletVerification
-              aura={aura}
-              contacts={verificationContacts}
-              onContacts={() => setVerificationContacts(true)}
-              onPersonal={() => setDisplayPage("personal")}
-              onSupport={() => setChatOpen(true)}
-            />
+            <>
+              <div className="wpay-verification-desktop-heading">
+                <button type="button" aria-label="Назад" onClick={backFromProfilePage}>
+                  <ArrowLeft size={20} aria-hidden="true" />
+                </button>
+                <h1>Верификация</h1>
+              </div>
+              <WalletVerification
+                aura={aura}
+                contacts={verificationContacts}
+                onContacts={() => setVerificationContacts(true)}
+                onPersonal={() => setDisplayPage("personal")}
+                onSupport={() => setChatOpen(true)}
+              />
+              <aside className="wpay-desktop-card wpay-verification-steps" aria-labelledby="wpay-verification-steps-title">
+                <h2 id="wpay-verification-steps-title">Этапы проверки</h2>
+                <ol>
+                  {[
+                    ["Контакты", "Телефон и электронная почта."],
+                    ["Документы", "Паспортные данные в защищённой форме."],
+                    ["Статус", "Результат проверки появится здесь."],
+                  ].map(([title, details], index) => (
+                    <li key={title} aria-current={verificationStep === index ? "step" : undefined}>
+                      <span className="wpay-verification-step-number" aria-hidden="true">{index + 1}</span>
+                      <div><strong>{title}</strong><p>{details}</p></div>
+                    </li>
+                  ))}
+                </ol>
+              </aside>
+            </>
           )}
 
           {displayPage === "provider" && (

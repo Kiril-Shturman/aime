@@ -1342,6 +1342,29 @@ test("desktop cards keep issued cards in the carousel and put new offers in tari
   await expect(tariffs).toBeHidden();
 });
 
+test("desktop verification shows the steps and goes back from contacts", async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await setup(page, "light", false, true);
+  await page.route("**/api/wallet/status", (route) => route.fulfill({
+    json: { configured: true, providers: { aura: { enabled: true, configured: true } } },
+  }));
+  await page.route("**/api/wallet/aura-customer", (route) => route.fulfill({ json: {} }));
+  await page.route("**/api/wallet/aura-kyc", (route) => route.fulfill({
+    json: { status: "not_started", verified: false, terminal: false },
+  }));
+  await page.getByRole("navigation", { name: "Основное" }).getByRole("button", { name: "Профиль" }).click();
+  await page.getByRole("link", { name: /Верификация/ }).click();
+  const verification = page.getByRole("main").filter({ has: page.getByRole("heading", { name: "Верификация", exact: true }) });
+  const steps = verification.getByRole("complementary", { name: "Этапы проверки" });
+  await expect(steps).toBeVisible();
+  await verification.getByRole("button", { name: "Начать", exact: true }).click();
+  await expect(verification.locator("#verification-phone")).toBeVisible();
+  await verification.getByRole("button", { name: "Назад", exact: true }).click();
+  await expect(verification.getByRole("button", { name: "Начать", exact: true })).toBeVisible();
+  await verification.getByRole("button", { name: "Назад", exact: true }).click();
+  await expect(steps).toBeHidden();
+});
+
 test("desktop asset chart fills the page above actions and balances", async ({ page }) => {
   await page.setViewportSize({ width: 1720, height: 860 });
   await setup(page, "light");

@@ -1367,3 +1367,84 @@
     opacity: 1;
   }
 }
+
+.wpay-verification-desktop-heading,
+.wpay-verification-steps {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  .wpay-viewport[data-wallet-surface] > .wpay-verification-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: 20px 24px;
+    max-width: 1240px;
+    padding: 24px 48px;
+  }
+  .wpay-verification-desktop-heading {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .wpay-verification-desktop-heading button {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border-radius: 50%;
+    background: #0000000c;
+    color: inherit;
+  }
+  .dark .wpay-verification-desktop-heading button { background: #ffffff14; }
+  .wpay-verification-desktop-heading h1 { margin: 0; font-size: 22px; font-weight: 650; }
+  .wpay-verification-layout > .wpay-verification {
+    border-radius: 28px;
+    background: #fff;
+  }
+  .dark .wpay-verification-layout > .wpay-verification { background: var(--color-ios-dark-surface-1); }
+  .wpay-verification-layout :is(.wpay-verification-scene, .wpay-contact-mail-scene, .wpay-verification-copy,
+    .wpay-verification-contact-copy, .wpay-verification-footer) {
+    width: 100%;
+    max-width: 560px;
+    margin-inline: auto;
+  }
+  .wpay-verification-layout .wpay-verification-scene { height: clamp(215px, 32dvh, 292px); }
+  .wpay-verification-layout .wpay-verification-footer { padding-block: 12px 20px; }
+  .wpay-f7-profile.wpay-verification-layout .wpay-verification-contact-inputs {
+    width: calc(100% - 40px);
+    max-width: 520px;
+    margin-inline: auto;
+    --f7-list-bg-color: #f5f6f8;
+  }
+  .dark .wpay-f7-profile.wpay-verification-layout .wpay-verification-contact-inputs { --f7-list-bg-color: #29292c; }
+  .wpay-verification-layout .wpay-verification-contact-note { max-width: 504px; margin-inline: auto; padding-inline: 8px; }
+  .wpay-verification-steps { display: block; align-self: start; }
+  .wpay-verification-steps h2 { margin: 0; font-size: 16px; font-weight: 650; }
+  .wpay-verification-steps ol { display: grid; gap: 16px; margin: 18px 0 0; padding: 0; list-style: none; }
+  .wpay-verification-steps li { display: flex; align-items: flex-start; gap: 10px; }
+  .wpay-verification-step-number {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    place-items: center;
+    border-radius: 50%;
+    background: #80808020;
+    font-size: 13px;
+    font-weight: 650;
+  }
+  .wpay-verification-steps [aria-current="step"] .wpay-verification-step-number {
+    background: var(--color-primary);
+    color: white;
+  }
+  .wpay-verification-steps strong { font-size: 14px; font-weight: 650; }
+  .wpay-verification-steps p { margin: 3px 0 0; font-size: 13px; line-height: 1.45; opacity: .65; }
+}
+@media (min-width: 1600px) {
+  .wpay-viewport[data-wallet-surface] > .wpay-verification-layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+    column-gap: 32px;
+  }
+}
