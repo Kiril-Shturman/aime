@@ -17,13 +17,15 @@ const desktopLinks = [
 ] as const;
 
 export function DesktopSidebar({
-  tab, onSelect, dark, onTheme, name, cardsEnabled,
+  tab, onSelect, dark, onTheme, name, username, photoUrl, cardsEnabled,
 }: {
   tab: Tab;
   onSelect: (tab: Tab) => void;
   dark: boolean;
   onTheme: () => void;
   name: string;
+  username?: string;
+  photoUrl?: string;
   cardsEnabled: boolean;
 }) {
   const [animation, setAnimation] = useState<{ tab: Tab; count: number } | null>(null);
@@ -59,8 +61,16 @@ export function DesktopSidebar({
           {dark ? "Светлая тема" : "Тёмная тема"}
         </button>
         <button type="button" className="wpay-desktop-user" onClick={() => onSelect("profile")}>
-          <span className="wpay-desktop-user-initial" aria-hidden="true">{name.trim().slice(0, 1).toUpperCase() || "W"}</span>
-          <strong>{name}</strong>
+          <span className="wpay-desktop-user-initial" aria-hidden="true">
+            {name.trim().slice(0, 1).toUpperCase() || "W"}
+            {photoUrl && (
+              <img key={photoUrl} src={photoUrl} alt="" onError={(event) => { event.currentTarget.hidden = true; }} />
+            )}
+          </span>
+          <span className="wpay-desktop-user-details">
+            <strong>{name}</strong>
+            {username && <small>@{username}</small>}
+          </span>
         </button>
       </div>
     </aside>

@@ -541,7 +541,9 @@ function WalletScreen() {
         onSelect={selectTab}
         dark={theme === "dark"}
         onTheme={toggleTheme}
-        name={user?.first_name || "Ваш аккаунт"}
+        name={[user?.first_name, user?.last_name].filter(Boolean).join(" ") || "Ваш аккаунт"}
+        username={user?.username}
+        photoUrl={user?.photo_url}
         cardsEnabled={live.capabilities.cards}
       />
       <WalletNavbar
