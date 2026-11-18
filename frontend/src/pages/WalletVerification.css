@@ -1374,6 +1374,11 @@
 }
 
 @media (min-width: 1100px) {
+  .wpay-viewport.wpay-verification-surface[data-wallet-surface] {
+    inset: 0 0 0 248px !important;
+    border: 0;
+    border-radius: 0;
+  }
   .wpay-viewport[data-wallet-surface] > .wpay-verification-layout {
     display: grid;
     grid-template-columns: minmax(0, 1fr) 310px;

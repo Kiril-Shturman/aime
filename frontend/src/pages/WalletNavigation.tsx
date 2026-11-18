@@ -154,6 +154,7 @@ export function PushViewShell({
   onClose,
   children,
   zClass = "z-[60]",
+  className = "",
   onRefreshed,
   assetSurface = false,
   scrollContent = true,
@@ -168,6 +169,7 @@ export function PushViewShell({
   onClose: () => void;
   children: ReactNode;
   zClass?: string;
+  className?: string;
   onRefreshed?: () => void;
   assetSurface?: boolean;
   scrollContent?: boolean;
@@ -231,7 +233,7 @@ export function PushViewShell({
           : undefined
       }
       data-wallet-surface={assetSurface ? "asset" : "grouped"}
-      className={`wpay-viewport fixed inset-0 ${zClass} flex flex-col overflow-hidden ${assetSurface ? "bg-white dark:bg-[#1c1c1e]" : "bg-[#efeff4] dark:bg-black"} transition-transform duration-300 ease-out ${open ? "translate-x-0 shadow-[-18px_0_50px_rgba(0,0,0,.18)]" : "pointer-events-none translate-x-full"}`}
+      className={`wpay-viewport ${className} fixed inset-0 ${zClass} flex flex-col overflow-hidden ${assetSurface ? "bg-white dark:bg-[#1c1c1e]" : "bg-[#efeff4] dark:bg-black"} transition-transform duration-300 ease-out ${open ? "translate-x-0 shadow-[-18px_0_50px_rgba(0,0,0,.18)]" : "pointer-events-none translate-x-full"}`}
       onPointerDown={(event) => {
         if (event.clientX <= 28) {
           swipeStart.current = event.clientX;

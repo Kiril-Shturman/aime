@@ -1355,6 +1355,9 @@ test("desktop verification shows the steps and goes back from contacts", async (
   await page.getByRole("navigation", { name: "Основное" }).getByRole("button", { name: "Профиль" }).click();
   await page.getByRole("link", { name: /Верификация/ }).click();
   const verification = page.locator("main.wpay-verification-layout");
+  const surface = page.locator(".wpay-verification-surface[aria-hidden=false]");
+  await expect(surface).toHaveCSS("top", "0px");
+  await expect(surface).toHaveCSS("border-top-left-radius", "0px");
   const header = verification.locator(".k-navbar");
   await expect(header.getByText("Верификация", { exact: true })).toBeVisible();
   const steps = verification.getByRole("complementary", { name: "Этапы проверки" });

@@ -3321,6 +3321,7 @@ function ProfileSettingsPushView({
         subtitle="Настройки профиля"
         scrollContent={displayPage !== "verification"}
         hideNavbar={displayPage === "verification"}
+        className={displayPage === "verification" ? "wpay-verification-surface" : undefined}
         nativeBack={displayPage === "verification"}
         onClose={backFromProfilePage}
         onRefreshed={() => showNotice("Данные профиля обновлены")}
