@@ -105,7 +105,10 @@ export function DesktopOwnedCards({
 }) {
   return (
     <section className="wpay-desktop-card" aria-label="Мои карты">
-      <div className="wpay-desktop-section-head"><h2>Мои карты</h2></div>
+      <div className="wpay-desktop-section-head">
+        <h2>Мои карты</h2>
+        <a className="wpay-desktop-add-card" href="#wpay-desktop-card-issuance">+ Добавить</a>
+      </div>
       {cards.length ? (
         <div className="wpay-desktop-card-offers">
           {cards.map((card, index) => {

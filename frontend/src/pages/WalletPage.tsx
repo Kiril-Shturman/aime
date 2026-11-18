@@ -2786,7 +2786,7 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
             }}
           />
         )}
-        <section className="wpay-desktop-card">
+        <section className="wpay-desktop-card" id="wpay-desktop-card-issuance">
         <div className="wpay-desktop-section-head"><h2>Тарифы и выпуск</h2></div>
         <div className="wpay-desktop-card-offers">
           {cardOffers.map((offer) => (

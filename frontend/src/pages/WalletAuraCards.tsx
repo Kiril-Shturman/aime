@@ -1322,7 +1322,7 @@ export default function WalletAuraCards({
             onSelect={jumpTo}
           />
         )}
-        <section className="wpay-desktop-card">
+        <section className="wpay-desktop-card" id="wpay-desktop-card-issuance">
           <div className="wpay-desktop-section-head"><h2>Тарифы и выпуск</h2></div>
           {fees ? (
             <div className="wpay-desktop-card-offers">
