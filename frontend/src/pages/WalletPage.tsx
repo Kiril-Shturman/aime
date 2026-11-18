@@ -2520,108 +2520,104 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
   return (
     <>
       <main className="mx-auto w-full max-w-[560px] pb-6">
-        <section aria-label="Ваши карты" className="pt-5">
-          <div
-            className={`flex snap-x snap-mandatory gap-3 overflow-x-auto select-none px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${draggingCard ? "cursor-grabbing" : "cursor-grab"}`}
-            onDragStart={(event) => event.preventDefault()}
-            onPointerDown={(event) => {
-              if (event.pointerType !== "mouse" || event.button !== 0) return;
-              event.stopPropagation();
-              cardDrag.current = {
-                active: true,
-                startX: event.clientX,
-                scrollLeft: event.currentTarget.scrollLeft,
-                moved: false,
-              };
-            }}
-            onPointerMove={(event) => {
-              const drag = cardDrag.current;
-              if (event.pointerType !== "mouse" || !drag.active) return;
-              const delta = event.clientX - drag.startX;
-              if (!drag.moved && Math.abs(delta) < 6) return;
-              if (!drag.moved) {
-                drag.moved = true;
-                suppressCardClick.current = true;
-                setDraggingCard(true);
-                event.currentTarget.style.scrollSnapType = "none";
-                event.currentTarget.setPointerCapture(event.pointerId);
-              }
-              event.preventDefault();
-              event.stopPropagation();
-              event.currentTarget.scrollLeft = drag.scrollLeft - delta;
-            }}
-            onPointerUp={finishCardDrag}
-            onPointerCancel={finishCardDrag}
-            onLostPointerCapture={finishCardDrag}
-            onPointerLeave={() => {
-              if (!cardDrag.current.moved) cardDrag.current.active = false;
-            }}
-            onClickCapture={(event) => {
-              if (suppressCardClick.current) {
+        <div className={activeOffer ? undefined : "wpay-desktop-balance-card wpay-desktop-card-selection"}>
+          <section aria-label="Ваши карты" className="pt-5">
+            <div
+              className={`flex snap-x snap-mandatory gap-3 overflow-x-auto select-none px-4 pb-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${draggingCard ? "cursor-grabbing" : "cursor-grab"}`}
+              onDragStart={(event) => event.preventDefault()}
+              onPointerDown={(event) => {
+                if (event.pointerType !== "mouse" || event.button !== 0) return;
+                event.stopPropagation();
+                cardDrag.current = {
+                  active: true,
+                  startX: event.clientX,
+                  scrollLeft: event.currentTarget.scrollLeft,
+                  moved: false,
+                };
+              }}
+              onPointerMove={(event) => {
+                const drag = cardDrag.current;
+                if (event.pointerType !== "mouse" || !drag.active) return;
+                const delta = event.clientX - drag.startX;
+                if (!drag.moved && Math.abs(delta) < 6) return;
+                if (!drag.moved) {
+                  drag.moved = true;
+                  suppressCardClick.current = true;
+                  setDraggingCard(true);
+                  event.currentTarget.style.scrollSnapType = "none";
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                }
                 event.preventDefault();
                 event.stopPropagation();
-                suppressCardClick.current = false;
-              }
-            }}
-            onScroll={(event) => {
-              const container = event.currentTarget;
-              const card = container.firstElementChild as HTMLElement | null;
-              if (card)
-                setActiveCardIndex(
-                  Math.max(
-                    0,
-                    Math.min(
-                      carouselCount - 1,
-                      Math.round(
-                        container.scrollLeft / (card.offsetWidth + 12),
+                event.currentTarget.scrollLeft = drag.scrollLeft - delta;
+              }}
+              onPointerUp={finishCardDrag}
+              onPointerCancel={finishCardDrag}
+              onLostPointerCapture={finishCardDrag}
+              onPointerLeave={() => {
+                if (!cardDrag.current.moved) cardDrag.current.active = false;
+              }}
+              onClickCapture={(event) => {
+                if (suppressCardClick.current) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  suppressCardClick.current = false;
+                }
+              }}
+              onScroll={(event) => {
+                const container = event.currentTarget;
+                const card = container.firstElementChild as HTMLElement | null;
+                if (card)
+                  setActiveCardIndex(
+                    Math.max(
+                      0,
+                      Math.min(
+                        carouselCount - 1,
+                        Math.round(
+                          container.scrollLeft / (card.offsetWidth + 12),
+                        ),
                       ),
                     ),
-                  ),
-                );
-            }}
-          >
-            {bankCards.map((card) => (
-              <button
-                key={card.id}
-                type="button"
-                aria-label={`Открыть ${card.name}`}
-                onClick={() => setSettingsCardId(card.id)}
-                className="min-w-0 shrink-0 basis-full snap-center rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              >
-                <BankCardArtwork card={card} />
-              </button>
-            ))}
-            {cardOffers.map((offer) => (
-              <button
-                key={offer.id}
-                type="button"
-                aria-label={`Заказать ${offer.name}`}
-                onClick={() => setPurchaseOffer(offer)}
-                className="min-w-0 shrink-0 basis-full snap-center rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              >
-                <CardOfferArtwork offer={offer} />
-              </button>
-            ))}
-          </div>
-          <div
-            className="mt-2 flex justify-center gap-1.5"
-            aria-label={`Карта ${activeCardIndex + 1} из ${carouselCount}`}
-          >
-            {[...bankCards, ...cardOffers].map((card, index) => (
-              <span
-                key={card.id}
-                className={`h-1.5 w-1.5 rounded-full ${index === activeCardIndex ? "bg-black/60 dark:bg-white/70" : "bg-black/15 dark:bg-white/20"}`}
-              />
-            ))}
-          </div>
-        </section>
-        {activeOffer ? (
-          <CardOfferDetails
-            offer={activeOffer}
-            onOrder={() => setPurchaseOffer(activeOffer)}
-          />
-        ) : (
-          <>
+                  );
+              }}
+            >
+              {bankCards.map((card) => (
+                <button
+                  key={card.id}
+                  type="button"
+                  aria-label={`Открыть ${card.name}`}
+                  onClick={() => setSettingsCardId(card.id)}
+                  className="min-w-0 shrink-0 basis-full snap-center rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                  <BankCardArtwork card={card} />
+                </button>
+              ))}
+              {cardOffers.map((offer) => (
+                <button
+                  key={offer.id}
+                  type="button"
+                  aria-label={`Заказать ${offer.name}`}
+                  onClick={() => setPurchaseOffer(offer)}
+                  className="min-w-0 shrink-0 basis-full snap-center rounded-[30px] text-left outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                  <CardOfferArtwork offer={offer} />
+                </button>
+              ))}
+            </div>
+            <div
+              className="mt-2 flex justify-center gap-1.5"
+              aria-label={`Карта ${activeCardIndex + 1} из ${carouselCount}`}
+            >
+              {[...bankCards, ...cardOffers].map((card, index) => (
+                <span
+                  key={card.id}
+                  className={`h-1.5 w-1.5 rounded-full ${index === activeCardIndex ? "bg-black/60 dark:bg-white/70" : "bg-black/15 dark:bg-white/20"}`}
+                />
+              ))}
+            </div>
+          </section>
+          {!activeOffer && (
+            <>
             <div className="h-5" />
             <WalletActionGrid
               label="Действия с картами"
@@ -2651,6 +2647,16 @@ function CardsSection({ showNotice }: { showNotice: NoticeHandler }) {
                 },
               ]}
             />
+            </>
+          )}
+        </div>
+        {activeOffer ? (
+          <CardOfferDetails
+            offer={activeOffer}
+            onOrder={() => setPurchaseOffer(activeOffer)}
+          />
+        ) : (
+          <>
             <div className="mb-2 mt-8 flex items-end justify-between px-safe-4">
               <h2 className="text-[21px] font-semibold tracking-tight text-black dark:text-white">
                 Мои карты

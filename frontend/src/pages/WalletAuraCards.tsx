@@ -806,285 +806,321 @@ export default function WalletAuraCards({
             </button>
           </div>
         )}
-        <section className="px-safe-4 pb-2 pt-5" aria-label="Выбор карты">
-          {loading ? (
-            <div
-              className="wpay-aura-card-skeleton animate-pulse"
-              role="status"
-              aria-label="Загружаем карты"
-            >
-              <span className="wpay-card-skeleton-logo" aria-hidden="true" />
-              <span className="wpay-card-skeleton-chip" aria-hidden="true" />
-              <span className="wpay-card-skeleton-number" aria-hidden="true" />
-            </div>
-          ) : (
-            <>
+        <div className={loading || (!showOffer && selected) ? "wpay-desktop-balance-card wpay-desktop-card-selection" : undefined}>
+          <section className="px-safe-4 pb-2 pt-5" aria-label="Выбор карты">
+            {loading ? (
               <div
-                ref={carousel}
-                className="wpay-aura-carousel"
-                onTouchStart={() => {
-                  touchingCarousel.current = true;
-                  scrollTarget.current = null;
-                  if (settleTimer.current) clearTimeout(settleTimer.current);
-                }}
-                onTouchEnd={() => {
-                  touchingCarousel.current = false;
-                  settleCarousel();
-                }}
-                onTouchCancel={() => {
-                  touchingCarousel.current = false;
-                  settleCarousel();
-                }}
-                onPointerDown={(event) => {
-                  scrollTarget.current = null;
-                  if (event.pointerType !== "mouse" || event.button !== 0)
-                    return;
-                  drag.current = {
-                    x: event.clientX,
-                    scroll: event.currentTarget.scrollLeft,
-                    moved: false,
-                  };
-                }}
-                onPointerMove={(event) => {
-                  const current = drag.current;
-                  if (!current) return;
-                  const delta = event.clientX - current.x;
-                  if (!current.moved && Math.abs(delta) < 6) return;
-                  current.moved = true;
-                  suppressClick.current = true;
-                  event.currentTarget.style.scrollSnapType = "none";
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                  event.preventDefault();
-                  event.stopPropagation();
-                  event.currentTarget.scrollLeft = current.scroll - delta;
-                }}
-                onPointerUp={(event) => {
-                  drag.current = null;
-                  event.currentTarget.style.scrollSnapType = "";
-                  settleCarousel();
-                  if (event.currentTarget.hasPointerCapture(event.pointerId))
-                    event.currentTarget.releasePointerCapture(event.pointerId);
-                }}
-                onPointerCancel={() => {
-                  drag.current = null;
-                  if (carousel.current)
-                    carousel.current.style.scrollSnapType = "";
-                  settleCarousel();
-                }}
-                onClickCapture={(event) => {
-                  if (suppressClick.current) {
+                className="wpay-aura-card-skeleton animate-pulse"
+                role="status"
+                aria-label="Загружаем карты"
+              >
+                <span className="wpay-card-skeleton-logo" aria-hidden="true" />
+                <span className="wpay-card-skeleton-chip" aria-hidden="true" />
+                <span className="wpay-card-skeleton-number" aria-hidden="true" />
+              </div>
+            ) : (
+              <>
+                <div
+                  ref={carousel}
+                  className="wpay-aura-carousel"
+                  onTouchStart={() => {
+                    touchingCarousel.current = true;
+                    scrollTarget.current = null;
+                    if (settleTimer.current) clearTimeout(settleTimer.current);
+                  }}
+                  onTouchEnd={() => {
+                    touchingCarousel.current = false;
+                    settleCarousel();
+                  }}
+                  onTouchCancel={() => {
+                    touchingCarousel.current = false;
+                    settleCarousel();
+                  }}
+                  onPointerDown={(event) => {
+                    scrollTarget.current = null;
+                    if (event.pointerType !== "mouse" || event.button !== 0)
+                      return;
+                    drag.current = {
+                      x: event.clientX,
+                      scroll: event.currentTarget.scrollLeft,
+                      moved: false,
+                    };
+                  }}
+                  onPointerMove={(event) => {
+                    const current = drag.current;
+                    if (!current) return;
+                    const delta = event.clientX - current.x;
+                    if (!current.moved && Math.abs(delta) < 6) return;
+                    current.moved = true;
+                    suppressClick.current = true;
+                    event.currentTarget.style.scrollSnapType = "none";
+                    event.currentTarget.setPointerCapture(event.pointerId);
                     event.preventDefault();
                     event.stopPropagation();
-                    suppressClick.current = false;
-                  }
-                }}
-                onScroll={(event) => {
-                  if (event.target !== event.currentTarget) return;
-                  settleCarousel();
-                  const index = nearestSlide(event.currentTarget);
-                  if (scrollTarget.current !== null) {
-                    const target = scrollTarget.current;
-                    if (
-                      Math.abs(
-                        event.currentTarget.scrollLeft -
-                          slideLeft(event.currentTarget, target),
-                      ) > 2
-                    )
-                      return;
-                    scrollTarget.current = null;
-                  }
-                  setActiveSlide(index);
-                  const card = cards[index];
-                  if (card && card.card_id !== selectedId)
-                    selectCard(card.card_id);
-                  else if (!card) {
-                    revealRequest.current?.abort();
-                    setCredentials(null);
-                    setCvvVisible(false);
-                  }
-                }}
-              >
-                {cards.map((card) => (
-                  <div
-                    key={card.card_id}
-                    className="wpay-aura-carousel-item wpay-owned-card-item"
-                  >
-                    <button
-                      type="button"
-                      className="wpay-card-surface-button"
-                      aria-label={
-                        credentials?.card_id === card.card_id
-                          ? "Скрыть реквизиты карты"
-                          : `Открыть ${card.kind === "physical" ? "физическую" : "виртуальную"} карту ${card.masked_pan ?? ""}`
-                      }
-                      onClick={() => {
-                        if (credentials?.card_id === card.card_id) {
-                          setCredentials(null);
-                          setCvvVisible(false);
-                          return;
-                        }
-                        selectCard(card.card_id);
-                        openPanel("details");
-                      }}
+                    event.currentTarget.scrollLeft = current.scroll - delta;
+                  }}
+                  onPointerUp={(event) => {
+                    drag.current = null;
+                    event.currentTarget.style.scrollSnapType = "";
+                    settleCarousel();
+                    if (event.currentTarget.hasPointerCapture(event.pointerId))
+                      event.currentTarget.releasePointerCapture(event.pointerId);
+                  }}
+                  onPointerCancel={() => {
+                    drag.current = null;
+                    if (carousel.current)
+                      carousel.current.style.scrollSnapType = "";
+                    settleCarousel();
+                  }}
+                  onClickCapture={(event) => {
+                    if (suppressClick.current) {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      suppressClick.current = false;
+                    }
+                  }}
+                  onScroll={(event) => {
+                    if (event.target !== event.currentTarget) return;
+                    settleCarousel();
+                    const index = nearestSlide(event.currentTarget);
+                    if (scrollTarget.current !== null) {
+                      const target = scrollTarget.current;
+                      if (
+                        Math.abs(
+                          event.currentTarget.scrollLeft -
+                            slideLeft(event.currentTarget, target),
+                        ) > 2
+                      )
+                        return;
+                      scrollTarget.current = null;
+                    }
+                    setActiveSlide(index);
+                    const card = cards[index];
+                    if (card && card.card_id !== selectedId)
+                      selectCard(card.card_id);
+                    else if (!card) {
+                      revealRequest.current?.abort();
+                      setCredentials(null);
+                      setCvvVisible(false);
+                    }
+                  }}
+                >
+                  {cards.map((card) => (
+                    <div
+                      key={card.card_id}
+                      className="wpay-aura-carousel-item wpay-owned-card-item"
                     >
-                      <span
-                        className={`wpay-card-flip ${credentials?.card_id === card.card_id ? "wpay-card-flip--revealed" : ""}`}
+                      <button
+                        type="button"
+                        className="wpay-card-surface-button"
+                        aria-label={
+                          credentials?.card_id === card.card_id
+                            ? "Скрыть реквизиты карты"
+                            : `Открыть ${card.kind === "physical" ? "физическую" : "виртуальную"} карту ${card.masked_pan ?? ""}`
+                        }
+                        onClick={() => {
+                          if (credentials?.card_id === card.card_id) {
+                            setCredentials(null);
+                            setCvvVisible(false);
+                            return;
+                          }
+                          selectCard(card.card_id);
+                          openPanel("details");
+                        }}
                       >
-                        <span className="wpay-card-flip-inner">
-                          <span
-                            className="wpay-card-flip-front"
-                            aria-hidden={credentials?.card_id === card.card_id}
-                          >
-                            <LiveCardArtwork
-                              card={card}
-                              skin={
-                                card.skin ??
-                                (card.plan_id === "card_travel"
-                                  ? "navy"
-                                  : card.plan_id === "card_platinum"
-                                    ? "graphite"
-                                    : card.kind === "physical"
-                                      ? "ice"
-                                      : "silver")
-                              }
-                            />
-                          </span>
-                          <span
-                            className="wpay-card-flip-back"
-                            aria-hidden={credentials?.card_id !== card.card_id}
-                            role="group"
-                            aria-label="Реквизиты карты"
-                          >
-                            <span className="wpay-card-back-stripe" />
-                            <img
-                              className="wpay-card-back-logo"
-                              src="/brands/wpay-wordmark.svg"
-                              alt="wPay"
-                            />
-                            <span className="wpay-card-back-number">
-                              <small>НОМЕР КАРТЫ</small>
-                              <span>
-                                {credentials?.card_id === card.card_id
-                                  ? credentials.number
-                                      .replace(/\s/g, "")
-                                      .match(/.{1,4}/g)
-                                      ?.join(" ")
-                                  : card.masked_pan}
-                              </span>
+                        <span
+                          className={`wpay-card-flip ${credentials?.card_id === card.card_id ? "wpay-card-flip--revealed" : ""}`}
+                        >
+                          <span className="wpay-card-flip-inner">
+                            <span
+                              className="wpay-card-flip-front"
+                              aria-hidden={credentials?.card_id === card.card_id}
+                            >
+                              <LiveCardArtwork
+                                card={card}
+                                skin={
+                                  card.skin ??
+                                  (card.plan_id === "card_travel"
+                                    ? "navy"
+                                    : card.plan_id === "card_platinum"
+                                      ? "graphite"
+                                      : card.kind === "physical"
+                                        ? "ice"
+                                        : "silver")
+                                }
+                              />
                             </span>
-                            <span className="wpay-card-back-fields">
-                              <span>
-                                <small>ДЕЙСТВУЕТ ДО</small>
-                                <b>
+                            <span
+                              className="wpay-card-flip-back"
+                              aria-hidden={credentials?.card_id !== card.card_id}
+                              role="group"
+                              aria-label="Реквизиты карты"
+                            >
+                              <span className="wpay-card-back-stripe" />
+                              <img
+                                className="wpay-card-back-logo"
+                                src="/brands/wpay-wordmark.svg"
+                                alt="wPay"
+                              />
+                              <span className="wpay-card-back-number">
+                                <small>НОМЕР КАРТЫ</small>
+                                <span>
                                   {credentials?.card_id === card.card_id
-                                    ? credentials.expiry
-                                    : "••/••"}
-                                </b>
+                                    ? credentials.number
+                                        .replace(/\s/g, "")
+                                        .match(/.{1,4}/g)
+                                        ?.join(" ")
+                                    : card.masked_pan}
+                                </span>
                               </span>
-                              <span>
-                                <small>CVV</small>
-                                <b>
-                                  {credentials?.card_id === card.card_id &&
-                                  cvvVisible
-                                    ? credentials.cvv
-                                    : "•••"}
-                                </b>
+                              <span className="wpay-card-back-fields">
+                                <span>
+                                  <small>ДЕЙСТВУЕТ ДО</small>
+                                  <b>
+                                    {credentials?.card_id === card.card_id
+                                      ? credentials.expiry
+                                      : "••/••"}
+                                  </b>
+                                </span>
+                                <span>
+                                  <small>CVV</small>
+                                  <b>
+                                    {credentials?.card_id === card.card_id &&
+                                    cvvVisible
+                                      ? credentials.cvv
+                                      : "•••"}
+                                  </b>
+                                </span>
                               </span>
-                            </span>
-                            <span className="wpay-card-back-hint">
-                              {card.demo ? "Демо-карта · " : ""}Нажмите, чтобы
-                              скрыть
+                              <span className="wpay-card-back-hint">
+                                {card.demo ? "Демо-карта · " : ""}Нажмите, чтобы
+                                скрыть
+                              </span>
                             </span>
                           </span>
                         </span>
-                      </span>
-                    </button>
-                    {credentials?.card_id === card.card_id && (
-                      <>
-                        <button
-                          type="button"
-                          className="wpay-card-copy wpay-card-copy--number"
-                          aria-label="Скопировать номер карты"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void copyCardValue(
-                              credentials.number.replace(/\s/g, ""),
-                              "Номер карты скопирован",
-                            );
-                          }}
-                        >
-                          <Copy size={17} />
-                        </button>
-                        <button
-                          type="button"
-                          className="wpay-card-copy wpay-card-copy--expiry"
-                          aria-label="Скопировать срок действия"
-                          onPointerDown={(event) => event.stopPropagation()}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void copyCardValue(
-                              credentials.expiry,
-                              "Срок действия скопирован",
-                            );
-                          }}
-                        >
-                          <Copy size={17} />
-                        </button>
-                      </>
-                    )}
-                    {credentials?.card_id === card.card_id && (
-                      <button
-                        type="button"
-                        className="wpay-card-cvv-toggle"
-                        aria-label={cvvVisible ? "Скрыть CVV" : "Показать CVV"}
-                        aria-pressed={cvvVisible}
-                        onPointerDown={(event) => event.stopPropagation()}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          haptic("light");
-                          setCvvVisible((value) => !value);
-                        }}
-                      >
-                        {cvvVisible ? <Eye size={19} /> : <EyeOff size={19} />}
                       </button>
-                    )}
-                  </div>
-                ))}
-                {offers.map(({ kind, skin: appearance }) => (
-                  <button
-                    type="button"
-                    className="wpay-aura-carousel-item"
-                    key={appearance}
-                    aria-label={`Заказать ${kind === "physical" ? "физическую" : "виртуальную"} карту`}
-                    onClick={() => order(kind, appearance)}
-                  >
-                    <LiveCardArtwork kind={kind} skin={appearance} />
-                  </button>
-                ))}
-              </div>
-              <div
-                className="wpay-aura-card-dots"
-                aria-label="Переключить карту"
-              >
-                {Array.from(
-                  { length: cards.length + offers.length },
-                  (_, index) => (
+                      {credentials?.card_id === card.card_id && (
+                        <>
+                          <button
+                            type="button"
+                            className="wpay-card-copy wpay-card-copy--number"
+                            aria-label="Скопировать номер карты"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void copyCardValue(
+                                credentials.number.replace(/\s/g, ""),
+                                "Номер карты скопирован",
+                              );
+                            }}
+                          >
+                            <Copy size={17} />
+                          </button>
+                          <button
+                            type="button"
+                            className="wpay-card-copy wpay-card-copy--expiry"
+                            aria-label="Скопировать срок действия"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void copyCardValue(
+                                credentials.expiry,
+                                "Срок действия скопирован",
+                              );
+                            }}
+                          >
+                            <Copy size={17} />
+                          </button>
+                        </>
+                      )}
+                      {credentials?.card_id === card.card_id && (
+                        <button
+                          type="button"
+                          className="wpay-card-cvv-toggle"
+                          aria-label={cvvVisible ? "Скрыть CVV" : "Показать CVV"}
+                          aria-pressed={cvvVisible}
+                          onPointerDown={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            haptic("light");
+                            setCvvVisible((value) => !value);
+                          }}
+                        >
+                          {cvvVisible ? <Eye size={19} /> : <EyeOff size={19} />}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {offers.map(({ kind, skin: appearance }) => (
                     <button
                       type="button"
-                      key={index}
-                      aria-label={`Карта ${index + 1}`}
-                      aria-current={index === activeSlide ? "true" : undefined}
-                      onClick={() => jumpTo(index)}
+                      className="wpay-aura-carousel-item"
+                      key={appearance}
+                      aria-label={`Заказать ${kind === "physical" ? "физическую" : "виртуальную"} карту`}
+                      onClick={() => order(kind, appearance)}
                     >
-                      <span />
+                      <LiveCardArtwork kind={kind} skin={appearance} />
                     </button>
-                  ),
-                )}
-              </div>
+                  ))}
+                </div>
+                <div
+                  className="wpay-aura-card-dots"
+                  aria-label="Переключить карту"
+                >
+                  {Array.from(
+                    { length: cards.length + offers.length },
+                    (_, index) => (
+                      <button
+                        type="button"
+                        key={index}
+                        aria-label={`Карта ${index + 1}`}
+                        aria-current={index === activeSlide ? "true" : undefined}
+                        onClick={() => jumpTo(index)}
+                      >
+                        <span />
+                      </button>
+                    ),
+                  )}
+                </div>
+              </>
+            )}
+          </section>
+          {!loading && !showOffer && selected && (
+            <>
+              {selected.demo && (
+                <p className="mx-4 mb-2 text-center text-[12px] text-black/45 dark:text-white/45">
+                  Демо-карта · Пример меню выпущенной карты
+                </p>
+              )}
+              <section
+                className="grid grid-cols-4 gap-2 px-safe-4 pt-2"
+                aria-label="Действия с картой"
+              >
+                {actions.map(({ label, Icon, disabled, run }) => (
+                  <Button
+                    key={label}
+                    rounded
+                    clear
+                    disabled={disabled || Boolean(busy)}
+                    className={actionClass}
+                    onClick={() => {
+                      haptic("light");
+                      run();
+                    }}
+                  >
+                    <span className="flex min-w-0 flex-col items-center justify-center gap-1">
+                      <Icon className="h-[22px] w-[22px]" />
+                      <span className="w-full truncate text-[10px] font-medium leading-none">
+                        {label}
+                      </span>
+                    </span>
+                  </Button>
+                ))}
+              </section>
             </>
           )}
-        </section>
+        </div>
         {loading ? (
           <section
             className="wpay-cards-loading px-4"
@@ -1206,36 +1242,6 @@ export default function WalletAuraCards({
         ) : (
           selected && (
             <>
-              {selected.demo && (
-                <p className="mx-4 mb-2 text-center text-[12px] text-black/45 dark:text-white/45">
-                  Демо-карта · Пример меню выпущенной карты
-                </p>
-              )}
-              <section
-                className="grid grid-cols-4 gap-2 px-safe-4 pt-2"
-                aria-label="Действия с картой"
-              >
-                {actions.map(({ label, Icon, disabled, run }) => (
-                  <Button
-                    key={label}
-                    rounded
-                    clear
-                    disabled={disabled || Boolean(busy)}
-                    className={actionClass}
-                    onClick={() => {
-                      haptic("light");
-                      run();
-                    }}
-                  >
-                    <span className="flex min-w-0 flex-col items-center justify-center gap-1">
-                      <Icon className="h-[22px] w-[22px]" />
-                      <span className="w-full truncate text-[10px] font-medium leading-none">
-                        {label}
-                      </span>
-                    </span>
-                  </Button>
-                ))}
-              </section>
               {physical && (
                 <>
                   <div className="wpay-aura-section-head">
