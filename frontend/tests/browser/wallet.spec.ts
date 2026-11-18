@@ -1354,14 +1354,16 @@ test("desktop verification shows the steps and goes back from contacts", async (
   }));
   await page.getByRole("navigation", { name: "Основное" }).getByRole("button", { name: "Профиль" }).click();
   await page.getByRole("link", { name: /Верификация/ }).click();
-  const verification = page.getByRole("main").filter({ has: page.getByRole("heading", { name: "Верификация", exact: true }) });
+  const verification = page.locator("main.wpay-verification-layout");
+  const header = verification.locator(".k-navbar");
+  await expect(header.getByText("Верификация", { exact: true })).toBeVisible();
   const steps = verification.getByRole("complementary", { name: "Этапы проверки" });
   await expect(steps).toBeVisible();
   await verification.getByRole("button", { name: "Начать", exact: true }).click();
   await expect(verification.locator("#verification-phone")).toBeVisible();
-  await verification.getByRole("button", { name: "Назад", exact: true }).click();
+  await header.getByLabel("Назад", { exact: true }).click();
   await expect(verification.getByRole("button", { name: "Начать", exact: true })).toBeVisible();
-  await verification.getByRole("button", { name: "Назад", exact: true }).click();
+  await header.getByLabel("Назад", { exact: true }).click();
   await expect(steps).toBeHidden();
 });
 

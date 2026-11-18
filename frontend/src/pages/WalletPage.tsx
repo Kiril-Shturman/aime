@@ -11,7 +11,7 @@ import WalletAssetAvatar from "./WalletAssetAvatar";
 import { type PointerEvent as ReactPointerEvent } from "react";
 import SunMax from "framework7-icons/react/esm/SunMax.js";
 import MoonStars from "framework7-icons/react/esm/MoonStars.js";
-import { WalletNavbar, PushViewShell } from "./WalletNavigation";
+import { WalletNavbar, WalletBackLink, PushViewShell } from "./WalletNavigation";
 import { usePullToRefresh, PullRefreshIndicator } from "./WalletScroll";
 import { assetIconStyle, type Asset } from "../wallet/appearance";
 import { CurrencyRow, CurrencySkeletonRow } from "./WalletCurrencyRow";
@@ -54,7 +54,7 @@ import "./WalletFramework7.css";
 import "framework7/components/popup/css";
 import "framework7/components/sheet/css";
 import "./WalletExchange.css";
-import { ArrowLeft, Search, Check, Delete } from "lucide-react";
+import { Search, Check, Delete } from "lucide-react";
 import "./WalletProfile.css";
 import "./WalletCard.css";
 import {
@@ -3475,10 +3475,12 @@ function ProfileSettingsPushView({
           {displayPage === "verification" && (
             <>
               <div className="wpay-verification-desktop-heading">
-                <button type="button" aria-label="Назад" onClick={backFromProfilePage}>
-                  <ArrowLeft size={20} aria-hidden="true" />
-                </button>
-                <h1>Верификация</h1>
+                <WalletNavbar
+                  title="Верификация"
+                  active={page === "verification"}
+                  left={<WalletBackLink onClick={backFromProfilePage} />}
+                  right={<span />}
+                />
               </div>
               <WalletVerification
                 aura={aura}

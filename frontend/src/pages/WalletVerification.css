@@ -1384,21 +1384,10 @@
   }
   .wpay-verification-desktop-heading {
     grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    gap: 14px;
+    display: block;
+    --wpay-top-inset: 0px;
   }
-  .wpay-verification-desktop-heading button {
-    display: grid;
-    width: 42px;
-    height: 42px;
-    place-items: center;
-    border-radius: 50%;
-    background: #0000000c;
-    color: inherit;
-  }
-  .dark .wpay-verification-desktop-heading button { background: #ffffff14; }
-  .wpay-verification-desktop-heading h1 { margin: 0; font-size: 22px; font-weight: 650; }
+  .wpay-verification-desktop-heading > .k-navbar { padding-top: 0; }
   .wpay-verification-layout > .wpay-verification {
     border-radius: 28px;
     background: #fff;

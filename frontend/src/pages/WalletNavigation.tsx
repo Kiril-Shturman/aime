@@ -138,6 +138,15 @@ export function WalletNavbar({
   );
 }
 
+export function WalletBackLink({ onClick }: { onClick: () => void }) {
+  return (
+    <KLink onClick={onClick} aria-label="Назад" className="!-ml-2 !gap-0 !text-primary">
+      <ChevronLeft className="text-[29px]" />
+      <span className="-ml-1 text-[17px]">Назад</span>
+    </KLink>
+  );
+}
+
 export function PushViewShell({
   open,
   title,
@@ -205,16 +214,7 @@ export function PushViewShell({
       menuItems={menuItems}
       active={open}
       subtitle={subtitle}
-      left={
-        <KLink
-          onClick={onClose}
-          aria-label="Назад"
-          className="!-ml-2 !gap-0 !text-primary"
-        >
-          <ChevronLeft className="text-[29px]" />
-          <span className="-ml-1 text-[17px]">Назад</span>
-        </KLink>
-      }
+      left={<WalletBackLink onClick={onClose} />}
     />
   );
 
