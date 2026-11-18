@@ -1401,7 +1401,14 @@
     display: block;
     --wpay-top-inset: 0px;
   }
-  .wpay-verification-desktop-heading > .k-navbar { padding-top: 0; }
+  .wpay-verification-desktop-heading > .k-navbar {
+    padding-top: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .wpay-verification-desktop-heading > .k-navbar > :not(.wpay-navbar-inner) {
+    display: none;
+  }
   .wpay-verification-layout > .wpay-verification {
     border-radius: 28px;
     background: #fff;
