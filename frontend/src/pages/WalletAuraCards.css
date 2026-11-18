@@ -438,10 +438,6 @@
     max-width: 780px !important;
     margin-left: 0 !important;
   }
-  .wpay-aura-cards section[aria-label="Выбор карты"] {
-    max-width: 560px;
-    margin: 0 auto;
-  }
 }
 
 .wpay-premium-delivery {
