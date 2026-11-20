@@ -1818,7 +1818,9 @@ function CryptoFlowPushView({
                       className="flex min-h-12 shrink-0 items-center gap-2 py-1 pl-2 text-black dark:text-white"
                     >
                       {usdtNetwork ? (
-                        <WalletAssetAvatar icon={asset.icon} color={asset.color} iconColor={asset.iconColor} network={usdtNetwork} />
+                        <span className="wpay-exchange-asset-avatar">
+                          <WalletAssetAvatar icon={asset.icon} color={asset.color} iconColor={asset.iconColor} network={usdtNetwork} />
+                        </span>
                       ) : (
                       <span
                         className="flex h-8 w-8 items-center justify-center rounded-full [&>svg]:!h-[21px] [&>svg]:!w-[21px]"

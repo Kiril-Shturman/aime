@@ -10,3 +10,15 @@
 .wpay-exchange-sheet .sheet-modal-inner { display: flex; flex-direction: column; }
 .wpay-exchange-sheet .wpay-exchange-picker-header { touch-action: pan-x; }
 .wpay-f7-root .wpay-exchange-sheet.sheet-modal { z-index: 13500; }
+
+.wpay-exchange-asset-avatar .wpay-address-avatar,
+.wpay-exchange-asset-avatar .wpay-currency-icon { width: 32px; height: 32px; }
+.wpay-exchange-asset-avatar .wpay-currency-icon > svg { width: 21px !important; height: 21px !important; }
+.wpay-exchange-asset-avatar .wpay-address-network-badge {
+  inset: auto -4px -2px auto;
+  width: 15px;
+  height: 15px;
+  border-width: 1px;
+  border-radius: 4px;
+}
+.wpay-exchange-asset-avatar .wpay-address-network-badge svg { width: 9px; height: 9px; }
