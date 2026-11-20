@@ -2259,3 +2259,45 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AuraUserWithdrawalTests(unittest.IsolatedAsyncioTestCase):
+    async def test_timeout_reuses_reservation_and_terminal_result_settles_once(self):
+        from types import SimpleNamespace
+        from wallet_aura import _position_adjust, store_withdrawal_snapshot, user_withdrawal
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Ledger(tmp + "/wallet")
+            prepare_inbox(ledger)
+            prepare(ledger)
+            uid = "tg:123"
+            ledger.account(uid)
+            ledger.put_balance(uid, "USDT", Decimal("10"), Decimal("0"))
+            _position_adjust(ledger, "test", uid, "USDT", Decimal("10"), Decimal("0"))
+            key = "11111111-1111-4111-8111-111111111111"
+            address = "T" + "A" * 33
+            body = {"address": address, "amount": "3", "fee": "2"}
+            snapshot = {
+                "withdrawal_id": "22222222-2222-4222-8222-222222222222",
+                "address": address, "amount": "3", "fee": "2", "network": "TRC20",
+                "currency": "USDT", "status": "processing", "tx_hash": None,
+                "failure_reason": None, "completed_at": None,
+                "created_at": "2026-11-21T00:00:00Z",
+            }
+            create = AsyncMock(side_effect=[TimeoutError(), snapshot])
+            client = SimpleNamespace(error_cls=ApiError, create_withdrawal=create)
+            with self.assertRaises(TimeoutError):
+                await user_withdrawal(ledger, client, "test", uid, body, key, Decimal("2"))
+            self.assertEqual(ledger.balance(uid, "USDT"), (Decimal("5"), Decimal("5")))
+            await user_withdrawal(ledger, client, "test", uid, body, key, Decimal("2"))
+            self.assertEqual(create.await_args_list[0], create.await_args_list[1])
+            finished = dict(snapshot, status="completed", tx_hash="hash",
+                            completed_at="2026-11-21T00:01:00Z")
+            store_withdrawal_snapshot(ledger, "test", finished)
+            store_withdrawal_snapshot(ledger, "test", finished)
+            self.assertEqual(ledger.balance(uid, "USDT"), (Decimal("5"), Decimal("0")))
+            self.assertEqual(ledger.db.execute(
+                "SELECT available FROM wallet_provider_positions WHERE user_id=?", (uid,),
+            ).fetchone()[0], "5")
+            ledger.book.verify()
+            ledger.db.close()

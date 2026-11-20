@@ -49,6 +49,7 @@ from wallet_aura import (
     receive_webhook as receive_aura_webhook, process_inbox as process_aura_inbox,
     reconcile as reconcile_aura, run_worker as run_aura_worker,
     reconcile_pending as reconcile_aura_pending, store_withdrawal_snapshot,
+    user_withdrawal as aura_user_withdrawal,
 )
 
 BASE_URL = 'https://goswap.site/api/'
@@ -1734,6 +1735,35 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            if action == 'aura-user-withdrawal' and request.method in {'GET', 'POST'}:
+                require_asset_enabled('USDT', 'TRON')
+                if deposit_provider('USDT', 'TRON') != 'aura' or not aura_enabled or not aura_client.configured:
+                    raise ApiError('NOT_CONFIGURED', 'Вывод через Aura недоступен', 503)
+                fee = money(os.environ.get('AURA_WITHDRAWAL_FEE_USDT', '2'), positive=False)
+                if fee < 0:
+                    raise ApiError('NOT_CONFIGURED', 'Комиссия Aura не настроена', 503)
+                if request.method == 'POST':
+                    return web.json_response(await aura_user_withdrawal(
+                        ledger, aura_client, aura_environment, uid, await request.json(),
+                        request.headers.get('Idempotency-Key', ''), fee,
+                    ))
+                position = ledger.db.execute(
+                    "SELECT available FROM wallet_provider_positions WHERE provider='aura' "
+                    "AND environment=? AND user_id=? AND asset='USDT'", (aura_environment, uid),
+                ).fetchone()
+                pending = ledger.db.execute(
+                    "SELECT request_body FROM wallet_provider_entities WHERE provider='aura' "
+                    "AND environment=? AND entity_type='withdrawal' AND user_id=? "
+                    "AND remote_id IS NULL AND status='reserved' LIMIT 1", (aura_environment, uid),
+                ).fetchone()
+                available, _ = ledger.balance(uid, 'USDT')
+                response = web.json_response({
+                    'available': str(min(available, Decimal(position[0])) if position else 0),
+                    'fee': str(fee), 'environment': aura_environment,
+                    'pending': json.loads(pending[0]) if pending else None,
+                })
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             if action == 'addresses' and request.method == 'GET':
                 items = [
                     {**json.loads(row['body']), 'provider': 'goswap'}

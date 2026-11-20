@@ -128,6 +128,7 @@ type Action = {
   icon: ComponentType<{ className?: string }>;
 };
 
+import WalletAuraWithdrawal from "./WalletAuraWithdrawal";
 import WalletAssetPanel from "./WalletAssetPanel";
 import {
   WalletLiveProvider,
@@ -1075,6 +1076,7 @@ function AssetPushView({
                                 : "exchange",
                             displayAsset.code,
                             addressEntry.network,
+                            action.label === "Вывести" ? addressEntry : undefined,
                           );
                       },
                     }))}
@@ -2054,6 +2056,13 @@ function CryptoFlowPushView({
     );
   }
 
+  if (displayFlow.depositAddress?.provider === "aura") {
+    return (
+      <PushViewShell open={flow !== null} title="Вывести USDT · TRC‑20" onClose={onClose}>
+        {flow && <WalletAuraWithdrawal />}
+      </PushViewShell>
+    );
+  }
   return <WithdrawalMethodsView open={flow !== null} onClose={onClose} />;
 }
 
