@@ -1558,12 +1558,12 @@ function CryptoFlowPushView({
   const [assetPicker, setAssetPicker] = useState<"from" | "to" | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
 
-  const [networkSelection, setNetworkSelection] = useState<{ side: "from" | "to"; network: string } | null>(null);
+  const [selectedUsdtNetwork, setSelectedUsdtNetwork] = useState("BSC");
   const [usdtNetworkBalances, setUsdtNetworkBalances] = useState<Record<string, number>>({});
   const usdtAvailable = availableAssets.some((asset) => asset.code === "USDT");
 
   useEffect(() => {
-    if (!assetPicker || !usdtAvailable) return;
+    if (flow?.kind !== "exchange" || !usdtAvailable) return;
     const controller = new AbortController();
     setUsdtNetworkBalances({});
     void walletRequest<{ items: { network: string; balance?: { status: string; amount: string | null } }[] }>(
@@ -1583,12 +1583,12 @@ function CryptoFlowPushView({
       setUsdtNetworkBalances(sums);
     }).catch(() => {});
     return () => controller.abort();
-  }, [assetPicker, usdtAvailable]);
+  }, [flow?.kind, usdtAvailable]);
 
   useEffect(() => {
     if (!flow) return;
     setDisplayFlow(flow);
-    setNetworkSelection(null);
+    setSelectedUsdtNetwork(flow.network ?? "BSC");
     if (flow.kind === "exchange")
       setNetworkExchange(!flow.assetCode || flow.assetCode === "USDT");
     setAssetPicker(null);
@@ -1622,6 +1622,12 @@ function CryptoFlowPushView({
   const balances: Record<string, number> = Object.fromEntries(
     availableAssets.map((item) => [item.code, Number(live.balance(item.code))]),
   );
+  const usdtRoutes = live.assetRoutes.USDT ?? [];
+  const activeUsdtNetwork = usdtRoutes.includes(selectedUsdtNetwork)
+    ? selectedUsdtNetwork
+    : usdtRoutes[0];
+  const selectedUsdtBalance = activeUsdtNetwork ? usdtNetworkBalances[activeUsdtNetwork] : undefined;
+  const fromBalance = fromAsset.code === "USDT" ? selectedUsdtBalance : balances[fromAsset.code];
   const parsedAmount = Number(amount.replace(",", ".")) || 0;
   const exchangeRate =
     (usdRates[fromAsset.code] ?? 0) / (usdRates[toAsset.code] || 1);
@@ -1680,8 +1686,7 @@ function CryptoFlowPushView({
         {exchangeTabs}
         <WalletNetworkExchange
           active={flow?.kind === "exchange"}
-          initialNetwork={networkSelection?.side === "from" ? networkSelection.network : flow?.network}
-          initialDestinationNetwork={networkSelection?.side === "to" ? networkSelection.network : undefined}
+          initialNetwork={flow?.network}
         />
       </PushViewShell>
     );
@@ -1722,8 +1727,8 @@ function CryptoFlowPushView({
     ].filter((group) => group.visible);
 
     const balancePercent =
-      balances[fromCode] > 0
-        ? Math.min(100, Math.max(0, (parsedAmount / balances[fromCode]) * 100))
+      (fromBalance ?? 0) > 0
+        ? Math.min(100, Math.max(0, (parsedAmount / (fromBalance ?? 0)) * 100))
         : 0;
     const enterKey = (key: string) => {
       haptic("light");
@@ -1754,7 +1759,8 @@ function CryptoFlowPushView({
             {(["from", "to"] as const).map((side) => {
               const giving = side === "from",
                 asset = giving ? fromAsset : toAsset;
-              const usdtNetwork = asset.code === "USDT" ? "BSC" : undefined;
+              const usdtNetwork = asset.code === "USDT" ? activeUsdtNetwork : undefined;
+              const displayBalance = asset.code === "USDT" ? selectedUsdtBalance : balances[asset.code];
               const network = usdtNetwork ? addressNetworkStandards[usdtNetwork] : null;
               return (
                 <section
@@ -1765,9 +1771,9 @@ function CryptoFlowPushView({
                     <span>{giving ? "Отдаёте" : "Получаете"}</span>
                     <span className="flex items-center gap-1.5 text-[13px]">
                       <WalletFill className="text-[15px]" />
-                      <span className="tabular-nums">
-                        {live.ready
-                          ? formatCrypto(balances[asset.code] ?? 0)
+                      <span className="tabular-nums" aria-label="Баланс валюты">
+                        {live.ready && displayBalance !== undefined
+                          ? formatCrypto(displayBalance)
                           : "—"}
                       </span>
                     </span>
@@ -1810,7 +1816,7 @@ function CryptoFlowPushView({
                         setPickerQuery("");
                         setAssetPicker(side);
                       }}
-                      className="flex min-h-12 shrink-0 items-center gap-2 py-1 pl-2 text-black dark:text-white"
+                      className="grid min-h-12 w-[116px] shrink-0 grid-cols-[28px_minmax(0,1fr)_16px] items-center gap-2 py-1 pl-1 text-black dark:text-white"
                     >
                       {usdtNetwork ? (
                         <span className="wpay-exchange-asset-avatar">
@@ -1818,7 +1824,7 @@ function CryptoFlowPushView({
                         </span>
                       ) : (
                       <span
-                        className="flex h-8 w-8 items-center justify-center rounded-full [&>svg]:!h-[21px] [&>svg]:!w-[21px]"
+                        className="flex h-7 w-7 items-center justify-center rounded-full [&>svg]:!h-4 [&>svg]:!w-4"
                         style={assetIconStyle(asset)}
                       >
                         {asset.icon}
@@ -1866,13 +1872,13 @@ function CryptoFlowPushView({
               max="100"
               step="1"
               value={balancePercent}
-              disabled={!live.ready || !(balances[fromCode] > 0)}
+              disabled={!live.ready || !((fromBalance ?? 0) > 0)}
               onChange={(e) =>
                 setAmount(
                   String(
                     Number(
                       (
-                        ((balances[fromCode] ?? 0) * Number(e.target.value)) /
+                        ((fromBalance ?? 0) * Number(e.target.value)) /
                         100
                       ).toFixed(8),
                     ),
@@ -1884,7 +1890,7 @@ function CryptoFlowPushView({
             <button
               type="button"
               disabled={!live.ready}
-              onClick={() => setAmount(String(balances[fromCode] ?? 0))}
+              onClick={() => setAmount(String(fromBalance ?? 0))}
               className="min-h-11 text-[14px] font-medium text-primary disabled:opacity-40"
             >
               Макс
@@ -1937,7 +1943,7 @@ function CryptoFlowPushView({
               !(parsedAmount > 0) ||
               !hasRate ||
               !live.ready ||
-              parsedAmount > (balances[fromCode] ?? 0)
+              parsedAmount > (fromBalance ?? 0)
             }
             onClick={() =>
               showNotice("Обмен пока недоступен. Средства не списываются.")
@@ -2015,11 +2021,8 @@ function CryptoFlowPushView({
                       contentClassName="!h-16"
                       innerClassName="!h-16 !min-w-0 !py-2 after:!opacity-30"
                       onClick={() => {
-                        if (!assetPicker) return;
-                        setNetworkSelection({ side: assetPicker, network });
-                        setAssetPicker(null);
-                        setNetworkExchange(true);
-                        haptic("light");
+                        setSelectedUsdtNetwork(network);
+                        selectExchangeAsset("USDT");
                       }}
                       media={<WalletAssetAvatar icon={tether.icon} color={tether.color} iconColor={tether.iconColor} network={network} />}
                       innerChildren={

@@ -1447,5 +1447,6 @@ test("exchange picker groups USDT networks and searches by network or ticker", a
   await expect(coins).toHaveCount(0);
   await expect(networks.getByText("USDT · TRC20", { exact: true })).toBeVisible();
   await networks.getByText("USDT · TRC20", { exact: true }).click();
-  await expect(page.getByLabel("Сеть отправления USDT")).toHaveValue("TRON");
+  await expect(page.getByRole("button", { name: "Валюта списания" })).toContainText("TRC20");
+  await expect(page.getByLabel("Баланс валюты").first()).toHaveText("12.5");
 });
