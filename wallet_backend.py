@@ -11,6 +11,7 @@ from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limit
 from wallet_key_export import prepare as prepare_key_export, route as key_export_route
 from wallet_exchange_funding import Funding
 from wallet_custody_withdrawal import CustodyWithdrawal
+from wallet_admin_wallets import user_wallet_inventory
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
 from wallet_chain import ASSET_NETWORKS as CUSTODY_ASSET_NETWORKS, ChainReader
 from wallet_aura_errors import wallet_error_payload
@@ -977,7 +978,7 @@ def install_wallet(app, root, owner_check):
         prefix = '+' + digits[0] if str(value).strip().startswith('+') else digits[0]
         return f'{prefix} *** ***-**-{digits[-2:]}'
 
-    def admin_user(request):
+    async def admin_user(request):
         user_id = str(request.query.get('user_id') or '')
         if not user_id.startswith('tg:') or not user_id[3:].isdigit():
             raise ValueError('Некорректный идентификатор пользователя')
@@ -1012,6 +1013,7 @@ def install_wallet(app, root, owner_check):
                     'ORDER BY updated_at DESC LIMIT 50', (user_id,),
                 ),
             },
+            'wallets': await user_wallet_inventory(ledger, app['wpay_chain'], user_id),
             'balances': decoded_rows(
                 'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=? ORDER BY asset',
                 (user_id,),
@@ -1851,7 +1853,7 @@ def install_wallet(app, root, owner_check):
             if action == 'admin-users' and request.method == 'GET':
                 return web.json_response(admin_users())
             if action == 'admin-user' and request.method == 'GET':
-                return web.json_response(admin_user(request), headers={'Cache-Control': 'private, no-store'})
+                return web.json_response(await admin_user(request), headers={'Cache-Control': 'private, no-store'})
             if action == 'admin-user-action' and request.method == 'POST':
                 return web.json_response(
                     await admin_user_action(request, uid),

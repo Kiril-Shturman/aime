@@ -77,11 +77,30 @@ type AdminOverview = {
   provider: { balance: Json[] };
 };
 type UsersData = { items: Json[]; total: number };
+type AdminWallet = {
+  provider: "wpay" | "aura" | "goswap";
+  environment: string | null;
+  network: string;
+  asset: string;
+  address: string;
+  available: string | null;
+  reserved: string | null;
+  balance_scope: "onchain" | "provider" | "network";
+  hidden?: boolean;
+};
+const walletProviderNames = { wpay: "wPay", aura: "Aura", goswap: "GoSwap" };
+const walletBalanceLabels = {
+  onchain: "Баланс сети",
+  provider: "Общий остаток Aura",
+  network: "Остаток по учёту wPay",
+};
+
 type AdminUserDetail = {
   account: Json;
   contacts: { email: string | null; phone: string | null; updated_at: unknown };
   aura: { customer: Json | null; kyc: Json | null; cards: Json[] };
   balances: Json[];
+  wallets?: AdminWallet[];
   addresses: Json[];
   events: Json[];
   notifications: Json[];
@@ -2282,6 +2301,35 @@ function AdminUserDrawer({
               </section>
 
               <section className="wpay-admin-user-section">
+                <h3>Кошельки и адреса</h3>
+                {detail.wallets?.length ? (
+                  <div className="grid gap-2">
+                    {detail.wallets.map((wallet) => (
+                      <div key={[wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address].join(":")}
+                        className="rounded-xl border border-[var(--admin-border)] p-3">
+                        <Row title={`${wallet.asset} · ${wallet.network} · ${walletProviderNames[wallet.provider]}`}
+                          subtitle={[
+                            wallet.environment,
+                            wallet.provider === "aura" && wallet.available === null
+                              ? "Дополнительный адрес Aura"
+                              : walletBalanceLabels[wallet.balance_scope],
+                            wallet.hidden ? "Скрыт пользователем" : null,
+                          ].filter(Boolean).join(" · ")}
+                          right={wallet.available === null
+                            ? (wallet.provider === "aura" ? "Общий остаток выше" : "Нет данных")
+                            : `${wallet.available} ${wallet.asset}`}
+                        />
+                        {wallet.reserved && Number(wallet.reserved) > 0 && (
+                          <p className="mt-1 text-xs opacity-60">Резерв {wallet.reserved} {wallet.asset}</p>
+                        )}
+                        <p className="mt-2 select-text break-all font-mono text-xs opacity-70">{wallet.address}</p>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="wpay-admin-user-empty">Кошельков пока нет.</p>}
+              </section>
+
+              <section className="wpay-admin-user-section">
                 <h3>Балансы</h3>
                 {detail.balances.length ? (
                   detail.balances.map((balance, index) => (
@@ -2330,7 +2378,7 @@ function AdminUserDrawer({
                     {actionWorking === "adjust_balance" ? "Проводим…" : "Провести корректировку"}
                   </button>
                   <small>
-                    Это бухгалтерская корректировка, а не пополнение провайдера. При отсутствии обеспечения сверка покажет дефицит.
+                    В тестовом контуре корректировка USDT использует доступный резерв Aura. GoSwap не ведёт отдельный баланс пользователя. Для остальных корректировок обеспечение проверяется сверкой.
                   </small>
                 </div>
               </section>
