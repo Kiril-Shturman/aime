@@ -330,12 +330,10 @@
 @media(min-width:1100px){
  .wpay-viewport[data-wallet-surface][aria-hidden=true]{visibility:hidden;pointer-events:none}
  .wpay-viewport[data-wallet-surface] main.wpay-exchange-desktop{display:grid;grid-template-columns:minmax(0,1fr) 300px;column-gap:40px;align-items:start;max-width:960px;padding-top:56px}
- .wpay-exchange-desktop>div:first-child{grid-column:1;grid-row:1 / span 3}
- .wpay-exchange-desktop>p[role=status]{grid-column:1;grid-row:4}
- .wpay-exchange-desktop>div:nth-child(3){grid-column:2;grid-row:1}
- .wpay-exchange-desktop>div[aria-label="Цифровая клавиатура"]{grid-column:2;grid-row:2 / span 2}
- .wpay-exchange-desktop>button{grid-column:2;grid-row:4}
- .wpay-exchange-desktop>p:last-child{grid-column:2;grid-row:5}
+ .wpay-exchange-desktop>div:first-child{grid-column:1;grid-row:1 / span 2}
+ .wpay-exchange-desktop>p[role=status]{grid-column:1;grid-row:3}
+ .wpay-exchange-desktop>button{grid-column:2;grid-row:1}
+ .wpay-exchange-desktop>p:last-child{grid-column:2;grid-row:2}
 }
 
 

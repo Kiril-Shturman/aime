@@ -1431,6 +1431,11 @@ test("exchange picker groups USDT networks and searches by network or ticker", a
   }));
   await page.getByRole("button", { name: "Обменять", exact: true }).click();
   await page.getByRole("button", { name: "Другие валюты" }).click();
+  const amount = page.getByRole("textbox", { name: "Сумма в USDT" });
+  await expect(amount).toHaveAttribute("inputmode", "decimal");
+  await amount.fill("1,25");
+  await expect(amount).toHaveValue("1,25");
+  await expect(page.getByRole("slider", { name: "Доля доступного баланса" })).toHaveCount(0);
   await page.getByRole("button", { name: "Валюта списания" }).click();
   const picker = page.getByRole("region", { name: "Валюты для обмена" });
   const networks = picker.locator('[aria-label="USDT"]');

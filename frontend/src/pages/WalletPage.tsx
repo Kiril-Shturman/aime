@@ -55,7 +55,7 @@ import "./WalletFramework7.css";
 import "framework7/components/popup/css";
 import "framework7/components/sheet/css";
 import "./WalletExchange.css";
-import { Search, Check, Delete } from "lucide-react";
+import { Search, Check } from "lucide-react";
 import "./WalletProfile.css";
 import "./WalletCard.css";
 import {
@@ -1736,23 +1736,6 @@ function CryptoFlowPushView({
       { label: "Другие валюты", items: pickerAssets, visible: pickerAssets.length > 0 },
     ].filter((group) => group.visible);
 
-    const balancePercent =
-      (fromBalance ?? 0) > 0
-        ? Math.min(100, Math.max(0, (parsedAmount / (fromBalance ?? 0)) * 100))
-        : 0;
-    const enterKey = (key: string) => {
-      haptic("light");
-      setAmount((previous) => {
-        if (key === "delete") return previous.slice(0, -1);
-        const digit = key === "," ? "." : key;
-        if (digit === ".")
-          return /[.,]/.test(previous) ? previous : (previous || "0") + ".";
-        if (previous.length >= 18) return previous;
-        const fraction = previous.split(/[.,]/)[1];
-        if (fraction !== undefined && fraction.length >= 8) return previous;
-        return previous === "0" ? digit : previous + digit;
-      });
-    };
     const hasRate =
       (live.rate(fromAsset.code) ?? 0) > 0 &&
       (live.rate(toAsset.code) ?? 0) > 0;
@@ -1792,18 +1775,14 @@ function CryptoFlowPushView({
                     {giving ? (
                       <input
                         aria-label={`Сумма в ${asset.code}`}
-                        inputMode="none"
-                        readOnly
+                        type="text"
+                        inputMode="decimal"
                         value={amount}
                         placeholder="0"
-                        onKeyDown={(e) => {
-                          if (/^[0-9.,]$/.test(e.key)) {
-                            e.preventDefault();
-                            enterKey(e.key);
-                          } else if (e.key === "Backspace") {
-                            e.preventDefault();
-                            enterKey("delete");
-                          }
+                        maxLength={18}
+                        onChange={(event) => {
+                          const value = event.currentTarget.value;
+                          if (/^\d*(?:[.,]\d{0,8})?$/.test(value)) setAmount(value);
                         }}
                         className="min-w-0 flex-1 bg-transparent p-0 text-left text-[44px] font-medium leading-none tracking-tight text-black outline-none placeholder:text-black/30 dark:text-white dark:placeholder:text-white/30"
                       />
@@ -1867,84 +1846,6 @@ function CryptoFlowPushView({
               ? `1 ${fromAsset.code} ≈ ${formatCrypto(exchangeRate, 8)} ${toAsset.code}`
               : "Курс пока недоступен"}
           </p>
-          <div className="flex h-11 items-center gap-4 px-2">
-            <button
-              type="button"
-              onClick={() => setAmount("")}
-              className="min-h-11 text-[14px] font-medium text-primary"
-            >
-              Мин
-            </button>
-            <input
-              aria-label="Доля доступного баланса"
-              type="range"
-              min="0"
-              max="100"
-              step="1"
-              value={balancePercent}
-              disabled={!live.ready || !((fromBalance ?? 0) > 0)}
-              onChange={(e) =>
-                setAmount(
-                  String(
-                    Number(
-                      (
-                        ((fromBalance ?? 0) * Number(e.target.value)) /
-                        100
-                      ).toFixed(8),
-                    ),
-                  ),
-                )
-              }
-              className="h-1.5 min-w-0 flex-1 cursor-pointer accent-[#3275e9] disabled:opacity-35"
-            />
-            <button
-              type="button"
-              disabled={!live.ready}
-              onClick={() => setAmount(String(fromBalance ?? 0))}
-              className="min-h-11 text-[14px] font-medium text-primary disabled:opacity-40"
-            >
-              Макс
-            </button>
-          </div>
-          <div
-            className="mt-2 grid grid-cols-3 gap-x-3 gap-y-1"
-            aria-label="Цифровая клавиатура"
-          >
-            {[
-              "1",
-              "2",
-              "3",
-              "4",
-              "5",
-              "6",
-              "7",
-              "8",
-              "9",
-              ".",
-              "0",
-              "delete",
-            ].map((key) => (
-              <button
-                key={key}
-                type="button"
-                aria-label={
-                  key === "delete"
-                    ? "Удалить цифру"
-                    : key === "."
-                      ? "Десятичный разделитель"
-                      : key
-                }
-                onClick={() => enterKey(key)}
-                className="flex h-[clamp(44px,7dvh,64px)] items-center justify-center rounded-2xl text-[31px] font-medium text-black transition-colors active:bg-black/5 dark:text-white dark:active:bg-white/10"
-              >
-                {key === "delete" ? (
-                  <Delete size={25} strokeWidth={1.8} />
-                ) : (
-                  key
-                )}
-              </button>
-            ))}
-          </div>
           <Button
             data-wpay-primary=""
             large
@@ -1958,7 +1859,7 @@ function CryptoFlowPushView({
             onClick={() =>
               showNotice("Обмен пока недоступен. Средства не списываются.")
             }
-            className="wpay-bottom-action !mt-5 !h-14 !w-full !rounded-[22px] !text-[17px] !font-semibold"
+            className="!mt-5 !h-14 !w-full !rounded-[22px] !text-[17px] !font-semibold"
           >
             Продолжить
           </Button>
