@@ -480,7 +480,7 @@ class CustodyRouteTests(unittest.IsolatedAsyncioTestCase):
             {"asset": "USDT", "address": "0x123"},
             {"asset": "USDT", "contract": "0x123"},
             {"asset": "USDT", "network": "ETH"},
-            {"asset": "GRAM"},
+            {"asset": "UNLISTED"},
             {"asset": []},
         ]:
             response = await self.client.post(

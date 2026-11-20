@@ -15,6 +15,7 @@ ASSET_NETWORKS = {
     "ETH": ["ETH"],
     "BNB": ["BSC"],
     "TON": ["TON"],
+    "GRAM": ["TON"],
     "SOL": ["SOL"],
     "TRX": ["TRON"],
     "USDT": ["BSC", "ETH", "TON", "SOL", "TRON"],
@@ -127,7 +128,7 @@ class ChainReader:
         )
         if network not in ASSET_NETWORKS.get(asset, []):
             raise ValueError("Unsupported asset/network")
-        if asset != NATIVE[network] and env != "mainnet":
+        if asset != NATIVE[network] and (asset, network) != ("GRAM", "TON") and env != "mainnet":
             raise ValueError("Mainnet token is not a testnet token")
         if network in {"ETH", "BSC"}:
             urls = (
@@ -258,7 +259,7 @@ class ChainReader:
                 if env == "mainnet"
                 else "https://testnet.toncenter.com"
             )
-            if asset == "TON":
+            if asset in {"TON", "GRAM"}:
                 data = await self.request(
                     host
                     + "/api/v2/getAddressBalance?address="
@@ -439,7 +440,7 @@ class ChainReader:
             (row, asset)
             for row in rows
             for asset, networks in ASSET_NETWORKS.items()
-            if row["network"] in networks
+            if row["network"] in networks and asset != "GRAM"
         ]
         observations = await asyncio.gather(
             *(self.observe(row, asset) for row, asset in jobs)

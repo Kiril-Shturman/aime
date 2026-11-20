@@ -197,6 +197,8 @@ capability. The existing BNB-only flag remains available.
   and requires ETH to pay gas.
 - TRX uses a native transfer and budgets for recipient account activation.
 - SOL uses a recent blockhash and checks finalized signature status.
+- GRAM is the native currency of TON. The signer uses V4R2, estimates
+  deployment when needed, and tracks the outgoing message to the recipient.
 - BTC uses confirmed outputs from the user's BIP84 wallet and currently
   accepts mainnet P2WPKH destinations. Change returns to the source address.
   The signer waits for six confirmations and rechecks the block hash.

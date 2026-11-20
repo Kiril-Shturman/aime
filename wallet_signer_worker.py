@@ -129,7 +129,8 @@ class Controller:
         job, wallet = item['job'], item['wallet']
         if 'withdrawal' in item:
             quote = self.chains.estimate_withdrawal(item['withdrawal']['asset'], job['network'], wallet['address'],
-                                                    instructions['pay_address'], instructions['from_amount'])
+                                                    instructions['pay_address'], instructions['from_amount'],
+                                                    public_key=wallet['public_key'])
             quote['recipient'] = instructions['pay_address']
             return quote
         return self.chains.estimate(job['network'], wallet['address'], instructions['pay_address'],
@@ -157,7 +158,7 @@ class Controller:
         document = json.loads(SealedBox(self.private).decrypt(wallet['encrypted_secret']))
         seed = decode(document['seed'])
         try:
-            if wallet['network'] == 'SOL':
+            if wallet['network'] in {'SOL', 'TON'}:
                 return seed
             if wallet['network'] == 'BTC':
                 return Bip84.FromSeed(seed, Bip84Coins.BITCOIN).DeriveDefaultPath().PrivateKey().Raw().ToBytes()
@@ -212,6 +213,8 @@ class Controller:
                 approved_cost = quote['unsigned']['value'] + quote['unsigned']['gas'] * quote['unsigned']['gasPrice']
                 if atomic(current['native_balance'], 18) < approved_cost:
                     raise PaymentError('NO_GAS')
+            if job['network'] == 'TON' and current['unsigned']['seqno'] != quote['unsigned']['seqno']:
+                raise PaymentError('QUOTE_EXPIRED')
             if job['network'] == 'BTC' and current['unsigned'] != quote['unsigned']:
                 raise PaymentError('QUOTE_EXPIRED')
             private_key = self.key(wallet)
@@ -255,7 +258,7 @@ class Controller:
             self.bridge('export-complete', job_id=job['id'], ciphertext=None)
 
     def cycle(self):
-        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'SOL', 'BTC', *CUSTODY_WITHDRAWAL_CAPABILITIES.values()], key_id=self.key_id)
+        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'SOL', 'BTC', 'TON', *CUSTODY_WITHDRAWAL_CAPABILITIES.values()], key_id=self.key_id)
         export = self.bridge('export-claim')
         if export.get('job'):
             self.process_export(export)

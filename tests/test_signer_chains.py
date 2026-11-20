@@ -162,6 +162,28 @@ class SignerChainTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             adapter.verify(dict(quote, recipient=source), payload, txid)
 
+    def test_native_gram_wallet_derivation_fee_and_signed_message(self):
+        from wallet_signer_ton import Ton
+
+        adapter = Chains()
+        seed = b"g" * 32
+        source = derive(seed, "TON", "mainnet")
+        recipient = derive(b"d" * 32, "TON", "mainnet")["address"]
+        fees = {"source_fees": {
+            "in_fwd_fee": 100000, "storage_fee": 10000, "gas_fee": 200000, "fwd_fee": 100000,
+        }}
+        with patch.object(Ton, "request", side_effect=[
+            {"balance": "1000000000", "account_state": "uninitialized"}, fees,
+        ]) as request:
+            quote = adapter.estimate_withdrawal("GRAM", "TON", source["address"], recipient, "0.1",
+                                                public_key=source["public_key"])
+        self.assertIn("init_code", request.call_args_list[1].kwargs["body"])
+        self.assertEqual(quote["max_fee"], "0.00082")
+        payload, identifier = adapter.sign(quote, seed)
+        adapter.verify(quote, payload, identifier)
+        with self.assertRaises(Exception):
+            adapter.verify(dict(quote, amount="0.2"), payload, identifier)
+
     def test_exact_atomic_precision(self):
         self.assertEqual(atomic('1.000001', 6), 1000001)
         for value in ['0', '-1', 'NaN', '1.0000001']:

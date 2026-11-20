@@ -10,6 +10,7 @@ const networks: Record<string, string[]> = {
   ETH: ["ETH"],
   BNB: ["BSC"],
   TON: ["TON"],
+  GRAM: ["TON"],
   SOL: ["SOL"],
   TRX: ["TRON"],
   USDT: ["BSC", "ETH", "TON", "SOL", "TRON"],

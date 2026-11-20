@@ -58,7 +58,7 @@ export default function WalletCustodyWithdrawal({ asset, network }: { asset: str
   }, [asset, jobId, polling]);
 
   const normalized = amount.trim().replace(",", ".");
-  const precision = ({ TRX: 6, XAUT: 6, SOL: 9, BTC: 8 } as Record<string, number>)[asset] ?? 18;
+  const precision = ({ TRX: 6, XAUT: 6, SOL: 9, BTC: 8, GRAM: 9 } as Record<string, number>)[asset] ?? 18;
   const validAmount = new RegExp(`^\\d{1,12}(?:\\.\\d{1,${precision}})?$`).test(normalized) && /[1-9]/.test(normalized);
   const validAddress = network === "BTC" ? /^bc1q[a-z0-9]{38}$/.test(address.trim()) : isRecipientAddress(network, address.trim());
   const valid = validAddress && validAmount;
@@ -88,10 +88,10 @@ export default function WalletCustodyWithdrawal({ asset, network }: { asset: str
         <Card className="!m-0 !rounded-[28px]">
           <p className="font-semibold">{job.amount} {asset}</p>
           <p className="break-all text-sm opacity-60">{job.recipient}</p>
-          {quote && <p className="mt-2 text-sm">Максимальная комиссия {quote.max_fee} {quote.fee_currency}</p>}
+          {quote && <p className="mt-2 text-sm">{network === "TON" || network === "TRON" ? "Резерв на комиссию" : "Максимальная комиссия"} {quote.max_fee} {quote.fee_currency}</p>}
           {statuses[job.state] && <p role="status" className="mt-2">{statuses[job.state]}</p>}
           {job.detail && <p className="mt-2 text-sm">{job.detail}</p>}
-          {job.tx_hash && <p className="mt-2 break-all font-mono text-xs">{job.tx_hash}</p>}
+          {job.tx_hash && <p className="mt-2 break-all font-mono text-xs">{network === "TON" ? "Хеш сообщения: " : ""}{job.tx_hash}</p>}
         </Card>
       ) : (
         <>

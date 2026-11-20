@@ -124,6 +124,7 @@ class ChainTests(unittest.IsolatedAsyncioTestCase):
             self.reader, "request", return_value={"ok": True, "result": "0"}
         ):
             self.assertEqual(await self.reader.read(w, "TON"), ("0", "indexed"))
+            self.assertEqual(await self.reader.read(w, "GRAM"), ("0", "indexed"))
         with patch.object(self.reader, "request", return_value={"jetton_wallets": []}):
             self.assertEqual(await self.reader.read(w, "USDT"), ("0", "indexed"))
         payload = {
@@ -263,7 +264,7 @@ class ChainTests(unittest.IsolatedAsyncioTestCase):
                 await self.reader.read(w, "USDT")
 
     async def test_unknown_token_cannot_create_wallet(self):
-        for asset in ["GRAM", "http://attacker", "ETH;drop table"]:
+        for asset in ["UNLISTED", "http://attacker", "ETH;drop table"]:
             with self.assertRaises(ApiError):
                 await self.reader.asset(self.custody, "tg:123", asset)
         self.assertEqual(

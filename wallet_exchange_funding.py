@@ -6,10 +6,10 @@ import uuid
 from aiohttp import web
 
 NETWORKS={'BSC':'BNB','ETH':'ETH','TRON':'TRX'}
-CUSTODY_WITHDRAWAL_NETWORKS = {"BNB": "BSC", "ETH": "ETH", "XAUT": "ETH", "TRX": "TRON", "SOL": "SOL", "BTC": "BTC"}
+CUSTODY_WITHDRAWAL_NETWORKS = {"BNB": "BSC", "ETH": "ETH", "XAUT": "ETH", "TRX": "TRON", "SOL": "SOL", "BTC": "BTC", "GRAM": "TON"}
 CUSTODY_WITHDRAWAL_CAPABILITIES = {
     "BNB": "BNB_WITHDRAWAL", "ETH": "ETH_WITHDRAWAL",
-    "XAUT": "XAUT_WITHDRAWAL", "TRX": "TRX_WITHDRAWAL", "SOL": "SOL_WITHDRAWAL", "BTC": "BTC_WITHDRAWAL",
+    "XAUT": "XAUT_WITHDRAWAL", "TRX": "TRX_WITHDRAWAL", "SOL": "SOL_WITHDRAWAL", "BTC": "BTC_WITHDRAWAL", "GRAM": "GRAM_WITHDRAWAL",
 }
 ACTIVE={'estimating','quoted','confirmed','signing','signed','broadcast','unknown'}
 ERRORS={

@@ -42,6 +42,8 @@ class CustodyWithdrawal:
             P2WPKHAddrDecoder.DecodeAddr(value, hrp="bc")
             return value
         normalized = address(network, value)
+        if network == "TON":
+            return normalized
         return value if network in {"TRON", "SOL"} else "0x" + normalized
 
     def prepare(self, uid, body):
@@ -55,7 +57,7 @@ class CustodyWithdrawal:
             raise ValueError("Укажите адрес и сумму")
         recipient = self.recipient(network, body["address"])
         raw = body["amount"]
-        precision = {"XAUT": 6, "TRX": 6, "SOL": 9, "BTC": 8}.get(asset, 18)
+        precision = {"XAUT": 6, "TRX": 6, "SOL": 9, "BTC": 8, "GRAM": 9}.get(asset, 18)
         if not isinstance(raw, str) or not re.fullmatch(r"[0-9]{1,12}(?:\.[0-9]{1," + str(precision) + r"})?", raw):
             raise ValueError(f"Укажите сумму с точностью до {precision} знаков")
         amount = Decimal(raw)

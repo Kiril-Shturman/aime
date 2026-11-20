@@ -148,6 +148,10 @@ class Chains:
     def estimate_bnb(self, source, recipient, amount):
         return self.estimate_withdrawal('BNB', 'BSC', source, recipient, amount)
 
+    def ton_wallet(self):
+        from wallet_signer_ton import Ton
+        return Ton(atomic, units, PaymentError)
+
     def bitcoin(self):
         from wallet_signer_bitcoin import Bitcoin
         return Bitcoin(atomic, units, PaymentError)
@@ -156,7 +160,9 @@ class Chains:
         from wallet_signer_solana import Solana
         return Solana(lambda method, params: self.rpc('SOL', method, params), atomic, units, PaymentError)
 
-    def estimate_withdrawal(self, asset, network, source, recipient, amount):
+    def estimate_withdrawal(self, asset, network, source, recipient, amount, public_key=None):
+        if asset == "GRAM" and network == "TON":
+            return self.ton_wallet().estimate(source, recipient, amount, public_key)
         if asset == 'BTC' and network == 'BTC':
             return self.bitcoin().estimate(source, recipient, amount)
         if asset == 'SOL' and network == 'SOL':
@@ -241,7 +247,9 @@ class Chains:
         if quote['expires_at'] <= time.time():
             raise PaymentError('QUOTE_EXPIRED')
         network, unsigned = quote['network'], quote['unsigned']
-        if network == 'BTC':
+        if network == 'TON':
+            payload, txid = self.ton_wallet().sign(quote, private_key)
+        elif network == 'BTC':
             payload, txid = self.bitcoin().sign(quote, private_key)
         elif network == 'SOL':
             payload, txid = self.solana().sign(quote, private_key)
@@ -258,6 +266,8 @@ class Chains:
 
     def verify(self, quote, payload, txid):
         network, expected = quote['network'], quote['unsigned']
+        if network == 'TON':
+            return self.ton_wallet().verify(quote, payload, txid)
         if network == 'BTC':
             return self.bitcoin().verify(quote, payload, txid)
         if network == 'SOL':
@@ -281,6 +291,8 @@ class Chains:
     def receipt(self, quote, txid):
         """Verify finalized inclusion and the expected asset movement."""
         network = quote['network']
+        if network == 'TON':
+            return self.ton_wallet().receipt(quote, txid)
         if network == 'BTC':
             return self.bitcoin().receipt(quote, txid)
         if network == 'SOL':
@@ -338,6 +350,8 @@ class Chains:
 
     def broadcast(self, quote, payload, txid):
         self.verify(quote, payload, txid)
+        if quote['network'] == 'TON':
+            return self.ton_wallet().broadcast(quote, payload, txid)
         if quote['network'] == 'BTC':
             return self.bitcoin().broadcast(quote, payload, txid)
         if quote['network'] == 'SOL':
