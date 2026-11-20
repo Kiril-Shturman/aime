@@ -499,6 +499,14 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_admin_goswap_console_is_allowlisted_and_confirmed(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}
+        catalog = await self.client.get('/api/wallet/admin-goswap', headers=admin)
+        self.assertEqual(catalog.status, 200)
+        methods = {item['method']: item for item in (await catalog.json())['methods']}
+        for method in ('createCard', 'topUpCard', 'getCards', 'getCardOps', 'getCardDetails'):
+            self.assertIn(method, methods)
+        self.assertTrue(methods['createCard']['dangerous'])
+        self.assertTrue(methods['topUpCard']['dangerous'])
+        self.assertEqual(methods['getCardDetails']['required'], ['card_id'])
         denied = await self.client.post('/api/wallet/admin-goswap-action', json={'method': 'getBalance', 'params': {}}, headers={'X-Telegram-Init-Data': init_data(999)})
         self.assertEqual(denied.status, 403)
         unknown = await self.client.post('/api/wallet/admin-goswap-action', json={'method': 'deleteEverything', 'params': {}}, headers=admin)

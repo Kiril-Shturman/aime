@@ -338,6 +338,9 @@ ADMIN_GOSWAP_METHODS = {
     'getDeposits': {'title': 'Пополнения', 'post': False, 'params': ['client_ref', 'network', 'count', 'offset'], 'required': [], 'example': {'count': 1000, 'offset': 0}},
     'getTransactions': {'title': 'Лента операций', 'post': False, 'params': ['asset', 'type', 'count', 'before', 'after'], 'required': [], 'example': {'count': 100, 'after': 0}},
     'getQrPayments': {'title': 'QR-платежи', 'post': False, 'params': ['payment_ids', 'spend_ids', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
+    'getCards': {'title': 'Карты клиентов', 'post': False, 'params': ['client_ref', 'card_ids', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
+    'getCardOps': {'title': 'Операции выпуска и пополнения карт', 'post': False, 'params': ['card_ids', 'spend_id', 'kind', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
+    'getCardDetails': {'title': 'Реквизиты карты', 'post': False, 'params': ['card_id'], 'required': ['card_id'], 'example': {'card_id': ''}},
     'estimateWithdrawal': {'title': 'Расчёт вывода', 'post': False, 'params': ['asset', 'network', 'address', 'amount', 'memo'], 'required': ['asset', 'network', 'address', 'amount'], 'example': {'asset': 'USDT', 'network': 'BSC', 'address': '', 'amount': '10'}},
     'createInvoice': {'title': 'Создать счёт', 'post': True, 'params': ['asset', 'amount', 'description', 'payload', 'expires_in'], 'required': ['asset', 'amount'], 'example': {'asset': 'USDT', 'amount': '10', 'description': '', 'payload': '', 'expires_in': 3600}},
     'transfer': {'title': 'Выплата пользователю', 'post': True, 'dangerous': True, 'params': ['user_id', 'asset', 'amount', 'spend_id', 'comment'], 'required': ['user_id', 'asset', 'amount', 'spend_id'], 'example': {'user_id': '', 'asset': 'USDT', 'amount': '1', 'spend_id': '', 'comment': ''}},
@@ -348,6 +351,8 @@ ADMIN_GOSWAP_METHODS = {
     'createExactDeposit': {'title': 'Точное пополнение TRON', 'post': True, 'params': ['client_ref', 'amount', 'network', 'asset'], 'required': ['client_ref', 'amount'], 'example': {'client_ref': '', 'amount': '1', 'network': 'TRON', 'asset': 'USDT'}},
     'createQrQuote': {'title': 'Котировка QR', 'post': True, 'params': ['qr'], 'required': ['qr'], 'example': {'qr': ''}},
     'payQr': {'title': 'Оплатить QR', 'post': True, 'dangerous': True, 'params': ['quote_id', 'spend_id'], 'required': ['quote_id', 'spend_id'], 'example': {'quote_id': '', 'spend_id': ''}},
+    'createCard': {'title': 'Выпустить карту', 'post': True, 'dangerous': True, 'params': ['client_ref', 'spend_id', 'product'], 'required': ['client_ref', 'spend_id'], 'example': {'client_ref': '', 'spend_id': '', 'product': 'sg'}},
+    'topUpCard': {'title': 'Пополнить карту', 'post': True, 'dangerous': True, 'params': ['card_id', 'amount', 'spend_id', 'max_fee'], 'required': ['card_id', 'amount', 'spend_id'], 'example': {'card_id': '', 'amount': '10.00', 'spend_id': '', 'max_fee': ''}},
 }
 
 
