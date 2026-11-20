@@ -1451,6 +1451,7 @@ test("exchange picker groups USDT networks and searches by network or ticker", a
   await expect(page.getByLabel("Баланс валюты").first()).toHaveText("12.5");
   await page.getByRole("button", { name: "Валюта получения" }).click();
   await networks.getByText("USDT · BEP20", { exact: true }).click();
-  await expect(page.getByLabel("Сеть отправления USDT")).toHaveValue("TRON");
-  await expect(page.getByLabel("Сеть получения USDT")).toHaveValue("BSC");
+  await expect(page.getByRole("button", { name: "Валюта списания" })).toContainText("TRC20");
+  await expect(page.getByRole("button", { name: "Валюта получения" })).toContainText("BEP20");
+  await expect(page.getByRole("button", { name: "Другие валюты" })).toHaveAttribute("aria-pressed", "true");
 });
