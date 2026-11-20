@@ -15,7 +15,7 @@ async def coverage(ledger, provider, ApiError):
     external = {row["currency_code"]: D(str(row["available"])) for row in balances}
     if any(not value.is_finite() or value < 0 for value in external.values()):
         raise ValueError("Invalid provider balance")
-    liabilities, allocated, inflight = {}, {}, {}
+    liabilities, allocated, goswap_allocated, inflight = {}, {}, {}, {}
     with localcontext() as ctx:
         ctx.prec = 80
         for row in ledger.db.execute(
@@ -34,13 +34,14 @@ async def coverage(ledger, provider, ApiError):
         }
         if "wallet_provider_positions" in tables:
             for row in ledger.db.execute(
-                "SELECT asset,available,reserved FROM wallet_provider_positions"
+                "SELECT provider,asset,available,reserved FROM wallet_provider_positions"
             ):
-                allocated[row["asset"]] = (
-                    allocated.get(row["asset"], D(0))
-                    + D(row["available"])
-                    + D(row["reserved"])
-                )
+                value = D(row["available"]) + D(row["reserved"])
+                allocated[row["asset"]] = allocated.get(row["asset"], D(0)) + value
+                if row["provider"] == "goswap":
+                    goswap_allocated[row["asset"]] = (
+                        goswap_allocated.get(row["asset"], D(0)) + value
+                    )
         for row in ledger.db.execute(
             "SELECT body,held FROM wallet_withdrawal_intents WHERE state='processing'"
         ):
@@ -67,10 +68,14 @@ async def coverage(ledger, provider, ApiError):
         )
         try:
             for asset in sorted(set(external) | set(liabilities) | set(inflight)):
-                # Provider positions are reconciled against their own provider and
-                # environment. Only the unallocated remainder belongs to the
-                # legacy GoSwap pool.
-                goswap_liability = liabilities.get(asset, D(0)) - allocated.get(asset, D(0))
+                # Preserve the original single-provider ledger when an asset has
+                # never had provider attribution. Once positions exist, never
+                # infer that an unallocated legacy remainder belongs to GoSwap.
+                goswap_liability = (
+                    liabilities.get(asset, D(0))
+                    if asset not in allocated
+                    else goswap_allocated.get(asset, D(0))
+                )
                 # Confirmed outgoing provider balances are held against reserved
                 # client liabilities until their final outcome is known.
                 difference = (
@@ -106,6 +111,22 @@ async def coverage(ledger, provider, ApiError):
                     ),
                 )
                 rows.append(row)
+                unassigned = (
+                    liabilities.get(asset, D(0)) - allocated.get(asset, D(0))
+                    if asset in allocated
+                    else D(0)
+                )
+                if unassigned:
+                    rows.append({
+                        "provider": "unassigned",
+                        "environment": "legacy",
+                        "asset": asset,
+                        "provider_available": "0",
+                        "liabilities": str(unassigned),
+                        "inflight": "0",
+                        "difference": str(-unassigned),
+                        "state": "unassigned",
+                    })
             if "wallet_provider_reconciliation" in tables:
                 for stored in ledger.db.execute(
                     "SELECT provider,environment,asset,provider_available,allocated,"

@@ -521,10 +521,14 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_reconciliation_separates_provider_environments(self):
-        self.ledger.db.execute(
+        self.ledger.db.executemany(
             "INSERT INTO wallet_provider_positions "
             "(provider,environment,user_id,asset,available,reserved,updated_at) "
-            "VALUES ('aura','test','tg:123','USDT','40','0',0)"
+            "VALUES (?,?,?,?,?,?,0)",
+            [
+                ("aura", "test", "tg:123", "USDT", "40", "0"),
+                ("goswap", "live", "tg:123", "USDT", "60", "0"),
+            ],
         )
         self.ledger.db.execute(
             "INSERT INTO wallet_provider_reconciliation "
@@ -542,6 +546,23 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(rows[("goswap", "live")]["difference"], "0")
         self.assertEqual(rows[("aura", "test")]["liabilities"], "40")
         self.assertEqual(rows[("aura", "test")]["difference"], "460")
+        self.assertFalse(report["blocked"])
+
+    async def test_unassigned_legacy_balance_is_not_charged_to_goswap(self):
+        self.ledger.db.execute(
+            "INSERT INTO wallet_provider_positions "
+            "(provider,environment,user_id,asset,available,reserved,updated_at) "
+            "VALUES ('aura','test','tg:123','USDT','40','0',0)"
+        )
+        self.provider.org = D(0)
+        response = await self.client.get(
+            "/api/wallet/finance-reconciliation", headers=OWNER
+        )
+        report = await response.json()
+        rows = {(row["provider"], row["environment"]): row for row in report["items"]}
+        self.assertEqual(rows[("goswap", "live")]["liabilities"], "0")
+        self.assertEqual(rows[("unassigned", "legacy")]["liabilities"], "60")
+        self.assertEqual(rows[("unassigned", "legacy")]["state"], "unassigned")
         self.assertFalse(report["blocked"])
 
     async def test_insufficient_balance_includes_entire_transfer(self):
