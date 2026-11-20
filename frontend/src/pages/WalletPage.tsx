@@ -1755,8 +1755,9 @@ function CryptoFlowPushView({
               const giving = side === "from",
                 asset = giving ? fromAsset : toAsset;
               const routes = live.assetRoutes[asset.code] ?? [];
-              const network = asset.code === "USDT"
-                ? "Баланс приложения"
+              const usdtNetwork = asset.code === "USDT" ? "BSC" : undefined;
+              const network = usdtNetwork
+                ? addressNetworkStandards[usdtNetwork]
                 : routes.length === 1
                   ? addressNetworkNames[routes[0]] ?? routes[0]
                   : null;
@@ -1816,12 +1817,16 @@ function CryptoFlowPushView({
                       }}
                       className="flex min-h-12 shrink-0 items-center gap-2 py-1 pl-2 text-black dark:text-white"
                     >
+                      {usdtNetwork ? (
+                        <WalletAssetAvatar icon={asset.icon} color={asset.color} iconColor={asset.iconColor} network={usdtNetwork} />
+                      ) : (
                       <span
                         className="flex h-8 w-8 items-center justify-center rounded-full [&>svg]:!h-[21px] [&>svg]:!w-[21px]"
                         style={assetIconStyle(asset)}
                       >
                         {asset.icon}
                       </span>
+                      )}
                       <span className="text-left">
                         <span className="block text-[18px] font-semibold leading-tight">{asset.code}</span>
                         {network && <span className="block text-xs text-black/45 dark:text-white/45">{network}</span>}
