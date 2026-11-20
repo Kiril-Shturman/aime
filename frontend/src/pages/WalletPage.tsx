@@ -2014,7 +2014,7 @@ function CryptoFlowPushView({
                       }}
                       media={<WalletAssetAvatar icon={tether.icon} color={tether.color} iconColor={tether.iconColor} network={network} />}
                       innerChildren={
-                        <span className="flex w-full min-w-0 items-center justify-between gap-3">
+                        <span className="flex h-full w-full min-w-0 items-center justify-between gap-3">
                           <span className="min-w-0">
                             <span className="block truncate text-[17px] font-semibold">USDT · {addressNetworkStandards[network] ?? network}</span>
                             <span className="mt-0.5 block truncate text-[13px] text-black/45 dark:text-white/45">{addressNetworkNames[network] ?? network}</span>
@@ -2048,7 +2048,7 @@ function CryptoFlowPushView({
                           </span>
                         }
                         innerChildren={
-                          <span className="flex min-w-0 items-center justify-between gap-3">
+                          <span className="flex h-full w-full min-w-0 items-center justify-between gap-3">
                             <span className="min-w-0">
                               <span className="block truncate text-[17px] font-semibold text-black dark:text-white">
                                 {item.name}
