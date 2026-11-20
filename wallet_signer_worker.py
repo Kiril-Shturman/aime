@@ -11,7 +11,8 @@ from decimal import Decimal
 from pathlib import Path
 
 import requests
-from bip_utils import Bip44, Bip44Coins, Bip84, Bip84Coins
+from bip_utils import Base58Encoder, Bip44, Bip44Coins, Bip84, Bip84Coins
+from nacl.signing import SigningKey
 from nacl.public import SealedBox
 
 from wallet_custody import decode, fingerprint
@@ -20,10 +21,25 @@ from wallet_fixedfloat_orders import Orders, address
 from wallet_signer_chains import Chains, PaymentError, atomic
 from wallet_exchange_funding import CUSTODY_WITHDRAWAL_NETWORKS, CUSTODY_WITHDRAWAL_CAPABILITIES
 from wallet_custody_withdrawal import CustodyWithdrawal
+from wallet_key_export import EXPORT_NETWORKS, EXPORT_CAPABILITY
 
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
+
+
+def export_material(wallet, key):
+    network = wallet['network']
+    if network == 'BTC':
+        prefix = b'\x80' if wallet['chain_env'] == 'mainnet' else b'\xef'
+        return "wif", Base58Encoder.CheckEncode(prefix + key + b'\x01')
+    if network == 'SOL':
+        return "solana_keypair_base58", Base58Encoder.Encode(key + bytes(SigningKey(key).verify_key))
+    if network == 'TON':
+        return "ton_v4r2_ed25519_seed_hex", key.hex()
+    if network in {'ETH', 'BSC', 'TRON'}:
+        return "hex", key.hex()
+    raise ValueError('Unsupported export network')
 
 
 class Controller:
@@ -161,7 +177,8 @@ class Controller:
             if wallet['network'] in {'SOL', 'TON'}:
                 return seed
             if wallet['network'] == 'BTC':
-                return Bip84.FromSeed(seed, Bip84Coins.BITCOIN).DeriveDefaultPath().PrivateKey().Raw().ToBytes()
+                coin = Bip84Coins.BITCOIN if wallet['chain_env'] == 'mainnet' else Bip84Coins.BITCOIN_TESTNET
+                return Bip84.FromSeed(seed, coin).DeriveDefaultPath().PrivateKey().Raw().ToBytes()
             coin = {'TRON': Bip44Coins.TRON, 'ETH': Bip44Coins.ETHEREUM, 'BSC': Bip44Coins.BINANCE_SMART_CHAIN}[wallet['network']]
             return Bip44.FromSeed(seed, coin).DeriveDefaultPath().PrivateKey().Raw().ToBytes()
         finally:
@@ -239,7 +256,7 @@ class Controller:
         job, wallet = item['job'], item['wallet']
         try:
             if (job['user_id'] != wallet['user_id'] or job['wallet_id'] != wallet['id'] or
-                    wallet['network'] not in {'ETH','BSC'} or wallet['key_id'] != self.key_id or
+                    wallet['network'] not in EXPORT_NETWORKS or wallet['key_id'] != self.key_id or
                     job['expires_at'] <= time.time()):
                 raise ValueError('Invalid export ownership')
             recipient = RSA.import_key(base64.b64decode(job['public_key'], validate=True))
@@ -247,19 +264,20 @@ class Controller:
                 raise ValueError('Invalid export recipient')
             key = self.key(wallet)
             try:
+                key_format, secret = export_material(wallet, key)
                 document = {'job_id': job['id'], 'wallet_id': wallet['id'], 'network': wallet['network'],
-                            'address': wallet['address'], 'private_key': key.hex()}
+                            'address': wallet['address'], 'private_key': secret, 'format': key_format}
                 encrypted = PKCS1_OAEP.new(recipient, hashAlgo=SHA256).encrypt(canonical(document))
             finally:
                 del key
-            del document
+            del document, secret
             self.bridge('export-complete', job_id=job['id'], ciphertext=base64.b64encode(encrypted).decode())
         except Exception:
             self.bridge('export-complete', job_id=job['id'], ciphertext=None)
 
     def cycle(self):
-        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'SOL', 'BTC', 'TON', *CUSTODY_WITHDRAWAL_CAPABILITIES.values()], key_id=self.key_id)
-        export = self.bridge('export-claim')
+        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'SOL', 'BTC', 'TON', EXPORT_CAPABILITY, *CUSTODY_WITHDRAWAL_CAPABILITIES.values()], key_id=self.key_id)
+        export = self.bridge('export-claim', multi_network=True)
         if export.get('job'):
             self.process_export(export)
         item = self.bridge('claim', custody_withdrawals=True)

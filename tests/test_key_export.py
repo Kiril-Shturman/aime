@@ -39,14 +39,14 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
     async def request_job(self,headers=None,wallet=None,**extra):
         return await self.http.post('/custody-export-prepare',json={'wallet_id':wallet or self.wallet['id'],'public_key':self.public,'acknowledged':True,**extra},headers=headers or self.headers)
 
-    async def test_stale_session_owner_and_unsupported_network_rejected(self):
+    async def test_stale_session_other_owner_and_old_signer_rejected(self):
         response=await self.request_job(headers={'X-Telegram-Init-Data':'auth_date=1'})
         self.assertEqual(response.status,403)
         self.assertIn('no-store',response.headers['Cache-Control'])
         response=await self.request_job(headers={**self.headers,'X-Test-User':'tg:2'})
         self.assertEqual(response.status,404)
         tron=self.custody.create('tg:1','TRON')
-        response=await self.request_job(wallet=tron['id']);self.assertEqual(response.status,400)
+        response=await self.request_job(wallet=tron['id']);self.assertEqual(response.status,503)
         response=await self.request_job(acknowledged=False);self.assertEqual(response.status,400)
 
     async def test_no_secret_in_status_and_ciphertext_is_consumed_only_once(self):
@@ -100,3 +100,56 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(Account.from_key(bytes.fromhex(document['private_key'])).address,self.wallet['address'])
         self.assertNotIn(document['private_key'],str(dict(row)))
         self.assertNotIn(document['private_key'],json.dumps([dict(r) for r in self.ledger.db.execute('SELECT * FROM custody_activity')]))
+
+    async def test_multichain_material_restores_same_address(self):
+        try:
+            from bip_utils import Base58Decoder
+            from embit import ec, script, networks
+            from solders.keypair import Keypair
+            from tronpy.keys import PrivateKey
+            from wallet_custody import derive
+            from wallet_signer_worker import Controller
+            from Cryptodome.PublicKey import RSA
+            from Cryptodome.Cipher import PKCS1_OAEP
+            from Cryptodome.Hash import SHA256
+        except ImportError:
+            self.skipTest("Isolated signer dependencies required")
+
+        ephemeral = RSA.generate(3072)
+        self.public = base64.b64encode(ephemeral.public_key().export_key(format="DER")).decode()
+        self.ledger.db.execute("UPDATE custody_signer_status SET networks=?,heartbeat_at=?",
+                               ('["MULTICHAIN_EXPORT"]', time.time()))
+        worker = Controller({"private_key_file": self.keys["private_file"], "worker_id": "export-worker"},
+                            bridge=lambda body: bridge(self.ledger.db, body))
+        for network, key_format in (
+            ("BTC", "wif"), ("SOL", "solana_keypair_base58"),
+            ("TRON", "hex"), ("TON", "ton_v4r2_ed25519_seed_hex"),
+        ):
+            with self.subTest(network=network):
+                wallet = self.custody.create("tg:1", network)
+                response = await self.request_job(wallet=wallet["id"])
+                self.assertEqual(response.status, 200)
+                job = (await response.json())["job_id"]
+                self.assertIsNone(bridge(self.ledger.db, {"op": "export-claim", "worker_id": "old-worker"})["job"])
+                item = bridge(self.ledger.db, {"op": "export-claim", "worker_id": "export-worker", "multi_network": True})
+                worker.process_export(item)
+                row = self.ledger.db.execute("SELECT * FROM custody_key_exports WHERE id=?", (job,)).fetchone()
+                self.assertEqual(row["state"], "ready")
+                document = json.loads(PKCS1_OAEP.new(ephemeral, hashAlgo=SHA256).decrypt(
+                    base64.b64decode(row["ciphertext"]),
+                ))
+                secret = document["private_key"]
+                self.assertEqual(document["format"], key_format)
+                if network == "BTC":
+                    decoded = Base58Decoder.CheckDecode(secret)
+                    self.assertEqual((decoded[0], decoded[-1]), (128, 1))
+                    restored = script.p2wpkh(ec.PrivateKey(decoded[1:-1]).get_public_key()).address(networks.NETWORKS["main"])
+                elif network == "SOL":
+                    restored = str(Keypair.from_base58_string(secret).pubkey())
+                elif network == "TRON":
+                    restored = PrivateKey(bytes.fromhex(secret)).public_key.to_base58check_address()
+                else:
+                    restored = derive(bytes.fromhex(secret), "TON", "mainnet")["address"]
+                self.assertEqual(restored, wallet["address"])
+                self.assertNotIn(secret, str(dict(row)))
+                self.ledger.db.execute("UPDATE custody_key_exports SET created_at=? WHERE id=?", (0, job))

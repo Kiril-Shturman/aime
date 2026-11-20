@@ -1,4 +1,4 @@
-# Owner key export (Ethereum and BSC)
+# Owner key export
 
 In the owned address details, Export private key opens an explicit risk
 acknowledgement. Each request needs a freshly verified Telegram launch (at most
@@ -13,7 +13,7 @@ key. The recovery private key and plaintext account private key are never sent
 to, or stored on, the web server.
 
 The browser consumes the encrypted result once, decrypts it in memory, checks
-job/wallet/network/address binding and displays the hexadecimal private key. It
+job/wallet/network/address binding and displays the private key in the format for that network. It
 is not placed in localStorage/sessionStorage or downloaded automatically. Copy
 is an explicit action; copied text remains in the user's system clipboard.
 The displayed key clears after 30 seconds, on close, on unmount or on document
@@ -33,10 +33,15 @@ SQLite BEGIN IMMEDIATE consume; a lost response requires starting a new export,
 never a plaintext recovery endpoint. Web-side support uses only existing runtime
 dependencies. RSA encryption lives in the isolated signer runtime.
 
-Import as an individual account private key in MetaMask, then choose the network.
-This exports precisely one independently generated address, not a seed phrase
-or all of the user's addresses. Ethereum and BSC were generated independently and
-need their own exports. SOL/TRON/BTC/TON exports are not included in this release.
+Each export covers one address. The isolated signer supports:
+- BTC: compressed WIF for Native SegWit (P2WPKH).
+- SOL: Base58-encoded 64-byte Ed25519 keypair.
+- ETH, BSC and TRON: hexadecimal account private key.
+- TON: raw 32-byte Ed25519 seed in hexadecimal for Wallet V4R2,
+  workchain 0, wallet ID 698983191.
+
+The updated signer advertises `MULTICHAIN_EXPORT`; legacy signers keep
+handling ETH and BSC jobs.
 External imports do not remove WPay's custody access. Automatic funding jobs use
 that source too; customers should not concurrently send from both apps.
 

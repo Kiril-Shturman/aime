@@ -5,6 +5,7 @@ import re
 import time
 
 from wallet_exchange_funding import CUSTODY_WITHDRAWAL_CAPABILITIES
+from wallet_key_export import EXPORT_CAPABILITY
 
 
 def bridge(db,body):
@@ -16,7 +17,7 @@ def bridge(db,body):
         return export_bridge(db,body)
     if op=='heartbeat':
         networks=body['networks']
-        if not isinstance(networks,list) or set(networks)-({'BSC','ETH','TRON','SOL','BTC','TON'} | set(CUSTODY_WITHDRAWAL_CAPABILITIES.values())):raise ValueError('Invalid networks')
+        if not isinstance(networks,list) or set(networks)-({'BSC','ETH','TRON','SOL','BTC','TON',EXPORT_CAPABILITY} | set(CUSTODY_WITHDRAWAL_CAPABILITIES.values())):raise ValueError('Invalid networks')
         db.execute('INSERT OR REPLACE INTO custody_signer_status VALUES (?,?,?,?)',(worker,json.dumps(networks),body['key_id'],time.time()))
         return {'ok':True}
     if op=='claim':

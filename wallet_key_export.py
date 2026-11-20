@@ -8,6 +8,11 @@ from urllib.parse import parse_qs
 from aiohttp import web
 
 
+EXPORT_NETWORKS = {"ETH", "BSC", "BTC", "TRON", "SOL", "TON"}
+LEGACY_EXPORT_NETWORKS = {"ETH", "BSC"}
+EXPORT_CAPABILITY = "MULTICHAIN_EXPORT"
+
+
 def prepare(ledger):
     ledger.db.executescript('''
         CREATE TABLE IF NOT EXISTS custody_key_exports (
@@ -61,8 +66,11 @@ async def _route(request, action, uid, custody):
         except Exception:raise ValueError('Invalid recipient key') from None
         wallet=db.execute('SELECT * FROM custody_wallets WHERE id=? AND user_id=?',(body['wallet_id'],uid)).fetchone()
         if not wallet:raise error('NOT_FOUND','Кошелёк не найден',404)
-        if wallet['network'] not in {'ETH','BSC'}:raise error('EXPORT_NOT_SUPPORTED','Экспорт для этой сети пока не подключён',400)
-        online=db.execute('SELECT 1 FROM custody_signer_status WHERE key_id=? AND heartbeat_at>?',(wallet['key_id'],time.time()-45)).fetchone()
+        if wallet['network'] not in EXPORT_NETWORKS:raise error('EXPORT_NOT_SUPPORTED','Экспорт для этой сети пока не подключён',400)
+        signers = db.execute('SELECT networks FROM custody_signer_status WHERE key_id=? AND heartbeat_at>?',
+                             (wallet['key_id'], time.time() - 45))
+        online = any(wallet['network'] in LEGACY_EXPORT_NETWORKS or EXPORT_CAPABILITY in json.loads(row[0])
+                     for row in signers)
         if not online:raise error('SIGNER_UNAVAILABLE','Защищённый процесс временно недоступен',503)
         custody.ledger.begin('key_export_request',uid,wallet['id'])
         try:
@@ -99,11 +107,17 @@ def bridge(db, body):
     if body['op']=='export-claim':
         db.execute('BEGIN IMMEDIATE')
         try:
-            row=db.execute("SELECT * FROM custody_key_exports WHERE state IN ('pending','processing') AND lease_until<=? AND expires_at>? ORDER BY created_at LIMIT 1",(time.time(),time.time())).fetchone()
+            row = db.execute("""
+                SELECT e.* FROM custody_key_exports e JOIN custody_wallets w
+                  ON w.id=e.wallet_id AND w.user_id=e.user_id
+                WHERE e.state IN ('pending','processing') AND e.lease_until<=? AND e.expires_at>?
+                  AND (? OR w.network IN ('ETH','BSC'))
+                ORDER BY e.created_at LIMIT 1
+            """, (time.time(), time.time(), body.get('multi_network') is True)).fetchone()
             if not row:db.execute('COMMIT');return {'job':None}
             db.execute("UPDATE custody_key_exports SET state='processing',worker_id=?,lease_until=? WHERE id=?",(worker,time.time()+30,row['id']))
             wallet=db.execute('SELECT * FROM custody_wallets WHERE id=? AND user_id=?',(row['wallet_id'],row['user_id'])).fetchone()
-            if not wallet or wallet['network'] not in {'ETH','BSC'}:raise ValueError('Invalid export wallet')
+            if not wallet or wallet['network'] not in EXPORT_NETWORKS:raise ValueError('Invalid export wallet')
             db.execute('COMMIT')
         except Exception:db.execute('ROLLBACK');raise
         wallet=dict(wallet);wallet['encrypted_secret']=base64.b64encode(wallet['encrypted_secret']).decode()

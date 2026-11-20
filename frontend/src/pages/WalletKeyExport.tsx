@@ -9,6 +9,17 @@ const toBase64 = (value: ArrayBuffer) =>
 const fromBase64 = (value: string) =>
   Uint8Array.from(atob(value), (c) => c.charCodeAt(0));
 
+const hex = /^[a-f0-9]{64}$/;
+const formats: Record<string, { format: string; pattern: RegExp; instructions: string }> = {
+  ETH: { format: "hex", pattern: hex, instructions: "Импортируйте как приватный ключ аккаунта Ethereum." },
+  BSC: { format: "hex", pattern: hex, instructions: "Импортируйте приватный ключ и выберите BNB Smart Chain." },
+  BTC: { format: "wif", pattern: /^[KLc][1-9A-HJ-NP-Za-km-z]{51}$/, instructions: "Импортируйте WIF как Native SegWit (P2WPKH). В Bitcoin Core этому соответствует дескриптор wpkh(WIF)." },
+  TRON: { format: "hex", pattern: hex, instructions: "Импортируйте как приватный ключ в кошелёк с поддержкой TRON." },
+  SOL: { format: "solana_keypair_base58", pattern: /^[1-9A-HJ-NP-Za-km-z]{64,88}$/, instructions: "Импортируйте в кошелёк Solana как приватный ключ в Base58." },
+  TON: { format: "ton_v4r2_ed25519_seed_hex", pattern: hex, instructions: "Используйте кошелёк, который импортирует 32-байтовый Ed25519 seed в HEX для Wallet V4R2 (workchain 0, wallet ID 698983191). Поле для слов восстановления не подходит." },
+};
+
+
 export default function WalletKeyExport({
   walletId,
   address,
@@ -18,6 +29,7 @@ export default function WalletKeyExport({
   address: string;
   network: string;
 }) {
+  const spec = formats[network];
   const [open, setOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -126,7 +138,10 @@ export default function WalletKeyExport({
           value.wallet_id !== walletId ||
           value.network !== network ||
           value.address !== address ||
-          !/^[a-f0-9]{64}$/.test(value.private_key)
+          typeof value.private_key !== "string" ||
+          !spec.pattern.test(value.private_key) ||
+          (value.format !== spec.format &&
+            !(value.format === undefined && ["ETH", "BSC"].includes(network)))
         )
           throw new Error("Не удалось проверить экспорт ключа");
         if (!abort.signal.aborted) setSecret(value.private_key);
@@ -143,7 +158,7 @@ export default function WalletKeyExport({
       }
     }
   }
-  if (!["ETH", "BSC"].includes(network)) return null;
+  if (!spec) return null;
   return (
     <section
       className="rounded-[28px] bg-white p-5 dark:bg-[#1c1c1e]"
@@ -161,7 +176,7 @@ export default function WalletKeyExport({
       ) : (
         <>
           <div className="flex items-center justify-between gap-3">
-            <h3 className="font-semibold">Импорт в MetaMask</h3>
+            <h3 className="font-semibold">Экспорт ключа · {network}</h3>
             <button
               aria-label="Закрыть экспорт ключа"
               onClick={clear}
@@ -229,8 +244,7 @@ export default function WalletKeyExport({
                 </span>
               </Button>
               <p className="mt-3 text-xs leading-5 opacity-60">
-                MetaMask → Добавить аккаунт → Импортировать → Приватный ключ.
-                Для BSC выберите сеть BNB Smart Chain.
+                {spec.instructions}
               </p>
             </>
           )}
