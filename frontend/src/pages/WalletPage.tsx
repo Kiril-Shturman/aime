@@ -1423,61 +1423,10 @@ function DepositMethodsView({
       )}
 
       {selected === "USDT" && !network ? (
-        <main className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
-          <p className="mb-4 text-center text-[14px] text-black/45 dark:text-white/45">
-            Выберите сеть
-          </p>
-          <List
-            strong
-            inset
-            dividers
-            className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]"
-          >
-            {(live.depositRoutes.USDT ?? []).map((net) => (
-              <ListItem
-                key={net}
-                link
-                chevron={false}
-                onClick={() => chooseNetwork("USDT", net)}
-                contentClassName="!h-[64px]"
-                innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30"
-                media={
-                  <WalletAssetAvatar
-                    icon={
-                      depositAssets.find((item) => item.code === "USDT")
-                        ?.icon ?? assets[0].icon
-                    }
-                    color={
-                      depositAssets.find((item) => item.code === "USDT")
-                        ?.color ?? assets[0].color
-                    }
-                    iconColor={
-                      depositAssets.find((item) => item.code === "USDT")
-                        ?.iconColor ?? assets[0].iconColor
-                    }
-                    network={net}
-                  />
-                }
-                innerChildren={
-                  <span className="flex h-full w-full items-center justify-between gap-3">
-                    <span className="min-w-0">
-                      <span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">
-                        {assets[0].code}
-                        {!["BTC", "TRX"].includes(assets[0].code)
-                          ? " · " + (addressNetworkStandards[net] ?? net)
-                          : ""}
-                      </span>
-                      <span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">
-                        {addressNetworkNames[net]}
-                      </span>
-                    </span>
-                    <ChevronRight className="shrink-0 text-[19px] text-black/25 dark:text-white/30" />
-                  </span>
-                }
-              />
-            ))}
-          </List>
-        </main>
+        <UsdtNetworkPicker
+          networks={live.depositRoutes.USDT ?? []}
+          onSelect={(net) => void chooseNetwork("USDT", net)}
+        />
       ) : selected ? (
         <LiveDepositPanel
           defaultNetwork={network ?? undefined}
@@ -2059,6 +2008,51 @@ function CryptoFlowPushView({
   return <WithdrawalMethodsView flow={flow} onClose={onClose} />;
 }
 
+function UsdtNetworkPicker({ networks, onSelect }: {
+  networks: string[];
+  onSelect: (network: string) => void;
+}) {
+  const { icon, color, iconColor } = assets[0];
+  return (
+  <main className="mx-auto w-full max-w-[560px] px-4 pb-8 pt-1">
+    <p className="mb-4 text-center text-[14px] text-black/45 dark:text-white/45">
+      Выберите сеть
+    </p>
+    <List
+      strong
+      inset
+      dividers
+      className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]"
+    >
+      {networks.map((net) => (
+        <ListItem
+          key={net}
+          link
+          chevron={false}
+          onClick={() => onSelect(net)}
+          contentClassName="!h-[64px]"
+          innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30"
+          media={<WalletAssetAvatar {...{ icon, color, iconColor }} network={net} />}
+          innerChildren={
+            <span className="flex h-full w-full items-center justify-between gap-3">
+              <span className="min-w-0">
+                <span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">
+                  USDT · {addressNetworkStandards[net] ?? net}
+                </span>
+                <span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">
+                  {addressNetworkNames[net]}
+                </span>
+              </span>
+              <ChevronRight className="shrink-0 text-[19px] text-black/25 dark:text-white/30" />
+            </span>
+          }
+        />
+      ))}
+    </List>
+  </main>
+  );
+}
+
 function WithdrawalMethodsView({
   flow,
   onClose,
@@ -2101,19 +2095,7 @@ function WithdrawalMethodsView({
       : <WithdrawalForm key={route} method="usdt" fixedNetwork={route} />;
   } else if (coin?.code === "USDT") {
     content = (
-      <main className="mx-auto w-full max-w-[560px] px-4 pb-6">
-        <p className="mb-4 text-center text-sm opacity-60">Выберите сеть вывода</p>
-        <List strong inset dividers className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
-          {enabledNetworks.map((net) => (
-            <ListItem key={net} link title={addressNetworkNames[net] ?? net}
-              subtitle={addressNetworkStandards[net] ?? net}
-              contentClassName="!h-[64px]"
-              onClick={() => setNetwork(net)}
-              media={<WalletAssetAvatar icon={coin.icon} color={coin.color} iconColor={coin.iconColor} network={net} />}
-            />
-          ))}
-        </List>
-      </main>
+      <UsdtNetworkPicker networks={enabledNetworks} onSelect={setNetwork} />
     );
   } else if (coin) {
     content = <p role="status" className="mx-auto max-w-[560px] px-5 py-6 text-center text-sm opacity-60">
