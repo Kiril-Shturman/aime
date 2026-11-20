@@ -95,12 +95,7 @@ type AdminUserDetail = {
 type AuditData = { items: Json[]; total: number };
 type CardsData = { items: Json[]; operations: Json[]; total: number };
 type TariffsData = {
-  items: (Json & {
-    product: string;
-    label: string;
-    enforced: boolean;
-    enabled: boolean;
-  })[];
+  items: (Json & { product: string; label: string; enforced: boolean; enabled: boolean })[];
   history: Json[];
   provider: Json;
 };
@@ -142,46 +137,11 @@ type GoSwapMethod = {
   params: string[];
   required: string[];
   example: Json;
-  description?: string;
-  notes?: string[];
-  rate_limit?: string;
-  response_example?: unknown;
 };
 type GoSwapData = {
   snapshot: Record<string, GoSwapStatus>;
   methods: GoSwapMethod[];
 };
-
-const GOSWAP_WEBHOOKS = [
-  "deposit_received",
-  "withdrawal_completed",
-  "withdrawal_failed",
-  "qr_payment_completed",
-  "qr_payment_failed",
-  "qr_payment_refunded",
-  "card_issued",
-  "card_issue_failed",
-  "card_topup_completed",
-  "card_topup_failed",
-  "card_transaction",
-  "card_status",
-  "card_3ds",
-];
-
-const GOSWAP_ERRORS: [string, string][] = [
-  ["QR_UNREADABLE", "QR не распознан, истёк или уже оплачен"],
-  ["QR_UNSUPPORTED", "Тип QR не поддерживается или в нём нет суммы"],
-  ["AMOUNT_OUT_OF_RANGE", "Сумма вне допустимых пределов"],
-  ["QUOTE_EXPIRED", "Котировка истекла — запросите новую"],
-  ["QUOTE_USED", "Котировка уже использована"],
-  ["INSUFFICIENT_FUNDS", "Недостаточно средств на балансе"],
-  ["LIMIT_EXCEEDED", "Превышен суточный лимит"],
-  ["QR_IN_PROGRESS", "Этот QR уже оплачивается"],
-  ["SPEND_ID_CONFLICT", "spend_id занят другой операцией"],
-  ["NOT_ENABLED", "Возможность не подключена организации"],
-  ["RATE_UNAVAILABLE", "Курс временно недоступен"],
-  ["UNAVAILABLE", "Сервис временно недоступен — повторите позже"],
-];
 type AuraMethod = {
   method: string;
   title: string;
@@ -283,76 +243,16 @@ const tabs: {
   icon: ComponentType<{ className?: string }>;
   color: string;
 }[] = [
-  {
-    id: "overview",
-    label: "Обзор",
-    description: "Сводка и контроль",
-    icon: HouseFill,
-    color: "#5856D6",
-  },
-  {
-    id: "data",
-    label: "Пользователи",
-    description: "Аккаунты и KYC",
-    icon: Person2Fill,
-    color: "#AF52DE",
-  },
-  {
-    id: "payments",
-    label: "Операции",
-    description: "Платежи и переводы",
-    icon: SquareListFill,
-    color: "#007AFF",
-  },
-  {
-    id: "crypto",
-    label: "Криптовалюты",
-    description: "Активы и сети",
-    icon: BitcoinCircleFill,
-    color: "#FF9500",
-  },
-  {
-    id: "cards",
-    label: "Карты",
-    description: "Выпуск и управление",
-    icon: CreditcardFill,
-    color: "#30C759",
-  },
-  {
-    id: "tariffs",
-    label: "Тарифы",
-    description: "Цены и комиссии",
-    icon: GearAltFill,
-    color: "#8E8E93",
-  },
-  {
-    id: "aura",
-    label: "Aura API",
-    description: "Карты и платежи",
-    icon: BuildingColumnsFill,
-    color: "#32ADE6",
-  },
-  {
-    id: "goswap",
-    label: "GoSwap API",
-    description: "Обмен и ликвидность",
-    icon: ArrowRightArrowLeftCircleFill,
-    color: "#AF52DE",
-  },
-  {
-    id: "notifications",
-    label: "Уведомления",
-    description: "Доставка и рассылки",
-    icon: BellFill,
-    color: "#FF3B30",
-  },
-  {
-    id: "audit",
-    label: "Аудит",
-    description: "Действия администраторов",
-    icon: DocTextFill,
-    color: "#5856D6",
-  },
+  { id: "overview", label: "Обзор", description: "Сводка и контроль", icon: HouseFill, color: "#5856D6" },
+  { id: "data", label: "Пользователи", description: "Аккаунты и KYC", icon: Person2Fill, color: "#AF52DE" },
+  { id: "payments", label: "Операции", description: "Платежи и переводы", icon: SquareListFill, color: "#007AFF" },
+  { id: "crypto", label: "Криптовалюты", description: "Активы и сети", icon: BitcoinCircleFill, color: "#FF9500" },
+  { id: "cards", label: "Карты", description: "Выпуск и управление", icon: CreditcardFill, color: "#30C759" },
+  { id: "tariffs", label: "Тарифы", description: "Цены и комиссии", icon: GearAltFill, color: "#8E8E93" },
+  { id: "aura", label: "Aura API", description: "Карты и платежи", icon: BuildingColumnsFill, color: "#32ADE6" },
+  { id: "goswap", label: "GoSwap API", description: "Обмен и ликвидность", icon: ArrowRightArrowLeftCircleFill, color: "#AF52DE" },
+  { id: "notifications", label: "Уведомления", description: "Доставка и рассылки", icon: BellFill, color: "#FF3B30" },
+  { id: "audit", label: "Аудит", description: "Действия администраторов", icon: DocTextFill, color: "#5856D6" },
 ];
 const navGroups: { label: string; items: Tab[] }[] = [
   {
@@ -530,14 +430,10 @@ export default function WalletAdminPage() {
             <nav className="wpay-admin-nav" aria-label="Разделы админки">
               {navGroups.map((group) => (
                 <section className="wpay-admin-nav-group" key={group.label}>
-                  <div className="wpay-admin-nav-group-title">
-                    {group.label}
-                  </div>
+                  <div className="wpay-admin-nav-group-title">{group.label}</div>
                   <div className="wpay-admin-nav-group-items">
                     {group.items.map((id) => {
-                      const item = tabs.find(
-                        (candidate) => candidate.id === id,
-                      )!;
+                      const item = tabs.find((candidate) => candidate.id === id)!;
                       return (
                         <F7Button
                           large
@@ -553,19 +449,13 @@ export default function WalletAdminPage() {
                           <span
                             className="wpay-admin-nav-icon"
                             aria-hidden="true"
-                            style={
-                              { "--nav-icon": item.color } as CSSProperties
-                            }
+                            style={{ "--nav-icon": item.color } as CSSProperties}
                           >
                             <item.icon className="wpay-admin-nav-glyph" />
                           </span>
                           <span className="wpay-admin-nav-copy">
-                            <span className="wpay-admin-nav-title">
-                              {item.label}
-                            </span>
-                            <span className="wpay-admin-nav-description">
-                              {item.description}
-                            </span>
+                            <span className="wpay-admin-nav-title">{item.label}</span>
+                            <span className="wpay-admin-nav-description">{item.description}</span>
                           </span>
                         </F7Button>
                       );
@@ -639,8 +529,7 @@ export default function WalletAdminPage() {
                       data: "Клиенты, профили и записи базы данных",
                       payments: "История платежей, переводов и выводов",
                       crypto: "Адреса, поступления и доступные сети",
-                      cards:
-                        "Карты клиентов, состояния и безопасное управление",
+                      cards: "Карты клиентов, состояния и безопасное управление",
                       aura: "Подключение, методы и состояние Aura",
                       goswap: "Состояние интеграции и методы GoSwap",
                       notifications: "Системные события и рассылки",
@@ -754,9 +643,7 @@ function Audit({ data }: { data: AuditData }) {
       key: "detail",
       label: "Детали",
       render: (value) =>
-        value && typeof value === "object"
-          ? JSON.stringify(value)
-          : text(value),
+        value && typeof value === "object" ? JSON.stringify(value) : text(value),
     },
   ];
   return (
@@ -792,16 +679,9 @@ function Audit({ data }: { data: AuditData }) {
   );
 }
 
-function Tariffs({
-  data,
-  reload,
-}: {
-  data: TariffsData;
-  reload: () => Promise<void>;
-}) {
+function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<void> }) {
   const [selected, setSelected] = useState(data.items[0]?.product || "");
-  const current =
-    data.items.find((item) => item.product === selected) || data.items[0];
+  const current = data.items.find((item) => item.product === selected) || data.items[0];
   const [enabled, setEnabled] = useState(Boolean(current?.enabled));
   const [fixed, setFixed] = useState(text(current?.fixed_fee || "0"));
   const [percent, setPercent] = useState(text(current?.percent_fee || "0"));
@@ -823,21 +703,13 @@ function Tariffs({
   }
   async function save() {
     if (!current || saving) return;
-    if (
-      window.prompt(`Введите TARIFF ${current.product}`) !==
-      `TARIFF ${current.product}`
-    )
-      return;
+    if (window.prompt(`Введите TARIFF ${current.product}`) !== `TARIFF ${current.product}`) return;
     setSaving(true);
     setNotice("");
     try {
       await walletRequest("admin-tariffs", {
-        product: current.product,
-        enabled,
-        fixed_fee: fixed,
-        percent_fee: percent,
-        minimum_fee: minimum,
-        note,
+        product: current.product, enabled, fixed_fee: fixed,
+        percent_fee: percent, minimum_fee: minimum, note,
         confirm: `TARIFF ${current.product}`,
       });
       setNotice("Новая версия тарифа сохранена");
@@ -852,49 +724,31 @@ function Tariffs({
     <div className="space-y-4">
       <section className={card}>
         <div className="wpay-admin-section-title">
-          <div>
-            <span>Ценообразование</span>
-            <h2>Тарифы WPay</h2>
-          </div>
+          <div><span>Ценообразование</span><h2>Тарифы WPay</h2></div>
           <i>Все суммы в USDT</i>
         </div>
         <p className="text-xs opacity-55">
-          Комиссия WPay считается отдельно от цены Aura. Новая версия действует
-          только на новые операции; повторы используют сохранённую версию.
+          Комиссия WPay считается отдельно от цены Aura. Новая версия действует только на новые операции; повторы используют сохранённую версию.
         </p>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {data.items.map((item) => (
-            <button
-              type="button"
-              key={item.product}
-              onClick={() => choose(item.product)}
-              className={`rounded-2xl border p-4 text-left ${selected === item.product ? "border-blue-500 bg-blue-500/5" : "border-[var(--admin-border)]"}`}
-            >
+            <button type="button" key={item.product} onClick={() => choose(item.product)}
+              className={`rounded-2xl border p-4 text-left ${selected === item.product ? "border-blue-500 bg-blue-500/5" : "border-[var(--admin-border)]"}`}>
               <b className="block text-sm">{item.label}</b>
               <small className="mt-1 block opacity-50">
-                {item.enforced
-                  ? item.enabled
-                    ? "Включён"
-                    : "Выключен"
-                  : "Подключение расчёта готовится"}
+                {item.enforced ? (item.enabled ? "Включён" : "Выключен") : "Подключение расчёта готовится"}
               </small>
               {Boolean(item.card_plan) && (
                 <small className="mt-2 block text-blue-500">
-                  Aura: выпуск {amount(item.provider_issue_fee)} USDT ·
-                  пополнение {amount(item.provider_recharge_fee)}%
-                  {item.provider_minimum
-                    ? ` · от ${amount(item.provider_minimum)} USDT`
-                    : ""}
+                  Aura: выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
+                  {item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}
                 </small>
               )}
               {Array.isArray(item.conditions) && (
-                <small className="mt-2 block opacity-55">
-                  {item.conditions.join(" · ")}
-                </small>
+                <small className="mt-2 block opacity-55">{item.conditions.join(" · ")}</small>
               )}
               <span className="mt-3 block text-xs">
-                {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум{" "}
-                {amount(item.minimum_fee)}
+                {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум {amount(item.minimum_fee)}
               </span>
             </button>
           ))}
@@ -902,107 +756,27 @@ function Tariffs({
       </section>
       {current && (
         <section className={card}>
-          <div className="wpay-admin-section-title">
-            <div>
-              <span>{current.product}</span>
-              <h2>{current.label}</h2>
-            </div>
-          </div>
-          {!current.enforced && (
-            <p className="mb-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-600">
-              Параметры видны для планирования, но включение заблокировано до
-              подключения безопасного расчёта к settlement.
-            </p>
-          )}
+          <div className="wpay-admin-section-title"><div><span>{current.product}</span><h2>{current.label}</h2></div></div>
+          {!current.enforced && <p className="mb-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-600">Параметры видны для планирования, но включение заблокировано до подключения безопасного расчёта к settlement.</p>}
           <div className="grid gap-3 md:grid-cols-3">
-            <label>
-              <span className="text-xs font-semibold">
-                {current.card_plan
-                  ? "Наценка за выпуск"
-                  : "Фиксированная комиссия"}
-              </span>
-              <input
-                className={`${input} mt-2`}
-                value={fixed}
-                onChange={(e) => setFixed(e.target.value)}
-              />
-            </label>
-            <label>
-              <span className="text-xs font-semibold">
-                {current.card_plan ? "Наша комиссия пополнения, %" : "Процент"}
-              </span>
-              <input
-                className={`${input} mt-2`}
-                value={percent}
-                onChange={(e) => setPercent(e.target.value)}
-              />
-            </label>
-            <label>
-              <span className="text-xs font-semibold">
-                {current.card_plan
-                  ? "Минимальная наша комиссия пополнения"
-                  : "Минимальная комиссия"}
-              </span>
-              <input
-                className={`${input} mt-2`}
-                value={minimum}
-                onChange={(e) => setMinimum(e.target.value)}
-              />
-            </label>
+            <label><span className="text-xs font-semibold">{current.card_plan ? "Наценка за выпуск" : "Фиксированная комиссия"}</span><input className={`${input} mt-2`} value={fixed} onChange={(e) => setFixed(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">{current.card_plan ? "Наша комиссия пополнения, %" : "Процент"}</span><input className={`${input} mt-2`} value={percent} onChange={(e) => setPercent(e.target.value)} /></label>
+            <label><span className="text-xs font-semibold">{current.card_plan ? "Минимальная наша комиссия пополнения" : "Минимальная комиссия"}</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
           </div>
-          <label className="mt-3 block">
-            <span className="text-xs font-semibold">Комментарий к версии</span>
-            <input
-              className={`${input} mt-2`}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              placeholder="Причина изменения"
-            />
-          </label>
-          <label className="mt-4 flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={enabled}
-              disabled={!current.enforced}
-              onChange={(e) => setEnabled(e.target.checked)}
-            />{" "}
-            Применять к новым операциям
-          </label>
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => void save()}
-            className="mt-4 rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40"
-          >
-            {saving ? "Сохраняю…" : "Сохранить новую версию"}
-          </button>
+          <label className="mt-3 block"><span className="text-xs font-semibold">Комментарий к версии</span><input className={`${input} mt-2`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Причина изменения" /></label>
+          <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять к новым операциям</label>
+          <button type="button" disabled={saving} onClick={() => void save()} className="mt-4 rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{saving ? "Сохраняю…" : "Сохранить новую версию"}</button>
           {notice && <p className="mt-3 text-xs">{notice}</p>}
         </section>
       )}
       <section className={card}>
-        <div className="wpay-admin-section-title">
-          <div>
-            <span>Аудит цен</span>
-            <h2>История версий</h2>
-          </div>
-          <b>{data.history.length}</b>
-        </div>
-        <AdminTable
-          rows={data.history}
-          columns={[
-            { key: "created_at", label: "Когда", render: date },
-            { key: "product", label: "Продукт" },
-            {
-              key: "enabled",
-              label: "Статус",
-              render: (v) => (v ? "Включён" : "Выключен"),
-            },
-            { key: "fixed_fee", label: "Фикс" },
-            { key: "percent_fee", label: "%" },
-            { key: "minimum_fee", label: "Минимум" },
-            { key: "created_by", label: "Автор" },
-          ]}
-        />
+        <div className="wpay-admin-section-title"><div><span>Аудит цен</span><h2>История версий</h2></div><b>{data.history.length}</b></div>
+        <AdminTable rows={data.history} columns={[
+          { key: "created_at", label: "Когда", render: date },
+          { key: "product", label: "Продукт" }, { key: "enabled", label: "Статус", render: (v) => v ? "Включён" : "Выключен" },
+          { key: "fixed_fee", label: "Фикс" }, { key: "percent_fee", label: "%" },
+          { key: "minimum_fee", label: "Минимум" }, { key: "created_by", label: "Автор" },
+        ]} />
       </section>
     </div>
   );
@@ -1031,14 +805,9 @@ function Cards({
       row.telegram_username,
       row.first_name,
       row.last_name,
-    ].some((value) =>
-      String(value || "")
-        .toLowerCase()
-        .includes(needle),
-    );
+    ].some((value) => String(value || "").toLowerCase().includes(needle));
   });
-  const current =
-    detail?.items[0] || data.items.find((row) => row.card_id === selected);
+  const current = detail?.items[0] || data.items.find((row) => row.card_id === selected);
 
   async function openCard(cardId: string) {
     setSelected(cardId);
@@ -1050,16 +819,13 @@ function Cards({
         ),
       );
     } catch (reason) {
-      setNotice(
-        reason instanceof Error ? reason.message : "Не удалось загрузить карту",
-      );
+      setNotice(reason instanceof Error ? reason.message : "Не удалось загрузить карту");
     }
   }
   async function act(operation: "refresh" | "freeze" | "unfreeze" | "cancel") {
     if (!selected || working) return;
     if (operation === "cancel") {
-      if (window.prompt("Для закрытия карты введите ЗАКРЫТЬ") !== "ЗАКРЫТЬ")
-        return;
+      if (window.prompt("Для закрытия карты введите ЗАКРЫТЬ") !== "ЗАКРЫТЬ") return;
     } else if (
       operation !== "refresh" &&
       !window.confirm(
@@ -1089,9 +855,7 @@ function Cards({
       );
       await Promise.all([reload(), openCard(selected)]);
     } catch (reason) {
-      setNotice(
-        reason instanceof Error ? reason.message : "Действие не выполнено",
-      );
+      setNotice(reason instanceof Error ? reason.message : "Действие не выполнено");
     } finally {
       setWorking("");
     }
@@ -1109,8 +873,7 @@ function Cards({
     {
       key: "status",
       label: "Статус",
-      render: (value, row) =>
-        `${text(value)}${row.frozen ? " · заморожена" : ""}`,
+      render: (value, row) => `${text(value)}${row.frozen ? " · заморожена" : ""}`,
     },
     {
       key: "balance",
@@ -1140,11 +903,7 @@ function Cards({
           />
         </div>
         <div className="wpay-admin-desktop-only mt-3">
-          <AdminTable
-            rows={visible}
-            columns={columns}
-            onRowClick={(row) => void openCard(text(row.card_id))}
-          />
+          <AdminTable rows={visible} columns={columns} onRowClick={(row) => void openCard(text(row.card_id))} />
         </div>
         <div className="wpay-admin-mobile-only wpay-admin-mobile-list mt-3">
           {visible.map((row) => (
@@ -1169,89 +928,43 @@ function Cards({
               <span>{text(current.user_id)}</span>
               <h2>{text(current.masked_pan || current.card_id)}</h2>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setSelected("");
-                setDetail(null);
-              }}
-            >
+            <button type="button" onClick={() => { setSelected(""); setDetail(null); }}>
               <X size={18} />
             </button>
           </div>
           <div className="wpay-admin-user-facts mt-3">
-            <div>
-              <small>Статус</small>
-              <b>{text(current.status)}</b>
-            </div>
-            <div>
-              <small>Баланс</small>
-              <b>
-                {current.balance === null
-                  ? "—"
-                  : `${amount(current.balance)} USDT`}
-              </b>
-            </div>
-            <div>
-              <small>Тип</small>
-              <b>{text(current.kind)}</b>
-            </div>
-            <div>
-              <small>Customer ID</small>
-              <b>{text(current.customer_id)}</b>
-            </div>
+            <div><small>Статус</small><b>{text(current.status)}</b></div>
+            <div><small>Баланс</small><b>{current.balance === null ? "—" : `${amount(current.balance)} USDT`}</b></div>
+            <div><small>Тип</small><b>{text(current.kind)}</b></div>
+            <div><small>Customer ID</small><b>{text(current.customer_id)}</b></div>
           </div>
           <div className="wpay-admin-card-actions">
-            <button
-              disabled={Boolean(working)}
-              onClick={() => void act("refresh")}
-            >
-              <RefreshCw
-                size={15}
-                className={working === "refresh" ? "animate-spin" : ""}
-              />{" "}
-              Обновить
+            <button disabled={Boolean(working)} onClick={() => void act("refresh")}>
+              <RefreshCw size={15} className={working === "refresh" ? "animate-spin" : ""} /> Обновить
             </button>
             {current.frozen ? (
-              <button
-                disabled={Boolean(working)}
-                onClick={() => void act("unfreeze")}
-              >
+              <button disabled={Boolean(working)} onClick={() => void act("unfreeze")}>
                 Разморозить
               </button>
             ) : (
-              <button
-                disabled={Boolean(working)}
-                onClick={() => void act("freeze")}
-              >
+              <button disabled={Boolean(working)} onClick={() => void act("freeze")}>
                 Заморозить
               </button>
             )}
-            <button
-              className="is-danger"
-              disabled={
-                Boolean(working) ||
-                ["cancelled", "closed"].includes(text(current.status))
-              }
-              onClick={() => void act("cancel")}
-            >
+            <button className="is-danger" disabled={Boolean(working) || ["cancelled", "closed"].includes(text(current.status))} onClick={() => void act("cancel")}>
               Закрыть карту
             </button>
           </div>
           {notice && <p className="wpay-admin-operator-notice">{notice}</p>}
           <h3 className="mt-5 text-sm font-semibold">Последние операции</h3>
-          {detail?.operations.length ? (
-            detail.operations.map((operation) => (
-              <Row
-                key={text(operation.operation_id)}
-                title={`${text(operation.operation_type)} · ${text(operation.merchant)}`}
-                subtitle={`${date(operation.provider_created_at || operation.created_at)} · ${text(operation.status)}`}
-                right={`${amount(operation.amount)} ${text(operation.asset)}`}
-              />
-            ))
-          ) : (
-            <p className="wpay-admin-user-empty mt-3">Операций пока нет.</p>
-          )}
+          {detail?.operations.length ? detail.operations.map((operation) => (
+            <Row
+              key={text(operation.operation_id)}
+              title={`${text(operation.operation_type)} · ${text(operation.merchant)}`}
+              subtitle={`${date(operation.provider_created_at || operation.created_at)} · ${text(operation.status)}`}
+              right={`${amount(operation.amount)} ${text(operation.asset)}`}
+            />
+          )) : <p className="wpay-admin-user-empty mt-3">Операций пока нет.</p>}
         </section>
       )}
     </div>
@@ -2595,17 +2308,11 @@ function AdminUserDrawer({
                           "USDT",
                           ...detail.balances.map((item) => text(item.asset)),
                         ]),
-                      ).map((asset) => (
-                        <option key={asset}>{asset}</option>
-                      ))}
+                      ).map((asset) => <option key={asset}>{asset}</option>)}
                     </select>
                     <input
                       value={balanceAmount}
-                      onChange={(event) =>
-                        setBalanceAmount(
-                          event.target.value.replace(/[^\d.,+-]/g, ""),
-                        )
-                      }
+                      onChange={(event) => setBalanceAmount(event.target.value.replace(/[^\d.,+-]/g, ""))}
                       inputMode="decimal"
                       placeholder="Сумма: 10 или -10"
                     />
@@ -2618,20 +2325,13 @@ function AdminUserDrawer({
                   />
                   <button
                     type="button"
-                    disabled={
-                      !balanceAmount.trim() ||
-                      !balanceReason.trim() ||
-                      Boolean(actionWorking)
-                    }
+                    disabled={!balanceAmount.trim() || !balanceReason.trim() || Boolean(actionWorking)}
                     onClick={() => void adjustBalance()}
                   >
-                    {actionWorking === "adjust_balance"
-                      ? "Проводим…"
-                      : "Провести корректировку"}
+                    {actionWorking === "adjust_balance" ? "Проводим…" : "Провести корректировку"}
                   </button>
                   <small>
-                    Это бухгалтерская корректировка, а не пополнение провайдера.
-                    При отсутствии обеспечения сверка покажет дефицит.
+                    Это бухгалтерская корректировка, а не пополнение провайдера. При отсутствии обеспечения сверка покажет дефицит.
                   </small>
                 </div>
               </section>
@@ -2697,16 +2397,14 @@ function AdminUserDrawer({
               <section className="wpay-admin-user-section">
                 <h3>Последние действия операторов</h3>
                 {detail.audit.length ? (
-                  detail.audit
-                    .slice(0, 12)
-                    .map((item, index) => (
-                      <Row
-                        key={index}
-                        title={text(item.action)}
-                        subtitle={`${date(item.created_at)} · ${text(item.admin_id)}`}
-                        right={text(item.outcome)}
-                      />
-                    ))
+                  detail.audit.slice(0, 12).map((item, index) => (
+                    <Row
+                      key={index}
+                      title={text(item.action)}
+                      subtitle={`${date(item.created_at)} · ${text(item.admin_id)}`}
+                      right={text(item.outcome)}
+                    />
+                  ))
                 ) : (
                   <p className="wpay-admin-user-empty">Действий пока нет.</p>
                 )}
@@ -2989,100 +2687,6 @@ function GoSwap({ data }: { data: GoSwapData }) {
   }
   return (
     <div className="space-y-4">
-      <section className={`${card} overflow-hidden`}>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600">
-              <ShieldCheck size={16} />
-              Серверное подключение
-            </div>
-            <h2 className="mt-2 !text-xl">GoSwap API</h2>
-            <p className="mt-1 max-w-3xl text-sm opacity-55">
-              Базовый адрес <code>https://goswap.site/api/</code>. Каждый запрос
-              подписывается серверным заголовком{" "}
-              <code>Crypto-Pay-API-Token</code>; ключ никогда не передаётся в
-              браузер.
-            </p>
-          </div>
-          <span className="rounded-xl bg-blue-500/10 px-3 py-2 font-mono text-xs text-blue-600">{`{ "ok": true, "result": { … } }`}</span>
-        </div>
-        <div className="mt-4 grid gap-3 lg:grid-cols-3">
-          <div className="rounded-2xl bg-black/[.035] p-4 text-sm dark:bg-white/[.05]">
-            <b>Ошибки</b>
-            <p className="mt-1 opacity-55">
-              Ветвление выполняйте по <code>error.name</code>, а пояснение для
-              оператора берите из <code>detail</code>.
-            </p>
-          </div>
-          <div className="rounded-2xl bg-black/[.035] p-4 text-sm dark:bg-white/[.05]">
-            <b>Идемпотентность</b>
-            <p className="mt-1 opacity-55">
-              Для денежных операций сохраняйте <code>spend_id</code> и
-              повторяйте запрос только с тем же значением.
-            </p>
-          </div>
-          <div className="rounded-2xl bg-black/[.035] p-4 text-sm dark:bg-white/[.05]">
-            <b>Retry-After</b>
-            <p className="mt-1 opacity-55">
-              При 503 и заголовке <code>Retry-After</code> повторяйте запрос
-              через указанный интервал.
-            </p>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-          <details className="rounded-2xl border border-[var(--admin-border)] p-4">
-            <summary className="cursor-pointer font-semibold">
-              Вебхуки, подпись и повторы
-            </summary>
-            <div className="mt-3 space-y-3 text-sm opacity-70">
-              <p>
-                Проверяйте заголовок <code>crypto-pay-api-signature</code> до
-                разбора JSON:{" "}
-                <code>hex(HMAC-SHA256(SHA256(API_KEY), raw_body))</code>.
-                Сравнение подписи должно быть constant-time.
-              </p>
-              <p>
-                Сразу отвечайте 2xx. При ошибке GoSwap повторяет доставку до 17
-                раз за трое суток. Дедупликация: депозит — по{" "}
-                <code>deposit_id</code>, QR — по{" "}
-                <code>payment_id + status</code>, вывод — по максимальной
-                <code>version</code>.
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {GOSWAP_WEBHOOKS.map((name) => (
-                  <code
-                    key={name}
-                    className="rounded-md bg-black/[.05] px-2 py-1 text-[10px] dark:bg-white/[.07]"
-                  >
-                    {name}
-                  </code>
-                ))}
-              </div>
-              <p>
-                <code>card_3ds</code> нужно подтвердить 2xx немедленно и сразу
-                передать код держателю: код не хранится и повторяется не дольше
-                пяти минут.
-              </p>
-            </div>
-          </details>
-          <details className="rounded-2xl border border-[var(--admin-border)] p-4">
-            <summary className="cursor-pointer font-semibold">
-              Справочник error.name
-            </summary>
-            <div className="mt-3 divide-y divide-[var(--admin-border)] text-sm">
-              {GOSWAP_ERRORS.map(([name, meaning]) => (
-                <div
-                  key={name}
-                  className="grid gap-1 py-2 sm:grid-cols-[170px_1fr]"
-                >
-                  <code className="font-semibold text-red-500">{name}</code>
-                  <span className="opacity-65">{meaning}</span>
-                </div>
-              ))}
-            </div>
-          </details>
-        </div>
-      </section>
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Object.entries(data.snapshot).map(([name, value]) => (
           <article key={name} className={card}>
@@ -3153,11 +2757,6 @@ function GoSwap({ data }: { data: GoSwapData }) {
                     <h2 className="!text-xl">{method.method}</h2>
                   </div>
                   <p className="mt-2 text-sm opacity-50">{method.title}</p>
-                  {method.description && (
-                    <p className="mt-2 max-w-3xl text-sm leading-6 opacity-70">
-                      {method.description}
-                    </p>
-                  )}
                 </div>
                 {method.dangerous && (
                   <span className="flex items-center gap-2 rounded-xl bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-500">
@@ -3180,22 +2779,6 @@ function GoSwap({ data }: { data: GoSwapData }) {
                   </b>
                 </div>
               </div>
-              {(method.rate_limit || method.notes?.length) && (
-                <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-4 text-sm">
-                  {method.rate_limit && (
-                    <p>
-                      <b>Лимит:</b> {method.rate_limit}
-                    </p>
-                  )}
-                  {method.notes?.length ? (
-                    <ul className="mt-2 list-disc space-y-1 pl-5 opacity-65">
-                      {method.notes.map((note) => (
-                        <li key={note}>{note}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              )}
               <label className="mt-5 block">
                 <span className="text-xs font-semibold">JSON-параметры</span>
                 <textarea
@@ -3244,16 +2827,6 @@ function GoSwap({ data }: { data: GoSwapData }) {
                   </pre>
                 </div>
               )}
-              {method.response_example !== undefined && result === null && (
-                <div className="mt-5">
-                  <div className="text-xs font-semibold opacity-55">
-                    Пример ответа
-                  </div>
-                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-black/[.04] p-4 text-xs dark:bg-black/30">
-                    {json(method.response_example)}
-                  </pre>
-                </div>
-              )}
             </div>
           ) : (
             <Empty />
@@ -3274,14 +2847,13 @@ function fileDataUrl(file: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));
-    reader.onerror = () =>
-      reject(new Error("Не удалось прочитать изображение"));
+    reader.onerror = () => reject(new Error("Не удалось прочитать изображение"));
     reader.readAsDataURL(file);
   });
 }
 
 async function prepareBroadcastImage(file: File) {
-  if (!["image/jpeg", "image/png"].includes(file.type))
+  if (!['image/jpeg', 'image/png'].includes(file.type))
     throw new Error("Выберите изображение JPEG или PNG");
   if (file.size > 12 * 1024 * 1024)
     throw new Error("Исходное изображение должно быть не больше 12 МБ");
@@ -3339,10 +2911,7 @@ function Notifications({
   const messageLength = useMemo(() => richTextPlain(message).length, [message]);
   const messageLimit = 32768;
   const canSend =
-    messageLength > 0 &&
-    messageLength <= messageLimit &&
-    !sending &&
-    !imageBusy;
+    messageLength > 0 && messageLength <= messageLimit && !sending && !imageBusy;
   async function pickImage(file?: File) {
     if (!file) return;
     setImageBusy(true);
@@ -3351,9 +2920,7 @@ function Notifications({
       setImageData(await prepareBroadcastImage(file));
       setImageName(file.name);
     } catch (reason) {
-      setNotice(
-        reason instanceof Error ? reason.message : "Ошибка изображения",
-      );
+      setNotice(reason instanceof Error ? reason.message : "Ошибка изображения");
     } finally {
       setImageBusy(false);
       if (imageInput.current) imageInput.current.value = "";
@@ -3545,16 +3112,11 @@ function Notifications({
                 className="max-h-72 w-full object-contain"
               />
               <div className="flex items-center justify-between gap-3 px-3 py-2">
-                <span className="min-w-0 truncate text-xs opacity-55">
-                  {imageName}
-                </span>
+                <span className="min-w-0 truncate text-xs opacity-55">{imageName}</span>
                 <button
                   type="button"
                   className="shrink-0 text-xs font-semibold text-red-500"
-                  onClick={() => {
-                    setImageData("");
-                    setImageName("");
-                  }}
+                  onClick={() => { setImageData(""); setImageName(""); }}
                 >
                   Удалить
                 </button>
@@ -3572,8 +3134,7 @@ function Notifications({
             </button>
           )}
           <p className="mt-2 text-xs opacity-40">
-            JPEG или PNG. Картинка станет медиаблоком внутри Rich Message; общий
-            лимит — 32 768 символов.
+            JPEG или PNG. Картинка станет медиаблоком внутри Rich Message; общий лимит — 32 768 символов.
           </p>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
