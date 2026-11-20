@@ -13,6 +13,7 @@ import SunMax from "framework7-icons/react/esm/SunMax.js";
 import MoonStars from "framework7-icons/react/esm/MoonStars.js";
 import { WalletNavbar, WalletBackLink, PushViewShell } from "./WalletNavigation";
 import { usePullToRefresh, PullRefreshIndicator } from "./WalletScroll";
+import { walletRequest } from "../lib/wallet-api";
 import { assetIconStyle, type Asset } from "../wallet/appearance";
 import { CurrencyRow, CurrencySkeletonRow } from "./WalletCurrencyRow";
 import WalletCryptoDeposit from "./WalletCryptoDeposit";
@@ -1557,9 +1558,37 @@ function CryptoFlowPushView({
   const [assetPicker, setAssetPicker] = useState<"from" | "to" | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
 
+  const [networkSelection, setNetworkSelection] = useState<{ side: "from" | "to"; network: string } | null>(null);
+  const [usdtNetworkBalances, setUsdtNetworkBalances] = useState<Record<string, number>>({});
+  const usdtAvailable = availableAssets.some((asset) => asset.code === "USDT");
+
+  useEffect(() => {
+    if (!assetPicker || !usdtAvailable) return;
+    const controller = new AbortController();
+    setUsdtNetworkBalances({});
+    void walletRequest<{ items: { network: string; balance?: { status: string; amount: string | null } }[] }>(
+      "custody-asset-balances?asset=USDT", undefined, controller.signal,
+    ).then(({ items }) => {
+      if (controller.signal.aborted) return;
+      const sums: Record<string, number> = {};
+      const unavailable = new Set<string>();
+      for (const { network, balance } of items) {
+        if (balance?.status !== "ok" || balance.amount === null || !Number.isFinite(Number(balance.amount))) {
+          unavailable.add(network);
+        } else {
+          sums[network] = (sums[network] ?? 0) + Number(balance.amount);
+        }
+      }
+      for (const network of unavailable) delete sums[network];
+      setUsdtNetworkBalances(sums);
+    }).catch(() => {});
+    return () => controller.abort();
+  }, [assetPicker, usdtAvailable]);
+
   useEffect(() => {
     if (!flow) return;
     setDisplayFlow(flow);
+    setNetworkSelection(null);
     if (flow.kind === "exchange")
       setNetworkExchange(!flow.assetCode || flow.assetCode === "USDT");
     setAssetPicker(null);
@@ -1651,7 +1680,8 @@ function CryptoFlowPushView({
         {exchangeTabs}
         <WalletNetworkExchange
           active={flow?.kind === "exchange"}
-          initialNetwork={flow?.network}
+          initialNetwork={networkSelection?.side === "from" ? networkSelection.network : flow?.network}
+          initialDestinationNetwork={networkSelection?.side === "to" ? networkSelection.network : undefined}
         />
       </PushViewShell>
     );
@@ -1676,11 +1706,21 @@ function CryptoFlowPushView({
         </PushViewShell>
       );
     }
-    const pickerAssets = availableAssets.filter((item) =>
-      `${item.name} ${item.code}`
-        .toLowerCase()
-        .includes(pickerQuery.trim().toLowerCase()),
+    const query = pickerQuery.trim().toLowerCase();
+    const matchesSearch = (value: string) => value.toLowerCase().includes(query);
+    const tether = availableAssets.find((item) => item.code === "USDT");
+    const appUsdt = tether && matchesSearch("Tether USDT Баланс приложения") ? tether : undefined;
+    const networks = (tether ? live.assetRoutes.USDT ?? [] : []).filter((network) =>
+      matchesSearch(`Tether USDT ${network} ${addressNetworkNames[network] ?? ""} ${addressNetworkStandards[network] ?? ""}`),
     );
+    const pickerAssets = availableAssets.filter((item) =>
+      item.code !== "USDT" && matchesSearch(`${item.name} ${item.code}`),
+    );
+
+    const pickerGroups = [
+      { label: "USDT", items: appUsdt ? [appUsdt] : [], visible: Boolean(appUsdt || networks.length) },
+      { label: "Другие валюты", items: pickerAssets, visible: pickerAssets.length > 0 },
+    ].filter((group) => group.visible);
 
     const balancePercent =
       balances[fromCode] > 0
@@ -1910,7 +1950,7 @@ function CryptoFlowPushView({
             closeOnEscape
             swipeToClose
             swipeHandler=".wpay-exchange-picker-header"
-            className="wpay-exchange-sheet"
+            className="wpay-exchange-sheet wpay-deposit-method-sheet wpay-deposit-method-sheet--all"
             onSheetClosed={() => {
               setAssetPicker(null);
               setPickerQuery("");
@@ -1954,68 +1994,94 @@ function CryptoFlowPushView({
             </header>
             <section
               aria-label="Валюты для обмена"
-              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 pb-[max(20px,env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-[max(20px,env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
             >
-              <List
-                strong
-                inset
-                dividers
-                className="!mx-0 !my-0 !bg-transparent"
-              >
-                {pickerAssets.map((item) => {
-                  const selected =
-                    item.code === (assetPicker === "from" ? fromCode : toCode);
-                  return (
+              {pickerGroups.map(({ label, items }) => (
+                <List key={label} strong inset dividers aria-label={label}
+                  className="!mx-0 !mb-3 !mt-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
+                  {label === "USDT" && tether && networks.map((network) => (
                     <ListItem
-                      key={item.code}
+                      key={network}
                       link
                       chevron={false}
-                      onClick={() => selectExchangeAsset(item.code)}
-                      contentClassName="!h-[72px]"
-                      innerClassName="!h-[72px] !min-w-0 !py-2 after:!opacity-30"
-                      media={
-                        <span
-                          className="wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full [&>svg]:!h-6 [&>svg]:!w-6"
-                          style={assetIconStyle(item)}
-                        >
-                          {item.icon}
-                        </span>
-                      }
+                      contentClassName="!h-16"
+                      innerClassName="!h-16 !min-w-0 !py-2 after:!opacity-30"
+                      onClick={() => {
+                        if (!assetPicker) return;
+                        setNetworkSelection({ side: assetPicker, network });
+                        setAssetPicker(null);
+                        setNetworkExchange(true);
+                        haptic("light");
+                      }}
+                      media={<WalletAssetAvatar icon={tether.icon} color={tether.color} iconColor={tether.iconColor} network={network} />}
                       innerChildren={
-                        <span className="flex min-w-0 items-center justify-between gap-3">
+                        <span className="flex w-full min-w-0 items-center justify-between gap-3">
                           <span className="min-w-0">
-                            <span className="block truncate text-[17px] font-semibold text-black dark:text-white">
-                              {item.name}
-                            </span>
-                            <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
-                              {item.code}
-                            </span>
+                            <span className="block truncate text-[17px] font-semibold">USDT · {addressNetworkStandards[network] ?? network}</span>
+                            <span className="mt-0.5 block truncate text-[13px] text-black/45 dark:text-white/45">{addressNetworkNames[network] ?? network}</span>
                           </span>
-                          <span className="ml-auto text-right">
-                            <span className="block text-[16px] font-medium tabular-nums text-black dark:text-white">
-                              {live.ready
-                                ? formatCrypto(balances[item.code] ?? 0)
-                                : "—"}
-                            </span>
-                            <span className="mt-0.5 block text-[12px] text-black/40 dark:text-white/40">
-                              {live.ready && live.rate(item.code) !== null
-                                ? usd(
-                                    (balances[item.code] ?? 0) *
-                                      (live.rate(item.code) ?? 0),
-                                  )
-                                : "Нет данных"}
-                            </span>
-                          </span>
-                          <span className="flex w-5 shrink-0 items-center justify-center text-primary">
-                            {selected && <Check size={20} strokeWidth={2.5} />}
+                          <span className="shrink-0 text-right text-[16px] font-medium tabular-nums">
+                            {usdtNetworkBalances[network] === undefined ? "—" : formatCrypto(usdtNetworkBalances[network])}
                           </span>
                         </span>
                       }
                     />
-                  );
-                })}
-              </List>
-              {!pickerAssets.length && (
+                  ))}
+                  {items.map((item) => {
+                    const selected =
+                      item.code === (assetPicker === "from" ? fromCode : toCode);
+                    return (
+                      <ListItem
+                        key={item.code}
+                        link
+                        chevron={false}
+                        onClick={() => selectExchangeAsset(item.code)}
+                        contentClassName="!h-[72px]"
+                        innerClassName="!h-[72px] !min-w-0 !py-2 after:!opacity-30"
+                        media={
+                          <span
+                            className="wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full [&>svg]:!h-6 [&>svg]:!w-6"
+                            style={assetIconStyle(item)}
+                          >
+                            {item.icon}
+                          </span>
+                        }
+                        innerChildren={
+                          <span className="flex min-w-0 items-center justify-between gap-3">
+                            <span className="min-w-0">
+                              <span className="block truncate text-[17px] font-semibold text-black dark:text-white">
+                                {item.name}
+                              </span>
+                              <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
+                                {item.code === "USDT" ? "Баланс приложения" : item.code}
+                              </span>
+                            </span>
+                            <span className="ml-auto text-right">
+                              <span className="block text-[16px] font-medium tabular-nums text-black dark:text-white">
+                                {live.ready
+                                  ? formatCrypto(balances[item.code] ?? 0)
+                                  : "—"}
+                              </span>
+                              <span className="mt-0.5 block text-[12px] text-black/40 dark:text-white/40">
+                                {live.ready && live.rate(item.code) !== null
+                                  ? usd(
+                                      (balances[item.code] ?? 0) *
+                                        (live.rate(item.code) ?? 0),
+                                    )
+                                  : "Нет данных"}
+                              </span>
+                            </span>
+                            <span className="flex w-5 shrink-0 items-center justify-center text-primary">
+                              {selected && <Check size={20} strokeWidth={2.5} />}
+                            </span>
+                          </span>
+                        }
+                      />
+                    );
+                  })}
+                </List>
+              ))}
+              {!pickerGroups.length && (
                 <p
                   role="status"
                   className="px-5 py-10 text-center text-[15px] text-black/45 dark:text-white/45"

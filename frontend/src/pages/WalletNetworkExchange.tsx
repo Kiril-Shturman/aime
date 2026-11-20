@@ -47,9 +47,11 @@ const format = (value: string) =>
 export default function WalletNetworkExchange({
   active,
   initialNetwork,
+  initialDestinationNetwork,
 }: {
   active: boolean;
   initialNetwork?: string;
+  initialDestinationNetwork?: string;
 }) {
   const [orderOpen, setOrderOpen] = useState(false);
   const [status, setStatus] = useState<Status | null>(null);
@@ -79,8 +81,9 @@ export default function WalletNetworkExchange({
     )
       ? initialNetwork!
       : "TRON";
-    setFrom(initial);
-    setTo(initial === "BSC" ? "TRON" : "BSC");
+    const destination = initialDestinationNetwork ?? (initial === "BSC" ? "TRON" : "BSC");
+    setFrom(initial === destination ? (destination === "TRON" ? "BSC" : "TRON") : initial);
+    setTo(destination);
     const abort = new AbortController();
     lifecycle.current = abort.signal;
     let current = true;
@@ -107,7 +110,7 @@ export default function WalletNetworkExchange({
       current = false;
       abort.abort();
     };
-  }, [active, initialNetwork]);
+  }, [active, initialNetwork, initialDestinationNetwork]);
   useEffect(() => {
     if (!quote?.available) return;
     const delay = Math.max(

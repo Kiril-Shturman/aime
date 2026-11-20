@@ -1413,3 +1413,37 @@ test("desktop asset chart fills the page above actions and balances", async ({ p
       frame.right <= window.innerWidth + 1;
   })).toBe(true);
 });
+
+
+test("exchange picker groups USDT networks and searches by network or ticker", async ({ page }) => {
+  await setup(page, "dark");
+  await page.route("**/api/wallet/exchange-status", (route) => route.fulfill({
+    json: { configured: true, orders_enabled: false, networks: [
+      { network: "TRON", name: "Tron", standard: "TRC20", can_send: true, can_receive: true },
+      { network: "BSC", name: "BNB Smart Chain", standard: "BEP20", can_send: true, can_receive: true },
+    ] },
+  }));
+  await page.route("**/api/wallet/custody-asset-balances?asset=USDT", (route) => route.fulfill({
+    json: { items: [
+      { network: "TRON", balance: { amount: "12.5", status: "ok" } },
+      { network: "BSC", balance: { amount: "0", status: "ok" } },
+    ] },
+  }));
+  await page.getByRole("button", { name: "Обменять", exact: true }).click();
+  await page.getByRole("button", { name: "Другие валюты" }).click();
+  await page.getByRole("button", { name: "Валюта списания" }).click();
+  const picker = page.getByRole("region", { name: "Валюты для обмена" });
+  const networks = picker.locator('[aria-label="USDT"]');
+  const coins = picker.locator('[aria-label="Другие валюты"]');
+  await expect(networks.getByText("12.5", { exact: true })).toBeVisible();
+  await expect(coins.getByText("BTC", { exact: true })).toBeVisible();
+  const search = page.getByRole("textbox", { name: "Найти валюту" });
+  await search.fill("btc");
+  await expect(networks).toHaveCount(0);
+  await expect(coins.getByText("BTC", { exact: true })).toBeVisible();
+  await search.fill("TRC20");
+  await expect(coins).toHaveCount(0);
+  await expect(networks.getByText("USDT · TRC20", { exact: true })).toBeVisible();
+  await networks.getByText("USDT · TRC20", { exact: true }).click();
+  await expect(page.getByLabel("Сеть отправления USDT")).toHaveValue("TRON");
+});
