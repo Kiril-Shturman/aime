@@ -1,7 +1,8 @@
 import { WalletTransfer } from "./WalletUserFinance";
 import { SiTether } from "@icons-pack/react-simple-icons";
 import type { Asset } from "../wallet/appearance";
-import WalletAssetAvatar from "./WalletAssetAvatar";
+import { CurrencyRow, CurrencySkeletonRow } from "./WalletCurrencyRow";
+import { haptic } from "../lib/telegram";
 import { useEffect, useState } from "react";
 import {
   Button,
@@ -61,6 +62,7 @@ export function WithdrawalMethods({
   cryptoAssets?: Asset[];
   onSelectAsset?: (asset: string) => void;
 }) {
+  const wallet = useLiveWallet();
   const avatar = (Icon: typeof DocTextFill, color: string) => (
     <span
       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
@@ -78,13 +80,21 @@ export function WithdrawalMethods({
       </p>
       {cryptoAssets ? (
         <KList strong inset dividers className="!mx-4 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
-          {cryptoAssets.map(({ code, name, icon, color, iconColor }) => (
-            <KListItem key={code} link title={name} subtitle={code}
-              onClick={() => onSelectAsset?.(code)}
-              contentClassName="!h-[64px]" innerClassName="!min-w-0 !h-[64px] !py-2"
-              media={<WalletAssetAvatar {...{ icon, color, iconColor }} />}
-            />
-          ))}
+          {cryptoAssets.map((asset) =>
+            wallet.loading ? (
+              <CurrencySkeletonRow key={asset.code} deposit />
+            ) : (
+              <CurrencyRow
+                key={asset.code}
+                asset={asset}
+                deposit
+                onClick={() => {
+                  onSelectAsset?.(asset.code);
+                  haptic("light");
+                }}
+              />
+            ),
+          )}
         </KList>
       ) : (
         <KList
