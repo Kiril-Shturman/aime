@@ -1816,7 +1816,7 @@ function CryptoFlowPushView({
                         setPickerQuery("");
                         setAssetPicker(side);
                       }}
-                      className="grid min-h-12 w-[116px] shrink-0 grid-cols-[28px_minmax(0,1fr)_16px] items-center gap-2 py-1 pl-1 text-black dark:text-white"
+                      className="flex min-h-12 shrink-0 items-center gap-1.5 py-1 pl-1 text-black dark:text-white"
                     >
                       {usdtNetwork ? (
                         <span className="wpay-exchange-asset-avatar">

@@ -12,8 +12,8 @@
 .wpay-f7-root .wpay-exchange-sheet.sheet-modal { z-index: 13500; }
 
 .wpay-exchange-asset-avatar .wpay-address-avatar,
-.wpay-exchange-asset-avatar .wpay-currency-icon { width: 28px; height: 28px; }
-.wpay-exchange-asset-avatar .wpay-currency-icon > svg { width: 16px !important; height: 16px !important; }
+.wpay-exchange-asset-avatar .wpay-currency-icon { width: 24px; height: 24px; }
+.wpay-exchange-asset-avatar .wpay-currency-icon > svg { width: 16px !important; height: 16px !important; transform: scale(.8); }
 .wpay-exchange-asset-avatar .wpay-address-network-badge {
   inset: auto -4px -2px auto;
   width: 13px;
