@@ -9,7 +9,7 @@ import uuid
 import weakref
 from decimal import Decimal, localcontext
 from aiohttp import web
-from wallet_finance import require_coverage
+from wallet_finance import aura_available, require_coverage, require_goswap_user_funds
 from wallet_withdrawals import debt
 
 D = Decimal
@@ -38,12 +38,13 @@ def change(ledger, uid, asset, available_delta, reserved_delta=D(0)):
         ctx.prec = 80
         available, reserved = ledger.balance(uid, asset)
         owed = debt(ledger, uid, asset)
+        protected = min(available, aura_available(ledger, uid, asset))
         available += available_delta
-        if available < 0:
-            owed -= available
-            available = D(0)
+        if available < protected:
+            owed += protected - available
+            available = protected
         elif owed:
-            paid = min(available, owed)
+            paid = min(available - protected, owed)
             available -= paid
             owed -= paid
         ledger.put_balance(uid, asset, available, reserved + reserved_delta)
@@ -183,6 +184,7 @@ async def route(request, action, uid, ledger, provider, money, ApiError):
             {
                 "can_transfer": me.get("can_transfer") is True,
                 "can_withdraw": me.get("can_withdraw") is True,
+                "available_usdt": str(max(D(0), ledger.balance(uid, "USDT")[0] - aura_available(ledger, uid, "USDT"))),
                 "currencies": await provider.call("getCurrencies"),
             }
         )
@@ -427,6 +429,7 @@ async def route(request, action, uid, ledger, provider, money, ApiError):
                 if current["state"] == "prepared":
                     first_submission = True
                     available, reserved = ledger.balance(uid, canonical["asset"])
+                    require_goswap_user_funds(ledger, uid, canonical["asset"], available, amount, ApiError)
                     if debt(ledger, uid, canonical["asset"]):
                         raise ApiError("INSUFFICIENT_FUNDS", "Есть задолженность", 409)
                     ledger.put_balance(

@@ -59,15 +59,20 @@ class TestCreditBackingTests(unittest.IsolatedAsyncioTestCase):
     async def test_goswap_credit_checks_reserve_and_does_not_allocate_aura(self):
         import asyncio
 
-        async def credit():
+        async def credit(operation_id):
             return await self.http.post('/adjust', json={
                 'account_id': 'tg:1', 'asset': 'USDT', 'amount': '20',
                 'reason': 'GoSwap reserve allocation', 'source': 'goswap',
+                'operation_id': operation_id,
                 'confirm': 'ADJUST tg:1 USDT 20 GOSWAP',
             }, headers={'X-Test-Admin': 'yes'})
 
-        replies = await asyncio.gather(credit(), credit())
+        first = "11111111-1111-4111-8111-111111111111"
+        second = "22222222-2222-4222-8222-222222222222"
+        replies = await asyncio.gather(credit(first), credit(second))
         self.assertEqual(sorted(reply.status for reply in replies), [200, 409])
+        winner = first if replies[0].status == 200 else second
+        self.assertEqual((await credit(winner)).status, 200)
         self.assertEqual(self.ledger.balance('tg:1', 'USDT')[0], Decimal('20'))
         self.assertEqual(self.backed(), Decimal('0'))
         self.aura.get_balance.assert_not_awaited()

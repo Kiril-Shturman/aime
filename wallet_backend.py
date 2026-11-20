@@ -37,7 +37,7 @@ from wallet_book import Book
 from wallet_user_ops import prepare as prepare_user_ops, route as user_ops_route
 from wallet_inbox import prepare as prepare_inbox, receive as receive_webhook
 from wallet_finance_worker import prepare as prepare_finance_worker, Worker as FinanceWorker
-from wallet_finance import finance_route, require_coverage
+from wallet_finance import finance_route, require_coverage, require_goswap_user_funds
 from wallet_notifications import (
     prepare as prepare_notifications, snapshot as notification_snapshot,
     NotificationWorker,
@@ -614,6 +614,7 @@ class Ledger:
                 if debt(self, uid, quote['asset']):
                     raise ApiError('INSUFFICIENT_FUNDS', 'Есть задолженность по уточнённому выводу', 409)
                 available, reserved = self.balance(uid, quote['asset'])
+                require_goswap_user_funds(self, uid, quote['asset'], available, amount, ApiError)
                 self.put_balance(uid, quote['asset'], add(available, -amount), add(reserved, amount))
                 self.db.execute("UPDATE wallet_quotes SET state='reserved' WHERE quote_id=?", (quote_id,))
             self.commit()
@@ -2785,7 +2786,7 @@ def install_wallet(app, root, owner_check):
                 pending=ledger.db.execute('SELECT state,body FROM wallet_quotes WHERE quote_id=? AND user_id=?',(str(body.get('quote_id','')),uid)).fetchone()
                 if pending and pending['state']=='quoted':
                     check=json.loads(pending['body'])
-                    if ledger.balance(uid,check['asset'])[0]<money(check['amount']):raise ApiError('INSUFFICIENT_FUNDS','Недостаточно средств',409)
+                    require_goswap_user_funds(ledger, uid, check['asset'], ledger.balance(uid, check['asset'])[0], money(check['amount']), ApiError)
                     await require_coverage(ledger,provider,check['asset'],ApiError)
                 row, quote = ledger.reserve(uid, str(body.get('quote_id', '')))
                 if row['state'] in {'completed', 'failed', 'refunded', 'processing'}:

@@ -513,6 +513,38 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual((await report.json())["items"][0]["difference"], "-1")
 
+    async def test_goswap_credit_can_be_spent_while_aura_remains_protected(self):
+        from wallet_aura import _position_adjust
+
+        self.ledger.put_balance("tg:123", "USDT", D(125), D(0))
+        _position_adjust(self.ledger, "test", "tg:123", "USDT", D(25), D(0))
+        self.provider.org = D(130)
+        credit = await self.post("finance-adjustment", {
+            "account_id": "tg:123", "asset": "USDT", "amount": "20",
+            "source": "goswap", "reason": "Allocate organization reserve",
+            "operation_id": "11111111-1111-4111-8111-111111111111",
+            "confirm": "ADJUST tg:123 USDT 20 GOSWAP",
+        }, headers=OWNER)
+        self.assertEqual(credit.status, 200, await credit.text())
+        report = await (await self.client.get("/api/wallet/finance-reconciliation", headers=OWNER)).json()
+        self.assertEqual(report["items"][0]["liabilities"], "120")
+        self.assertEqual(report["items"][0]["state"], "surplus")
+        intent = await self.transfer()
+        result = await self.post("transfer-send", {"intent_id": intent})
+        self.assertEqual(result.status, 200, await result.text())
+        self.assertEqual(self.balance(), (D(135), D(10)))
+        self.assertEqual(self.ledger.db.execute(
+            "SELECT available FROM wallet_provider_positions WHERE provider='aura' AND user_id=?",
+            ("tg:123",),
+        ).fetchone()[0], "25")
+
+        quote = await (await self.post("withdrawal-estimate", {
+            "asset": "USDT", "network": "BSC", "address": "0x" + "1" * 40, "amount": "15",
+        })).json()
+        withdraw = await self.post("withdrawal-create", {"intent_id": quote["intent_id"]})
+        self.assertEqual(withdraw.status, 200, await withdraw.text())
+        self.assertEqual(self.balance(), (D(119), D(26)))
+
     async def test_positive_unexplained_difference_also_blocks(self):
         intent = await self.transfer()
         self.provider.org = D(101)

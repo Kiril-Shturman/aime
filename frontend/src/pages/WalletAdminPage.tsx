@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ComponentType,
@@ -2016,6 +2017,7 @@ function AdminUserDrawer({
   const [actionWorking, setActionWorking] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [messageText, setMessageText] = useState("");
+  const creditRequest = useRef<{ fingerprint: string; operationId: string } | null>(null);
   const [balanceSource, setBalanceSource] = useState("default");
   const [balanceAsset, setBalanceAsset] = useState("USDT");
   const [balanceAmount, setBalanceAmount] = useState("");
@@ -2086,6 +2088,12 @@ function AdminUserDrawer({
       )
     )
       return;
+    if (balanceSource === "goswap") {
+      const fingerprint = JSON.stringify([userId, balanceAsset, normalizedAmount, balanceReason.trim()]);
+      if (creditRequest.current?.fingerprint !== fingerprint) {
+        creditRequest.current = { fingerprint, operationId: crypto.randomUUID() };
+      }
+    }
     setActionWorking("adjust_balance");
     setActionNotice("");
     try {
@@ -2098,12 +2106,14 @@ function AdminUserDrawer({
           reason: balanceReason.trim(),
           bucket: "available",
           source: balanceSource,
+          ...(balanceSource === "goswap" && { operation_id: creditRequest.current?.operationId }),
           confirm: `ADJUST ${userId} ${balanceAsset} ${normalizedAmount}${balanceSource === "goswap" ? " GOSWAP" : ""}`,
         },
       );
       setActionNotice(
         `Баланс изменён: ${amount(result.before)} → ${amount(result.after)} ${balanceAsset}`,
       );
+      creditRequest.current = null;
       setBalanceAmount("");
       setBalanceReason("");
       onRetry();

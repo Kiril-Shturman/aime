@@ -178,7 +178,7 @@ interface Outcome {
   tx_hash?: string;
 }
 
-function CoreWithdrawalForm({ method, fixedNetwork }: { method: WithdrawalMethod; fixedNetwork?: string }) {
+function CoreWithdrawalForm({ method, fixedNetwork, providerAvailable }: { method: WithdrawalMethod; fixedNetwork?: string; providerAvailable?: string }) {
   const wallet = useLiveWallet();
   const [network, setNetwork] = useState(fixedNetwork ?? "");
   const [recipient, setRecipient] = useState(""),
@@ -191,8 +191,10 @@ function CoreWithdrawalForm({ method, fixedNetwork }: { method: WithdrawalMethod
     [error, setError] = useState("");
   const available = wallet.demo
     ? 1234.56
-    : wallet.ready
-      ? Number(wallet.balance("USDT"))
+    : providerAvailable !== undefined
+      ? Number(providerAvailable)
+      : wallet.ready
+        ? Number(wallet.balance("USDT"))
       : null;
   const normalized = amount.replace(",", "."),
     value = Number(normalized);
@@ -547,12 +549,16 @@ function CoreWithdrawalForm({ method, fixedNetwork }: { method: WithdrawalMethod
 export function WithdrawalForm({ method, fixedNetwork }: { method: WithdrawalMethod; fixedNetwork?: string }) {
   const wallet = useLiveWallet();
   const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [providerAvailable, setProviderAvailable] = useState<string>();
   useEffect(() => {
     let active = true;
     if (method !== "usdt") return;
-    walletRequest<{ can_withdraw: boolean }>("financial-capabilities")
+    walletRequest<{ can_withdraw: boolean; available_usdt?: string }>("financial-capabilities")
       .then((value) => {
-        if (active) setAllowed(value.can_withdraw === true);
+        if (active) {
+          setAllowed(value.can_withdraw === true);
+          setProviderAvailable(value.available_usdt);
+        }
       })
       .catch(() => {
         if (active) setAllowed(false);
@@ -575,6 +581,6 @@ export function WithdrawalForm({ method, fixedNetwork }: { method: WithdrawalMet
   return method === "username" ? (
     <WalletTransfer />
   ) : (
-    <CoreWithdrawalForm method={method} fixedNetwork={fixedNetwork} />
+    <CoreWithdrawalForm method={method} fixedNetwork={fixedNetwork} providerAvailable={providerAvailable} />
   );
 }

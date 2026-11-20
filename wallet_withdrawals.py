@@ -6,7 +6,7 @@ import uuid
 import weakref
 from decimal import Decimal, localcontext
 from aiohttp import web
-from wallet_finance import require_coverage
+from wallet_finance import aura_available, require_coverage, require_goswap_user_funds
 
 
 def prepare_withdrawals(ledger):
@@ -63,13 +63,14 @@ def apply_outcome(ledger, payload, money, ApiError):
             new_reserved = total if state == 'processing' else Decimal(0)
             available, reserved = ledger.balance(row['user_id'], body['asset'])
             change = old_liability - new_liability
+            protected = min(available, aura_available(ledger, row["user_id"], body["asset"]))
             available += change
             owed = debt(ledger, row['user_id'], body['asset'])
-            if available < 0:
-                owed -= available
-                available = Decimal(0)
+            if available < protected:
+                owed += protected - available
+                available = protected
             elif owed:
-                repayment = min(available, owed)
+                repayment = min(available - protected, owed)
                 available -= repayment
                 owed -= repayment
             ledger.put_balance(row['user_id'], body['asset'], available, reserved + new_reserved - old_reserved)
@@ -161,7 +162,7 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
         raise ApiError('NOT_ENABLED','Вывод для организации недоступен',403)
     if pending and pending['state']=='estimated':
         check=json.loads(pending['body'])
-        if ledger.balance(uid,check['asset'])[0]<money(check['total']):raise ApiError('INSUFFICIENT_FUNDS','Недостаточно средств с учётом комиссии',409)
+        require_goswap_user_funds(ledger, uid, check['asset'], ledger.balance(uid, check['asset'])[0], money(check['total']), ApiError)
         await require_coverage(ledger,provider,check['asset'],ApiError)
     ledger.begin('withdrawal_reserve',uid,'Reserve withdrawal '+str(intent_id))
     try:
@@ -176,6 +177,7 @@ async def _withdrawal_route(request, action, uid, ledger, provider, money, ApiEr
                 raise ApiError('QUOTE_EXPIRED', 'Расчёт истёк. Повторите расчёт.', 409)
             available, reserved = ledger.balance(uid, canonical['asset'])
             total = money(canonical['total'])
+            require_goswap_user_funds(ledger, uid, canonical['asset'], available, total, ApiError)
             if debt(ledger, uid, canonical['asset']):
                 raise ApiError('INSUFFICIENT_FUNDS', 'Есть задолженность по уточнённому выводу', 409)
             with localcontext() as ctx:
