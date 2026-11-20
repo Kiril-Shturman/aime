@@ -1410,6 +1410,12 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(address_response.status, 200, await address_response.text())
         address = await address_response.json()
         self.assertEqual(address["chain"], "nile")
+        saved = await self.wpay.get("/api/wallet/addresses", headers=self.owner)
+        self.assertEqual(saved.status, 200)
+        self.assertEqual((await saved.json())["items"], [{
+            "provider": "aura", "asset": "USDT", "network": "TRON",
+            "address": address["address"], "chain": "nile",
+        }])
         created = await self.mock.post(
             "/mock/deposits",
             json={"customer_id": address["customer_id"], "amount": "10", "fee": "1"},

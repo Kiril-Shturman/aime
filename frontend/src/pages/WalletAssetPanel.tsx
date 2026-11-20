@@ -150,32 +150,34 @@ export default function WalletAssetPanel({
     setAddresses([]);
     setAddressError("");
     setLoadingAddresses(false);
-    if (active && wallet.configured) {
-      setLoadingAddresses(true);
-      void (async () => {
-        try {
-          const result = await walletRequest<{ items?: WalletAddress[] }>(
-            "addresses",
-          );
-          const networks = (addressNetworks[code] ?? []).filter((network) =>
-            (wallet.assetRoutes[code] ?? []).includes(network),
-          );
-          const saved = addressesForAsset(result.items ?? [], code).filter(
-            (item) => item.address && networks.includes(item.network),
-          );
-          if (!current) return;
-          setAddresses(saved);
-        } catch {
-          if (current)
-            setAddressError(
-              "Не удалось загрузить адреса. Нажмите на сеть, чтобы повторить.",
+    function loadAddresses() {
+      if (active && wallet.configured) {
+        setLoadingAddresses(true);
+        void (async () => {
+          try {
+            const result = await walletRequest<{ items?: WalletAddress[] }>(
+              "addresses",
             );
-        } finally {
-          if (current) setLoadingAddresses(false);
-        }
-      })();
+            const saved = addressesForAsset(result.items ?? [], code).filter(
+              (item) => item.address,
+            );
+            if (!current) return;
+            setAddresses(saved);
+          } catch {
+            if (current)
+              setAddressError(
+                "Не удалось загрузить адреса. Нажмите на сеть, чтобы повторить.",
+              );
+          } finally {
+            if (current) setLoadingAddresses(false);
+          }
+        })();
+      }
     }
+    loadAddresses();
+    window.addEventListener("wpay:deposit-address", loadAddresses);
     return () => {
+      window.removeEventListener("wpay:deposit-address", loadAddresses);
       current = false;
     };
   }, [active, code, wallet.configured]);
@@ -360,7 +362,8 @@ export default function WalletAssetPanel({
                   const provider = wallet.depositProviders[code]?.[network];
                   const item = demoPortfolio
                     ? portfolioExamples[network]
-                    : provider ? undefined : addresses.find((row) => row.network === network);
+                    : addresses.find((row) => row.network === network &&
+                        (provider ? row.provider === provider : !row.provider || row.provider === "goswap"));
                   return (
                     <button
                       key={network}
@@ -378,11 +381,12 @@ export default function WalletAssetPanel({
                       onClick={() => {
                         setAddressError("");
                         setCopiedAddress("");
-                        if (provider) onDeposit(network);
-                        else if (item)
+                        if (item)
                           onOpenAddress({
                             network,
                             address: item.address,
+                            provider: "provider" in item ? item.provider : undefined,
+                            chain: "chain" in item ? item.chain : undefined,
                             min_deposit:
                               "min_deposit" in item
                                 ? item.min_deposit
@@ -395,6 +399,7 @@ export default function WalletAssetPanel({
                               : null,
                             rate: demoPortfolio ? preview.rate : rate,
                           });
+                        else if (provider) onDeposit(network);
                         else if (network === "TRON" && code === "USDT")
                           onDeposit("TRON");
                         else if ((addressNetworks[code] ?? []).includes(network))

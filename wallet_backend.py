@@ -1734,6 +1734,25 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            if action == 'addresses' and request.method == 'GET':
+                items = [
+                    {**json.loads(row['body']), 'provider': 'goswap'}
+                    for row in ledger.db.execute(
+                        'SELECT body FROM wallet_addresses WHERE user_id=? ORDER BY network', (uid,),
+                    )
+                ]
+                if aura_enabled and aura_client.configured:
+                    row = ledger.db.execute(
+                        'SELECT address,network FROM aura_deposit_addresses WHERE user_id=? '
+                        'AND environment=? ORDER BY is_default DESC, created_at ASC, address_id LIMIT 1',
+                        (uid, aura_environment),
+                    ).fetchone()
+                    if row:
+                        items.append({'provider': 'aura', 'asset': 'USDT', 'network': 'TRON',
+                                      'address': row['address'], 'chain': row['network']})
+                response = web.json_response({'items': items})
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             export_response = await key_export_route(request, action, uid, custody)
             if export_response is not None:return export_response
             custody_response = await custody_route(request, action, uid, custody)
