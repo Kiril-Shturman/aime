@@ -2034,3 +2034,46 @@
     padding-bottom: 12px;
   }
 }
+
+.wpay-admin-asset-switch {
+  position: absolute;
+  inset-inline-end: 12px;
+  top: 0;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+}
+
+.wpay-admin-asset-switch > span {
+  display: flex;
+  align-items: center;
+  width: 42px;
+  height: 24px;
+  padding: 2px;
+  border-radius: 999px;
+  background: #8e8e93;
+  transition: background-color 160ms ease;
+}
+
+.wpay-admin-asset-switch > span::after {
+  content: "";
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 18%);
+  transition: transform 160ms ease;
+}
+
+.wpay-admin-asset-switch[aria-checked="true"] > span {
+  background: var(--wpay-admin-action, #007aff);
+}
+
+.wpay-admin-asset-switch[aria-checked="true"] > span::after {
+  transform: translateX(18px);
+}

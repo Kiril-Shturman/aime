@@ -2566,9 +2566,9 @@ function Crypto({
                   aria-checked={enabled}
                   disabled={Boolean(workingRoute)}
                   onClick={() => void updateAssets({ asset, enabled: !enabled }, asset)}
-                  className={`absolute right-4 top-3 h-6 w-11 rounded-full p-0.5 transition-colors disabled:opacity-40 ${enabled ? "bg-blue-500" : "bg-gray-500"}`}
+                  className="wpay-admin-asset-switch"
                 >
-                  <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${enabled ? "translate-x-5" : ""}`} />
+                  <span aria-hidden="true" />
                 </button>
                 <details>
                   <summary className="cursor-pointer rounded-xl px-4 py-3 pr-20 text-sm font-semibold">
