@@ -1,5 +1,7 @@
 import { WalletTransfer } from "./WalletUserFinance";
 import { SiTether } from "@icons-pack/react-simple-icons";
+import type { Asset } from "../wallet/appearance";
+import WalletAssetAvatar from "./WalletAssetAvatar";
 import { useEffect, useState } from "react";
 import {
   Button,
@@ -52,8 +54,12 @@ const methods = [
 ];
 export function WithdrawalMethods({
   onSelect,
+  cryptoAssets,
+  onSelectAsset,
 }: {
   onSelect: (method: WithdrawalMethod) => void;
+  cryptoAssets?: Asset[];
+  onSelectAsset?: (asset: string) => void;
 }) {
   const avatar = (Icon: typeof DocTextFill, color: string) => (
     <span
@@ -70,43 +76,55 @@ export function WithdrawalMethods({
       <p className="mb-4 mt-1 px-5 text-center text-[14px] leading-6 text-black/45 dark:text-white/45">
         Выберите удобный способ
       </p>
-      <KList
-        strong
-        inset
-        className="!mx-4 !my-0 overflow-hidden !rounded-full [&>ul]:!rounded-full"
-      >
-        <KListItem
-          link
-          chevron={false}
-          contentClassName="!h-[64px]"
-          innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30"
-          onClick={() => onSelect("usdt")}
-          media={
-            <span
-              className="wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
-              style={{
-                background:
-                  "linear-gradient(180deg,color-mix(in srgb,#26a17b 62%,white),#26a17b)",
-              }}
-            >
-              <SiTether size={25} />
-            </span>
-          }
-          innerChildren={
-            <span className="flex h-full w-full min-w-0 items-center justify-between gap-3">
-              <span className="min-w-0">
-                <span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">
-                  Tether
-                </span>
-                <span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">
-                  USDT
-                </span>
+      {cryptoAssets ? (
+        <KList strong inset dividers className="!mx-4 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
+          {cryptoAssets.map(({ code, name, icon, color, iconColor }) => (
+            <KListItem key={code} link title={name} subtitle={code}
+              onClick={() => onSelectAsset?.(code)}
+              contentClassName="!h-[64px]" innerClassName="!min-w-0 !h-[64px] !py-2"
+              media={<WalletAssetAvatar {...{ icon, color, iconColor }} />}
+            />
+          ))}
+        </KList>
+      ) : (
+        <KList
+          strong
+          inset
+          className="!mx-4 !my-0 overflow-hidden !rounded-full [&>ul]:!rounded-full"
+        >
+          <KListItem
+            link
+            chevron={false}
+            contentClassName="!h-[64px]"
+            innerClassName="!min-w-0 !h-[64px] !py-2 after:!opacity-30"
+            onClick={() => onSelect("usdt")}
+            media={
+              <span
+                className="wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
+                style={{
+                  background:
+                    "linear-gradient(180deg,color-mix(in srgb,#26a17b 62%,white),#26a17b)",
+                }}
+              >
+                <SiTether size={25} />
               </span>
-              <ChevronRight className="shrink-0 text-[19px] text-black/25 dark:text-white/30" />
-            </span>
-          }
-        />
-      </KList>
+            }
+            innerChildren={
+              <span className="flex h-full w-full min-w-0 items-center justify-between gap-3">
+                <span className="min-w-0">
+                  <span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">
+                    Tether
+                  </span>
+                  <span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">
+                    USDT
+                  </span>
+                </span>
+                <ChevronRight className="shrink-0 text-[19px] text-black/25 dark:text-white/30" />
+              </span>
+            }
+          />
+        </KList>
+      )}
       <h2 className="mb-2 mt-6 px-5 text-[17px] font-semibold text-black/50 dark:text-white/50">
         В Telegram
       </h2>
@@ -150,9 +168,9 @@ interface Outcome {
   tx_hash?: string;
 }
 
-function CoreWithdrawalForm({ method }: { method: WithdrawalMethod }) {
+function CoreWithdrawalForm({ method, fixedNetwork }: { method: WithdrawalMethod; fixedNetwork?: string }) {
   const wallet = useLiveWallet();
-  const [network, setNetwork] = useState("");
+  const [network, setNetwork] = useState(fixedNetwork ?? "");
   const [recipient, setRecipient] = useState(""),
     [amount, setAmount] = useState(""),
     [memo, setMemo] = useState("");
@@ -293,7 +311,7 @@ function CoreWithdrawalForm({ method }: { method: WithdrawalMethod }) {
           <select
             id="withdraw-network"
             aria-label="Сеть вывода"
-            disabled={locked}
+            disabled={locked || Boolean(fixedNetwork)}
             value={network}
             onChange={(event) => {
               setNetwork(event.target.value);
@@ -516,7 +534,7 @@ function CoreWithdrawalForm({ method }: { method: WithdrawalMethod }) {
   );
 }
 
-export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
+export function WithdrawalForm({ method, fixedNetwork }: { method: WithdrawalMethod; fixedNetwork?: string }) {
   const wallet = useLiveWallet();
   const [allowed, setAllowed] = useState<boolean | null>(null);
   useEffect(() => {
@@ -547,6 +565,6 @@ export function WithdrawalForm({ method }: { method: WithdrawalMethod }) {
   return method === "username" ? (
     <WalletTransfer />
   ) : (
-    <CoreWithdrawalForm method={method} />
+    <CoreWithdrawalForm method={method} fixedNetwork={fixedNetwork} />
   );
 }

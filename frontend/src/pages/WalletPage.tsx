@@ -1054,10 +1054,10 @@ function AssetPushView({
                               displayAsset.code,
                               addressEntry.network,
                             );
-                          } else
-                            showNotice(
-                              "Вывод с собственного кошелька ещё не подключён",
-                            );
+                          } else if (action.label === "Вывести") {
+                            setAddressEntry(null);
+                            openFlow("withdraw", displayAsset.code, addressEntry.network);
+                          }
                           return;
                         }
                         if (action.label === "Пополнить") {
@@ -2056,40 +2056,73 @@ function CryptoFlowPushView({
     );
   }
 
-  if (displayFlow.depositAddress?.provider === "aura") {
-    return (
-      <PushViewShell open={flow !== null} title="Вывести USDT · TRC‑20" onClose={onClose}>
-        {flow && <WalletAuraWithdrawal />}
-      </PushViewShell>
-    );
-  }
-  return <WithdrawalMethodsView open={flow !== null} onClose={onClose} />;
+  return <WithdrawalMethodsView flow={flow} onClose={onClose} />;
 }
 
 function WithdrawalMethodsView({
-  open,
+  flow,
   onClose,
 }: {
-  open: boolean;
+  flow: CryptoFlow | null;
   onClose: () => void;
 }) {
+  const live = useLiveWallet();
   const [method, setMethod] = useState<WithdrawalMethod | null>(null);
+  const [asset, setAsset] = useState<string>();
+  const [network, setNetwork] = useState<string>();
+  const initialAsset = flow?.assetCode;
+  const initialNetwork = flow?.network;
+  const open = flow !== null;
   useEffect(() => {
-    if (open) setMethod(null);
-  }, [open]);
-  return (
-    <PushViewShell
-      open={open}
-      title={method ? withdrawalTitles[method] : "Вывод"}
-      onClose={() => (method ? setMethod(null) : onClose())}
-    >
-      {method ? (
-        <WithdrawalForm key={method} method={method} />
-      ) : (
-        <WithdrawalMethods onSelect={setMethod} />
-      )}
-    </PushViewShell>
-  );
+    if (!open) return;
+    setMethod(null);
+    setAsset(initialAsset);
+    setNetwork(initialAsset === "USDT" ? initialNetwork : undefined);
+  }, [open, initialAsset, initialNetwork]);
+
+  const visibleAssets = assets.filter(({ code }) => (live.assetRoutes[code]?.length ?? 0) > 0);
+  const coin = visibleAssets.find(({ code }) => code === asset);
+  const enabledNetworks = live.assetRoutes.USDT ?? [];
+  const route = network && enabledNetworks.includes(network) ? network : undefined;
+  const goBack = () => {
+    if (method) setMethod(null);
+    else if (network) setNetwork(undefined);
+    else if (asset) setAsset(undefined);
+    else onClose();
+  };
+  const title = method ? withdrawalTitles[method]
+    : coin ? `Вывести ${coin.code}${route ? " · " + (addressNetworkStandards[route] ?? route) : ""}`
+    : "Вывод";
+  let content;
+  if (method) {
+    content = <WithdrawalForm key={method} method={method} />;
+  } else if (coin?.code === "USDT" && route) {
+    content = route === "TRON" ? <WalletAuraWithdrawal key={route} />
+      : <WithdrawalForm key={route} method="usdt" fixedNetwork={route} />;
+  } else if (coin?.code === "USDT") {
+    content = (
+      <main className="mx-auto w-full max-w-[560px] px-4 pb-6">
+        <p className="mb-4 text-center text-sm opacity-60">Выберите сеть вывода</p>
+        <List strong inset dividers className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
+          {enabledNetworks.map((net) => (
+            <ListItem key={net} link title={addressNetworkNames[net] ?? net}
+              subtitle={addressNetworkStandards[net] ?? net}
+              contentClassName="!h-[64px]"
+              onClick={() => setNetwork(net)}
+              media={<WalletAssetAvatar icon={coin.icon} color={coin.color} iconColor={coin.iconColor} network={net} />}
+            />
+          ))}
+        </List>
+      </main>
+    );
+  } else if (coin) {
+    content = <p role="status" className="mx-auto max-w-[560px] px-5 py-6 text-center text-sm opacity-60">
+      Вывод {coin.code} с собственного кошелька wPay пока недоступен.
+    </p>;
+  } else {
+    content = <WithdrawalMethods cryptoAssets={visibleAssets} onSelect={setMethod} onSelectAsset={setAsset} />;
+  }
+  return <PushViewShell open={open} title={title} onClose={goBack}>{open && content}</PushViewShell>;
 }
 
 const bankCards = [
