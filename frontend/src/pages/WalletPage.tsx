@@ -1717,6 +1717,7 @@ function CryptoFlowPushView({
     const query = pickerQuery.trim().toLowerCase();
     const matchesSearch = (value: string) => value.toLowerCase().includes(query);
     const tether = availableAssets.find((item) => item.code === "USDT");
+    const tetherRate = live.rate("USDT");
     const networks = (tether ? live.assetRoutes.USDT ?? [] : []).filter((network) =>
       matchesSearch(`Tether USDT ${network} ${addressNetworkNames[network] ?? ""} ${addressNetworkStandards[network] ?? ""}`),
     );
@@ -2049,8 +2050,19 @@ function CryptoFlowPushView({
                             <span className="block truncate text-[17px] font-semibold">USDT · {addressNetworkStandards[network] ?? network}</span>
                             <span className="mt-0.5 block truncate text-[13px] text-black/45 dark:text-white/45">{addressNetworkNames[network] ?? network}</span>
                           </span>
-                          <span className="ml-auto shrink-0 text-right text-[16px] font-medium tabular-nums">
-                            {usdtNetworkBalances[network] === undefined ? "—" : formatCrypto(usdtNetworkBalances[network])}
+                          <span className="ml-auto shrink-0 text-right tabular-nums">
+                            <span className="block text-[16px] font-medium">
+                              {usdtNetworkBalances[network] === undefined ? "—" : formatCrypto(usdtNetworkBalances[network])}
+                            </span>
+                            {usdtNetworkBalances[network] !== undefined && (
+                              <span className="mt-0.5 block text-[12px] text-black/40 dark:text-white/40">
+                                {usdtNetworkBalances[network] === 0
+                                  ? usd(0)
+                                  : tetherRate === null
+                                    ? "Нет данных"
+                                    : usd(usdtNetworkBalances[network] * tetherRate)}
+                              </span>
+                            )}
                           </span>
                           {network === activeUsdtNetwork && (assetPicker === "from" ? fromAsset : toAsset).code === "USDT" && (
                             <span aria-label="Выбрано" className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#007aff] text-white">
