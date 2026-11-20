@@ -421,6 +421,30 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(self.provider.calls[-1], ('getTransactions', {'count': 100, 'before': 55}, False))
 
+    async def test_network_balances_use_fifo_exclude_aura_and_cap_by_available(self):
+        from wallet_operations import goswap_network_balances
+
+        uid = 'owner'
+        for event_id, amount, kind, detail in (
+            ('deposit:b', '5', 'deposit', '{"network":"BSC"}'),
+            ('deposit:e', '4', 'deposit', '{"network":"ETH"}'),
+            ('withdrawal:one:1', '-3', 'withdrawal_completed', '{}'),
+            ('aura:test:card_topup:one', '-2', 'card_topup', '{}'),
+            ('provider-row:42', '-1', 'deposit_return', '{"details":{"deposit_id":"e"}}'),
+        ):
+            self.ledger.db.execute(
+                'INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)',
+                (event_id, uid, 'USDT', amount, kind, '2026-01-01', detail),
+            )
+        self.ledger.put_balance(uid, 'USDT', Decimal('5'), Decimal('1'))
+        self.ledger.db.execute(
+            'INSERT INTO wallet_provider_positions VALUES (?,?,?,?,?,?,?)',
+            ('aura', 'test', uid, 'USDT', '1', '0', 0),
+        )
+        self.assertEqual(goswap_network_balances(self.ledger, uid, 'USDT'), {
+            'BSC': Decimal('1'), 'ETH': Decimal('3'),
+        })
+
     async def test_saved_addresses_are_isolated_and_server_scoped(self):
         user = {'X-Telegram-Init-Data': init_data(123)}
         response = await self.client.post('/api/wallet/address', json={'network': 'BSC', 'client_ref': 'foreign'}, headers=user)

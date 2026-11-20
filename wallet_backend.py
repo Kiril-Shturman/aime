@@ -41,7 +41,7 @@ from wallet_notifications import (
     NotificationWorker,
 )
 from wallet_referrals import capture as capture_referral, ensure_code as ensure_referral_code, prepare as prepare_referrals, summary as referral_summary
-from wallet_operations import prepare_operations, operations_route, save_address
+from wallet_operations import goswap_network_balances, prepare_operations, operations_route, save_address
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
 from wallet_tariffs import prepare as prepare_tariffs, snapshot as tariff_snapshot, create_version as create_tariff_version
 from wallet_aura import (
@@ -1741,6 +1741,12 @@ def install_wallet(app, root, owner_check):
                         'SELECT body FROM wallet_addresses WHERE user_id=? ORDER BY network', (uid,),
                     )
                 ]
+                if items:
+                    balances = goswap_network_balances(ledger, uid, 'USDT')
+                    for item in items:
+                        if 'USDT' in item.get('assets', [item.get('asset')]):
+                            item['provider_available'] = str(balances.get(item['network'], 0))
+                            item['balance_asset'] = 'USDT'
                 if aura_enabled and aura_client.configured:
                     row = ledger.db.execute(
                         'SELECT address,network FROM aura_deposit_addresses WHERE user_id=? '

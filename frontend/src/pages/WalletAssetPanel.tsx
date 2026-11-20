@@ -365,7 +365,9 @@ export default function WalletAssetPanel({
                     : addresses.find((row) => row.network === network &&
                         (provider ? row.provider === provider : !row.provider || row.provider === "goswap"));
                   const providerBalance =
-                    item && "provider_available" in item ? item.provider_available : undefined;
+                    item && "provider_available" in item &&
+                    (!item.balance_asset || item.balance_asset === code)
+                      ? item.provider_available : undefined;
                   return (
                     <button
                       key={network}
@@ -434,7 +436,7 @@ export default function WalletAssetPanel({
                           aria-label={
                             demoPortfolio
                               ? "Пример баланса сети"
-                              : providerBalance !== undefined ? "Доступно в Aura" : "Баланс сети пока недоступен"
+                              : providerBalance !== undefined ? provider === "goswap" ? "Учётный остаток GoSwap" : "Доступно в Aura" : "Баланс сети пока недоступен"
                           }
                         >
                           {demoPortfolio
