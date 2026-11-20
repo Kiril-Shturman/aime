@@ -11,7 +11,7 @@ from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limit
 from wallet_key_export import prepare as prepare_key_export, route as key_export_route
 from wallet_exchange_funding import Funding
 from wallet_custody_withdrawal import CustodyWithdrawal
-from wallet_admin_wallets import user_wallet_inventory
+from wallet_admin_wallets import control_wallet, user_wallet_inventory
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
 from wallet_chain import ASSET_NETWORKS as CUSTODY_ASSET_NETWORKS, ChainReader
 from wallet_aura_errors import wallet_error_payload
@@ -1014,6 +1014,7 @@ def install_wallet(app, root, owner_check):
                     'ORDER BY updated_at DESC LIMIT 50', (user_id,),
                 ),
             },
+            'credit_assets': enabled_asset_routes(),
             'wallets': await user_wallet_inventory(ledger, app['wpay_chain'], user_id),
             'balances': decoded_rows(
                 'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=? ORDER BY asset',
@@ -1855,6 +1856,16 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(admin_users())
             if action == 'admin-user' and request.method == 'GET':
                 return web.json_response(await admin_user(request), headers={'Cache-Control': 'private, no-store'})
+            if action == 'admin-wallet-control' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'user_id', 'wallet_id', 'operation'}:
+                    raise ValueError('Некорректная команда оператора')
+                if not isinstance(body['operation'], str):
+                    raise ValueError('Некорректное действие')
+                return web.json_response(control_wallet(
+                    ledger, body['user_id'], body['wallet_id'], body['operation'],
+                    uid, record_admin_action, ApiError,
+                ), headers={'Cache-Control': 'private, no-store'})
             if action == 'admin-user-action' and request.method == 'POST':
                 return web.json_response(
                     await admin_user_action(request, uid),

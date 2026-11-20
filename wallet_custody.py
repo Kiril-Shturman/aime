@@ -146,6 +146,11 @@ def prepare(ledger):
         encrypted_secret BLOB NOT NULL,created_at REAL NOT NULL,
         UNIQUE(user_id,network,chain_env),UNIQUE(network,chain_env,address)
       );
+      CREATE TABLE IF NOT EXISTS custody_wallet_controls (
+        wallet_id TEXT PRIMARY KEY REFERENCES custody_wallets(id),
+        state TEXT NOT NULL CHECK(state IN ('frozen','archived')),
+        updated_at REAL NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS custody_hidden (wallet_id TEXT PRIMARY KEY REFERENCES custody_wallets(id),user_id TEXT NOT NULL,hidden_at REAL NOT NULL);
       CREATE TABLE IF NOT EXISTS custody_activity (id TEXT PRIMARY KEY,wallet_id TEXT NOT NULL REFERENCES custody_wallets(id),actor TEXT NOT NULL,action TEXT NOT NULL,created_at REAL NOT NULL);
       CREATE TABLE IF NOT EXISTS custody_events (wallet_id TEXT PRIMARY KEY REFERENCES custody_wallets(id),actor TEXT NOT NULL,action TEXT NOT NULL,created_at REAL NOT NULL);
@@ -262,6 +267,8 @@ class Custody:
                 (uid, network, self.chain_env),
             ).fetchone()
             if row:
+                if wallet_control_state(ledger.db, row["id"]) == "archived":
+                    raise self.error("WALLET_ARCHIVED", "Кошелёк находится в архиве", 403)
                 if ledger.db.execute(
                     "DELETE FROM custody_hidden WHERE wallet_id=? AND user_id=?",
                     (row["id"], uid),
@@ -365,10 +372,23 @@ class Custody:
         return [
             public_wallet(row)
             for row in self.ledger.db.execute(
-                "SELECT w.* FROM custody_wallets w WHERE w.user_id=? AND NOT EXISTS (SELECT 1 FROM custody_hidden h WHERE h.wallet_id=w.id) ORDER BY w.created_at,w.id",
+                "SELECT w.* FROM custody_wallets w WHERE w.user_id=? AND NOT EXISTS (SELECT 1 FROM custody_hidden h WHERE h.wallet_id=w.id) AND NOT EXISTS (SELECT 1 FROM custody_wallet_controls c WHERE c.wallet_id=w.id AND c.state='archived') ORDER BY w.created_at,w.id",
                 (uid,),
             )
         ]
+
+
+
+def wallet_control_state(db, wallet_id):
+    row = db.execute(
+        "SELECT state FROM custody_wallet_controls WHERE wallet_id=?", (wallet_id,),
+    ).fetchone()
+    return row[0] if row else None
+
+
+def require_wallet_active(db, wallet_id, error):
+    if wallet_control_state(db, wallet_id):
+        raise error("WALLET_FROZEN", "Операции с этим кошельком заблокированы администратором", 403)
 
 
 async def custody_route(request, action, uid, custody):

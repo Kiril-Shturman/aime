@@ -63,8 +63,8 @@ class TestCreditBackingTests(unittest.IsolatedAsyncioTestCase):
             return await self.http.post('/adjust', json={
                 'account_id': 'tg:1', 'asset': 'USDT', 'amount': '20',
                 'reason': 'GoSwap reserve allocation', 'source': 'goswap',
-                'operation_id': operation_id,
-                'confirm': 'ADJUST tg:1 USDT 20 GOSWAP',
+                'operation_id': operation_id, 'network': 'BSC',
+                'confirm': 'ADJUST tg:1 USDT 20 GOSWAP BSC',
             }, headers={'X-Test-Admin': 'yes'})
 
         first = "11111111-1111-4111-8111-111111111111"
@@ -78,3 +78,5 @@ class TestCreditBackingTests(unittest.IsolatedAsyncioTestCase):
         self.aura.get_balance.assert_not_awaited()
         event = self.ledger.db.execute("SELECT detail FROM wallet_events").fetchone()
         self.assertEqual(json.loads(event['detail'])['source'], 'goswap')
+        from wallet_operations import goswap_network_balances
+        self.assertEqual(goswap_network_balances(self.ledger, 'tg:1', 'USDT'), {'BSC': Decimal('20')})

@@ -4,6 +4,7 @@ import re
 import time
 import uuid
 from aiohttp import web
+from wallet_custody import require_wallet_active
 
 NETWORKS={'BSC':'BNB','ETH':'ETH','TRON':'TRX'}
 CUSTODY_WITHDRAWAL_NETWORKS = {"BNB": "BSC", "ETH": "ETH", "XAUT": "ETH", "TRX": "TRON", "SOL": "SOL", "BTC": "BTC", "GRAM": "TON"}
@@ -92,6 +93,7 @@ class Funding:
         wallet=self.custody.create(uid,network)
         self.ledger.begin('funding_estimate',uid,intent_id)
         try:
+            require_wallet_active(self.ledger.db, wallet['id'], self.error)
             self.ledger.db.execute("UPDATE custody_funding_jobs SET state='expired',error='QUOTE_EXPIRED' WHERE state='quoted' AND json_extract(quote,'$.expires_at')<?",(time.time(),))
             active=self.ledger.db.execute("SELECT * FROM custody_funding_jobs WHERE wallet_id=? AND state IN ('estimating','quoted','confirmed','signing','signed','broadcast','unknown')",(wallet['id'],)).fetchone()
             if active:
@@ -109,6 +111,7 @@ class Funding:
         try:
             row=self.ledger.db.execute('SELECT * FROM custody_funding_jobs WHERE id=? AND user_id=?',(job_id,uid)).fetchone()
             if not row:raise self.error('NOT_FOUND','Платёж не найден',404)
+            require_wallet_active(self.ledger.db, row['wallet_id'], self.error)
             withdrawal = self.ledger.db.execute(
                 'SELECT 1 FROM custody_withdrawal_intents WHERE job_id=?', (job_id,),
             ).fetchone()

@@ -407,7 +407,7 @@ class ChainReader:
         hidden = {
             row[0]
             for row in self.ledger.db.execute(
-                "SELECT wallet_id FROM custody_hidden WHERE user_id=?", (uid,)
+                "SELECT wallet_id FROM custody_hidden WHERE user_id=? UNION SELECT c.wallet_id FROM custody_wallet_controls c JOIN custody_wallets w ON w.id=c.wallet_id WHERE w.user_id=? AND c.state='archived'", (uid, uid)
             )
         }
         return {

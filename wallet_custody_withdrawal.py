@@ -9,6 +9,7 @@ from aiohttp import web
 from bip_utils import P2WPKHAddrDecoder
 
 from wallet_fixedfloat_orders import address
+from wallet_custody import require_wallet_active
 from wallet_exchange_funding import CUSTODY_WITHDRAWAL_NETWORKS
 
 
@@ -76,6 +77,7 @@ class CustodyWithdrawal:
         stamp = time.time()
         self.ledger.begin("custody_withdrawal_prepare", uid, identifier)
         try:
+            require_wallet_active(self.ledger.db, wallet["id"], self.funding.error)
             self.ledger.db.execute("""
                 UPDATE custody_funding_jobs SET state='expired',error='QUOTE_EXPIRED'
                 WHERE wallet_id=? AND state='quoted' AND json_extract(quote,'$.expires_at')<=?

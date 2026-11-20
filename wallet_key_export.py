@@ -6,6 +6,7 @@ import time
 import uuid
 from urllib.parse import parse_qs
 from aiohttp import web
+from wallet_custody import require_wallet_active
 
 
 EXPORT_NETWORKS = {"ETH", "BSC", "BTC", "TRON", "SOL", "TON"}
@@ -74,6 +75,7 @@ async def _route(request, action, uid, custody):
         if not online:raise error('SIGNER_UNAVAILABLE','Защищённый процесс временно недоступен',503)
         custody.ledger.begin('key_export_request',uid,wallet['id'])
         try:
+            require_wallet_active(db, wallet['id'], error)
             count=db.execute('SELECT count(*) FROM custody_key_exports WHERE user_id=? AND created_at>?',(uid,time.time()-600)).fetchone()[0]
             if count>=3:raise error('RATE_LIMITED','Не более трёх экспортов за 10 минут',429)
             identifier=uuid.uuid4().hex;stamp=time.time()
@@ -90,6 +92,7 @@ async def _route(request, action, uid, custody):
     custody.ledger.begin('key_export_delivered',uid,row['wallet_id'])
     try:
         row=db.execute('SELECT * FROM custody_key_exports WHERE id=? AND user_id=?',(body['job_id'],uid)).fetchone()
+        require_wallet_active(db, row['wallet_id'], error)
         if row['state']!='ready' or row['expires_at']<=time.time():raise error('EXPORT_NOT_READY','Экспорт недоступен или уже получен. Начните заново',409)
         ciphertext=row['ciphertext']
         db.execute("UPDATE custody_key_exports SET state='consumed',ciphertext=NULL,public_key='' WHERE id=?",(row['id'],))

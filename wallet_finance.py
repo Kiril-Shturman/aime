@@ -296,7 +296,7 @@ async def finance_route(
         if not admin:
             raise ApiError("FORBIDDEN", "Только администратор", 403)
         body = await request.json()
-        if not isinstance(body, dict) or set(body) - {"account_id", "asset", "amount", "reason", "bucket", "confirm", "source", "operation_id"}:
+        if not isinstance(body, dict) or set(body) - {"account_id", "asset", "amount", "reason", "bucket", "confirm", "source", "operation_id", "network"}:
             raise ValueError("Unknown parameter")
         target = body.get("account_id")
         asset = str(body.get("asset", "")).upper()
@@ -316,9 +316,16 @@ async def finance_route(
         source = body.get("source", "default")
         if source not in ("default", "goswap"):
             raise ValueError("Invalid correction source")
+        network = body.get("network")
+        if network is not None:
+            expected = ("BSC", "ETH", "TON", "SOL") if source == "goswap" else ("TRON",)
+            if asset != "USDT" or not isinstance(network, str) or network not in expected:
+                raise ValueError("Сеть не соответствует источнику начисления USDT")
         confirmation = f"ADJUST {target} {asset} {confirmation_amount}"
         if source == "goswap":
             confirmation += " GOSWAP"
+        if network:
+            confirmation += " " + network
         if body.get("confirm") != confirmation:
             raise ApiError(
                 "CONFIRMATION_REQUIRED",
@@ -335,7 +342,7 @@ async def finance_route(
                 raise ValueError("GoSwap credit requires an operation ID")
             operation_key = "adjustment:goswap:" + hashlib.sha256((uid + ":" + operation_id).encode()).hexdigest()
             request_fingerprint = hashlib.sha256(json.dumps(
-                [target, asset, confirmation_amount, reason, bucket], ensure_ascii=False,
+                [target, asset, confirmation_amount, reason, bucket, network], ensure_ascii=False,
             ).encode()).hexdigest()
 
         def existing_credit():
@@ -355,6 +362,8 @@ async def finance_route(
         if goswap_credit and (bucket != "available" or amount <= 0):
             raise ValueError("GoSwap source supports positive available credits only")
         test_backing = not goswap_credit and aura_test_client is not None and aura_test_client.environment == "test" and asset == "USDT" and bucket == "available"
+        if network == "TRON" and not test_backing:
+            raise ApiError("NOT_CONFIGURED", "Начисление через тестовый резерв Aura недоступно", 503)
         platform = None
         if test_backing and amount > 0:
             from wallet_aura import _platform_balance
@@ -391,6 +400,7 @@ async def finance_route(
             event_detail = {
                 "reason": reason, "actor": uid, "bucket": bucket,
                 "source": "goswap" if goswap_credit else "aura_test" if test_backing else "ledger",
+                **({"network": network} if network else {}),
             }
             if goswap_credit:
                 event_detail.update(operation_fingerprint=request_fingerprint, result=result)
@@ -416,7 +426,7 @@ async def finance_route(
                     detail={
                         "asset": asset, "amount": str(amount), "bucket": bucket,
                         "before": str(before), "after": str(after),
-                        "event_id": key, "reason_characters": len(reason), "source": source,
+                        "event_id": key, "reason_characters": len(reason), "source": source, "network": network,
                     },
                 )
             ledger.commit()

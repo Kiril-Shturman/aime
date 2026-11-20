@@ -76,6 +76,33 @@ class FundingTests(unittest.TestCase):
             "confirmed",
         )
 
+    def test_admin_freeze_cancels_unsigned_jobs_and_archive_preserves_wallet(self):
+        from wallet_admin_wallets import control_wallet
+        from wallet_custody_withdrawal import CustodyWithdrawal
+        from wallet_key_export import prepare as prepare_exports
+
+        prepare_exports(self.ledger)
+        wallet = self.custody.create("tg:1", "BSC")
+        self.call("heartbeat", networks=["BSC", "BNB_WITHDRAWAL"], key_id=self.keys["key_id"])
+        withdrawal = CustodyWithdrawal(self.funding, enabled=True)
+        request = {"address": self.pay, "amount": "0.01"}
+        job = withdrawal.prepare("tg:1", request)
+        def control(operation):
+            return control_wallet(self.ledger, "tg:1", wallet["id"], operation,
+                                  "owner", lambda *args, **kwargs: None, ApiError)
+
+        self.assertEqual(control("freeze")["state"], "frozen")
+        self.assertEqual(withdrawal.owned("tg:1", job["job_id"])["state"], "cancelled")
+        self.assertIsNone(self.call("claim", native_bnb=True)["job"])
+        with self.assertRaises(ApiError) as error:
+            withdrawal.prepare("tg:1", request)
+        self.assertEqual(error.exception.name, "WALLET_FROZEN")
+        self.assertEqual(control("archive")["state"], "archived")
+        with self.assertRaises(ApiError):
+            self.custody.create("tg:1", "BSC")
+        self.assertIsNone(control("restore")["state"])
+        self.assertEqual(self.custody.create("tg:1", "BSC")["address"], wallet["address"])
+
     def test_ownership_offline_and_disabled(self):
         with self.assertRaises(ApiError): self.funding.estimate('tg:2', self.intent)
         self.ledger.db.execute('DELETE FROM custody_signer_status')

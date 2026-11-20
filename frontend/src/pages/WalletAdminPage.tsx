@@ -88,6 +88,8 @@ type AdminWallet = {
   reserved: string | null;
   balance_scope: "onchain" | "provider" | "network";
   hidden?: boolean;
+  wallet_id?: string;
+  state?: "frozen" | "archived" | null;
 };
 const walletProviderNames = { wpay: "wPay", aura: "Aura", goswap: "GoSwap" };
 const walletBalanceLabels = {
@@ -102,6 +104,7 @@ type AdminUserDetail = {
   aura: { customer: Json | null; kyc: Json | null; cards: Json[] };
   balances: Json[];
   wallets?: AdminWallet[];
+  credit_assets?: Record<string, string[]>;
   addresses: Json[];
   events: Json[];
   notifications: Json[];
@@ -2014,11 +2017,20 @@ function AdminUserDrawer({
   onClose: () => void;
   onRetry: () => void;
 }) {
+  const tabs = [
+    ["profile", "Профиль"],
+    ["balances", "Балансы"],
+    ["wallets", "Кошельки"],
+    ["cards", "Карты"],
+    ["history", "История"],
+  ] as const;
+  const [section, setSection] = useState<(typeof tabs)[number][0]>("profile");
+  const [balanceNetwork, setBalanceNetwork] = useState("");
   const [actionWorking, setActionWorking] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [messageText, setMessageText] = useState("");
   const creditRequest = useRef<{ fingerprint: string; operationId: string } | null>(null);
-  const [balanceSource, setBalanceSource] = useState("default");
+  const [selectedBalanceSource, setBalanceSource] = useState("default");
   const [balanceAsset, setBalanceAsset] = useState("USDT");
   const [balanceAmount, setBalanceAmount] = useState("");
   const [balanceReason, setBalanceReason] = useState("");
@@ -2079,17 +2091,42 @@ function AdminUserDrawer({
       setActionWorking("");
     }
   }
+  async function updateWallet(wallet: AdminWallet, operation: "freeze" | "archive" | "restore") {
+    if (!wallet.wallet_id || actionWorking) return;
+    const labels = { freeze: "Заморозить", archive: "Архивировать", restore: "Восстановить" };
+    if (!window.confirm(`${labels[operation]} кошелёк ${wallet.network}?`)) return;
+    setActionWorking(operation);
+    setActionNotice("");
+    try {
+      await walletRequest("admin-wallet-control", { user_id: userId, wallet_id: wallet.wallet_id, operation });
+      setActionNotice("Статус кошелька обновлён");
+      onRetry();
+    } catch (reason) {
+      setActionNotice(reason instanceof Error ? reason.message : "Не удалось обновить кошелёк");
+    } finally {
+      setActionWorking("");
+    }
+  }
+
+  const balanceSource = balanceAsset === "USDT"
+    ? (balanceNetwork === "TRON" ? "default" : "goswap")
+    : selectedBalanceSource;
+  const creditNetworks = (detail?.credit_assets?.USDT ?? []).filter((network) =>
+    ["TRON", "BSC", "ETH", "TON", "SOL"].includes(network),
+  );
   async function adjustBalance() {
     const normalizedAmount = balanceAmount.trim().replace(",", ".");
+    const network = balanceAsset === "USDT" ? balanceNetwork : "";
+    if (balanceAsset === "USDT" && !creditNetworks.includes(network)) return;
     if (!normalizedAmount || !balanceReason.trim() || actionWorking) return;
     if (
       !window.confirm(
-        `Изменить баланс ${userId} на ${normalizedAmount} ${balanceAsset}${balanceSource === "goswap" ? " из резерва GoSwap" : ""}?\n\nОперация попадёт в финансовый журнал и аудит.`,
+        `Изменить баланс ${userId} на ${normalizedAmount} ${balanceAsset}${network ? " · " + network : ""}${balanceSource === "goswap" ? " из резерва GoSwap" : ""}?\n\nОперация попадёт в финансовый журнал и аудит.`,
       )
     )
       return;
     if (balanceSource === "goswap") {
-      const fingerprint = JSON.stringify([userId, balanceAsset, normalizedAmount, balanceReason.trim()]);
+      const fingerprint = JSON.stringify([userId, balanceAsset, normalizedAmount, balanceReason.trim(), network]);
       if (creditRequest.current?.fingerprint !== fingerprint) {
         creditRequest.current = { fingerprint, operationId: crypto.randomUUID() };
       }
@@ -2106,8 +2143,9 @@ function AdminUserDrawer({
           reason: balanceReason.trim(),
           bucket: "available",
           source: balanceSource,
+          ...(network && { network }),
           ...(balanceSource === "goswap" && { operation_id: creditRequest.current?.operationId }),
-          confirm: `ADJUST ${userId} ${balanceAsset} ${normalizedAmount}${balanceSource === "goswap" ? " GOSWAP" : ""}`,
+          confirm: `ADJUST ${userId} ${balanceAsset} ${normalizedAmount}${balanceSource === "goswap" ? " GOSWAP" : ""}${network ? " " + network : ""}`,
         },
       );
       setActionNotice(
@@ -2167,6 +2205,15 @@ function AdminUserDrawer({
             </div>
           ) : detail ? (
             <>
+              <nav aria-label="Разделы карточки пользователя" className="sticky top-0 z-10 mb-3 flex gap-2 overflow-x-auto rounded-2xl bg-[var(--admin-surface)] p-2">
+                {tabs.map(([id, label]) => (
+                  <button key={id} type="button" aria-pressed={section === id} onClick={() => setSection(id)}
+                    className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${section === id ? "bg-blue-500/15 text-blue-600 dark:text-blue-300" : "text-[var(--admin-muted)]"}`}>
+                    {label}
+                  </button>
+                ))}
+              </nav>
+              {actionNotice && <p role="status" className="wpay-admin-operator-notice mb-3">{actionNotice}</p>}
               <div className="wpay-admin-user-badges">
                 <span className={customer ? "is-good" : ""}>
                   Aura: {customer ? "подключён" : "нет клиента"}
@@ -2178,302 +2225,354 @@ function AdminUserDrawer({
                 <span>Карты: {detail.aura.cards.length}</span>
               </div>
 
-              <section className="wpay-admin-user-section wpay-admin-operator-actions">
-                <div className="wpay-admin-section-title">
-                  <div>
-                    <span>Оператор</span>
-                    <h3>Безопасные действия</h3>
+              {section === "profile" && (
+                <section className="wpay-admin-user-section wpay-admin-operator-actions">
+                  <div className="wpay-admin-section-title">
+                    <div>
+                      <span>Оператор</span>
+                      <h3>Безопасные действия</h3>
+                    </div>
                   </div>
-                </div>
-                <div className="wpay-admin-operator-buttons">
-                  <button
-                    type="button"
-                    disabled={!customer || Boolean(actionWorking)}
-                    onClick={() => void runUserAction("refresh_kyc")}
-                  >
-                    <RefreshCw
-                      size={15}
-                      className={
-                        actionWorking === "refresh_kyc" ? "animate-spin" : ""
-                      }
-                    />
-                    Обновить KYC из Aura
-                  </button>
-                  <button
-                    type="button"
-                    disabled={Boolean(actionWorking)}
-                    onClick={() => void runUserAction("retry_notifications")}
-                  >
-                    <Bell size={15} />
-                    Повторить уведомления
-                  </button>
-                </div>
-                <textarea
-                  className="wpay-admin-operator-message"
-                  value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
-                  maxLength={4096}
-                  placeholder="Личное сообщение пользователю в Telegram"
-                />
-                <button
-                  type="button"
-                  className="wpay-admin-operator-send"
-                  disabled={!messageText.trim() || Boolean(actionWorking)}
-                  onClick={() => void runUserAction("send_message")}
-                >
-                  <Send size={15} />
-                  {actionWorking === "send_message"
-                    ? "Отправляем…"
-                    : "Отправить сообщение"}
-                </button>
-                {actionNotice && (
-                  <p className="wpay-admin-operator-notice">{actionNotice}</p>
-                )}
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <h3>Профиль и контакты</h3>
-                <div className="wpay-admin-user-facts">
-                  <div>
-                    <small>Telegram ID</small>
-                    <b>{text(account?.telegram_id)}</b>
-                  </div>
-                  <div>
-                    <small>Роль</small>
-                    <b>{text(account?.role)}</b>
-                  </div>
-                  <div>
-                    <small>Email</small>
-                    <b>{text(detail.contacts.email)}</b>
-                  </div>
-                  <div>
-                    <small>Телефон</small>
-                    <b>{text(detail.contacts.phone)}</b>
-                  </div>
-                  <div>
-                    <small>Последний вход</small>
-                    <b>
-                      {date(account?.last_miniapp_at || account?.last_seen)}
-                    </b>
-                  </div>
-                  <div>
-                    <small>Бот запущен</small>
-                    <b>{date(account?.bot_started_at)}</b>
-                  </div>
-                </div>
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <div className="wpay-admin-section-title">
-                  <div>
-                    <span>Aura</span>
-                    <h3>Клиент и KYC</h3>
-                  </div>
-                </div>
-                {customer ? (
-                  <div className="wpay-admin-user-facts">
+                  <div className="wpay-admin-operator-buttons">
                     <button
                       type="button"
-                      onClick={() => copy(customer.customer_id)}
+                      disabled={!customer || Boolean(actionWorking)}
+                      onClick={() => void runUserAction("refresh_kyc")}
                     >
-                      <small>Customer ID · нажмите для копирования</small>
-                      <b>{text(customer.customer_id)}</b>
+                      <RefreshCw
+                        size={15}
+                        className={
+                          actionWorking === "refresh_kyc" ? "animate-spin" : ""
+                        }
+                      />
+                      Обновить KYC из Aura
                     </button>
-                    <div>
-                      <small>Среда</small>
-                      <b>{text(customer.environment)}</b>
-                    </div>
-                    <div>
-                      <small>Состояние клиента</small>
-                      <b>{text(customer.state)}</b>
-                    </div>
-                    <div>
-                      <small>Статус KYC</small>
-                      <b>{text(kyc?.status || "not_started")}</b>
-                    </div>
-                    <div>
-                      <small>Обновлено Aura</small>
-                      <b>
-                        {date(
-                          kyc?.provider_updated_at ||
-                            customer.provider_updated_at,
-                        )}
-                      </b>
-                    </div>
-                    <div>
-                      <small>Причина</small>
-                      <b>{text(kyc?.reason)}</b>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="wpay-admin-user-empty">
-                    Пользователь ещё не создавал профиль в Aura.
-                  </p>
-                )}
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <h3>Кошельки и адреса</h3>
-                {detail.wallets?.length ? (
-                  <div className="grid gap-2">
-                    {detail.wallets.map((wallet) => (
-                      <div key={[wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address].join(":")}
-                        className="rounded-xl border border-[var(--admin-border)] p-3">
-                        <Row title={`${wallet.asset} · ${wallet.network} · ${walletProviderNames[wallet.provider]}`}
-                          subtitle={[
-                            wallet.environment,
-                            wallet.provider === "aura" && wallet.available === null
-                              ? "Дополнительный адрес Aura"
-                              : walletBalanceLabels[wallet.balance_scope],
-                            wallet.hidden ? "Скрыт пользователем" : null,
-                          ].filter(Boolean).join(" · ")}
-                          right={wallet.available === null
-                            ? (wallet.provider === "aura" ? "Общий остаток выше" : "Нет данных")
-                            : `${wallet.available} ${wallet.asset}`}
-                        />
-                        {wallet.reserved && Number(wallet.reserved) > 0 && (
-                          <p className="mt-1 text-xs opacity-60">Резерв {wallet.reserved} {wallet.asset}</p>
-                        )}
-                        <p className="mt-2 select-text break-all font-mono text-xs opacity-70">{wallet.address}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : <p className="wpay-admin-user-empty">Кошельков пока нет.</p>}
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <h3>Балансы</h3>
-                {detail.balances.length ? (
-                  detail.balances.map((balance, index) => (
-                    <Row
-                      key={index}
-                      title={text(balance.asset)}
-                      subtitle={`Резерв: ${amount(balance.reserved)}`}
-                      right={amount(balance.available)}
-                    />
-                  ))
-                ) : (
-                  <p className="wpay-admin-user-empty">Балансов пока нет.</p>
-                )}
-                <div className="wpay-admin-balance-adjustment">
-                  <div className="wpay-admin-balance-fields">
-                    <select
-                      value={balanceAsset}
-                      onChange={(event) => setBalanceAsset(event.target.value)}
-                      aria-label="Актив корректировки"
+                    <button
+                      type="button"
+                      disabled={Boolean(actionWorking)}
+                      onClick={() => void runUserAction("retry_notifications")}
                     >
-                      {Array.from(
-                        new Set([
-                          "USDT",
-                          ...detail.balances.map((item) => text(item.asset)),
-                        ]),
-                      ).map((asset) => <option key={asset}>{asset}</option>)}
-                    </select>
-                    <input
-                      value={balanceAmount}
-                      onChange={(event) => setBalanceAmount(event.target.value.replace(/[^\d.,+-]/g, ""))}
-                      inputMode="decimal"
-                      placeholder="Сумма: 10 или -10"
-                    />
+                      <Bell size={15} />
+                      Повторить уведомления
+                    </button>
                   </div>
-                  <select value={balanceSource} onChange={(event) => setBalanceSource(event.target.value)}
-                    aria-label="Источник корректировки">
-                    <option value="default">Текущий резерв / внутренний учёт</option>
-                    <option value="goswap">Резерв GoSwap · начисление</option>
-                  </select>
                   <textarea
-                    value={balanceReason}
-                    onChange={(event) => setBalanceReason(event.target.value)}
-                    maxLength={1000}
-                    placeholder="Обязательная причина корректировки"
+                    className="wpay-admin-operator-message"
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                    maxLength={4096}
+                    placeholder="Личное сообщение пользователю в Telegram"
                   />
                   <button
                     type="button"
-                    disabled={!balanceAmount.trim() || !balanceReason.trim() || Boolean(actionWorking) ||
-                      (balanceSource === "goswap" && !(Number(balanceAmount.replace(",", ".")) > 0))}
-                    onClick={() => void adjustBalance()}
+                    className="wpay-admin-operator-send"
+                    disabled={!messageText.trim() || Boolean(actionWorking)}
+                    onClick={() => void runUserAction("send_message")}
                   >
-                    {actionWorking === "adjust_balance" ? "Проводим…" : "Провести корректировку"}
+                    <Send size={15} />
+                    {actionWorking === "send_message"
+                      ? "Отправляем…"
+                      : "Отправить сообщение"}
                   </button>
-                  <small>
-                    Для GoSwap wPay проверяет свободный резерв организации и начисляет средства пользователю. В тестовом контуре обычная корректировка USDT использует резерв Aura.
-                  </small>
-                </div>
-              </section>
+                </section>
+              )}
 
-              <section className="wpay-admin-user-section">
-                <h3>Карты Aura</h3>
-                {detail.aura.cards.length ? (
-                  detail.aura.cards.map((item, index) => (
-                    <Row
-                      key={index}
-                      title={`${text(item.kind)} · ${text(item.masked_pan)}`}
-                      subtitle={`${text(item.status)}${item.frozen ? " · заморожена" : ""}`}
-                      right={text(item.delivery_status)}
-                    />
-                  ))
-                ) : (
-                  <p className="wpay-admin-user-empty">Карт пока нет.</p>
-                )}
-              </section>
+              {section === "profile" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Профиль и контакты</h3>
+                  <div className="wpay-admin-user-facts">
+                    <div>
+                      <small>Telegram ID</small>
+                      <b>{text(account?.telegram_id)}</b>
+                    </div>
+                    <button type="button" onClick={() => copy(customer?.customer_id)}>
+                      <small>Aura · Customer ID</small><b>{text(customer?.customer_id)}</b>
+                    </button>
+                    <button type="button" onClick={() => copy(account?.client_ref)}>
+                      <small>GoSwap · client_ref</small><b>{text(account?.client_ref)}</b>
+                    </button>
+                    <div>
+                      <small>Роль</small>
+                      <b>{text(account?.role)}</b>
+                    </div>
+                    <div>
+                      <small>Email</small>
+                      <b>{text(detail.contacts.email)}</b>
+                    </div>
+                    <div>
+                      <small>Телефон</small>
+                      <b>{text(detail.contacts.phone)}</b>
+                    </div>
+                    <div>
+                      <small>Последний вход</small>
+                      <b>
+                        {date(account?.last_miniapp_at || account?.last_seen)}
+                      </b>
+                    </div>
+                    <div>
+                      <small>Бот запущен</small>
+                      <b>{date(account?.bot_started_at)}</b>
+                    </div>
+                  </div>
+                </section>
+              )}
 
-              <section className="wpay-admin-user-section">
-                <h3>Последние операции</h3>
-                {detail.events.length ? (
-                  detail.events
-                    .slice(0, 12)
-                    .map((item, index) => (
+              {section === "profile" && (
+                <section className="wpay-admin-user-section">
+                  <div className="wpay-admin-section-title">
+                    <div>
+                      <span>Aura</span>
+                      <h3>Клиент и KYC</h3>
+                    </div>
+                  </div>
+                  {customer ? (
+                    <div className="wpay-admin-user-facts">
+                      <button
+                        type="button"
+                        onClick={() => copy(customer.customer_id)}
+                      >
+                        <small>Customer ID · нажмите для копирования</small>
+                        <b>{text(customer.customer_id)}</b>
+                      </button>
+                      <div>
+                        <small>Среда</small>
+                        <b>{text(customer.environment)}</b>
+                      </div>
+                      <div>
+                        <small>Состояние клиента</small>
+                        <b>{text(customer.state)}</b>
+                      </div>
+                      <div>
+                        <small>Статус KYC</small>
+                        <b>{text(kyc?.status || "not_started")}</b>
+                      </div>
+                      <div>
+                        <small>Обновлено Aura</small>
+                        <b>
+                          {date(
+                            kyc?.provider_updated_at ||
+                              customer.provider_updated_at,
+                          )}
+                        </b>
+                      </div>
+                      <div>
+                        <small>Причина</small>
+                        <b>{text(kyc?.reason)}</b>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="wpay-admin-user-empty">
+                      Пользователь ещё не создавал профиль в Aura.
+                    </p>
+                  )}
+                </section>
+              )}
+
+              {section === "wallets" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Кошельки и адреса</h3>
+                  {detail.wallets?.length ? (
+                    <div className="grid gap-2">
+                      {detail.wallets.map((wallet) => (
+                        <div key={[wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address].join(":")}
+                          className="rounded-xl border border-[var(--admin-border)] p-3">
+                          <Row title={`${wallet.asset} · ${wallet.network} · ${walletProviderNames[wallet.provider]}`}
+                            subtitle={[
+                              wallet.environment,
+                              wallet.provider === "aura" && wallet.available === null
+                                ? "Дополнительный адрес Aura"
+                                : walletBalanceLabels[wallet.balance_scope],
+                              wallet.hidden ? "Скрыт пользователем" : null,
+                            ].filter(Boolean).join(" · ")}
+                            right={wallet.available === null
+                              ? (wallet.provider === "aura" ? "Общий остаток выше" : "Нет данных")
+                              : `${wallet.available} ${wallet.asset}`}
+                          />
+                          {wallet.reserved && Number(wallet.reserved) > 0 && (
+                            <p className="mt-1 text-xs opacity-60">Резерв {wallet.reserved} {wallet.asset}</p>
+                          )}
+                          <button type="button" title="Скопировать адрес" onClick={() => copy(wallet.address)}
+                            className="mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
+                          {wallet.wallet_id && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              {wallet.state && <span className="rounded-lg bg-amber-500/15 px-2 py-1 text-xs">
+                                {wallet.state === "archived" ? "В архиве" : "Заморожен"}
+                              </span>}
+                              {wallet.state ? (
+                                <button type="button" className="rounded-lg bg-black/5 px-3 py-2 text-xs dark:bg-white/10"
+                                  disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "restore")}>Восстановить</button>
+                              ) : (
+                                <>
+                                  <button type="button" className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs"
+                                    disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "freeze")}>Заморозить</button>
+                                  <button type="button" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs"
+                                    disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "archive")}>В архив</button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="wpay-admin-user-empty">Кошельков пока нет.</p>}
+                </section>
+              )}
+
+              {section === "balances" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Балансы</h3>
+                  {detail.balances.length ? (
+                    detail.balances.map((balance, index) => (
                       <Row
                         key={index}
-                        title={text(item.type)}
-                        subtitle={date(item.created_at)}
-                        right={`${amount(item.amount)} ${text(item.asset)}`}
+                        title={text(balance.asset)}
+                        subtitle={`Резерв: ${amount(balance.reserved)}`}
+                        right={amount(balance.available)}
                       />
                     ))
-                ) : (
-                  <p className="wpay-admin-user-empty">Операций пока нет.</p>
-                )}
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <h3>Уведомления и рефералы</h3>
-                <div className="wpay-admin-user-facts">
-                  <div>
-                    <small>Уведомлений</small>
-                    <b>{detail.notifications.length}</b>
-                  </div>
-                  <div>
-                    <small>Приглашено</small>
-                    <b>{detail.referrals.invited.length}</b>
-                  </div>
-                  <div>
-                    <small>Пригласил</small>
-                    <b>
-                      {text(detail.referrals.referred_by?.referrer_user_id)}
-                    </b>
-                  </div>
-                  <div>
-                    <small>Адресов</small>
-                    <b>{detail.addresses.length}</b>
-                  </div>
-                </div>
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <h3>Последние действия операторов</h3>
-                {detail.audit.length ? (
-                  detail.audit.slice(0, 12).map((item, index) => (
-                    <Row
-                      key={index}
-                      title={text(item.action)}
-                      subtitle={`${date(item.created_at)} · ${text(item.admin_id)}`}
-                      right={text(item.outcome)}
+                  ) : (
+                    <p className="wpay-admin-user-empty">Балансов пока нет.</p>
+                  )}
+                  <div className="wpay-admin-balance-adjustment">
+                    <div className="wpay-admin-balance-fields">
+                      <select
+                        value={balanceAsset}
+                        onChange={(event) => { setBalanceAsset(event.target.value); setBalanceNetwork(""); }}
+                        aria-label="Актив корректировки"
+                      >
+                        {Array.from(
+                          new Set([
+                            "USDT",
+                            ...Object.keys(detail.credit_assets ?? {}),
+                            ...detail.balances.map((item) => text(item.asset)),
+                          ]),
+                        ).map((asset) => <option key={asset}>{asset}</option>)}
+                      </select>
+                      <input
+                        value={balanceAmount}
+                        onChange={(event) => setBalanceAmount(event.target.value.replace(/[^\d.,+-]/g, ""))}
+                        inputMode="decimal"
+                        placeholder="Сумма: 10 или -10"
+                      />
+                    </div>
+                    {balanceAsset !== "USDT" && (
+                      <select value={balanceSource} onChange={(event) => { setBalanceSource(event.target.value); setBalanceNetwork(""); }}
+                        aria-label="Источник корректировки">
+                        <option value="default">Текущий резерв / внутренний учёт</option>
+                        <option value="goswap">Резерв GoSwap · начисление</option>
+                      </select>
+                    )}
+                    {balanceAsset === "USDT" && (
+                      <select aria-label="Сеть USDT" value={balanceNetwork} onChange={(event) => setBalanceNetwork(event.target.value)}>
+                        <option value="">Выберите сеть USDT</option>
+                        {creditNetworks.map((net) => <option key={net} value={net}>{
+                          `${({ TRON: "TRC‑20", BSC: "BEP‑20", ETH: "ERC‑20" } as Record<string, string>)[net] ?? net} · ${net === "TRON" ? "Aura" : "GoSwap"}`
+                        }</option>)}
+                      </select>
+                    )}
+                    <textarea
+                      value={balanceReason}
+                      onChange={(event) => setBalanceReason(event.target.value)}
+                      maxLength={1000}
+                      placeholder="Обязательная причина корректировки"
                     />
-                  ))
-                ) : (
-                  <p className="wpay-admin-user-empty">Действий пока нет.</p>
-                )}
-              </section>
+                    <button
+                      type="button"
+                      disabled={!balanceAmount.trim() || !balanceReason.trim() || Boolean(actionWorking) ||
+                        (balanceAsset === "USDT" && !creditNetworks.includes(balanceNetwork)) ||
+                        (balanceSource === "goswap" && !(Number(balanceAmount.replace(",", ".")) > 0))}
+                      onClick={() => void adjustBalance()}
+                    >
+                      {actionWorking === "adjust_balance" ? "Проводим…" : "Провести корректировку"}
+                    </button>
+                    <small>
+                      Для USDT источник определяется сетью. Начисления на собственный адрес wPay требуют перевода в блокчейне.
+                    </small>
+                  </div>
+                </section>
+              )}
+
+              {section === "cards" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Карты Aura</h3>
+                  {detail.aura.cards.length ? (
+                    detail.aura.cards.map((item, index) => (
+                      <Row
+                        key={index}
+                        title={`${text(item.kind)} · ${text(item.masked_pan)}`}
+                        subtitle={`${text(item.status)}${item.frozen ? " · заморожена" : ""}`}
+                        right={text(item.delivery_status)}
+                      />
+                    ))
+                  ) : (
+                    <p className="wpay-admin-user-empty">Карт пока нет.</p>
+                  )}
+                </section>
+              )}
+
+              {section === "history" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Последние операции</h3>
+                  {detail.events.length ? (
+                    detail.events
+                      .slice(0, 12)
+                      .map((item, index) => (
+                        <Row
+                          key={index}
+                          title={text(item.type)}
+                          subtitle={date(item.created_at)}
+                          right={`${amount(item.amount)} ${text(item.asset)}`}
+                        />
+                      ))
+                  ) : (
+                    <p className="wpay-admin-user-empty">Операций пока нет.</p>
+                  )}
+                </section>
+              )}
+
+              {section === "profile" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Уведомления и рефералы</h3>
+                  <div className="wpay-admin-user-facts">
+                    <div>
+                      <small>Уведомлений</small>
+                      <b>{detail.notifications.length}</b>
+                    </div>
+                    <div>
+                      <small>Приглашено</small>
+                      <b>{detail.referrals.invited.length}</b>
+                    </div>
+                    <div>
+                      <small>Пригласил</small>
+                      <b>
+                        {text(detail.referrals.referred_by?.referrer_user_id)}
+                      </b>
+                    </div>
+                    <div>
+                      <small>Адресов</small>
+                      <b>{detail.addresses.length}</b>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {section === "history" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Последние действия операторов</h3>
+                  {detail.audit.length ? (
+                    detail.audit.slice(0, 12).map((item, index) => (
+                      <Row
+                        key={index}
+                        title={text(item.action)}
+                        subtitle={`${date(item.created_at)} · ${text(item.admin_id)}`}
+                        right={text(item.outcome)}
+                      />
+                    ))
+                  ) : (
+                    <p className="wpay-admin-user-empty">Действий пока нет.</p>
+                  )}
+                </section>
+              )}
             </>
           ) : null}
         </div>

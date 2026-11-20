@@ -70,8 +70,11 @@ def goswap_network_balances(ledger, uid, asset):
             if event_id.startswith('aura:'):
                 continue
             delta = Decimal(raw)
-            if kind == 'deposit' and event_id.startswith('deposit:') and delta > 0:
+            if delta > 0 and kind in {'deposit', 'admin_adjustment'}:
                 detail = json.loads(raw_detail)
+                if not (kind == 'deposit' and event_id.startswith('deposit:')
+                        or kind == 'admin_adjustment' and detail.get('source') == 'goswap'):
+                    continue
                 network = detail.get('network')
                 if network not in {'BSC', 'ETH', 'SOL', 'TON', 'TRON'}:
                     continue
