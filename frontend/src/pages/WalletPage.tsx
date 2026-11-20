@@ -1558,6 +1558,7 @@ function CryptoFlowPushView({
   const [assetPicker, setAssetPicker] = useState<"from" | "to" | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
 
+  const [networkPair, setNetworkPair] = useState<{ from: string; to: string } | null>(null);
   const [selectedUsdtNetwork, setSelectedUsdtNetwork] = useState("BSC");
   const [usdtNetworkBalances, setUsdtNetworkBalances] = useState<Record<string, number>>({});
   const usdtAvailable = availableAssets.some((asset) => asset.code === "USDT");
@@ -1588,6 +1589,7 @@ function CryptoFlowPushView({
   useEffect(() => {
     if (!flow) return;
     setDisplayFlow(flow);
+    setNetworkPair(null);
     setSelectedUsdtNetwork(flow.network ?? "BSC");
     if (flow.kind === "exchange")
       setNetworkExchange(!flow.assetCode || flow.assetCode === "USDT");
@@ -1686,7 +1688,8 @@ function CryptoFlowPushView({
         {exchangeTabs}
         <WalletNetworkExchange
           active={flow?.kind === "exchange"}
-          initialNetwork={flow?.network}
+          initialNetwork={networkPair?.from ?? flow?.network}
+          initialDestinationNetwork={networkPair?.to}
         />
       </PushViewShell>
     );
@@ -2021,6 +2024,21 @@ function CryptoFlowPushView({
                       contentClassName="!h-16"
                       innerClassName="!h-16 !min-w-0 !py-2 after:!opacity-30"
                       onClick={() => {
+                        if (!assetPicker) return;
+                        const opposite = assetPicker === "from" ? toAsset : fromAsset;
+                        if (opposite.code === "USDT" && activeUsdtNetwork) {
+                          if (activeUsdtNetwork === network) {
+                            showNotice("Выберите другую сеть USDT");
+                            return;
+                          }
+                          setNetworkPair(assetPicker === "from"
+                            ? { from: network, to: activeUsdtNetwork }
+                            : { from: activeUsdtNetwork, to: network });
+                          setAssetPicker(null);
+                          setNetworkExchange(true);
+                          haptic("light");
+                          return;
+                        }
                         setSelectedUsdtNetwork(network);
                         selectExchangeAsset("USDT");
                       }}
@@ -2031,9 +2049,12 @@ function CryptoFlowPushView({
                             <span className="block truncate text-[17px] font-semibold">USDT · {addressNetworkStandards[network] ?? network}</span>
                             <span className="mt-0.5 block truncate text-[13px] text-black/45 dark:text-white/45">{addressNetworkNames[network] ?? network}</span>
                           </span>
-                          {usdtNetworkBalances[network] > 0 && (
-                            <span className="shrink-0 text-right text-[16px] font-medium tabular-nums">
-                              {formatCrypto(usdtNetworkBalances[network])}
+                          <span className="ml-auto shrink-0 text-right text-[16px] font-medium tabular-nums">
+                            {usdtNetworkBalances[network] === undefined ? "—" : formatCrypto(usdtNetworkBalances[network])}
+                          </span>
+                          {network === activeUsdtNetwork && (assetPicker === "from" ? fromAsset : toAsset).code === "USDT" && (
+                            <span aria-label="Выбрано" className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#007aff] text-white">
+                              <Check size={13} strokeWidth={3} aria-hidden="true" />
                             </span>
                           )}
                         </span>

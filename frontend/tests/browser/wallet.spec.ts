@@ -1436,7 +1436,7 @@ test("exchange picker groups USDT networks and searches by network or ticker", a
   const networks = picker.locator('[aria-label="USDT"]');
   const coins = picker.locator('[aria-label="Другие валюты"]');
   await expect(networks.getByText("12.5", { exact: true })).toBeVisible();
-  await expect(networks.getByText("0", { exact: true })).toHaveCount(0);
+  await expect(networks.getByText("0", { exact: true })).toBeVisible();
   await expect(networks.getByText("Баланс приложения", { exact: true })).toHaveCount(0);
   await expect(coins.getByText("BTC", { exact: true })).toBeVisible();
   const search = page.getByRole("textbox", { name: "Найти валюту" });
@@ -1449,4 +1449,8 @@ test("exchange picker groups USDT networks and searches by network or ticker", a
   await networks.getByText("USDT · TRC20", { exact: true }).click();
   await expect(page.getByRole("button", { name: "Валюта списания" })).toContainText("TRC20");
   await expect(page.getByLabel("Баланс валюты").first()).toHaveText("12.5");
+  await page.getByRole("button", { name: "Валюта получения" }).click();
+  await networks.getByText("USDT · BEP20", { exact: true }).click();
+  await expect(page.getByLabel("Сеть отправления USDT")).toHaveValue("TRON");
+  await expect(page.getByLabel("Сеть получения USDT")).toHaveValue("BSC");
 });
