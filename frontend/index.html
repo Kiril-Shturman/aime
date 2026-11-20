@@ -2,6 +2,23 @@
 <html lang="ru" class="dark">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      // Telegram can dispatch native events while the SDK is still loading.
+      (() => {
+        if (typeof window.TelegramGameProxy?.receiveEvent === "function") return;
+        const pending = [];
+        const proxy = window.TelegramGameProxy ?? {};
+        proxy.receiveEvent = (type, data) => {
+          if (pending.length < 64) pending.push([type, data]);
+        };
+        window.TelegramGameProxy = proxy;
+        window.addEventListener("DOMContentLoaded", () => {
+          const receiver = window.TelegramGameProxy;
+          if (receiver === proxy || typeof receiver?.receiveEvent !== "function") return;
+          for (const [type, data] of pending.splice(0)) receiver.receiveEvent(type, data);
+        }, { once: true });
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta
       name="viewport"
