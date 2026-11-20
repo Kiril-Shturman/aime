@@ -145,6 +145,35 @@ class Chains:
                 'max_fee': units(max_fee, fee_decimals), 'fee_currency': currency, 'expires_at': expiry,
                 'source_address': source, 'recipient': recipient, 'network': network, 'unsigned': unsigned}
 
+    def estimate_bnb(self, source, recipient, amount):
+        network = 'BSC'
+        quantity = atomic(amount, 18)
+        if int(self.rpc(network, 'eth_chainId', []), 16) != CHAIN_IDS[network]:
+            raise PaymentError('RPC_UNAVAILABLE')
+        recipient = to_checksum_address(recipient)
+        native = int(self.rpc(network, 'eth_getBalance', [source, 'pending']), 16)
+        if native < quantity:
+            raise PaymentError('NO_FUNDS')
+        gas_price = int(self.rpc(network, 'eth_gasPrice', []), 16) * 12 // 10 + 1
+        gas = int(self.rpc(network, 'eth_estimateGas', [
+            {'from': source, 'to': recipient, 'value': hex(quantity), 'data': '0x'},
+        ]), 16) * 13 // 10 + 1
+        if not 21000 <= gas <= 250000 or not 0 < gas_price <= 500_000_000_000:
+            raise PaymentError('RPC_UNAVAILABLE')
+        max_fee = gas * gas_price
+        if native < quantity + max_fee:
+            raise PaymentError('NO_GAS')
+        unsigned = {
+            'chainId': CHAIN_IDS[network], 'to': recipient, 'value': quantity, 'data': '0x',
+            'nonce': int(self.rpc(network, 'eth_getTransactionCount', [source, 'pending']), 16),
+            'gas': gas, 'gasPrice': gas_price,
+        }
+        return {
+            'asset': 'BNB', 'amount': amount, 'native_balance': units(native, 18),
+            'max_fee': units(max_fee, 18), 'fee_currency': 'BNB', 'expires_at': int(time.time()) + 90,
+            'source_address': source, 'recipient': recipient, 'network': network, 'unsigned': unsigned,
+        }
+
     def sign(self, quote, private_key):
         if quote['expires_at'] <= time.time():
             raise PaymentError('QUOTE_EXPIRED')
@@ -207,6 +236,8 @@ class Chains:
                 return None
             if int(receipt['status'], 16) != 1:
                 raise PaymentError('TX_FAILED')
+            if network == 'BSC' and quote.get('asset') == 'BNB':
+                return True
             logs, contract = receipt['logs'], ERC20[(network, 'USDT')][0][2:]
             source, target = quote['source_address'][2:], quote['recipient'][2:]
             decimals = ERC20[(network, 'USDT')][1]

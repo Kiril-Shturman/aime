@@ -10,6 +10,7 @@ from wallet_card_ui import CardUI
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
 from wallet_key_export import prepare as prepare_key_export, route as key_export_route
 from wallet_exchange_funding import Funding
+from wallet_custody_withdrawal import CustodyWithdrawal
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
 from wallet_chain import ASSET_NETWORKS as CUSTODY_ASSET_NETWORKS, ChainReader
 from wallet_aura_errors import wallet_error_payload
@@ -713,6 +714,9 @@ def install_wallet(app, root, owner_check):
     app['wpay_custody'] = custody
     prepare_key_export(ledger)
     exchange_funding = Funding(ledger, exchange_orders, custody, enabled=os.environ.get('WPAY_WALLET_FUNDING_ENABLED','0') == '1')
+    custody_withdrawal = CustodyWithdrawal(
+        exchange_funding, enabled=os.environ.get('WPAY_CUSTODY_BNB_WITHDRAWAL_ENABLED') == '1',
+    )
     app['wpay_exchange_funding'] = exchange_funding
     app['wpay_chain'] = ChainReader(ledger, ApiError)
     prepare_tariffs(ledger)
@@ -1800,6 +1804,11 @@ def install_wallet(app, root, owner_check):
             custody_response = await custody_route(request, action, uid, custody)
             if custody_response is not None:
                 return custody_response
+            if action in {'custody-withdrawal-prepare', 'custody-withdrawal-confirm'}:
+                require_asset_enabled('BNB', 'BSC')
+            custody_withdrawal_response = await custody_withdrawal.route(request, action, uid)
+            if custody_withdrawal_response is not None:
+                return custody_withdrawal_response
             funding_response = await exchange_funding.route(request, action, uid)
             if funding_response is not None:return funding_response
             order_response = await exchange_orders.route(request, action, uid)

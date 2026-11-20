@@ -31,6 +31,9 @@ def prepare(ledger):
       CREATE UNIQUE INDEX IF NOT EXISTS custody_funding_one_wallet ON custody_funding_jobs(wallet_id)
         WHERE state IN ('estimating','quoted','confirmed','signing','signed','broadcast','unknown');
       CREATE INDEX IF NOT EXISTS custody_funding_intent ON custody_funding_jobs(user_id,intent_id,created_at DESC);
+      CREATE TABLE IF NOT EXISTS custody_withdrawal_intents (
+        job_id TEXT PRIMARY KEY, recipient TEXT NOT NULL, amount TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS custody_signer_status (worker_id TEXT PRIMARY KEY,networks TEXT NOT NULL,key_id TEXT NOT NULL,heartbeat_at REAL NOT NULL);
     ''')
 
@@ -51,9 +54,10 @@ class Funding:
                 'quote':shown,'tx_hash':row['tx_hash'],'error':row['error'],
                 'detail':ERRORS.get(row['error'],'Статус платежа уточняется' if row['error'] else None)}
 
-    def signer(self,network):
+    def signer(self,network,native_bnb=False):
         rows=self.ledger.db.execute('SELECT * FROM custody_signer_status WHERE heartbeat_at>?',(time.time()-45,)).fetchall()
-        return any(r['key_id']==self.custody.key_id and network in json.loads(r['networks']) for r in rows)
+        return any(r['key_id']==self.custody.key_id and network in json.loads(r['networks'])
+                   and (not native_bnb or 'BNB_WITHDRAWAL' in json.loads(r['networks'])) for r in rows)
 
     def status(self,uid,intent_id):
         order=self.orders.owned(uid,intent_id)
@@ -89,18 +93,24 @@ class Funding:
         except Exception:self.ledger.rollback();raise
         return self.public(self.ledger.db.execute('SELECT * FROM custody_funding_jobs WHERE id=?',(job,)).fetchone())
 
-    def confirm(self,uid,job_id,approval_id):
-        if not self.enabled:raise self.error('FUNDING_NOT_ENABLED','Оплата с собственного кошелька не включена',503)
+    def confirm(self,uid,job_id,approval_id,native_bnb=False):
+        if not native_bnb and not self.enabled:raise self.error('FUNDING_NOT_ENABLED','Оплата с собственного кошелька не включена',503)
         self.ledger.begin('funding_confirm',uid,job_id)
         try:
             row=self.ledger.db.execute('SELECT * FROM custody_funding_jobs WHERE id=? AND user_id=?',(job_id,uid)).fetchone()
             if not row:raise self.error('NOT_FOUND','Платёж не найден',404)
+            withdrawal = self.ledger.db.execute(
+                'SELECT 1 FROM custody_withdrawal_intents WHERE job_id=?', (job_id,),
+            ).fetchone()
+            if bool(withdrawal) != native_bnb:
+                raise self.error('NOT_FOUND','Платёж не найден',404)
             if row['state'] in {'confirmed','signing','signed','broadcast','unknown','done'}:
                 self.ledger.commit();return self.public(row)
             quote=json.loads(row['quote']) if row['quote'] else None
             if row['state']!='quoted' or not quote or quote['expires_at']<time.time() or quote['approval_id']!=approval_id:
                 raise self.error('QUOTE_EXPIRED','Расчёт комиссии устарел. Обновите его',400)
-            self.payable(uid,row['intent_id'])
+            if not native_bnb:
+                self.payable(uid,row['intent_id'])
             self.ledger.db.execute("UPDATE custody_funding_jobs SET state='confirmed',updated_at=?,lease_until=0 WHERE id=?",(time.time(),job_id))
             self.ledger.commit()
         except Exception:self.ledger.rollback();raise

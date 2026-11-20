@@ -17,7 +17,7 @@ from nacl.public import SealedBox
 from wallet_custody import decode, fingerprint
 from wallet_custody_tools import load_private, verify_wallet
 from wallet_fixedfloat_orders import Orders, address
-from wallet_signer_chains import Chains, PaymentError
+from wallet_signer_chains import Chains, PaymentError, atomic
 
 
 def canonical(value):
@@ -95,6 +95,41 @@ class Controller:
             raise ValueError('Provider changed payment instructions')
         return snapshot
 
+    def instructions(self, item):
+        if 'withdrawal' not in item:
+            return self.payable(item)
+        job, wallet, withdrawal = item['job'], item['wallet'], item['withdrawal']
+        if (
+            job['id'] != withdrawal['job_id'] or job['wallet_id'] != wallet['id']
+            or job['user_id'] != wallet['user_id'] or job['network'] != 'BSC'
+            or wallet['network'] != 'BSC' or wallet['chain_env'] != 'mainnet'
+            or wallet['key_id'] != self.key_id
+        ):
+            raise ValueError('Invalid BNB withdrawal binding')
+        return {
+            'pay_address': '0x' + address('BSC', withdrawal['recipient']),
+            'from_amount': withdrawal['amount'],
+        }
+
+    def approval_binding(self, item):
+        job, wallet = item['job'], item['wallet']
+        binding = {'job_id': job['id'], 'intent_id': job['intent_id'], 'user_id': job['user_id'],
+                   'wallet_id': wallet['id']}
+        if 'withdrawal' in item:
+            binding['kind'] = 'bnb_withdrawal'
+        else:
+            binding['provider_id'] = item['order']['provider_id']
+        return binding
+
+    def estimate(self, item, instructions):
+        job, wallet = item['job'], item['wallet']
+        if 'withdrawal' in item:
+            quote = self.chains.estimate_bnb(wallet['address'], instructions['pay_address'], instructions['from_amount'])
+            quote['recipient'] = instructions['pay_address']
+            return quote
+        return self.chains.estimate(job['network'], wallet['address'], instructions['pay_address'],
+                                    instructions['from_amount'], instructions['expires_at'])
+
     def seal(self, value):
         return hmac.new(self.seal_key, canonical(value), hashlib.sha256).hexdigest()
 
@@ -102,10 +137,8 @@ class Controller:
         clean = {k: v for k, v in quote.items() if k != 'seal'}
         if not hmac.compare_digest(self.seal(clean), quote['seal']):
             raise ValueError('Approval tampered')
-        job, wallet = item['job'], item['wallet']
-        binding = {'job_id': job['id'], 'intent_id': job['intent_id'], 'user_id': job['user_id'],
-                   'wallet_id': wallet['id'], 'provider_id': item['order']['provider_id']}
-        if quote['binding'] != binding or quote['network'] != wallet['network'] or quote['source_address'] != wallet['address']:
+        wallet = item['wallet']
+        if quote['binding'] != self.approval_binding(item) or quote['network'] != wallet['network'] or quote['source_address'] != wallet['address']:
             raise ValueError('Approval belongs to another job')
 
     def key(self, wallet):
@@ -133,18 +166,17 @@ class Controller:
                     self.bridge('status', job_id=identifier, state='done')
                     return
                 # No re-signing, even after expiry/restart. EVM transactions have no chain expiry.
-                fresh = self.payable(item)
+                fresh = self.instructions(item)
                 if fresh['pay_address'] != quote['recipient'] or fresh['from_amount'] != quote['amount']:
                     raise ValueError('Payment instructions changed')
                 self.chains.broadcast(quote, payload, txid)
                 self.bridge('status', job_id=identifier, state='broadcast')
                 return
-            fresh = self.payable(item)
+            fresh = self.instructions(item)
             if job['state'] == 'estimating':
-                quote = self.chains.estimate(job['network'], wallet['address'], fresh['pay_address'], fresh['from_amount'], fresh['expires_at'])
+                quote = self.estimate(item, fresh)
                 quote['approval_id'] = uuid.uuid4().hex
-                quote['binding'] = {'job_id': identifier, 'intent_id': job['intent_id'], 'user_id': job['user_id'],
-                                    'wallet_id': wallet['id'], 'provider_id': item['order']['provider_id']}
+                quote['binding'] = self.approval_binding(item)
                 quote['seal'] = self.seal(quote)
                 self.bridge('quote', job_id=identifier, quote=quote)
                 return
@@ -155,11 +187,17 @@ class Controller:
             if fresh['pay_address'] != quote['recipient'] or fresh['from_amount'] != quote['amount']:
                 raise ValueError('Payment instructions changed')
             # Re-estimation validates live balances, nonce, fee and execution; never silently alter approval.
-            current = self.chains.estimate(job['network'], wallet['address'], quote['recipient'], quote['amount'], fresh['expires_at'])
+            current = self.estimate(item, fresh)
             if job['network'] != 'TRON' and (current['unsigned']['nonce'] != quote['unsigned']['nonce']):
                 raise PaymentError('QUOTE_EXPIRED')
             if Decimal(current['max_fee']) > Decimal(quote['max_fee']):
                 raise PaymentError('QUOTE_EXPIRED')
+            if 'withdrawal' in item:
+                if current['unsigned']['gas'] > quote['unsigned']['gas']:
+                    raise PaymentError('QUOTE_EXPIRED')
+                approved_cost = quote['unsigned']['value'] + quote['unsigned']['gas'] * quote['unsigned']['gasPrice']
+                if atomic(current['native_balance'], 18) < approved_cost:
+                    raise PaymentError('NO_GAS')
             private_key = self.key(wallet)
             try:
                 payload, txid = self.chains.sign(quote, private_key)
@@ -201,11 +239,11 @@ class Controller:
             self.bridge('export-complete', job_id=job['id'], ciphertext=None)
 
     def cycle(self):
-        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON'], key_id=self.key_id)
+        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'BNB_WITHDRAWAL'], key_id=self.key_id)
         export = self.bridge('export-claim')
         if export.get('job'):
             self.process_export(export)
-        item = self.bridge('claim')
+        item = self.bridge('claim', native_bnb=True)
         if item.get('job'):
             self.process(item)
 

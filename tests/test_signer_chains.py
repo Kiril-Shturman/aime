@@ -57,6 +57,33 @@ class SignerChainTests(unittest.TestCase):
             with self.assertRaises(PaymentError) as error: adapter.estimate('BSC', '0x' + '1' * 40, '0x' + '2' * 40, '1', time.time() + 1000)
             self.assertEqual(error.exception.code, 'NO_GAS')
 
+    def test_native_bnb_quote_signing_and_final_receipt(self):
+        from eth_account import Account
+
+        adapter = Chains()
+        key = b"3" * 32
+        source = Account.from_key(key).address
+        recipient = "0x" + "2" * 40
+        data = {"eth_chainId": "0x38", "eth_getBalance": hex(10**18),
+                "eth_gasPrice": hex(10**9), "eth_estimateGas": hex(21000),
+                "eth_getTransactionCount": "0x3"}
+        with patch.object(adapter, "rpc", side_effect=lambda network, method, params: data[method]):
+            quote = adapter.estimate_bnb(source, recipient, "0.1")
+            self.assertEqual(quote["unsigned"]["value"], 10**17)
+            self.assertEqual(quote["unsigned"]["data"], "0x")
+            signed, txid = adapter.sign(quote, key)
+            adapter.verify(quote, signed, txid)
+            data["eth_getBalance"] = hex(10**17)
+            with self.assertRaises(PaymentError) as error:
+                adapter.estimate_bnb(source, recipient, "0.1")
+            self.assertEqual(error.exception.code, "NO_GAS")
+
+        receipt = {"transactionHash": txid, "blockNumber": "0x2", "blockHash": "0xab", "status": "0x1"}
+        with patch.object(adapter, "rpc", side_effect=[receipt, {"number": "0x1"}]):
+            self.assertIsNone(adapter.receipt(quote, txid))
+        with patch.object(adapter, "rpc", side_effect=[receipt, {"number": "0x2"}, {"hash": "0xab"}]):
+            self.assertTrue(adapter.receipt(quote, txid))
+
     def test_exact_atomic_precision(self):
         self.assertEqual(atomic('1.000001', 6), 1000001)
         for value in ['0', '-1', 'NaN', '1.0000001']:

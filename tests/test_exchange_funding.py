@@ -50,6 +50,32 @@ class FundingTests(unittest.TestCase):
         self.call('quote', job_id=job['job_id'], quote=quote)
         return job
 
+    def test_bnb_jobs_are_owned_and_share_the_exchange_wallet_lock(self):
+        from wallet_custody_withdrawal import CustodyWithdrawal
+
+        withdrawal = CustodyWithdrawal(self.funding, enabled=True)
+        request = {"address": self.pay, "amount": "0.01"}
+        with self.assertRaises(ApiError):
+            withdrawal.prepare("tg:1", request)
+        self.call("heartbeat", networks=["BSC", "BNB_WITHDRAWAL"], key_id=self.keys["key_id"])
+        job = withdrawal.prepare("tg:1", request)
+        self.assertEqual(job, withdrawal.prepare("tg:1", request))
+        self.assertIsNone(withdrawal.owned("tg:2", job["job_id"]))
+        with self.assertRaises(ApiError):
+            self.funding.estimate("tg:1", self.intent)
+        self.assertIsNone(self.call("claim")["job"])
+        item = self.call("claim", native_bnb=True)
+        self.assertEqual(item["withdrawal"]["recipient"].lower(), self.pay.lower())
+        self.assertNotIn("order", item)
+        quote = {"approval_id": "b" * 32, "expires_at": time.time() + 60}
+        self.call("quote", job_id=job["job_id"], quote=quote)
+        with self.assertRaises(ApiError):
+            self.funding.confirm("tg:2", job["job_id"], quote["approval_id"], native_bnb=True)
+        self.assertEqual(
+            self.funding.confirm("tg:1", job["job_id"], quote["approval_id"], native_bnb=True)["state"],
+            "confirmed",
+        )
+
     def test_ownership_offline_and_disabled(self):
         with self.assertRaises(ApiError): self.funding.estimate('tg:2', self.intent)
         self.ledger.db.execute('DELETE FROM custody_signer_status')

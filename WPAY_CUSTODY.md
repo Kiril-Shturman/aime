@@ -18,9 +18,9 @@ unknown balance, never a fabricated zero. The same address is returned on repeat
 Private keys and recovery seeds never reach the browser.
 
 These addresses are separate from “Баланс приложения”, Aura deposit addresses
-and legacy GoSwap records. They do not credit the internal ledger, fund a card,
-sign withdrawals, sweep funds or submit exchange orders. The address screen
-explains this explicitly. Provider deposit flows keep their existing behavior.
+and legacy GoSwap records. On-chain balances do not credit the internal ledger
+or fund a card. Supported transfers from an own wallet go through the isolated
+signer. Provider deposits keep their existing behavior.
 Aura's test environment does not choose the environment of own wallets.
 
 Defaults are disabled/testnet. Mainnet requires server-side configuration with
@@ -153,9 +153,8 @@ permissions, fail-closed configuration and light/dark UI. Browser tests intercep
 APIs; no real blockchain funding, activation, deployment, signing or broadcasts.
 
 Next execution work remains: chain indexers with confirmation/reorg handling,
-asset-contract allowlists, idempotent deposit postings, gas funding, isolated
-signer and withdrawal/sweep state machines with reconciliation. Address generation
-alone does not make the service a working deposit/withdrawal processor.
+asset-contract allowlists, idempotent deposit postings, gas funding, and
+withdrawal support for additional assets.
 
 References:
 - https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki
@@ -187,3 +186,13 @@ they cannot be deleted from a blockchain or the upstream provider by this UI.
 TRON address generation now uses BIP44 m/44'/195'/0'/0/0 (Bip44Coins.TRON),
 with independent seeds as for other networks. Mainnet and Nile are recorded in
 metadata. Generating an address does not activate a TRON account or pay energy.
+
+### Native BNB withdrawals
+
+The BSC form creates a native BNB transfer from the user's mainnet wallet.
+Set `WPAY_CUSTODY_BNB_WITHDRAWAL_ENABLED=1` on the web service after updating
+both the web release and the isolated signer. The signer must advertise
+`BNB_WITHDRAWAL` in its heartbeat. The withdrawal and exchange payment share
+the same active-job lock per wallet. The signer checks live balance and fee
+again after approval, persists the signed transaction before broadcasting,
+and waits for a finalized receipt. This path does not debit the wPay ledger.
