@@ -15,7 +15,7 @@ async def coverage(ledger, provider, ApiError):
     external = {row["currency_code"]: D(str(row["available"])) for row in balances}
     if any(not value.is_finite() or value < 0 for value in external.values()):
         raise ValueError("Invalid provider balance")
-    liabilities, inflight = {}, {}
+    liabilities, allocated, inflight = {}, {}, {}
     with localcontext() as ctx:
         ctx.prec = 80
         for row in ledger.db.execute(
@@ -26,6 +26,21 @@ async def coverage(ledger, provider, ApiError):
                 + D(row["available"])
                 + D(row["reserved"])
             )
+        tables = {
+            row[0]
+            for row in ledger.db.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            )
+        }
+        if "wallet_provider_positions" in tables:
+            for row in ledger.db.execute(
+                "SELECT asset,available,reserved FROM wallet_provider_positions"
+            ):
+                allocated[row["asset"]] = (
+                    allocated.get(row["asset"], D(0))
+                    + D(row["available"])
+                    + D(row["reserved"])
+                )
         for row in ledger.db.execute(
             "SELECT body,held FROM wallet_withdrawal_intents WHERE state='processing'"
         ):
@@ -52,17 +67,23 @@ async def coverage(ledger, provider, ApiError):
         )
         try:
             for asset in sorted(set(external) | set(liabilities) | set(inflight)):
+                # Provider positions are reconciled against their own provider and
+                # environment. Only the unallocated remainder belongs to the
+                # legacy GoSwap pool.
+                goswap_liability = liabilities.get(asset, D(0)) - allocated.get(asset, D(0))
                 # Confirmed outgoing provider balances are held against reserved
                 # client liabilities until their final outcome is known.
                 difference = (
                     external.get(asset, D(0))
                     + inflight.get(asset, D(0))
-                    - liabilities.get(asset, D(0))
+                    - goswap_liability
                 )
                 row = {
+                    "provider": "goswap",
+                    "environment": "live",
                     "asset": asset,
                     "provider_available": str(external.get(asset, D(0))),
-                    "liabilities": str(liabilities.get(asset, D(0))),
+                    "liabilities": str(goswap_liability),
                     "inflight": str(inflight.get(asset, D(0))),
                     "difference": str(difference),
                     "state": (
@@ -85,16 +106,45 @@ async def coverage(ledger, provider, ApiError):
                     ),
                 )
                 rows.append(row)
+            if "wallet_provider_reconciliation" in tables:
+                for stored in ledger.db.execute(
+                    "SELECT provider,environment,asset,provider_available,allocated,"
+                    "difference,state FROM wallet_provider_reconciliation "
+                    "ORDER BY provider,environment,asset"
+                ):
+                    state = str(stored["state"]).lower()
+                    rows.append({
+                        "provider": stored["provider"],
+                        "environment": stored["environment"],
+                        "asset": stored["asset"],
+                        "provider_available": stored["provider_available"],
+                        "liabilities": stored["allocated"],
+                        "inflight": "0",
+                        "difference": stored["difference"],
+                        "state": state,
+                    })
             ledger.commit()
         except Exception:
             ledger.rollback()
             raise
-    return {"items": rows, "blocked": any(row["state"] != "ok" for row in rows)}
+    return {
+        "items": rows,
+        "blocked": any(
+            row["state"] in {"deficit", "error", "failed", "mismatch"}
+            for row in rows
+        ),
+    }
 
 
 async def require_coverage(ledger, provider, asset, ApiError):
     report = await coverage(ledger, provider, ApiError)
-    row = next((item for item in report["items"] if item["asset"] == asset), None)
+    row = next(
+        (
+            item for item in report["items"]
+            if item["provider"] == "goswap" and item["asset"] == asset
+        ),
+        None,
+    )
     if row and row["state"] != "ok":
         raise ApiError(
             "BALANCE_MISMATCH",

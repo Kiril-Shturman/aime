@@ -334,6 +334,8 @@ export function WalletFinanceReport() {
       blocked: boolean;
       worker?: { health?: string; last_error?: string; last_success?: string };
       items: {
+        provider: string;
+        environment: string;
         asset: string;
         provider_available: string;
         liabilities: string;
@@ -367,7 +369,7 @@ export function WalletFinanceReport() {
         <>
           <p role="status">
             {report.blocked
-              ? "Новые расходы заблокированы: есть расхождение"
+              ? "Расходы проблемного провайдера заблокированы: есть расхождение"
               : "Баланс организации покрывает обязательства"}
           </p>
           <p role="status">
@@ -386,7 +388,9 @@ export function WalletFinanceReport() {
               key={row.asset}
               className="mt-3 rounded-2xl border border-black/10 p-3 dark:border-white/10"
             >
-              <strong>{row.asset}</strong>
+              <strong>
+                {row.provider.toUpperCase()} · {row.environment.toUpperCase()} · {row.asset}
+              </strong>
               <p>
                 Организация: {row.provider_available} · Обязательства:{" "}
                 {row.liabilities}

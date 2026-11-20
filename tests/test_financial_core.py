@@ -520,6 +520,30 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
             (await self.post("transfer-send", {"intent_id": intent})).status, 503
         )
 
+    async def test_reconciliation_separates_provider_environments(self):
+        self.ledger.db.execute(
+            "INSERT INTO wallet_provider_positions "
+            "(provider,environment,user_id,asset,available,reserved,updated_at) "
+            "VALUES ('aura','test','tg:123','USDT','40','0',0)"
+        )
+        self.ledger.db.execute(
+            "INSERT INTO wallet_provider_reconciliation "
+            "(provider,environment,asset,provider_available,allocated,difference,state,checked_at,detail) "
+            "VALUES ('aura','test','USDT','500','40','460','reserve',0,'{}')"
+        )
+        self.provider.org = D(60)
+        response = await self.client.get(
+            "/api/wallet/finance-reconciliation", headers=OWNER
+        )
+        self.assertEqual(response.status, 200)
+        report = await response.json()
+        rows = {(row["provider"], row["environment"]): row for row in report["items"]}
+        self.assertEqual(rows[("goswap", "live")]["liabilities"], "60")
+        self.assertEqual(rows[("goswap", "live")]["difference"], "0")
+        self.assertEqual(rows[("aura", "test")]["liabilities"], "40")
+        self.assertEqual(rows[("aura", "test")]["difference"], "460")
+        self.assertFalse(report["blocked"])
+
     async def test_insufficient_balance_includes_entire_transfer(self):
         response = await self.post(
             "transfer-prepare",
