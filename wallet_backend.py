@@ -1748,8 +1748,14 @@ def install_wallet(app, root, owner_check):
                         (uid, aura_environment),
                     ).fetchone()
                     if row:
+                        position = ledger.db.execute(
+                            "SELECT available FROM wallet_provider_positions WHERE provider='aura' "
+                            "AND environment=? AND user_id=? AND asset='USDT'",
+                            (aura_environment, uid),
+                        ).fetchone()
                         items.append({'provider': 'aura', 'asset': 'USDT', 'network': 'TRON',
-                                      'address': row['address'], 'chain': row['network']})
+                                      'address': row['address'], 'chain': row['network'],
+                                      'provider_available': position['available'] if position else '0'})
                 response = web.json_response({'items': items})
                 response.headers['Cache-Control'] = 'no-store'
                 return response

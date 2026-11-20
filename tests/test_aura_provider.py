@@ -1414,7 +1414,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(saved.status, 200)
         self.assertEqual((await saved.json())["items"], [{
             "provider": "aura", "asset": "USDT", "network": "TRON",
-            "address": address["address"], "chain": "nile",
+            "address": address["address"], "chain": "nile", "provider_available": "0",
         }])
         created = await self.mock.post(
             "/mock/deposits",

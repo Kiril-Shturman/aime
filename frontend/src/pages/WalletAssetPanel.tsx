@@ -180,7 +180,7 @@ export default function WalletAssetPanel({
       window.removeEventListener("wpay:deposit-address", loadAddresses);
       current = false;
     };
-  }, [active, code, wallet.configured]);
+  }, [active, code, wallet.configured, wallet.data]);
   async function copyAddress(address: string) {
     try {
       await navigator.clipboard.writeText(address);
@@ -364,6 +364,8 @@ export default function WalletAssetPanel({
                     ? portfolioExamples[network]
                     : addresses.find((row) => row.network === network &&
                         (provider ? row.provider === provider : !row.provider || row.provider === "goswap"));
+                  const providerBalance =
+                    item && "provider_available" in item ? item.provider_available : undefined;
                   return (
                     <button
                       key={network}
@@ -396,7 +398,7 @@ export default function WalletAssetPanel({
                               ? code === "USDT"
                                 ? portfolioExamples[network].amount
                                 : preview.amount
-                              : null,
+                              : providerBalance !== undefined ? Number(providerBalance) : null,
                             rate: demoPortfolio ? preview.rate : rate,
                           });
                         else if (provider) onDeposit(network);
@@ -432,7 +434,7 @@ export default function WalletAssetPanel({
                           aria-label={
                             demoPortfolio
                               ? "Пример баланса сети"
-                              : "Баланс сети пока недоступен"
+                              : providerBalance !== undefined ? "Доступно в Aura" : "Баланс сети пока недоступен"
                           }
                         >
                           {demoPortfolio
@@ -440,7 +442,7 @@ export default function WalletAssetPanel({
                               ? "$" +
                                 cryptoAmount(portfolioExamples[network].amount)
                               : cryptoAmount(preview.amount)
-                            : "—"}
+                            : providerBalance !== undefined ? `${cryptoAmount(providerBalance)} ${code}` : "—"}
                         </span>
                         <span className="mt-0.5 block text-[12px] leading-5 text-black/45 dark:text-white/45">
                           {wallet.depositModes[code]?.[network] === "exact"

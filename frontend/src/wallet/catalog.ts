@@ -47,6 +47,7 @@ export const currencyNames: Record<string, string> = {
 };
 export interface WalletAddress {
   provider?: string;
+  provider_available?: string;
   chain?: string;
   network: string;
   address: string;
