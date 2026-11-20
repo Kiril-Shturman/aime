@@ -13,9 +13,10 @@ from wallet_finance import finance_route,apply_aura_test_backing
 class TestCreditBackingTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.ledger=Ledger(self.tmp.name+'/db');prepare_inbox(self.ledger);prepare(self.ledger);self.ledger.account('tg:1')
+        self.goswap=SimpleNamespace(call=AsyncMock(return_value=[{'currency_code':'USDT','available':'30'}]))
         self.aura=SimpleNamespace(environment='test',get_balance=AsyncMock(return_value={'platform_balance':'1000'}))
         async def handler(request):
-            try:return await finance_route(request,'finance-adjustment','owner',request.headers.get('X-Test-Admin')=='yes',self.ledger,None,money,ApiError,aura_test_client=self.aura)
+            try:return await finance_route(request,'finance-adjustment','owner',request.headers.get('X-Test-Admin')=='yes',self.ledger,self.goswap,money,ApiError,aura_test_client=self.aura)
             except ApiError as e:return web.json_response({'error':e.name},status=e.status)
         app=web.Application();app.router.add_post('/adjust',handler)
         self.http=TestClient(TestServer(app));await self.http.start_server()
@@ -54,3 +55,21 @@ class TestCreditBackingTests(unittest.IsolatedAsyncioTestCase):
         replies=await asyncio.gather(self.adjust(),self.adjust())
         self.assertEqual(sorted(r.status for r in replies),[200,409])
         self.assertEqual(self.backed(),Decimal(20));self.assertEqual(self.ledger.balance('tg:1','USDT')[0],Decimal(20))
+
+    async def test_goswap_credit_checks_reserve_and_does_not_allocate_aura(self):
+        import asyncio
+
+        async def credit():
+            return await self.http.post('/adjust', json={
+                'account_id': 'tg:1', 'asset': 'USDT', 'amount': '20',
+                'reason': 'GoSwap reserve allocation', 'source': 'goswap',
+                'confirm': 'ADJUST tg:1 USDT 20 GOSWAP',
+            }, headers={'X-Test-Admin': 'yes'})
+
+        replies = await asyncio.gather(credit(), credit())
+        self.assertEqual(sorted(reply.status for reply in replies), [200, 409])
+        self.assertEqual(self.ledger.balance('tg:1', 'USDT')[0], Decimal('20'))
+        self.assertEqual(self.backed(), Decimal('0'))
+        self.aura.get_balance.assert_not_awaited()
+        event = self.ledger.db.execute("SELECT detail FROM wallet_events").fetchone()
+        self.assertEqual(json.loads(event['detail'])['source'], 'goswap')

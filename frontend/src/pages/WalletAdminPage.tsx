@@ -2016,6 +2016,7 @@ function AdminUserDrawer({
   const [actionWorking, setActionWorking] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [messageText, setMessageText] = useState("");
+  const [balanceSource, setBalanceSource] = useState("default");
   const [balanceAsset, setBalanceAsset] = useState("USDT");
   const [balanceAmount, setBalanceAmount] = useState("");
   const [balanceReason, setBalanceReason] = useState("");
@@ -2081,7 +2082,7 @@ function AdminUserDrawer({
     if (!normalizedAmount || !balanceReason.trim() || actionWorking) return;
     if (
       !window.confirm(
-        `Изменить баланс ${userId} на ${normalizedAmount} ${balanceAsset}?\n\nОперация попадёт в финансовый журнал и аудит.`,
+        `Изменить баланс ${userId} на ${normalizedAmount} ${balanceAsset}${balanceSource === "goswap" ? " из резерва GoSwap" : ""}?\n\nОперация попадёт в финансовый журнал и аудит.`,
       )
     )
       return;
@@ -2096,7 +2097,8 @@ function AdminUserDrawer({
           amount: normalizedAmount,
           reason: balanceReason.trim(),
           bucket: "available",
-          confirm: `ADJUST ${userId} ${balanceAsset} ${normalizedAmount}`,
+          source: balanceSource,
+          confirm: `ADJUST ${userId} ${balanceAsset} ${normalizedAmount}${balanceSource === "goswap" ? " GOSWAP" : ""}`,
         },
       );
       setActionNotice(
@@ -2364,6 +2366,11 @@ function AdminUserDrawer({
                       placeholder="Сумма: 10 или -10"
                     />
                   </div>
+                  <select value={balanceSource} onChange={(event) => setBalanceSource(event.target.value)}
+                    aria-label="Источник корректировки">
+                    <option value="default">Текущий резерв / внутренний учёт</option>
+                    <option value="goswap">Резерв GoSwap · начисление</option>
+                  </select>
                   <textarea
                     value={balanceReason}
                     onChange={(event) => setBalanceReason(event.target.value)}
@@ -2372,13 +2379,14 @@ function AdminUserDrawer({
                   />
                   <button
                     type="button"
-                    disabled={!balanceAmount.trim() || !balanceReason.trim() || Boolean(actionWorking)}
+                    disabled={!balanceAmount.trim() || !balanceReason.trim() || Boolean(actionWorking) ||
+                      (balanceSource === "goswap" && !(Number(balanceAmount.replace(",", ".")) > 0))}
                     onClick={() => void adjustBalance()}
                   >
                     {actionWorking === "adjust_balance" ? "Проводим…" : "Провести корректировку"}
                   </button>
                   <small>
-                    В тестовом контуре корректировка USDT использует доступный резерв Aura. GoSwap не ведёт отдельный баланс пользователя. Для остальных корректировок обеспечение проверяется сверкой.
+                    Для GoSwap wPay проверяет свободный резерв организации и начисляет средства пользователю. В тестовом контуре обычная корректировка USDT использует резерв Aura.
                   </small>
                 </div>
               </section>

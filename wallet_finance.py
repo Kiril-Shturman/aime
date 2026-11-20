@@ -135,6 +135,30 @@ def apply_aura_test_backing(ledger, target, amount, event_id, actor, platform):
     ledger.db.execute('INSERT INTO custody_test_allocation_audit VALUES (?,?,?,?,?,?,?,?,?,?)',(event_id,target,'test','USDT',str(delta),str(platform) if platform is not None else 'not_required',str(allocated),actor,'Back existing administrative TEST credit with Aura reserve; no additional user credit',time.time()))
 
 
+def require_goswap_credit_reserve(ledger, asset, credit, platform, error):
+    """Bound new credits by existing liabilities and a fresh organization balance."""
+    with localcontext() as ctx:
+        ctx.prec = 80
+        liabilities = D(0)
+        backing = {}
+        for row in ledger.db.execute(
+            "SELECT user_id,available FROM wallet_provider_positions "
+            "WHERE provider='aura' AND asset=?", (asset,),
+        ):
+            backing[row["user_id"]] = backing.get(row["user_id"], D(0)) + D(row["available"])
+        for row in ledger.db.execute(
+            "SELECT user_id,available,reserved FROM wallet_balances WHERE asset=?", (asset,),
+        ):
+            available = D(row["available"])
+            liabilities += available + D(row["reserved"]) - min(available, backing.get(row["user_id"], D(0)))
+        if platform < liabilities + credit:
+            raise error(
+                "GOSWAP_RESERVE_INSUFFICIENT",
+                "Свободного резерва GoSwap недостаточно для этого начисления.",
+                409,
+            )
+
+
 async def finance_route(
     request, action, uid, admin, ledger, provider, money, ApiError,
     audit_callback=None, aura_test_client=None,
@@ -153,7 +177,7 @@ async def finance_route(
         if not admin:
             raise ApiError("FORBIDDEN", "Только администратор", 403)
         body = await request.json()
-        if set(body) - {"account_id", "asset", "amount", "reason", "bucket", "confirm"}:
+        if not isinstance(body, dict) or set(body) - {"account_id", "asset", "amount", "reason", "bucket", "confirm", "source"}:
             raise ValueError("Unknown parameter")
         target = body.get("account_id")
         asset = str(body.get("asset", "")).upper()
@@ -170,7 +194,12 @@ async def finance_route(
         amount = money(confirmation_amount, positive=False)
         if not asset.isalnum() or not 2 <= len(asset) <= 12 or not amount:
             raise ValueError("Invalid adjustment")
+        source = body.get("source", "default")
+        if source not in ("default", "goswap"):
+            raise ValueError("Invalid correction source")
         confirmation = f"ADJUST {target} {asset} {confirmation_amount}"
+        if source == "goswap":
+            confirmation += " GOSWAP"
         if body.get("confirm") != confirmation:
             raise ApiError(
                 "CONFIRMATION_REQUIRED",
@@ -178,13 +207,23 @@ async def finance_route(
                 409,
             )
         bucket = body.get("bucket", "available")
-        test_backing = aura_test_client is not None and aura_test_client.environment == "test" and asset == "USDT" and bucket == "available"
+        goswap_credit = source == "goswap"
+        if goswap_credit and (bucket != "available" or amount <= 0):
+            raise ValueError("GoSwap source supports positive available credits only")
+        test_backing = not goswap_credit and aura_test_client is not None and aura_test_client.environment == "test" and asset == "USDT" and bucket == "available"
         platform = None
         if test_backing and amount > 0:
             from wallet_aura import _platform_balance
             platform = _platform_balance(await aura_test_client.get_balance())
+        if goswap_credit:
+            balances = await provider.call("getBalance")
+            platform = next((D(str(row["available"])) for row in balances if row["currency_code"] == asset), D(0))
+            if not platform.is_finite() or platform < 0:
+                raise ValueError("Invalid GoSwap balance")
         ledger.begin("admin_adjustment", uid, reason)
         try:
+            if goswap_credit:
+                require_goswap_credit_reserve(ledger, asset, amount, platform, ApiError)
             if bucket == "available":
                 available, reserved = ledger.balance(target, asset)
                 before, after = available, available + amount
@@ -207,7 +246,7 @@ async def finance_route(
                     str(amount),
                     "admin_adjustment",
                     time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-                    json.dumps({"reason": reason, "actor": uid, "bucket": bucket}),
+                    json.dumps({"reason": reason, "actor": uid, "bucket": bucket, "source": "goswap" if goswap_credit else "aura_test" if test_backing else "ledger"}),
                 ),
             )
             if test_backing:
@@ -220,7 +259,7 @@ async def finance_route(
                     detail={
                         "asset": asset, "amount": str(amount), "bucket": bucket,
                         "before": str(before), "after": str(after),
-                        "event_id": key, "reason_characters": len(reason),
+                        "event_id": key, "reason_characters": len(reason), "source": source,
                     },
                 )
             ledger.commit()
