@@ -22,3 +22,5 @@
   border-radius: 4px;
 }
 .wpay-exchange-asset-avatar .wpay-address-network-badge svg { width: 9px; height: 9px; }
+
+.wpay-exchange-asset-avatar { margin-inline-end: 4px; }
