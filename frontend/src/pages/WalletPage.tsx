@@ -1754,13 +1754,8 @@ function CryptoFlowPushView({
             {(["from", "to"] as const).map((side) => {
               const giving = side === "from",
                 asset = giving ? fromAsset : toAsset;
-              const routes = live.assetRoutes[asset.code] ?? [];
               const usdtNetwork = asset.code === "USDT" ? "BSC" : undefined;
-              const network = usdtNetwork
-                ? addressNetworkStandards[usdtNetwork]
-                : routes.length === 1
-                  ? addressNetworkNames[routes[0]] ?? routes[0]
-                  : null;
+              const network = usdtNetwork ? addressNetworkStandards[usdtNetwork] : null;
               return (
                 <section
                   key={side}
