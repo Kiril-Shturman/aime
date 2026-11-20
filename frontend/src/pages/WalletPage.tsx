@@ -2037,8 +2037,8 @@ function CryptoFlowPushView({
                         link
                         chevron={false}
                         onClick={() => selectExchangeAsset(item.code)}
-                        contentClassName="!h-[72px]"
-                        innerClassName="!h-[72px] !min-w-0 !py-2 after:!opacity-30"
+                        contentClassName="!h-16"
+                        innerClassName="!h-16 !min-w-0 !py-2 after:!opacity-30"
                         media={
                           <span
                             className="wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full [&>svg]:!h-6 [&>svg]:!w-6"
