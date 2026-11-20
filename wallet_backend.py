@@ -1565,17 +1565,87 @@ def install_wallet(app, root, owner_check):
         except ApiError as error:
             return {'ok': False, 'error': error.name, 'detail': error.detail}
 
+    def realized_service_profit(provider_name, environment=None):
+        total = Decimal('0')
+        operations = 0
+        for row in ledger.db.execute(
+                "SELECT event_id,detail FROM wallet_events WHERE detail LIKE '%service_fee%'"):
+            try:
+                detail = json.loads(row['detail'])
+                event_provider = str(
+                    detail.get('provider') or str(row['event_id']).split(':', 1)[0]
+                ).lower()
+                event_environment = str(detail.get('environment') or '').lower()
+                fee = Decimal(str(detail.get('service_fee', '0')))
+            except (InvalidOperation, TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if event_provider != provider_name or detail.get('status') != 'completed':
+                continue
+            if environment and event_environment != environment.lower():
+                continue
+            if not fee.is_finite() or fee <= 0:
+                continue
+            total += fee
+            operations += 1
+        return {
+            'asset': 'USDT', 'realized': str(total), 'operations': operations,
+            'basis': 'completed_service_fees',
+        }
+
+    def partner_balance(payload):
+        if isinstance(payload, list):
+            for item in payload:
+                if isinstance(item, dict) and str(
+                        item.get('currency_code') or item.get('asset') or '').upper() == 'USDT':
+                    return str(item.get('available', item.get('balance', '0')))
+        if isinstance(payload, dict):
+            candidates = [
+                payload.get('platform_balance'), payload.get('available'), payload.get('balance'),
+            ]
+            platform = payload.get('platform')
+            if isinstance(platform, dict):
+                candidates.extend([platform.get('available'), platform.get('balance')])
+            for value in candidates:
+                if value is not None and not isinstance(value, (dict, list)):
+                    return str(value)
+        raise ValueError('Partner balance is missing')
+
+    def card_summary(items):
+        statuses = defaultdict(int)
+        for item in items:
+            if isinstance(item, dict):
+                statuses[str(item.get('status') or 'unknown').lower()] += 1
+        return {'total': len(items), 'statuses': dict(sorted(statuses.items()))}
+
     async def admin_goswap():
         methods = {
             'account': ('getMe', {}), 'balance': ('getBalance', {}), 'currencies': ('getCurrencies', {}),
             'transactions': ('getTransactions', {'count': 100}), 'invoices': ('getInvoices', {'count': 100}),
             'transfers': ('getTransfers', {'count': 100}), 'withdrawals': ('getWithdrawals', {'count': 100}),
             'deposits': ('getDeposits', {'count': 100}), 'qrPayments': ('getQrPayments', {'count': 100}),
-            'rates': ('getExchangeRates', {}),
+            'rates': ('getExchangeRates', {}), 'cards': ('getCards', {'count': 1000, 'offset': 0}),
         }
         values = await asyncio.gather(*(safe_provider(method, params) for method, params in methods.values()))
+        snapshot = dict(zip(methods, values))
+        balance = snapshot['balance']
+        cards = snapshot['cards']
+        summary = {
+            'partner_balance': {
+                'ok': balance['ok'], 'asset': 'USDT',
+                **({'available': partner_balance(balance['result'])} if balance['ok'] else {
+                    'error': balance.get('detail') or balance.get('error'),
+                }),
+            },
+            'cards': {
+                'ok': cards['ok'],
+                **(card_summary(
+                    cards['result'].get('items', []) if isinstance(cards['result'], dict) else []
+                ) if cards['ok'] else {'error': cards.get('detail') or cards.get('error')}),
+            },
+            'profit': realized_service_profit('goswap'),
+        }
         catalog = [{'method': method, **spec} for method, spec in ADMIN_GOSWAP_METHODS.items()]
-        return {'snapshot': dict(zip(methods, values)), 'methods': catalog}
+        return {'summary': summary, 'snapshot': snapshot, 'methods': catalog}
 
     async def admin_goswap_action(request, admin_id):
         body = await request.json()
@@ -1606,10 +1676,35 @@ def install_wallet(app, root, owner_check):
         )
         return {'ok': True, 'method': method, 'result': result}
 
-    def admin_aura_console():
+    async def admin_aura_console():
+        balance = {'ok': False, 'asset': 'USDT', 'error': 'Aura не подключена'}
+        if aura_client.configured:
+            try:
+                balance = {
+                    'ok': True, 'asset': 'USDT',
+                    'available': partner_balance(await aura_client.get_balance()),
+                }
+            except (ApiError, TypeError, ValueError) as error:
+                balance = {
+                    'ok': False, 'asset': 'USDT',
+                    'error': getattr(error, 'detail', str(error))[:300],
+                }
+        rows = ledger.db.execute(
+            'SELECT status,COUNT(*) count FROM aura_cards WHERE environment=? GROUP BY status',
+            (aura_environment,),
+        ).fetchall()
+        statuses = {str(row['status'] or 'unknown').lower(): row['count'] for row in rows}
         return {
             'environment': aura_environment,
             'configured': aura_client.configured,
+            'summary': {
+                'partner_balance': balance,
+                'cards': {
+                    'ok': True, 'total': sum(statuses.values()),
+                    'statuses': dict(sorted(statuses.items())),
+                },
+                'profit': realized_service_profit('aura', aura_environment),
+            },
             'methods': [
                 {'method': method, **{
                     key: value for key, value in spec.items()
@@ -2067,7 +2162,7 @@ def install_wallet(app, root, owner_check):
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
                 return web.json_response(await admin_goswap_action(request, uid))
             if action == 'admin-aura-console' and request.method == 'GET':
-                return web.json_response(admin_aura_console())
+                return web.json_response(await admin_aura_console())
             if action == 'admin-aura-action' and request.method == 'POST':
                 return web.json_response(await admin_aura_action(request, uid))
             if action == 'admin-providers' and request.method == 'GET':

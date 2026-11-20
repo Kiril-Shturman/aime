@@ -72,6 +72,11 @@ class FakeProvider:
             return {'items': []}
         if method == 'getQrPayments':
             return {'items': self.payments}
+        if method == 'getCards':
+            return {'items': [
+                {'card_id': 1, 'status': 'active'},
+                {'card_id': 2, 'status': 'inactive'},
+            ]}
         if method == 'createQrQuote':
             return {'quote_id': 'q-one', 'amount': '9.13', 'asset': 'USDT', 'amount_rub': '700.00', 'merchant_name': 'Test shop', 'rate': '76.67', 'expires_at': '2099-01-01T00:00:00Z'}
         if method == 'payQr':
@@ -501,7 +506,13 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         admin = {'X-Telegram-Init-Data': init_data(321)}
         catalog = await self.client.get('/api/wallet/admin-goswap', headers=admin)
         self.assertEqual(catalog.status, 200)
-        methods = {item['method']: item for item in (await catalog.json())['methods']}
+        catalog_body = await catalog.json()
+        methods = {item['method']: item for item in catalog_body['methods']}
+        self.assertEqual(catalog_body['summary']['partner_balance']['available'], '10')
+        self.assertEqual(catalog_body['summary']['cards'], {
+            'ok': True, 'total': 2, 'statuses': {'active': 1, 'inactive': 1},
+        })
+        self.assertEqual(catalog_body['summary']['profit']['realized'], '0')
         for method in ('createCard', 'topUpCard', 'getCards', 'getCardOps', 'getCardDetails'):
             self.assertIn(method, methods)
         self.assertTrue(methods['createCard']['dangerous'])
@@ -522,6 +533,36 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(confirmed.status, 200)
         self.assertEqual((await confirmed.json())['result']['status'], 'processing')
         self.assertEqual(self.provider.calls[-1], ('createWithdrawal', params, True))
+
+    async def test_admin_aura_summary_counts_cards_and_realized_service_fees(self):
+        stamp = time.time()
+        self.ledger.db.execute(
+            'INSERT INTO aura_cards '
+            '(card_id,user_id,customer_id,environment,kind,status,frozen,masked_pan,'
+            'delivery_status,tracking,provider_updated_at,body,created_at,updated_at) '
+            'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            ('card-summary-test', 'tg:1', 'customer-1', 'test', 'virtual', 'opened', 0,
+             '411111******1111', None, None, None, '{}', stamp, stamp),
+        )
+        self.ledger.db.execute(
+            'INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)',
+            ('aura:test:card_issue:summary', 'tg:1', 'USDT', '-10', 'card_issue',
+             '2026-01-01T00:00:00+00:00', json.dumps({
+                 'status': 'completed', 'environment': 'test', 'service_fee': '2.5',
+             })),
+        )
+        response = await self.client.get(
+            '/api/wallet/admin-aura-console',
+            headers={'X-Telegram-Init-Data': init_data(321)},
+        )
+        self.assertEqual(response.status, 200, await response.text())
+        summary = (await response.json())['summary']
+        self.assertFalse(summary['partner_balance']['ok'])
+        self.assertEqual(summary['cards'], {
+            'ok': True, 'total': 1, 'statuses': {'opened': 1},
+        })
+        self.assertEqual(summary['profit']['realized'], '2.5')
+        self.assertEqual(summary['profit']['operations'], 1)
 
     async def test_admin_can_leave_only_usdt_trc20_and_server_enforces_it(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}

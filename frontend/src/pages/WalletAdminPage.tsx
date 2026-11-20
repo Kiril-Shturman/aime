@@ -138,7 +138,28 @@ type GoSwapMethod = {
   required: string[];
   example: Json;
 };
+type PartnerSummary = {
+  partner_balance: {
+    ok: boolean;
+    asset: string;
+    available?: string;
+    error?: string;
+  };
+  cards: {
+    ok: boolean;
+    total?: number;
+    statuses?: Record<string, number>;
+    error?: string;
+  };
+  profit: {
+    asset: string;
+    realized: string;
+    operations: number;
+    basis: string;
+  };
+};
 type GoSwapData = {
+  summary: PartnerSummary;
   snapshot: Record<string, GoSwapStatus>;
   methods: GoSwapMethod[];
 };
@@ -157,6 +178,7 @@ type AuraMethod = {
 type AuraConsoleData = {
   environment: string;
   configured: boolean;
+  summary: PartnerSummary;
   methods: AuraMethod[];
 };
 type BroadcastData = { items: Json[] };
@@ -1268,6 +1290,61 @@ function Aura({
   );
 }
 
+function PartnerEconomics({
+  summary,
+  label,
+}: {
+  summary: PartnerSummary;
+  label: string;
+}) {
+  const statuses = Object.entries(summary.cards.statuses ?? {});
+  return (
+    <section className="grid gap-3 sm:grid-cols-3">
+      <article className={card}>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+          {label} · Партнёрский аккаунт
+        </span>
+        <h2 className="mt-2 !text-2xl">
+          {summary.partner_balance.ok
+            ? `${amount(summary.partner_balance.available)} ${summary.partner_balance.asset}`
+            : "Недоступно"}
+        </h2>
+        <p className="mt-2 text-xs opacity-45">
+          {summary.partner_balance.ok
+            ? "Доступно у провайдера"
+            : summary.partner_balance.error || "Баланс не получен"}
+        </p>
+      </article>
+      <article className={card}>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+          Выпущено карт
+        </span>
+        <h2 className="mt-2 !text-2xl">
+          {summary.cards.ok ? amount(summary.cards.total ?? 0) : "Недоступно"}
+        </h2>
+        <p className="mt-2 text-xs opacity-45">
+          {summary.cards.ok
+            ? statuses.length
+              ? statuses.map(([status, count]) => `${status}: ${count}`).join(" · ")
+              : "Карт пока нет"
+            : summary.cards.error || "Список карт не получен"}
+        </p>
+      </article>
+      <article className={card}>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+          Наша прибыль
+        </span>
+        <h2 className="mt-2 !text-2xl">
+          {amount(summary.profit.realized)} {summary.profit.asset}
+        </h2>
+        <p className="mt-2 text-xs opacity-45">
+          Завершённые service fee · операций: {summary.profit.operations}
+        </p>
+      </article>
+    </section>
+  );
+}
+
 function AuraConsole({ data }: { data: AuraConsoleData }) {
   const [selected, setSelected] = useState(data.methods[0]?.method ?? "");
   const [draft, setDraft] = useState(() =>
@@ -1334,7 +1411,12 @@ function AuraConsole({ data }: { data: AuraConsoleData }) {
   }
 
   return (
-    <section className={`${card} !p-0 overflow-hidden`}>
+    <div className="space-y-4">
+      <PartnerEconomics
+        summary={data.summary}
+        label={`Aura ${data.environment.toUpperCase()}`}
+      />
+      <section className={`${card} !p-0 overflow-hidden`}>
       <div className="border-b border-[var(--admin-border)] p-5">
         <div className="wpay-admin-section-title !mb-0">
           <div>
@@ -1496,7 +1578,8 @@ function AuraConsole({ data }: { data: AuraConsoleData }) {
           <Empty />
         )}
       </div>
-    </section>
+      </section>
+    </div>
   );
 }
 
@@ -2687,6 +2770,7 @@ function GoSwap({ data }: { data: GoSwapData }) {
   }
   return (
     <div className="space-y-4">
+      <PartnerEconomics summary={data.summary} label="GoSwap LIVE" />
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Object.entries(data.snapshot).map(([name, value]) => (
           <article key={name} className={card}>
