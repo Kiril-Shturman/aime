@@ -1436,6 +1436,8 @@ test("exchange picker groups USDT networks and searches by network or ticker", a
   const networks = picker.locator('[aria-label="USDT"]');
   const coins = picker.locator('[aria-label="Другие валюты"]');
   await expect(networks.getByText("12.5", { exact: true })).toBeVisible();
+  await expect(networks.getByText("0", { exact: true })).toHaveCount(0);
+  await expect(networks.getByText("Баланс приложения", { exact: true })).toHaveCount(0);
   await expect(coins.getByText("BTC", { exact: true })).toBeVisible();
   const search = page.getByRole("textbox", { name: "Найти валюту" });
   await search.fill("btc");

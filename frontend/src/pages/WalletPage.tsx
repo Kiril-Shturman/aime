@@ -1709,7 +1709,6 @@ function CryptoFlowPushView({
     const query = pickerQuery.trim().toLowerCase();
     const matchesSearch = (value: string) => value.toLowerCase().includes(query);
     const tether = availableAssets.find((item) => item.code === "USDT");
-    const appUsdt = tether && matchesSearch("Tether USDT Баланс приложения") ? tether : undefined;
     const networks = (tether ? live.assetRoutes.USDT ?? [] : []).filter((network) =>
       matchesSearch(`Tether USDT ${network} ${addressNetworkNames[network] ?? ""} ${addressNetworkStandards[network] ?? ""}`),
     );
@@ -1718,7 +1717,7 @@ function CryptoFlowPushView({
     );
 
     const pickerGroups = [
-      { label: "USDT", items: appUsdt ? [appUsdt] : [], visible: Boolean(appUsdt || networks.length) },
+      { label: "USDT", items: [], visible: networks.length > 0 },
       { label: "Другие валюты", items: pickerAssets, visible: pickerAssets.length > 0 },
     ].filter((group) => group.visible);
 
@@ -2020,9 +2019,11 @@ function CryptoFlowPushView({
                             <span className="block truncate text-[17px] font-semibold">USDT · {addressNetworkStandards[network] ?? network}</span>
                             <span className="mt-0.5 block truncate text-[13px] text-black/45 dark:text-white/45">{addressNetworkNames[network] ?? network}</span>
                           </span>
-                          <span className="shrink-0 text-right text-[16px] font-medium tabular-nums">
-                            {usdtNetworkBalances[network] === undefined ? "—" : formatCrypto(usdtNetworkBalances[network])}
-                          </span>
+                          {usdtNetworkBalances[network] > 0 && (
+                            <span className="shrink-0 text-right text-[16px] font-medium tabular-nums">
+                              {formatCrypto(usdtNetworkBalances[network])}
+                            </span>
+                          )}
                         </span>
                       }
                     />
@@ -2053,7 +2054,7 @@ function CryptoFlowPushView({
                                 {item.name}
                               </span>
                               <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
-                                {item.code === "USDT" ? "Баланс приложения" : item.code}
+                                {item.code}
                               </span>
                             </span>
                             <span className="ml-auto text-right">
@@ -2071,9 +2072,11 @@ function CryptoFlowPushView({
                                   : "Нет данных"}
                               </span>
                             </span>
-                            <span className="flex w-5 shrink-0 items-center justify-center text-primary">
-                              {selected && <Check size={20} strokeWidth={2.5} />}
-                            </span>
+                            {selected && (
+                              <span aria-label="Выбрано" className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#007aff] text-white">
+                                <Check size={13} strokeWidth={3} aria-hidden="true" />
+                              </span>
+                            )}
                           </span>
                         }
                       />
