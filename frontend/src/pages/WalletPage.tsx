@@ -921,11 +921,11 @@ function AssetPushView({
     const run = ++depositRequest.current;
     const provider = network ? live.depositProviders[code]?.[network] : undefined;
     let selected = code === "RUB" || provider ? undefined : (addressEntry ?? undefined);
-    if (code !== "RUB" && network && !selected) {
+    if (code !== "RUB" && network && !provider && !selected) {
       setChoosingDeposit(true);
       try {
         selected =
-          (await resolveDeposit(code, network, live.demo, undefined, provider ? live.depositModes[code]?.[network] : undefined)) ?? undefined;
+          (await resolveDeposit(code, network, live.demo)) ?? undefined;
       } catch (error) {
         if (run === depositRequest.current)
           showNotice(
@@ -1296,6 +1296,7 @@ function DepositMethodsView({
   const [network, setNetwork] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const depositRouteKey = JSON.stringify(live.depositRoutes);
+  const providerRouteKey = JSON.stringify(live.depositProviders);
   useEffect(() => {
     const routes: Record<string, string[]> = JSON.parse(depositRouteKey);
     const code = flow?.assetCode;
@@ -1303,15 +1304,20 @@ function DepositMethodsView({
       code === "RUB"
         ? live.capabilities.sbp_buy
         : Boolean(code && routes[code]?.length);
+    controller.current?.abort();
+    setResolving(false);
+    const initialNetwork = code && flow?.network && routes[code]?.includes(flow.network)
+      ? flow.network
+      : null;
     setSelected(code && allowed ? code : null);
-    setEntry(allowed ? (flow?.depositAddress ?? null) : null);
-    setNetwork(allowed ? (flow?.network ?? null) : null);
+    setEntry(initialNetwork ? (flow?.depositAddress ?? null) : null);
+    setNetwork(initialNetwork);
     setDepositError(
       code && !allowed && live.ready
         ? "Пополнение этой монеты пока не подключено. Выберите доступную валюту."
         : "",
     );
-  }, [flow, depositRouteKey, live.capabilities.sbp_buy, live.ready]);
+  }, [flow, depositRouteKey, providerRouteKey, live.capabilities.sbp_buy, live.ready]);
   async function chooseNetwork(code: string, network: string) {
     if (resolving || !live.depositRoutes[code]?.includes(network)) return;
     controller.current?.abort();
@@ -1472,7 +1478,7 @@ function DepositMethodsView({
         </main>
       ) : selected ? (
         <LiveDepositPanel
-          defaultNetwork={network ?? flow?.network}
+          defaultNetwork={network ?? undefined}
           defaultAsset={selected}
           onAssetChange={chooseAsset}
           options={[sbpDepositAsset, ...depositAssets].map((item) => ({

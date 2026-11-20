@@ -1,6 +1,6 @@
 import WalletCryptoDeposit from "./WalletCryptoDeposit";
 import WalletSbpDeposit from "./WalletSbpDeposit";
-import { depositNetworks as networks, networkNames } from "../wallet/catalog";
+import { networkNames } from "../wallet/catalog";
 import WalletNetworkIcon from "./WalletNetworkIcon";
 import WalletSheetClose from "./WalletSheetClose";
 import {
@@ -48,9 +48,7 @@ export default function WalletDeposit({
   const wallet = useLiveWallet(),
     asset = defaultAsset;
   const meta = options.find((item) => item.code === asset);
-  const supported = (wallet.depositRoutes[asset] ?? []).filter((network) =>
-    (networks[asset] ?? []).includes(network),
-  );
+  const supported = wallet.depositRoutes[asset] ?? [];
   const [retryAt, setRetryAt] = useState(0);
   useEffect(() => {
     if (!retryAt) return;
@@ -97,6 +95,7 @@ export default function WalletDeposit({
     return () => window.clearInterval(timer);
   }, [deposit?.expires_at]);
   const mode = wallet.depositModes[asset]?.[network];
+  const provider = wallet.depositProviders[asset]?.[network];
   const available = supported.includes(network) && mode !== "disabled";
   const exact = mode ? mode === "exact" : network === "TRON";
   const numeric = Number(amount.replace(",", "."));
@@ -132,6 +131,7 @@ export default function WalletDeposit({
     }
   }
   useEffect(() => {
+    setDeposit(null);
     if (mode !== "address" || !available || !wallet.configured || !wallet.ready)
       return;
     const controller = new AbortController();
@@ -160,7 +160,7 @@ export default function WalletDeposit({
           setBusy(false);
       });
     return () => controller.abort();
-  }, [asset, network, mode, available, wallet.configured, wallet.ready]);
+  }, [asset, network, mode, provider, available, wallet.configured, wallet.ready]);
   function changeNetwork(code: string) {
     generation.current++;
     setNetwork(code);

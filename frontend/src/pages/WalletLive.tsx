@@ -208,8 +208,15 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
   );
   useEffect(() => {
     void refresh();
-    return () => walletRequestController.current?.abort();
-  }, [refresh]);
+    const refreshOnReturn = () => {
+      if (!demo && document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      walletRequestController.current?.abort();
+    };
+  }, [demo, refresh]);
   const balance = useCallback(
     (asset: string) =>
       data.balances.find((x) => x.asset === asset)?.available ?? "0",
