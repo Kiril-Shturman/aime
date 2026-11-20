@@ -1395,7 +1395,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         disabled = await self.wpay.post("/api/wallet/aura-deposit-address", headers=self.owner)
         self.assertEqual(disabled.status, 503)
         before = await self.wpay.get('/api/wallet/status')
-        self.assertEqual((await before.json())['deposit_modes']['USDT']['TRON'], 'disabled')
+        self.assertEqual((await before.json())['deposit_modes']['USDT']['TRON'], 'address')
         enabled = await self.wpay.post(
             "/api/wallet/admin-provider-route", headers=self.owner,
             json={"product": "crypto_deposit", "asset": "USDT", "network": "TRON",

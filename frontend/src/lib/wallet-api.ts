@@ -165,6 +165,7 @@ export interface WalletStatus {
   capabilities: WalletCapabilities;
   routes: { qr_pay: "aura" | "goswap" | null };
   asset_routes: Record<string, string[]>;
+  deposit_providers?: Record<string, Record<string, "wpay" | "aura" | "goswap">>;
   deposit_modes?: Record<
     string,
     Record<string, "address" | "exact" | "disabled">
@@ -186,6 +187,8 @@ export interface QrPayment {
   payment_id?: string;
 }
 export interface Deposit {
+  provider?: string;
+  chain?: string;
   min_deposit?: string;
   address?: string | null;
   network: string;

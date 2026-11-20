@@ -11,7 +11,7 @@ from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limit
 from wallet_key_export import prepare as prepare_key_export, route as key_export_route
 from wallet_exchange_funding import Funding
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
-from wallet_chain import ChainReader
+from wallet_chain import ASSET_NETWORKS as CUSTODY_ASSET_NETWORKS, ChainReader
 from wallet_aura_errors import wallet_error_payload
 import hashlib
 import hmac
@@ -59,6 +59,23 @@ WALLET_ASSET_NETWORKS = {
     'TRX': ('TRON',), 'BNB': ('BSC',), 'ETH': ('ETH',),
     'GRAM': ('TON',), 'SOL': ('SOL',), 'BTC': ('BTC',), 'XAUT': ('ETH',),
 }
+
+def deposit_provider_options(asset, network):
+    options = []
+    if network in CUSTODY_ASSET_NETWORKS.get(asset, ()):
+        options.append('wpay')
+    if network in DEPOSIT_NETWORKS.get(asset, ()):
+        options.append('goswap')
+    if (asset, network) == ('USDT', 'TRON'):
+        options.append('aura')
+    return options
+
+
+def default_deposit_provider(asset, network):
+    if asset == 'USDT':
+        return 'aura' if network == 'TRON' else 'goswap'
+    return 'wpay'
+
 
 ADMIN_GOSWAP_METHODS = {
     'getMe': {'title': 'Приложение', 'post': False, 'params': [], 'required': [], 'example': {}},
@@ -705,6 +722,10 @@ def install_wallet(app, root, owner_check):
         PRIMARY KEY(asset,network)
       );
     ''')
+    ledger.db.execute("""CREATE TABLE IF NOT EXISTS wallet_deposit_providers (
+        asset TEXT NOT NULL, network TEXT NOT NULL, provider TEXT NOT NULL,
+        PRIMARY KEY(asset, network)
+    )""")
     if not ledger.db.execute('SELECT 1 FROM wallet_asset_routes LIMIT 1').fetchone():
         stamp = now()
         ledger.db.executemany(
@@ -743,11 +764,23 @@ def install_wallet(app, root, owner_check):
     def is_admin(uid):
         return uid == 'owner' or (uid.startswith('tg:') and uid[3:] in admin_ids)
 
+    def deposit_provider(asset, network):
+        row = ledger.db.execute(
+            'SELECT provider FROM wallet_deposit_providers WHERE asset=? AND network=?',
+            (asset, network),
+        ).fetchone()
+        return row['provider'] if row else default_deposit_provider(asset, network)
+
     def asset_route_rows():
-        return [dict(row) for row in ledger.db.execute(
-            'SELECT asset,network,enabled,updated_at,updated_by FROM wallet_asset_routes '
-            'ORDER BY CASE asset WHEN \'USDT\' THEN 0 ELSE 1 END,asset,network'
+        rows = [dict(row) for row in ledger.db.execute(
+            "SELECT asset,network,enabled,updated_at,updated_by FROM wallet_asset_routes "
+            "ORDER BY CASE asset WHEN 'USDT' THEN 0 ELSE 1 END,asset,network"
         )]
+        for row in rows:
+            asset, network = row['asset'], row['network']
+            row['provider'] = deposit_provider(asset, network)
+            row['providers'] = deposit_provider_options(asset, network)
+        return rows
 
     def enabled_asset_routes():
         result = {}
@@ -1648,17 +1681,26 @@ def install_wallet(app, root, owner_check):
                     'aura' if aura_available and aura_products['qr_pay']
                     else 'goswap' if bool(token) else None
                 )
-                deposit_route = ledger.db.execute(
-                    "SELECT enabled FROM wallet_provider_routes WHERE product='crypto_deposit' "
-                    "AND asset='USDT' AND network='TRON' AND environment=? AND provider='aura'",
-                    (aura_environment,),
-                ).fetchone()
-                aura_address = bool(aura_enabled and aura_client.configured and deposit_route and deposit_route['enabled'])
+                deposit_modes, deposit_providers = {}, {}
+                for row in asset_route_rows():
+                    asset, network, selected = row['asset'], row['network'], row['provider']
+                    available = row['enabled'] and selected in row['providers'] and (
+                        (selected == 'aura' and aura_available and aura_products['crypto_processing'])
+                        or (selected == 'goswap' and bool(token))
+                        or (selected == 'wpay' and custody.configured and custody.chain_env == 'mainnet')
+                    )
+                    exact = selected == 'goswap' and network == 'TRON'
+                    deposit_modes.setdefault(asset, {})[network] = (
+                        ('exact' if exact else 'address') if available else 'disabled'
+                    )
+                    deposit_providers.setdefault(asset, {})[network] = selected
                 return web.json_response({
-                    'configured': bool(token) or bool(aura_enabled and aura_client.configured),
+                    'configured': bool(token) or bool(aura_enabled and aura_client.configured)
+                    or (custody.configured and custody.chain_env == 'mainnet'),
                     'telegram_auth': bool(bot_token),
                     'asset_routes': enabled_asset_routes(),
-                    'deposit_modes': {'USDT': {'TRON': 'address' if aura_address else 'exact' if token else 'disabled'}},
+                    'deposit_modes': deposit_modes,
+                    'deposit_providers': deposit_providers,
                     'capabilities': {
                         'cards': aura_available and aura_products['cards'],
                         'sbp_buy': aura_available and aura_products['sbp_buy'],
@@ -1823,6 +1865,23 @@ def install_wallet(app, root, owner_check):
                     except Exception:
                         ledger.rollback()
                         raise
+                elif set(body) == {'asset', 'enabled'} and type(body['enabled']) is bool:
+                    asset = str(body['asset']).upper()
+                    if asset not in WALLET_ASSET_NETWORKS:
+                        raise ApiError('INVALID_ASSET_ROUTE', 'Unsupported asset', 400)
+                    ledger.db.execute(
+                        'UPDATE wallet_asset_routes SET enabled=?,updated_at=?,updated_by=? WHERE asset=?',
+                        (int(body['enabled']), stamp, uid, asset),
+                    )
+                elif set(body) == {'asset', 'network', 'provider'}:
+                    asset, network, selected = str(body['asset']).upper(), str(body['network']).upper(), body['provider']
+                    if network not in WALLET_ASSET_NETWORKS.get(asset, ()) or selected not in deposit_provider_options(asset, network):
+                        raise ApiError('INVALID_ASSET_ROUTE', 'Unsupported deposit provider for this asset and network', 400)
+                    ledger.db.execute(
+                        'INSERT INTO wallet_deposit_providers VALUES (?,?,?) '
+                        'ON CONFLICT(asset,network) DO UPDATE SET provider=excluded.provider',
+                        (asset, network, selected),
+                    )
                 elif set(body) == {'asset', 'network', 'enabled'} \
                         and type(body['enabled']) is bool:
                     asset = str(body['asset']).upper()
@@ -1841,6 +1900,7 @@ def install_wallet(app, root, owner_check):
                     detail={
                         'preset': body.get('preset'), 'asset': body.get('asset'),
                         'network': body.get('network'), 'enabled': body.get('enabled'),
+                        'provider': body.get('provider'),
                     },
                 )
                 return web.json_response({
@@ -2413,6 +2473,8 @@ def install_wallet(app, root, owner_check):
                 ).fetchone()
                 if not active or not active['enabled']:
                     raise ApiError('ROUTE_DISABLED', 'Aura TRON deposits are disabled', 503)
+                if deposit_provider('USDT', 'TRON') != 'aura':
+                    raise ApiError('ROUTE_DISABLED', 'Для USDT TRC-20 выбран другой провайдер', 409)
                 require_asset_enabled('USDT', 'TRON')
                 result = await aura_service.get_or_create_deposit_address(uid, client_ref)
                 return web.json_response(result)
@@ -2443,6 +2505,8 @@ def install_wallet(app, root, owner_check):
                 ).fetchone()
                 if not active or not active['enabled']:
                     raise ApiError('ROUTE_DISABLED', 'Aura TRON deposits are disabled', 503)
+                if deposit_provider('USDT', 'TRON') != 'aura':
+                    raise ApiError('ROUTE_DISABLED', 'Для USDT TRC-20 выбран другой провайдер', 409)
                 require_asset_enabled('USDT', 'TRON')
                 if not await aura_client.product_enabled('crypto_processing'):
                     raise ApiError(
@@ -2465,26 +2529,45 @@ def install_wallet(app, root, owner_check):
                 response = web.json_response(await aura_client.get_deposit_fees())
                 response.headers['Cache-Control'] = 'no-store'
                 return response
-            if action == 'deposit' and request.method == 'POST' \
-                    and aura_enabled and aura_client.configured:
+            if action == 'deposit' and request.method == 'POST':
                 body = await request.json()
                 asset = str(body.get('asset', 'USDT')).upper()
                 network = str(body.get('network') or '').upper()
-                route = ledger.db.execute(
-                    "SELECT enabled FROM wallet_provider_routes WHERE product='crypto_deposit' "
-                    "AND asset='USDT' AND network='TRON' AND environment=? AND provider='aura'",
-                    (aura_environment,),
-                ).fetchone()
-                if asset == 'USDT' and network == 'TRON' and route and route['enabled']:
-                    require_asset_enabled(asset, network)
+                if network not in WALLET_ASSET_NETWORKS.get(asset, ()):
+                    raise ValueError('Пополнение этой валюты в выбранной сети не поддерживается')
+                require_asset_enabled(asset, network)
+                selected = deposit_provider(asset, network)
+                if selected not in deposit_provider_options(asset, network):
+                    raise ApiError('ROUTE_DISABLED', 'Пополнение этой монеты пока недоступно', 503)
+                if selected == 'wpay':
+                    if not custody.configured or custody.chain_env != 'mainnet':
+                        raise ApiError('NOT_CONFIGURED', 'Основная сеть кошельков wPay не подключена', 503)
+                    result = custody.create(uid, network)
+                    return web.json_response({**result, 'asset': asset})
+                if selected == 'aura':
+                    if not aura_enabled or not aura_client.configured:
+                        raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
                     if not await aura_client.product_enabled('crypto_processing'):
-                        raise ApiError(
-                            'crypto_processing_not_enabled',
-                            'Aura crypto processing is not enabled', 403,
-                        )
-                    return web.json_response(
-                        await aura_service.get_or_create_deposit_address(uid, client_ref)
-                    )
+                        raise ApiError('crypto_processing_not_enabled', 'Aura crypto processing is not enabled', 403)
+                    return web.json_response(await aura_service.get_or_create_deposit_address(uid, client_ref))
+                if not token:
+                    raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
+                if asset == 'USDT' and network != 'TRON':
+                    result = await provider.call('getClientAddress', {'client_ref': client_ref, 'network': network}, post=True)
+                    save_address(ledger, uid, result, asset)
+                    return web.json_response(result)
+                if network == 'TRON':
+                    exact_amount = money(body.get('amount'))
+                    if exact_amount < 1 or exact_amount.as_tuple().exponent < -6:
+                        raise ValueError('TRON: минимум 1 USDT, до 6 знаков после точки')
+                    if asset != 'USDT':
+                        raise ValueError('TRON поддерживает пополнение USDT')
+                    result = await provider.call('createExactDeposit', {'client_ref': client_ref, 'amount': str(money(body.get('amount'))), 'network': 'TRON', 'asset': 'USDT'}, post=True)
+                else:
+                    result = await provider.call('createDeposit', {'client_ref': client_ref, 'network': network, 'asset': asset}, post=True)
+                save_address(ledger, uid, result, asset)
+                ledger.db.execute('INSERT OR REPLACE INTO wallet_deposit_requests VALUES (?,?,?,?,?)',(str(result.get('claim_id') or uuid.uuid4().hex),uid,network,json.dumps(result),time.time()))
+                return web.json_response(result)
             if action == 'overview' and request.method == 'GET' and not token:
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Платёжный провайдер не подключён', 503)
@@ -2523,7 +2606,11 @@ def install_wallet(app, root, owner_check):
             }:
                 body = await request.json()
                 if action == 'address':
-                    require_asset_enabled(body.get('asset', 'USDT'), body.get('network'))
+                    asset, network = body.get('asset', 'USDT'), body.get('network')
+                    require_asset_enabled(asset, network)
+                    if asset == 'USDT' and network in {'BSC', 'ETH', 'TON', 'SOL'} \
+                            and deposit_provider(asset, network) != 'goswap':
+                        raise ApiError('ROUTE_DISABLED', 'Используйте реквизиты выбранного провайдера', 409)
                 elif action == 'withdrawal-estimate':
                     require_asset_enabled(body.get('asset'), body.get('network'))
                 elif action == 'withdrawal-create':
@@ -2588,29 +2675,6 @@ def install_wallet(app, root, owner_check):
                 elif isinstance(currencies, dict) and isinstance(currencies.get('items'), list):
                     currencies = {**currencies, 'items': [row for row in currencies['items'] if asset_enabled(row.get('code') or row.get('currency_code'))]}
                 return web.json_response(currencies)
-            if action == 'deposit' and request.method == 'POST':
-                body = await request.json()
-                network = body.get('network')
-                if network not in NETWORKS:
-                    raise ValueError('Выберите поддерживаемую сеть')
-                asset = str(body.get('asset', 'USDT')).upper()
-                if not re.fullmatch(r'[A-Z0-9]{2,12}', asset):
-                    raise ValueError('Некорректная валюта')
-                if network not in DEPOSIT_NETWORKS.get(asset, set()):
-                    raise ValueError('Пополнение этой валюты в выбранной сети не поддерживается')
-                require_asset_enabled(asset, network)
-                if network == 'TRON':
-                    exact_amount = money(body.get('amount'))
-                    if exact_amount < 1 or exact_amount.as_tuple().exponent < -6:
-                        raise ValueError('TRON: минимум 1 USDT, до 6 знаков после точки')
-                    if asset != 'USDT':
-                        raise ValueError('TRON поддерживает пополнение USDT')
-                    result = await provider.call('createExactDeposit', {'client_ref': client_ref, 'amount': str(money(body.get('amount'))), 'network': 'TRON', 'asset': 'USDT'}, post=True)
-                else:
-                    result = await provider.call('createDeposit', {'client_ref': client_ref, 'network': network, 'asset': asset}, post=True)
-                save_address(ledger, uid, result, asset)
-                ledger.db.execute('INSERT OR REPLACE INTO wallet_deposit_requests VALUES (?,?,?,?,?)',(str(result.get('claim_id') or uuid.uuid4().hex),uid,network,json.dumps(result),time.time()))
-                return web.json_response(result)
             if action == 'sync' and request.method == 'POST':
                 ledger.db.execute('CREATE TABLE IF NOT EXISTS wallet_deposit_sync_cursor (user_id TEXT PRIMARY KEY, offset INTEGER NOT NULL)')
                 progress = ledger.db.execute('SELECT offset FROM wallet_deposit_sync_cursor WHERE user_id=?', (uid,)).fetchone()

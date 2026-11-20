@@ -107,6 +107,13 @@ export default function WalletAssetPanel({
   onExchange: () => void;
 }) {
   const wallet = useLiveWallet();
+  const assetRoutes = wallet.assetRoutes[code] ?? [];
+  const providerRoutes = wallet.depositProviders[code];
+  const ownedNetworkKey = providerRoutes
+    ? (wallet.depositRoutes[code] ?? [])
+        .filter((network) => providerRoutes[network] === "wpay")
+        .join(",")
+    : undefined;
   const [ownedAvailable, setOwnedAvailable] = useState(false);
   const [allHistory, setAllHistory] = useState(false);
   const historySection = useRef<HTMLElement>(null);
@@ -339,23 +346,28 @@ export default function WalletAssetPanel({
               </p>
             )}
             <div className="wpay-portfolio-networks">
-              <WalletOwnedWallets
-                {...{ code, active, icon, color, iconColor }}
-                onAvailability={setOwnedAvailable}
-                onOpenAddress={onOpenAddress}
-              />
-              {(!ownedAvailable ? (wallet.assetRoutes[code] ?? []) : []).map(
+              {ownedNetworkKey !== "" && (
+                <WalletOwnedWallets
+                  {...{ code, active, icon, color, iconColor, ownedNetworkKey }}
+                  onAvailability={setOwnedAvailable}
+                  onOpenAddress={onOpenAddress}
+                />
+              )}
+              {assetRoutes.filter((network) =>
+                !ownedAvailable || (providerRoutes && providerRoutes[network] !== "wpay"),
+              ).map(
                 (network) => {
+                  const provider = wallet.depositProviders[code]?.[network];
                   const item = demoPortfolio
                     ? portfolioExamples[network]
-                    : addresses.find((row) => row.network === network);
+                    : provider ? undefined : addresses.find((row) => row.network === network);
                   return (
                     <button
                       key={network}
                       type="button"
                       aria-label={`Открыть адрес ${network}`}
                       disabled={
-                        !demoPortfolio &&
+                        provider ? !wallet.depositRoutes[code]?.includes(network) : !demoPortfolio &&
                         !(code === "USDT" && network === "TRON") &&
                         !item &&
                         (!(addressNetworks[code] ?? []).includes(network) ||
@@ -366,7 +378,8 @@ export default function WalletAssetPanel({
                       onClick={() => {
                         setAddressError("");
                         setCopiedAddress("");
-                        if (item)
+                        if (provider) onDeposit(network);
+                        else if (item)
                           onOpenAddress({
                             network,
                             address: item.address,

@@ -49,7 +49,8 @@ export default function WalletCryptoDeposit({
       setCopyTick((value) => value + 1);
     }
   }
-  const network = addressNetworkNames[entry.network] ?? entry.network;
+  const network = entry.chain === "nile" ? "TRON Nile (тестовая сеть)" :
+    (addressNetworkNames[entry.network] ?? entry.network);
   const standard = addressNetworkStandards[entry.network];
   return (
     <main className="mx-auto flex w-full max-w-[560px] flex-col gap-6 px-4 pb-28 pt-5 text-black dark:text-white">
@@ -140,6 +141,11 @@ export default function WalletCryptoDeposit({
           . Перевод в другой сети может привести к потере средств.
         </p>
       </div>
+      {entry.provider === "wpay" && (
+        <p className="px-2 text-[14px] text-black/45 dark:text-white/45">
+          Перевод поступит на ваш кошелёк в блокчейне. Его баланс отображается отдельно от общего баланса приложения.
+        </p>
+      )}
       {entry.min_deposit && code === "USDT" && (
         <p className="px-2 text-[14px] text-black/45 dark:text-white/45">
           Минимум пополнения: {entry.min_deposit} USDT. Переводы меньше минимума

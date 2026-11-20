@@ -70,6 +70,7 @@ interface WalletContextValue {
   qrProvider: "aura" | "goswap" | null;
   assetRoutes: Record<string, string[]>;
   depositRoutes: Record<string, string[]>;
+  depositProviders: NonNullable<WalletStatus["deposit_providers"]>;
   depositModes: Record<
     string,
     Record<string, "address" | "exact" | "disabled">
@@ -113,6 +114,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
     [depositRoutes, setDepositRoutes] = useState<Record<string, string[]>>(
       demo ? depositNetworks : {},
     ),
+    [depositProviders, setDepositProviders] = useState<NonNullable<WalletStatus["deposit_providers"]>>({}),
     [depositModes, setDepositModes] = useState<
       Record<string, Record<string, "address" | "exact" | "disabled">>
     >({}),
@@ -173,6 +175,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         setAssetRoutes(status.asset_routes ?? {});
         setDepositRoutes(availableDepositRoutes(status));
         setDepositModes(status.deposit_modes ?? {});
+        setDepositProviders(status.deposit_providers ?? {});
         if (!status.configured) {
           setData(empty);
           setReady(false);
@@ -243,6 +246,7 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
         assetRoutes,
         depositRoutes,
         depositModes,
+        depositProviders,
         loading,
         error,
         refresh,

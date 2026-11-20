@@ -46,6 +46,8 @@ export const currencyNames: Record<string, string> = {
   XAUT: "Tether Gold",
 };
 export interface WalletAddress {
+  provider?: string;
+  chain?: string;
   network: string;
   address: string;
   asset?: string;
@@ -79,6 +81,7 @@ export function isRecipientAddress(network: string, raw: string): boolean {
 /** Holdings and admin visibility do not imply a provider can receive this asset. */
 export function availableDepositRoutes(status: {
   asset_routes?: Record<string, string[]>;
+  deposit_providers?: Record<string, Record<string, string>>;
   deposit_modes?: Record<
     string,
     Record<string, "address" | "exact" | "disabled">
@@ -92,6 +95,7 @@ export function availableDepositRoutes(status: {
   for (const [asset, networks] of Object.entries(status.asset_routes ?? {})) {
     const active = networks.filter((network) => {
       const mode = status.deposit_modes?.[asset]?.[network];
+      if (status.deposit_providers) return mode === "address" || mode === "exact";
       if (mode === "disabled") return false;
       if (
         mode === "address" &&

@@ -9,6 +9,7 @@ export async function resolveDeposit(
   network: string,
   demo: boolean,
   signal?: AbortSignal,
+  mode?: "address" | "exact" | "disabled",
 ): Promise<WalletAddressSelection | null> {
   if (demo) {
     const sample = portfolioExamples[network];
@@ -23,10 +24,11 @@ export async function resolveDeposit(
         }
       : null;
   }
-  if (network === "TRON" || !depositNetworks[code]?.includes(network))
+  if (mode && mode !== "address") return null;
+  if (!mode && (network === "TRON" || !depositNetworks[code]?.includes(network)))
     return null;
   const result =
-    code === "USDT"
+    !mode && code === "USDT"
       ? await walletRequest<WalletAddress>("address", { network }, signal)
       : await walletRequest<WalletAddress>(
           "deposit",

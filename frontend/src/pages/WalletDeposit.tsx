@@ -207,6 +207,8 @@ export default function WalletDeposit({
         entry={{
           network,
           address: deposit.address,
+          provider: deposit.provider,
+          chain: deposit.chain,
           demo: false,
           amount: null,
           rate: null,

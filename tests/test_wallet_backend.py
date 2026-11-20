@@ -271,7 +271,7 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
     async def test_deposit_identity_is_server_owned(self):
         response = await self.client.post('/api/wallet/deposit', json={'asset': 'USDT', 'network': 'BSC', 'client_ref': 'attacker'}, headers=OWNER)
         self.assertEqual(response.status, 200)
-        call = [x for x in self.provider.calls if x[0] == 'createDeposit'][0]
+        call = [x for x in self.provider.calls if x[0] == 'getClientAddress'][0]
         self.assertEqual(call[1]['client_ref'], self.ledger.account('owner'))
         response = await self.client.post('/api/wallet/deposit', json={'asset': 'BTC', 'network': 'BSC'}, headers=OWNER)
         self.assertEqual(response.status, 400)
@@ -330,6 +330,30 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(confirmed.status, 200)
         self.assertEqual((await confirmed.json())['result']['status'], 'processing')
         self.assertEqual(self.provider.calls[-1], ('createWithdrawal', params, True))
+
+    async def test_admin_deposit_provider_defaults_switch_and_validation(self):
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        routes = (await (await self.client.get('/api/wallet/status')).json())['deposit_providers']
+        self.assertEqual(routes['USDT'], dict.fromkeys(('BSC', 'ETH', 'SOL', 'TON'), 'goswap') | {'TRON': 'aura'})
+        self.assertEqual(routes['BTC'], {'BTC': 'wpay'})
+        invalid = await self.client.post('/api/wallet/admin-assets', headers=admin, json={
+            'asset': 'BTC', 'network': 'BTC', 'provider': 'aura',
+        })
+        self.assertEqual(invalid.status, 400)
+        changed = await self.client.post('/api/wallet/admin-assets', headers=admin, json={
+            'asset': 'USDT', 'network': 'BSC', 'provider': 'wpay',
+        })
+        self.assertEqual(changed.status, 200, await changed.text())
+        response = await self.client.post('/api/wallet/address', headers=OWNER, json={'network': 'BSC'})
+        self.assertEqual(response.status, 409)
+        disabled = await self.client.post('/api/wallet/admin-assets', headers=admin, json={
+            'asset': 'USDT', 'enabled': False,
+        })
+        self.assertEqual(disabled.status, 200)
+        status = await (await self.client.get('/api/wallet/status')).json()
+        self.assertNotIn('USDT', status['asset_routes'])
+        self.assertEqual(status['deposit_providers']['USDT']['BSC'], 'wpay')
+        self.assertEqual(status['deposit_modes']['USDT']['BSC'], 'disabled')
 
     async def test_admin_can_leave_only_usdt_trc20_and_server_enforces_it(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}
@@ -581,6 +605,10 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('89'),Decimal('11')))
 
     async def test_exact_tron_rejects_invalid_precision_before_provider(self):
+        selected = await self.client.post('/api/wallet/admin-assets', headers=OWNER, json={
+            'asset': 'USDT', 'network': 'TRON', 'provider': 'goswap',
+        })
+        self.assertEqual(selected.status, 200, await selected.text())
         user={'X-Telegram-Init-Data':init_data(123)}
         for amount in ['0.9','1.0000001']:
             response=await self.client.post('/api/wallet/deposit',json={'asset':'USDT','network':'TRON','amount':amount},headers=user)

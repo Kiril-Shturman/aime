@@ -919,12 +919,13 @@ function AssetPushView({
   async function chooseDeposit(code: string, network?: string) {
     if (choosingDeposit) return;
     const run = ++depositRequest.current;
-    let selected = code === "RUB" ? undefined : (addressEntry ?? undefined);
+    const provider = network ? live.depositProviders[code]?.[network] : undefined;
+    let selected = code === "RUB" || provider ? undefined : (addressEntry ?? undefined);
     if (code !== "RUB" && network && !selected) {
       setChoosingDeposit(true);
       try {
         selected =
-          (await resolveDeposit(code, network, live.demo)) ?? undefined;
+          (await resolveDeposit(code, network, live.demo, undefined, provider ? live.depositModes[code]?.[network] : undefined)) ?? undefined;
       } catch (error) {
         if (run === depositRequest.current)
           showNotice(
@@ -1326,6 +1327,7 @@ function DepositMethodsView({
         network,
         live.demo,
         request.signal,
+        live.depositProviders[code]?.[network] ? live.depositModes[code]?.[network] : undefined,
       );
       if (request.signal.aborted) return;
       setNetwork(network);

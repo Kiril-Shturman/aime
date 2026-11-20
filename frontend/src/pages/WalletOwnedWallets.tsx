@@ -39,9 +39,11 @@ export default function WalletOwnedWallets({
   icon,
   color,
   iconColor,
+  ownedNetworkKey,
   onAvailability,
   onOpenAddress,
 }: {
+  ownedNetworkKey?: string;
   onAvailability: (available: boolean) => void;
   onOpenAddress: (entry: WalletAddressSelection) => void;
   code: string;
@@ -58,7 +60,8 @@ export default function WalletOwnedWallets({
   useEffect(() => {
     if (!active) return;
     onAvailability(false);
-    if (!networks[code]) return;
+    const selectedNetworks = ownedNetworkKey?.split(",").filter(Boolean) ?? networks[code];
+    if (!selectedNetworks?.length) return;
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const signal = controller.signal;
@@ -72,7 +75,7 @@ export default function WalletOwnedWallets({
           undefined,
           signal,
         );
-        if (!signal.aborted) setRows(result.items);
+        if (!signal.aborted) setRows(result.items.filter((row) => selectedNetworks.includes(row.network)));
       } catch (e) {
         if (!signal.aborted)
           setError(e instanceof Error ? e.message : "Баланс сети недоступен");
@@ -90,14 +93,14 @@ export default function WalletOwnedWallets({
         if (signal.aborted) return;
         if (!capability.configured) return;
         onAvailability(true);
-        if (!["mainnet", "testnet"].includes(capability.chain_env))
+        if (ownedNetworkKey !== undefined ? capability.chain_env !== "mainnet" : !["mainnet", "testnet"].includes(capability.chain_env))
           throw new Error("Сеть кошелька не определена");
         // Server controls ownership, environment and derivation. Repeat returns the same wallet.
         const created: Owned[] = [];
-        for (const network of networks[code]) {
+        for (const network of selectedNetworks) {
           const row = await walletRequest<Owned>(
-            "custody-wallet",
-            { network },
+            ownedNetworkKey === undefined ? "custody-wallet" : "deposit",
+            ownedNetworkKey === undefined ? { network } : { asset: code, network },
             signal,
           );
           if (
@@ -125,7 +128,7 @@ export default function WalletOwnedWallets({
       controller.abort();
       clearTimeout(timer);
     };
-  }, [active, code, retry, onAvailability]);
+  }, [active, code, retry, onAvailability, ownedNetworkKey]);
   if (!networks[code]) return null;
 
   return (

@@ -115,6 +115,8 @@ type CryptoData = {
     asset: string;
     network: string;
     enabled: number;
+    provider?: string;
+    providers?: string[];
     updated_at: string;
     updated_by: string;
   }[];
@@ -2503,6 +2505,17 @@ function Crypto({
       setWorkingRoute("");
     }
   }
+  const providerNames: Record<string, string> = {
+    wpay: "Кошельки wPay",
+    aura: "Aura",
+    goswap: "GoSwap",
+  };
+  const assets = new Map<string, CryptoData["asset_routes"]>();
+  for (const route of data.asset_routes ?? []) {
+    const routes = assets.get(route.asset) ?? [];
+    routes.push(route);
+    assets.set(route.asset, routes);
+  }
   const columns: AdminColumn[] = [
     { key: "rowid", label: "ID" },
     { key: "user_id", label: "Пользователь" },
@@ -2541,37 +2554,62 @@ function Crypto({
             {routeNotice}
           </p>
         )}
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {(data.asset_routes ?? []).map((route) => {
-            const key = `${route.asset}:${route.network}`;
+        <div className="grid items-start gap-3 lg:grid-cols-2">
+          {[...assets].map(([asset, routes]) => {
+            const enabled = routes.some((route) => route.enabled);
             return (
-              <button
-                key={key}
-                disabled={Boolean(workingRoute)}
-                onClick={() =>
-                  void updateAssets(
-                    {
-                      asset: route.asset,
-                      network: route.network,
-                      enabled: !Boolean(route.enabled),
-                    },
-                    key,
-                  )
-                }
-                className={`flex items-center justify-between rounded-xl border px-4 py-3 text-left disabled:opacity-40 ${route.enabled ? "border-emerald-500/40 bg-emerald-500/10" : "border-[var(--admin-border)] bg-[var(--admin-surface-muted)]"}`}
-              >
-                <span>
-                  <b className="block text-sm">{route.asset}</b>
-                  <small className="opacity-50">
-                    {route.network === "TRON" ? "TRC-20" : route.network}
-                  </small>
-                </span>
-                <span
-                  className={`rounded-full px-2 py-1 text-[10px] font-bold ${route.enabled ? "bg-emerald-500 text-white" : "bg-black/10 opacity-50 dark:bg-white/10"}`}
+              <div key={asset} className="relative rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface-muted)]">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label={`Доступность ${asset}`}
+                  aria-checked={enabled}
+                  disabled={Boolean(workingRoute)}
+                  onClick={() => void updateAssets({ asset, enabled: !enabled }, asset)}
+                  className={`absolute right-4 top-3 h-6 w-11 rounded-full p-0.5 transition-colors disabled:opacity-40 ${enabled ? "bg-blue-500" : "bg-gray-500"}`}
                 >
-                  {route.enabled ? "ON" : "OFF"}
-                </span>
-              </button>
+                  <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${enabled ? "translate-x-5" : ""}`} />
+                </button>
+                <details>
+                  <summary className="cursor-pointer rounded-xl px-4 py-3 pr-20 text-sm font-semibold">
+                    {asset}
+                  </summary>
+                  <div className="divide-y divide-[var(--admin-border)] border-t border-[var(--admin-border)] px-4">
+                    {routes.map((route) => {
+                      const key = `${asset}:${route.network}`;
+                      const network = route.network === "TRON" && asset === "USDT" ? "TRC-20" : route.network;
+                      const options = route.providers ?? [];
+                      return (
+                        <div key={key} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 py-3 text-sm">
+                          <span className="font-medium">{network}</span>
+                          <label className="flex items-center gap-2 text-xs">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(route.enabled)}
+                              disabled={Boolean(workingRoute)}
+                              onChange={(event) => void updateAssets({ asset, network: route.network, enabled: event.target.checked }, key)}
+                            />
+                            Сеть включена
+                          </label>
+                          <label className="col-span-2 flex flex-wrap items-center justify-between gap-2">
+                            <span className="text-xs opacity-70">Провайдер адреса</span>
+                            <select
+                              aria-label={`Провайдер адреса ${asset} ${network}`}
+                              value={options.includes(route.provider ?? "") ? route.provider : ""}
+                              disabled={Boolean(workingRoute) || options.length <= 1}
+                              onChange={(event) => void updateAssets({ asset, network: route.network, provider: event.target.value }, key)}
+                              className="rounded-lg border border-[var(--admin-border)] bg-[var(--admin-surface-muted)] px-3 py-1.5"
+                            >
+                              {!options.includes(route.provider ?? "") && <option value="">Недоступно</option>}
+                              {options.map((provider) => <option key={provider} value={provider}>{providerNames[provider]}</option>)}
+                            </select>
+                          </label>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </details>
+              </div>
             );
           })}
         </div>

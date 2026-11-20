@@ -18,6 +18,8 @@ import {
 } from "./WalletTransaction";
 
 export interface WalletAddressSelection {
+  provider?: string;
+  chain?: string;
   network: string;
   address: string;
   demo: boolean;
