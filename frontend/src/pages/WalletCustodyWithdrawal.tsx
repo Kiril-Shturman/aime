@@ -10,7 +10,7 @@ type Job = {
   amount: string;
   tx_hash: string | null;
   detail: string | null;
-  quote: { approval_id: string; max_fee: string; fee_currency: string; expires_at: number; source_address: string } | null;
+  quote: { approval_id: string; max_fee: string; fee_currency: string; estimated_total?: string; expires_at: number; source_address: string } | null;
 };
 type Status = { enabled: boolean; job: Job | null };
 const action = "custody-withdrawal";
@@ -86,9 +86,22 @@ export default function WalletCustodyWithdrawal({ asset, network }: { asset: str
       <p className="text-sm opacity-60">{networkNames[network] ?? network} · Собственный кошелёк</p>
       {job ? (
         <Card className="!m-0 !rounded-[28px]">
-          <p className="font-semibold">{job.amount} {asset}</p>
+          <p className="font-semibold">Получатель получит {job.amount} {asset}</p>
           <p className="break-all text-sm opacity-60">{job.recipient}</p>
-          {quote && <p className="mt-2 text-sm">{network === "TON" || network === "TRON" ? "Резерв на комиссию" : "Максимальная комиссия"} {quote.max_fee} {quote.fee_currency}</p>}
+          {quote && (
+            <dl className="mt-3 grid gap-2 text-sm">
+              <div className="flex justify-between gap-3">
+                <dt className="opacity-60">{network === "TON" || network === "TRON" ? "Резерв на комиссию" : "Максимальная комиссия"}</dt>
+                <dd>{quote.max_fee} {quote.fee_currency}</dd>
+              </div>
+              <div className="flex justify-between gap-3 font-semibold">
+                <dt>Сумма с учётом комиссии</dt>
+                <dd className="text-right">{quote.estimated_total
+                  ? `до ${quote.estimated_total} ${asset}`
+                  : `${job.amount} ${asset} + до ${quote.max_fee} ${quote.fee_currency}`}</dd>
+              </div>
+            </dl>
+          )}
           {statuses[job.state] && <p role="status" className="mt-2">{statuses[job.state]}</p>}
           {job.detail && <p className="mt-2 text-sm">{job.detail}</p>}
           {job.tx_hash && <p className="mt-2 break-all font-mono text-xs">{network === "TON" ? "Хеш сообщения: " : ""}{job.tx_hash}</p>}

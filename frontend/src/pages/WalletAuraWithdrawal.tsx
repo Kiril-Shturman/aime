@@ -83,7 +83,13 @@ export default function WalletAuraWithdrawal() {
         <input className="rounded-xl bg-black/5 p-3 dark:bg-white/10" inputMode="decimal"
           value={pending?.amount ?? amount} disabled={busy || Boolean(pending || status)} onChange={(event) => setAmount(event.target.value)} />
       </label>
-      {valid && fee && <p>Будет списано {total.toFixed(6).replace(/\.?0+$/, "")} USDT</p>}
+      {valid && fee && (
+        <dl className="grid gap-2 rounded-[20px] bg-black/5 p-4 text-sm dark:bg-white/10">
+          <div className="flex justify-between gap-3"><dt className="opacity-60">Получатель получит</dt><dd>{sum} USDT</dd></div>
+          <div className="flex justify-between gap-3"><dt className="opacity-60">Комиссия</dt><dd>{fee} USDT</dd></div>
+          <div className="flex justify-between gap-3 font-semibold"><dt>Всего к списанию</dt><dd>{total.toFixed(6).replace(/\.?0+$/, "")} USDT</dd></div>
+        </dl>
+      )}
       {options && !pending && Number(options.available) <= Number(fee) && <p>Доступного остатка не хватает на комиссию.</p>}
       {error && <p role="alert" className="text-red-500">{error}</p>}
       {status && <p role="status">{{ processing: "Вывод принят и проверяется", broadcast: "Перевод отправлен в сеть", completed: "Вывод подтверждён", failed: "Вывод отклонён, резерв возвращён" }[status] ?? "Заявка сохранена"}</p>}

@@ -3,7 +3,7 @@
 import re
 import time
 import uuid
-from decimal import Decimal
+from decimal import Decimal, localcontext
 
 from aiohttp import web
 from bip_utils import P2WPKHAddrDecoder
@@ -32,6 +32,12 @@ class CustodyWithdrawal:
             view["detail"] = f"На собственном кошельке недостаточно {row['asset']}."
         if row["error"] == "NO_GAS":
             view["detail"] = "Недостаточно валюты сети для оплаты комиссии."
+        quote = view["quote"]
+        if quote and quote.get("fee_currency") == row["asset"]:
+            with localcontext() as context:
+                context.prec = 50
+                total = Decimal(row["amount"]) + Decimal(quote["max_fee"])
+                quote["estimated_total"] = format(total, "f")
         return {**view, "recipient": row["recipient"], "amount": row["amount"], "asset": row["asset"]}
 
     @staticmethod
