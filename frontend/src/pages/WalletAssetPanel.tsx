@@ -438,7 +438,7 @@ export default function WalletAssetPanel({
                             : "—"}
                         </span>
                         <span className="mt-0.5 block text-[12px] leading-5 text-black/45 dark:text-white/45">
-                          {network === "TRON" && !demoPortfolio
+                          {wallet.depositModes[code]?.[network] === "exact"
                             ? "По точной сумме"
                             : item
                               ? item.address.slice(0, 7) +

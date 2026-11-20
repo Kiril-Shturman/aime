@@ -97,7 +97,7 @@ export default function WalletDeposit({
   const mode = wallet.depositModes[asset]?.[network];
   const provider = wallet.depositProviders[asset]?.[network];
   const available = supported.includes(network) && mode !== "disabled";
-  const exact = mode ? mode === "exact" : network === "TRON";
+  const exact = mode === "exact" || (!provider && !mode && network === "TRON");
   const numeric = Number(amount.replace(",", "."));
   async function create() {
     if (busy || !available || !wallet.configured || Date.now() < retryAt)
@@ -634,7 +634,9 @@ export default function WalletDeposit({
                             </span>
                             <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
                               {code}
-                              {code === "TRON" ? " · Точная сумма" : ""}
+                              {wallet.depositModes[asset]?.[code] === "exact"
+                                ? " · Точная сумма"
+                                : ""}
                             </span>
                           </span>
                           <span className="flex h-full w-6 shrink-0 items-center justify-center text-primary">
