@@ -1598,6 +1598,7 @@ def install_wallet(app, root, owner_check):
                 if isinstance(item, dict) and str(
                         item.get('currency_code') or item.get('asset') or '').upper() == 'USDT':
                     return str(item.get('available', item.get('balance', '0')))
+            return '0'
         if isinstance(payload, dict):
             candidates = [
                 payload.get('platform_balance'), payload.get('available'), payload.get('balance'),
