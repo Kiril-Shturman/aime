@@ -1,6 +1,6 @@
 """Isolated signer adapters. Import only in the operator process, never the web API.
 
-Only USDT.transfer to an independently verified FixedFloat pay address is allowed.
+Supports approved custody withdrawals and verified FixedFloat payments.
 Signed bytes are persisted by the controller before any broadcast.
 """
 import hashlib
@@ -19,7 +19,7 @@ from tronpy.proto import calculate_txid_from_raw_data
 from wallet_chain import ERC20, TRON_USDT, units
 
 URLS = {'ETH': 'https://ethereum-rpc.publicnode.com',
-        'BSC': 'https://bsc-rpc.publicnode.com', 'TRON': 'https://api.trongrid.io'}
+        'BSC': 'https://bsc-rpc.publicnode.com', 'TRON': 'https://api.trongrid.io', 'SOL': 'https://api.mainnet-beta.solana.com'}
 CHAIN_IDS = {'ETH': 1, 'BSC': 56}
 TRANSFER_TOPIC = keccak(text='Transfer(address,address,uint256)').hex()
 
@@ -146,39 +146,106 @@ class Chains:
                 'source_address': source, 'recipient': recipient, 'network': network, 'unsigned': unsigned}
 
     def estimate_bnb(self, source, recipient, amount):
-        network = 'BSC'
-        quantity = atomic(amount, 18)
+        return self.estimate_withdrawal('BNB', 'BSC', source, recipient, amount)
+
+    def bitcoin(self):
+        from wallet_signer_bitcoin import Bitcoin
+        return Bitcoin(atomic, units, PaymentError)
+
+    def solana(self):
+        from wallet_signer_solana import Solana
+        return Solana(lambda method, params: self.rpc('SOL', method, params), atomic, units, PaymentError)
+
+    def estimate_withdrawal(self, asset, network, source, recipient, amount):
+        if asset == 'BTC' and network == 'BTC':
+            return self.bitcoin().estimate(source, recipient, amount)
+        if asset == 'SOL' and network == 'SOL':
+            return self.solana().estimate(source, recipient, amount)
+        if asset == 'TRX' and network == 'TRON':
+            return self.estimate_trx(source, recipient, amount)
+        if (asset, network) not in {('BNB','BSC'), ('ETH','ETH'), ('XAUT','ETH')}:
+            raise ValueError('Unsupported custody withdrawal')
+        token = ERC20.get((network, asset))
+        decimals = token[1] if token else 18
+        quantity = atomic(amount, decimals)
         if int(self.rpc(network, 'eth_chainId', []), 16) != CHAIN_IDS[network]:
             raise PaymentError('RPC_UNAVAILABLE')
         recipient = to_checksum_address(recipient)
         native = int(self.rpc(network, 'eth_getBalance', [source, 'pending']), 16)
-        if native < quantity:
+        target, value, data = recipient, quantity, '0x'
+        balance = native
+        if token:
+            target, value, data = to_checksum_address(token[0]), 0, '0x' + calldata(network, recipient, quantity)
+            balance = int(self.rpc(network, 'eth_call', [
+                {'to': target, 'data': '0x70a08231' + source[2:].lower().rjust(64, '0')}, 'pending',
+            ]), 16)
+        if balance < quantity:
             raise PaymentError('NO_FUNDS')
         gas_price = int(self.rpc(network, 'eth_gasPrice', []), 16) * 12 // 10 + 1
         gas = int(self.rpc(network, 'eth_estimateGas', [
-            {'from': source, 'to': recipient, 'value': hex(quantity), 'data': '0x'},
+            {'from': source, 'to': target, 'value': hex(value), 'data': data},
         ]), 16) * 13 // 10 + 1
         if not 21000 <= gas <= 250000 or not 0 < gas_price <= 500_000_000_000:
             raise PaymentError('RPC_UNAVAILABLE')
         max_fee = gas * gas_price
-        if native < quantity + max_fee:
+        if native < value + max_fee:
             raise PaymentError('NO_GAS')
         unsigned = {
-            'chainId': CHAIN_IDS[network], 'to': recipient, 'value': quantity, 'data': '0x',
+            'chainId': CHAIN_IDS[network], 'to': target, 'value': value, 'data': data,
             'nonce': int(self.rpc(network, 'eth_getTransactionCount', [source, 'pending']), 16),
             'gas': gas, 'gasPrice': gas_price,
         }
         return {
-            'asset': 'BNB', 'amount': amount, 'native_balance': units(native, 18),
-            'max_fee': units(max_fee, 18), 'fee_currency': 'BNB', 'expires_at': int(time.time()) + 90,
-            'source_address': source, 'recipient': recipient, 'network': network, 'unsigned': unsigned,
+            'asset': asset, 'amount': amount, 'native_balance': units(native, 18),
+            'max_fee': units(max_fee, 18), 'fee_currency': 'BNB' if network == 'BSC' else 'ETH',
+            'expires_at': int(time.time()) + 90, 'source_address': source,
+            'recipient': recipient, 'network': network, 'unsigned': unsigned,
+        }
+
+    def estimate_trx(self, source, recipient, amount):
+        quantity = atomic(amount, 6)
+        if quantity >= 2**63:
+            raise ValueError('TRX amount out of range')
+        account = self.tron('/walletsolidity/getaccount', {'address': source, 'visible': True})
+        native = int(account.get('balance', 0))
+        if native < quantity:
+            raise PaymentError('NO_FUNDS')
+        fees = {row['key']: int(row.get('value', 0)) for row in
+                self.tron('/wallet/getchainparameters', {}).get('chainParameter', [])}
+        required = ('getTransactionFee', 'getCreateAccountFee', 'getCreateNewAccountFeeInSystemContract')
+        if any(fees.get(key, 0) <= 0 for key in required):
+            raise PaymentError('RPC_UNAVAILABLE')
+        # Budget activation even if the destination is already active.
+        maximum = (1024 * fees['getTransactionFee'] + fees['getCreateAccountFee']
+                   + fees['getCreateNewAccountFeeInSystemContract'])
+        if native < quantity + maximum:
+            raise PaymentError('NO_GAS')
+        now_ms = int(time.time() * 1000)
+        block = self.tron('/walletsolidity/getnowblock', {})['blockID']
+        unsigned = {
+            'ref_block_bytes': block[12:16], 'ref_block_hash': block[16:32],
+            'expiration': now_ms + 180000, 'timestamp': now_ms,
+            'contract': [{'type': 'TransferContract', 'parameter': {
+                'type_url': 'type.googleapis.com/protocol.TransferContract',
+                'value': {'owner_address': tronhex(source), 'to_address': tronhex(recipient), 'amount': quantity},
+            }}],
+        }
+        return {
+            'asset': 'TRX', 'amount': amount, 'native_balance': units(native, 6),
+            'max_fee': units(maximum, 6), 'fee_currency': 'TRX',
+            'expires_at': now_ms // 1000 + 90, 'source_address': source,
+            'recipient': recipient, 'network': 'TRON', 'unsigned': unsigned,
         }
 
     def sign(self, quote, private_key):
         if quote['expires_at'] <= time.time():
             raise PaymentError('QUOTE_EXPIRED')
         network, unsigned = quote['network'], quote['unsigned']
-        if network == 'TRON':
+        if network == 'BTC':
+            payload, txid = self.bitcoin().sign(quote, private_key)
+        elif network == 'SOL':
+            payload, txid = self.solana().sign(quote, private_key)
+        elif network == 'TRON':
             txid = calculate_txid_from_raw_data(unsigned)
             payload = {'txID': txid, 'raw_data': unsigned,
                        'signature': [TronKey(private_key).sign_msg_hash(bytes.fromhex(txid)).hex()]}
@@ -191,6 +258,10 @@ class Chains:
 
     def verify(self, quote, payload, txid):
         network, expected = quote['network'], quote['unsigned']
+        if network == 'BTC':
+            return self.bitcoin().verify(quote, payload, txid)
+        if network == 'SOL':
+            return self.solana().verify(quote, payload, txid)
         if network == 'TRON':
             if payload['raw_data'] != expected or calculate_txid_from_raw_data(expected) != txid or payload['txID'] != txid or len(payload['signature']) != 1:
                 raise ValueError('Signed TRON payload mismatch')
@@ -208,14 +279,27 @@ class Chains:
             raise ValueError('Signer ownership mismatch')
 
     def receipt(self, quote, txid):
-        """Only finalized/successful token Transfer logs count as payment."""
+        """Verify finalized inclusion and the expected asset movement."""
         network = quote['network']
+        if network == 'BTC':
+            return self.bitcoin().receipt(quote, txid)
+        if network == 'SOL':
+            return self.solana().receipt(quote, txid)
         if network == 'TRON':
             receipt = self.tron('/walletsolidity/gettransactioninfobyid', {'value': txid})
             if not receipt:
                 return None
             if receipt.get('id') != txid:
                 raise ValueError('Receipt mismatch')
+            if quote.get('asset') == 'TRX':
+                if receipt.get('result') == 'FAILED':
+                    raise PaymentError('TX_FAILED')
+                transaction = self.tron('/walletsolidity/gettransactionbyid', {'value': txid})
+                if transaction.get('txID') != txid or transaction.get('raw_data') != quote['unsigned']:
+                    return None
+                if (transaction.get('ret') or [{}])[0].get('contractRet') != 'SUCCESS':
+                    raise PaymentError('TX_FAILED')
+                return True
             if receipt.get('receipt', {}).get('result') != 'SUCCESS':
                 raise PaymentError('TX_FAILED')
             logs, contract = receipt.get('log', []), tronhex(TRON_USDT)[2:]
@@ -236,11 +320,12 @@ class Chains:
                 return None
             if int(receipt['status'], 16) != 1:
                 raise PaymentError('TX_FAILED')
-            if network == 'BSC' and quote.get('asset') == 'BNB':
+            if quote.get('asset') in {'BNB', 'ETH'}:
                 return True
-            logs, contract = receipt['logs'], ERC20[(network, 'USDT')][0][2:]
+            token = quote.get('asset', 'USDT')
+            logs, contract = receipt['logs'], ERC20[(network, token)][0][2:]
             source, target = quote['source_address'][2:], quote['recipient'][2:]
-            decimals = ERC20[(network, 'USDT')][1]
+            decimals = ERC20[(network, token)][1]
         quantity = atomic(quote['amount'], decimals)
         for log in logs:
             topics = [v.lower().removeprefix('0x') for v in log.get('topics', [])]
@@ -253,6 +338,10 @@ class Chains:
 
     def broadcast(self, quote, payload, txid):
         self.verify(quote, payload, txid)
+        if quote['network'] == 'BTC':
+            return self.bitcoin().broadcast(quote, payload, txid)
+        if quote['network'] == 'SOL':
+            return self.solana().broadcast(quote, payload, txid)
         if quote['network'] == 'TRON':
             if payload['raw_data']['expiration'] <= time.time() * 1000:
                 raise PaymentError('OUTCOME_UNKNOWN')

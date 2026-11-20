@@ -715,7 +715,8 @@ def install_wallet(app, root, owner_check):
     prepare_key_export(ledger)
     exchange_funding = Funding(ledger, exchange_orders, custody, enabled=os.environ.get('WPAY_WALLET_FUNDING_ENABLED','0') == '1')
     custody_withdrawal = CustodyWithdrawal(
-        exchange_funding, enabled=os.environ.get('WPAY_CUSTODY_BNB_WITHDRAWAL_ENABLED') == '1',
+        exchange_funding, enabled=os.environ.get('WPAY_CUSTODY_WITHDRAWAL_ENABLED') == '1',
+        bnb_enabled=os.environ.get('WPAY_CUSTODY_BNB_WITHDRAWAL_ENABLED') == '1',
     )
     app['wpay_exchange_funding'] = exchange_funding
     app['wpay_chain'] = ChainReader(ledger, ApiError)
@@ -1804,9 +1805,7 @@ def install_wallet(app, root, owner_check):
             custody_response = await custody_route(request, action, uid, custody)
             if custody_response is not None:
                 return custody_response
-            if action in {'custody-withdrawal-prepare', 'custody-withdrawal-confirm'}:
-                require_asset_enabled('BNB', 'BSC')
-            custody_withdrawal_response = await custody_withdrawal.route(request, action, uid)
+            custody_withdrawal_response = await custody_withdrawal.route(request, action, uid, require_asset_enabled)
             if custody_withdrawal_response is not None:
                 return custody_withdrawal_response
             funding_response = await exchange_funding.route(request, action, uid)

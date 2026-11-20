@@ -187,12 +187,21 @@ TRON address generation now uses BIP44 m/44'/195'/0'/0/0 (Bip44Coins.TRON),
 with independent seeds as for other networks. Mainnet and Nile are recorded in
 metadata. Generating an address does not activate a TRON account or pay energy.
 
-### Native BNB withdrawals
+### Withdrawals from wPay wallets
 
-The BSC form creates a native BNB transfer from the user's mainnet wallet.
-Set `WPAY_CUSTODY_BNB_WITHDRAWAL_ENABLED=1` on the web service after updating
-both the web release and the isolated signer. The signer must advertise
-`BNB_WITHDRAWAL` in its heartbeat. The withdrawal and exchange payment share
-the same active-job lock per wallet. The signer checks live balance and fee
-again after approval, persists the signed transaction before broadcasting,
-and waits for a finalized receipt. This path does not debit the wPay ledger.
+Set `WPAY_CUSTODY_WITHDRAWAL_ENABLED=1` after updating the web release and
+the isolated signer. Each asset requires the matching signer heartbeat
+capability. The existing BNB-only flag remains available.
+
+- BNB and ETH use native transfers. XAUT uses the configured Ethereum contract
+  and requires ETH to pay gas.
+- TRX uses a native transfer and budgets for recipient account activation.
+- SOL uses a recent blockhash and checks finalized signature status.
+- BTC uses confirmed outputs from the user's BIP84 wallet and currently
+  accepts mainnet P2WPKH destinations. Change returns to the source address.
+  The signer waits for six confirmations and rechecks the block hash.
+
+A withdrawal and an exchange payment share the same active-job lock per
+wallet. The signer persists the signed transaction before broadcast and
+reuses those signed bytes after an uncertain result. This path does not
+debit the wPay ledger.

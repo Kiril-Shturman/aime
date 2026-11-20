@@ -84,6 +84,84 @@ class SignerChainTests(unittest.TestCase):
         with patch.object(adapter, "rpc", side_effect=[receipt, {"number": "0x2"}, {"hash": "0xab"}]):
             self.assertTrue(adapter.receipt(quote, txid))
 
+    def test_ethereum_native_and_xaut_quotes_target_different_recipients(self):
+        from wallet_chain import ERC20
+
+        adapter = Chains()
+        source, recipient = '0x' + '1' * 40, '0x' + '2' * 40
+        results = {"eth_chainId": "0x1", "eth_getBalance": hex(10**19),
+                   "eth_gasPrice": hex(10**9), "eth_estimateGas": hex(65000),
+                   "eth_getTransactionCount": "0x1", "eth_call": hex(10**6)}
+        with patch.object(adapter, "rpc", side_effect=lambda net, method, params: results[method]):
+            native = adapter.estimate_withdrawal("ETH", "ETH", source, recipient, "0.1")
+            token = adapter.estimate_withdrawal("XAUT", "ETH", source, recipient, "0.1")
+        self.assertEqual(native["unsigned"]["value"], 10**17)
+        self.assertEqual(native["unsigned"]["to"].lower(), recipient)
+        self.assertEqual(token["unsigned"]["value"], 0)
+        self.assertEqual(token["unsigned"]["to"].lower(), ERC20[("ETH", "XAUT")][0])
+        self.assertEqual(token["unsigned"]["data"], "0x" + calldata("ETH", recipient, 100_000))
+        self.assertEqual(token["fee_currency"], "ETH")
+
+    def test_trx_native_signed_roundtrip(self):
+        adapter = Chains()
+        seed = b"4" * 32
+        key = Bip44.FromSeed(seed, Bip44Coins.TRON).DeriveDefaultPath().PrivateKey().Raw().ToBytes()
+        source = derive(seed, "TRON", "mainnet")["address"]
+        recipient = derive(b"5" * 32, "TRON", "mainnet")["address"]
+        params = [{"key": key, "value": fee} for key, fee in (
+            ("getTransactionFee", 1000), ("getCreateAccountFee", 100000),
+            ("getCreateNewAccountFeeInSystemContract", 1000000),
+        )]
+        with patch.object(adapter, "tron", side_effect=[{"balance": 10000000},
+                {"chainParameter": params}, {"blockID": "00" * 32}]):
+            quote = adapter.estimate_withdrawal("TRX", "TRON", source, recipient, "1")
+        payload, txid = adapter.sign(quote, key)
+        adapter.verify(quote, payload, txid)
+        self.assertEqual(quote["unsigned"]["contract"][0]["type"], "TransferContract")
+
+    def test_sol_signed_roundtrip_and_finalized_status(self):
+        from solders.hash import Hash
+
+        adapter = Chains()
+        seed = b"6" * 32
+        source = derive(seed, "SOL", "mainnet")["address"]
+        recipient = derive(b"7" * 32, "SOL", "mainnet")["address"]
+        with patch.object(adapter, "rpc", side_effect=[
+            "5eykt4UsFv8P8NJdTREpY1vzqKqZKvdpKuc147dw2dwy", {"value": 1000000000},
+            {"value": {"blockhash": str(Hash.new_unique()), "lastValidBlockHeight": 500}},
+            {"value": 5000},
+        ]):
+            quote = adapter.estimate_withdrawal("SOL", "SOL", source, recipient, "0.1")
+        payload, txid = adapter.sign(quote, seed)
+        adapter.verify(quote, payload, txid)
+        with patch.object(adapter, "rpc", return_value={"value": [{"confirmationStatus": "finalized", "err": None}]}):
+            self.assertTrue(adapter.receipt(quote, txid))
+
+    def test_btc_only_uses_owned_confirmed_inputs_and_verifies_witness(self):
+        from embit import ec, script
+        from embit.transaction import Transaction, TransactionInput, TransactionOutput
+        from wallet_signer_bitcoin import Bitcoin
+
+        adapter = Chains()
+        key = b"8" * 32
+        public = ec.PrivateKey(key).get_public_key()
+        prevout_script = script.p2wpkh(public)
+        source = prevout_script.address()
+        recipient = script.p2wpkh(ec.PrivateKey(b"9" * 32).get_public_key()).address()
+        parent = Transaction(vin=[TransactionInput(b"X" * 32, 0)],
+                             vout=[TransactionOutput(100000, prevout_script)])
+        utxos = [{"txid": parent.txid().hex(), "vout": 0, "value": 100000,
+                  "status": {"confirmed": True}}]
+        import json
+        with patch.object(Bitcoin, "request", side_effect=[json.dumps(utxos), '{"6":1}', parent.serialize().hex()]):
+            quote = adapter.estimate_withdrawal("BTC", "BTC", source, recipient, "0.0005")
+        payload, txid = adapter.sign(quote, key)
+        adapter.verify(quote, payload, txid)
+        self.assertEqual(quote["unsigned"]["quantity"], 50000)
+        self.assertEqual(quote["unsigned"]["change"], 49857)
+        with self.assertRaises(ValueError):
+            adapter.verify(dict(quote, recipient=source), payload, txid)
+
     def test_exact_atomic_precision(self):
         self.assertEqual(atomic('1.000001', 6), 1000001)
         for value in ['0', '-1', 'NaN', '1.0000001']:

@@ -6,6 +6,11 @@ import uuid
 from aiohttp import web
 
 NETWORKS={'BSC':'BNB','ETH':'ETH','TRON':'TRX'}
+CUSTODY_WITHDRAWAL_NETWORKS = {"BNB": "BSC", "ETH": "ETH", "XAUT": "ETH", "TRX": "TRON", "SOL": "SOL", "BTC": "BTC"}
+CUSTODY_WITHDRAWAL_CAPABILITIES = {
+    "BNB": "BNB_WITHDRAWAL", "ETH": "ETH_WITHDRAWAL",
+    "XAUT": "XAUT_WITHDRAWAL", "TRX": "TRX_WITHDRAWAL", "SOL": "SOL_WITHDRAWAL", "BTC": "BTC_WITHDRAWAL",
+}
 ACTIVE={'estimating','quoted','confirmed','signing','signed','broadcast','unknown'}
 ERRORS={
  'NO_FUNDS':'На собственном адресе недостаточно USDT. Баланс приложения здесь не используется.',
@@ -37,6 +42,10 @@ def prepare(ledger):
       CREATE TABLE IF NOT EXISTS custody_signer_status (worker_id TEXT PRIMARY KEY,networks TEXT NOT NULL,key_id TEXT NOT NULL,heartbeat_at REAL NOT NULL);
     ''')
 
+    columns = {row[1] for row in ledger.db.execute("PRAGMA table_info(custody_withdrawal_intents)")}
+    if "asset" not in columns:
+        ledger.db.execute("ALTER TABLE custody_withdrawal_intents ADD COLUMN asset TEXT NOT NULL DEFAULT 'BNB'")
+
 
 class Funding:
     def __init__(self,ledger,orders,custody,enabled=False):
@@ -54,10 +63,11 @@ class Funding:
                 'quote':shown,'tx_hash':row['tx_hash'],'error':row['error'],
                 'detail':ERRORS.get(row['error'],'Статус платежа уточняется' if row['error'] else None)}
 
-    def signer(self,network,native_bnb=False):
+    def signer(self,network,native_bnb=False,withdrawal_asset=None):
+        capability = CUSTODY_WITHDRAWAL_CAPABILITIES.get(withdrawal_asset or ("BNB" if native_bnb else ""))
         rows=self.ledger.db.execute('SELECT * FROM custody_signer_status WHERE heartbeat_at>?',(time.time()-45,)).fetchall()
         return any(r['key_id']==self.custody.key_id and network in json.loads(r['networks'])
-                   and (not native_bnb or 'BNB_WITHDRAWAL' in json.loads(r['networks'])) for r in rows)
+                   and (not capability or capability in json.loads(r['networks'])) for r in rows)
 
     def status(self,uid,intent_id):
         order=self.orders.owned(uid,intent_id)

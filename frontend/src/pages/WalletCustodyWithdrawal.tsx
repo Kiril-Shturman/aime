@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Button, Card } from "konsta/react";
 import { walletRequest } from "../lib/wallet-api";
-import { isRecipientAddress } from "../wallet/catalog";
+import { isRecipientAddress, networkNames } from "../wallet/catalog";
 
 type Job = {
   job_id: string;
@@ -10,7 +10,7 @@ type Job = {
   amount: string;
   tx_hash: string | null;
   detail: string | null;
-  quote: { approval_id: string; max_fee: string; expires_at: number; source_address: string } | null;
+  quote: { approval_id: string; max_fee: string; fee_currency: string; expires_at: number; source_address: string } | null;
 };
 type Status = { enabled: boolean; job: Job | null };
 const action = "custody-withdrawal";
@@ -28,7 +28,7 @@ const statuses: Record<string, string> = {
 };
 const inputClass = "rounded-xl bg-black/5 p-3 dark:bg-white/10";
 
-export default function WalletBnbWithdrawal() {
+export default function WalletCustodyWithdrawal({ asset, network }: { asset: string; network: string }) {
   const [status, setStatus] = useState<Status>();
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -40,7 +40,7 @@ export default function WalletBnbWithdrawal() {
 
   useEffect(() => {
     const controller = new AbortController();
-    const route = jobId ? `${action}?job_id=${encodeURIComponent(jobId)}` : action;
+    const route = `${action}?asset=${encodeURIComponent(asset)}${jobId ? "&job_id=" + encodeURIComponent(jobId) : ""}`;
     async function refresh() {
       try {
         const value = await walletRequest<Status>(route, undefined, controller.signal);
@@ -55,11 +55,13 @@ export default function WalletBnbWithdrawal() {
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [jobId, polling]);
+  }, [asset, jobId, polling]);
 
   const normalized = amount.trim().replace(",", ".");
-  const validAmount = /^\d{1,12}(?:\.\d{1,18})?$/.test(normalized) && /[1-9]/.test(normalized);
-  const valid = isRecipientAddress("BSC", address.trim()) && validAmount;
+  const precision = ({ TRX: 6, XAUT: 6, SOL: 9, BTC: 8 } as Record<string, number>)[asset] ?? 18;
+  const validAmount = new RegExp(`^\\d{1,12}(?:\\.\\d{1,${precision}})?$`).test(normalized) && /[1-9]/.test(normalized);
+  const validAddress = network === "BTC" ? /^bc1q[a-z0-9]{38}$/.test(address.trim()) : isRecipientAddress(network, address.trim());
+  const valid = validAddress && validAmount;
   const quote = job?.state === "quoted" ? job.quote : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -70,7 +72,7 @@ export default function WalletBnbWithdrawal() {
     try {
       const result = quote && job
         ? await walletRequest<Job>(action + "-confirm", { job_id: job.job_id, approval_id: quote.approval_id })
-        : await walletRequest<Job>(action + "-prepare", { address: address.trim(), amount: normalized });
+        : await walletRequest<Job>(action + "-prepare", { asset, address: address.trim(), amount: normalized });
       setStatus({ enabled: true, job: result });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось обновить заявку");
@@ -81,12 +83,12 @@ export default function WalletBnbWithdrawal() {
 
   return (
     <form onSubmit={submit} className="mx-auto grid w-full max-w-[560px] gap-4 px-4 py-6">
-      <p className="text-sm opacity-60">BNB Smart Chain · Собственный кошелёк</p>
+      <p className="text-sm opacity-60">{networkNames[network] ?? network} · Собственный кошелёк</p>
       {job ? (
         <Card className="!m-0 !rounded-[28px]">
-          <p className="font-semibold">{job.amount} BNB</p>
+          <p className="font-semibold">{job.amount} {asset}</p>
           <p className="break-all text-sm opacity-60">{job.recipient}</p>
-          {quote && <p className="mt-2 text-sm">Максимальная комиссия {quote.max_fee} BNB</p>}
+          {quote && <p className="mt-2 text-sm">Максимальная комиссия {quote.max_fee} {quote.fee_currency}</p>}
           {statuses[job.state] && <p role="status" className="mt-2">{statuses[job.state]}</p>}
           {job.detail && <p className="mt-2 text-sm">{job.detail}</p>}
           {job.tx_hash && <p className="mt-2 break-all font-mono text-xs">{job.tx_hash}</p>}
@@ -99,18 +101,18 @@ export default function WalletBnbWithdrawal() {
               onChange={(event) => setAddress(event.target.value)} disabled={busy} />
           </label>
           <label className="grid gap-2 text-sm">
-            Сумма BNB
+            Сумма {asset}
             <input className={inputClass} value={amount} inputMode="decimal"
               onChange={(event) => setAmount(event.target.value)} disabled={busy} />
           </label>
         </>
       )}
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
-      {status && !status.enabled && <p role="status">Подписант BNB сейчас недоступен.</p>}
+      {status && !status.enabled && <p role="status">Вывод {asset} сейчас недоступен.</p>}
       {(!job || quote) && (
         <Button type="submit" rounded data-wpay-primary=""
           disabled={busy || !status?.enabled || (!quote && !valid)}>
-          {busy ? "Проверяем…" : quote ? "Подтвердить вывод BNB" : "Рассчитать комиссию"}
+          {busy ? "Проверяем…" : quote ? `Подтвердить вывод ${asset}` : "Рассчитать комиссию"}
         </Button>
       )}
       {job && !quote && !pending.has(job.state) && (

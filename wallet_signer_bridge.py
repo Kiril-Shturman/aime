@@ -1,8 +1,10 @@
 """Private SSH bridge for the separate signer. Never mounted as a web route."""
 import base64
 import json
-import sqlite3
+import re
 import time
+
+from wallet_exchange_funding import CUSTODY_WITHDRAWAL_CAPABILITIES
 
 
 def bridge(db,body):
@@ -14,7 +16,7 @@ def bridge(db,body):
         return export_bridge(db,body)
     if op=='heartbeat':
         networks=body['networks']
-        if not isinstance(networks,list) or set(networks)-{'BSC','ETH','TRON','BNB_WITHDRAWAL'}:raise ValueError('Invalid networks')
+        if not isinstance(networks,list) or set(networks)-({'BSC','ETH','TRON','SOL','BTC'} | set(CUSTODY_WITHDRAWAL_CAPABILITIES.values())):raise ValueError('Invalid networks')
         db.execute('INSERT OR REPLACE INTO custody_signer_status VALUES (?,?,?,?)',(worker,json.dumps(networks),body['key_id'],time.time()))
         return {'ok':True}
     if op=='claim':
@@ -25,9 +27,14 @@ def bridge(db,body):
                 SELECT * FROM custody_funding_jobs j
                 WHERE state IN ('estimating','confirmed','signing','signed','broadcast','unknown')
                 AND lease_until<=? AND next_attempt_at<=?
-                AND (? OR NOT EXISTS (SELECT 1 FROM custody_withdrawal_intents w WHERE w.job_id=j.id))
+                AND (
+                    ?
+                    OR NOT EXISTS (SELECT 1 FROM custody_withdrawal_intents w WHERE w.job_id=j.id)
+                    OR EXISTS (SELECT 1 FROM custody_withdrawal_intents w
+                               WHERE w.job_id=j.id AND w.asset='BNB' AND ?)
+                )
                 ORDER BY next_attempt_at,created_at LIMIT 1
-            """,(time.time(),time.time(),body.get('native_bnb') is True)).fetchone()
+            """,(time.time(),time.time(),int(body.get('custody_withdrawals') is True),body.get('native_bnb') is True)).fetchone()
             if not row:db.execute('COMMIT');return {'job':None}
             db.execute("UPDATE custody_funding_jobs SET worker_id=?,lease_until=?,state=CASE WHEN state='confirmed' THEN 'signing' ELSE state END WHERE id=?",(worker,time.time()+120,row['id']))
             db.execute('COMMIT')
@@ -50,7 +57,7 @@ def bridge(db,body):
         return {'ok':True}
     if op=='signed':
         if row['state'] not in {'signing','signed','broadcast','unknown'}:raise ValueError('Not approved')
-        if not isinstance(body.get('payload'),dict) or len(json.dumps(body['payload']))>16384 or not isinstance(body.get('tx_hash'),str) or len(body['tx_hash']) not in {64,66}:raise ValueError('Invalid signed transaction')
+        if not isinstance(body.get('payload'),dict) or len(json.dumps(body['payload']))>16384 or not isinstance(body.get('tx_hash'),str) or not (re.fullmatch(r'[1-9A-HJ-NP-Za-km-z]{64,88}', body['tx_hash']) if row['network']=='SOL' else len(body['tx_hash']) in {64,66}):raise ValueError('Invalid signed transaction')
         db.execute("UPDATE custody_funding_jobs SET state='signed',signed_payload=?,tx_hash=?,updated_at=? WHERE id=? AND signed_payload IS NULL",(json.dumps(body['payload']),body['tx_hash'],time.time(),row['id']))
         stored=db.execute('SELECT signed_payload,tx_hash FROM custody_funding_jobs WHERE id=?',(row['id'],)).fetchone()
         return {'payload':json.loads(stored['signed_payload']),'tx_hash':stored['tx_hash']}

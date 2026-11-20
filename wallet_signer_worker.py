@@ -11,13 +11,15 @@ from decimal import Decimal
 from pathlib import Path
 
 import requests
-from bip_utils import Bip44, Bip44Coins
+from bip_utils import Bip44, Bip44Coins, Bip84, Bip84Coins
 from nacl.public import SealedBox
 
 from wallet_custody import decode, fingerprint
 from wallet_custody_tools import load_private, verify_wallet
 from wallet_fixedfloat_orders import Orders, address
 from wallet_signer_chains import Chains, PaymentError, atomic
+from wallet_exchange_funding import CUSTODY_WITHDRAWAL_NETWORKS, CUSTODY_WITHDRAWAL_CAPABILITIES
+from wallet_custody_withdrawal import CustodyWithdrawal
 
 
 def canonical(value):
@@ -101,13 +103,14 @@ class Controller:
         job, wallet, withdrawal = item['job'], item['wallet'], item['withdrawal']
         if (
             job['id'] != withdrawal['job_id'] or job['wallet_id'] != wallet['id']
-            or job['user_id'] != wallet['user_id'] or job['network'] != 'BSC'
-            or wallet['network'] != 'BSC' or wallet['chain_env'] != 'mainnet'
+            or job['user_id'] != wallet['user_id']
+            or CUSTODY_WITHDRAWAL_NETWORKS.get(withdrawal['asset']) != job['network']
+            or wallet['network'] != job['network'] or wallet['chain_env'] != 'mainnet'
             or wallet['key_id'] != self.key_id
         ):
             raise ValueError('Invalid BNB withdrawal binding')
         return {
-            'pay_address': '0x' + address('BSC', withdrawal['recipient']),
+            'pay_address': CustodyWithdrawal.recipient(job['network'], withdrawal['recipient']),
             'from_amount': withdrawal['amount'],
         }
 
@@ -116,7 +119,8 @@ class Controller:
         binding = {'job_id': job['id'], 'intent_id': job['intent_id'], 'user_id': job['user_id'],
                    'wallet_id': wallet['id']}
         if 'withdrawal' in item:
-            binding['kind'] = 'bnb_withdrawal'
+            binding['kind'] = 'custody_withdrawal'
+            binding['asset'] = item['withdrawal']['asset']
         else:
             binding['provider_id'] = item['order']['provider_id']
         return binding
@@ -124,7 +128,8 @@ class Controller:
     def estimate(self, item, instructions):
         job, wallet = item['job'], item['wallet']
         if 'withdrawal' in item:
-            quote = self.chains.estimate_bnb(wallet['address'], instructions['pay_address'], instructions['from_amount'])
+            quote = self.chains.estimate_withdrawal(item['withdrawal']['asset'], job['network'], wallet['address'],
+                                                    instructions['pay_address'], instructions['from_amount'])
             quote['recipient'] = instructions['pay_address']
             return quote
         return self.chains.estimate(job['network'], wallet['address'], instructions['pay_address'],
@@ -138,7 +143,12 @@ class Controller:
         if not hmac.compare_digest(self.seal(clean), quote['seal']):
             raise ValueError('Approval tampered')
         wallet = item['wallet']
-        if quote['binding'] != self.approval_binding(item) or quote['network'] != wallet['network'] or quote['source_address'] != wallet['address']:
+        binding = self.approval_binding(item)
+        legacy = 'withdrawal' in item and item['withdrawal']['asset'] == 'BNB' and quote['binding'].get('kind') == 'bnb_withdrawal'
+        if legacy:
+            binding = {**binding, 'kind': 'bnb_withdrawal'}
+            del binding['asset']
+        if quote['binding'] != binding or quote['network'] != wallet['network'] or quote['source_address'] != wallet['address']:
             raise ValueError('Approval belongs to another job')
 
     def key(self, wallet):
@@ -147,6 +157,10 @@ class Controller:
         document = json.loads(SealedBox(self.private).decrypt(wallet['encrypted_secret']))
         seed = decode(document['seed'])
         try:
+            if wallet['network'] == 'SOL':
+                return seed
+            if wallet['network'] == 'BTC':
+                return Bip84.FromSeed(seed, Bip84Coins.BITCOIN).DeriveDefaultPath().PrivateKey().Raw().ToBytes()
             coin = {'TRON': Bip44Coins.TRON, 'ETH': Bip44Coins.ETHEREUM, 'BSC': Bip44Coins.BINANCE_SMART_CHAIN}[wallet['network']]
             return Bip44.FromSeed(seed, coin).DeriveDefaultPath().PrivateKey().Raw().ToBytes()
         finally:
@@ -188,16 +202,18 @@ class Controller:
                 raise ValueError('Payment instructions changed')
             # Re-estimation validates live balances, nonce, fee and execution; never silently alter approval.
             current = self.estimate(item, fresh)
-            if job['network'] != 'TRON' and (current['unsigned']['nonce'] != quote['unsigned']['nonce']):
+            if job['network'] in {'BSC','ETH'} and (current['unsigned']['nonce'] != quote['unsigned']['nonce']):
                 raise PaymentError('QUOTE_EXPIRED')
             if Decimal(current['max_fee']) > Decimal(quote['max_fee']):
                 raise PaymentError('QUOTE_EXPIRED')
-            if 'withdrawal' in item:
+            if 'withdrawal' in item and job['network'] in {'BSC','ETH'}:
                 if current['unsigned']['gas'] > quote['unsigned']['gas']:
                     raise PaymentError('QUOTE_EXPIRED')
                 approved_cost = quote['unsigned']['value'] + quote['unsigned']['gas'] * quote['unsigned']['gasPrice']
                 if atomic(current['native_balance'], 18) < approved_cost:
                     raise PaymentError('NO_GAS')
+            if job['network'] == 'BTC' and current['unsigned'] != quote['unsigned']:
+                raise PaymentError('QUOTE_EXPIRED')
             private_key = self.key(wallet)
             try:
                 payload, txid = self.chains.sign(quote, private_key)
@@ -239,11 +255,11 @@ class Controller:
             self.bridge('export-complete', job_id=job['id'], ciphertext=None)
 
     def cycle(self):
-        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'BNB_WITHDRAWAL'], key_id=self.key_id)
+        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'SOL', 'BTC', *CUSTODY_WITHDRAWAL_CAPABILITIES.values()], key_id=self.key_id)
         export = self.bridge('export-claim')
         if export.get('job'):
             self.process_export(export)
-        item = self.bridge('claim', native_bnb=True)
+        item = self.bridge('claim', custody_withdrawals=True)
         if item.get('job'):
             self.process(item)
 

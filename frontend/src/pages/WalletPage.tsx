@@ -129,7 +129,7 @@ type Action = {
 };
 
 import WalletAuraWithdrawal from "./WalletAuraWithdrawal";
-import WalletBnbWithdrawal from "./WalletBnbWithdrawal";
+import WalletCustodyWithdrawal from "./WalletCustodyWithdrawal";
 import WalletAssetPanel from "./WalletAssetPanel";
 import {
   WalletLiveProvider,
@@ -2098,8 +2098,8 @@ function WithdrawalMethodsView({
     content = (
       <UsdtNetworkPicker networks={enabledNetworks} onSelect={setNetwork} />
     );
-  } else if (coin?.code === "BNB") {
-    content = <WalletBnbWithdrawal />;
+  } else if (coin && ["BNB", "ETH", "TRX", "XAUT", "SOL", "BTC"].includes(coin.code)) {
+    content = <WalletCustodyWithdrawal key={coin.code} asset={coin.code} network={live.assetRoutes[coin.code][0]} />;
   } else if (coin) {
     content = <p role="status" className="mx-auto max-w-[560px] px-5 py-6 text-center text-sm opacity-60">
       Вывод {coin.code} с собственного кошелька wPay пока недоступен.
