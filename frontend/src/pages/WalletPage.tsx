@@ -1754,6 +1754,12 @@ function CryptoFlowPushView({
             {(["from", "to"] as const).map((side) => {
               const giving = side === "from",
                 asset = giving ? fromAsset : toAsset;
+              const routes = live.assetRoutes[asset.code] ?? [];
+              const network = asset.code === "USDT"
+                ? "Баланс приложения"
+                : routes.length === 1
+                  ? addressNetworkNames[routes[0]] ?? routes[0]
+                  : null;
               return (
                 <section
                   key={side}
@@ -1816,8 +1822,9 @@ function CryptoFlowPushView({
                       >
                         {asset.icon}
                       </span>
-                      <span className="text-[18px] font-semibold">
-                        {asset.code}
+                      <span className="text-left">
+                        <span className="block text-[18px] font-semibold leading-tight">{asset.code}</span>
+                        {network && <span className="block text-xs text-black/45 dark:text-white/45">{network}</span>}
                       </span>
                       <ChevronRight className="rotate-90 text-[16px] text-black/35 dark:text-white/35" />
                     </button>
