@@ -254,9 +254,13 @@
   opacity: 1;
 }
 .wpay-card-design--usa:has(.wpay-card-face-plus) .wpay-card-face-status,
-.wpay-card-design--usa .wpay-card-face-bottom:has(.wpay-card-face-plus) > span:first-child {
+.wpay-card-design--usa .wpay-card-face-bottom:has(.wpay-card-face-plus) .wpay-card-face-kind {
   display: none;
 }
 .wpay-card-design--usa .wpay-card-face-plus {
   margin-inline-start: auto;
+}
+.wpay-card-design--usa .wpay-card-face-number {
+  font-weight: 700;
+  text-shadow: 0 1px 3px #050e22, 0 0 6px #050e22;
 }
