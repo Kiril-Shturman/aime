@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type PointerEvent } from "react";
 import {
   Activity, ChevronRight, ReceiptText, Search, SlidersHorizontal, TrendingUp, X,
 } from "lucide-react";
@@ -80,6 +80,8 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
   const [days, setDays] = useState(7);
   const [selected, setSelected] = useState("");
   const gradient = useId();
+  const plot = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(360);
   const [highlight, setHighlight] = useState<number | null>(null);
   const [metric, setMetric] = useState<"volume" | "revenue">("volume");
   const assets = [...new Set(daily.map(row => row.asset))].sort();
@@ -98,10 +100,27 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
   const floor = Math.min(0, ...values);
   const range = ceiling - floor || 1;
   const chartLabel = metric === "volume" ? "Оборот" : "Доход от комиссий";
-  const x = (index: number) => 4 + index * (892 / (series.length - 1));
-  const y = (value: number) => 175 - (value - floor) / range * 147;
+  const hasData = total.count !== 0 || values.some(value => value !== 0);
+  useEffect(() => {
+    const element = plot.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(Math.max(150, Math.round(entry.contentRect.width))));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [hasData]);
+  const axis = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 2 });
+  const right = width - 52;
+  const x = (index: number) => 8 + index * (right - 8) / (series.length - 1);
+  const y = (value: number) => 152 - (value - floor) / range * 134;
   const line = series.map((row, index) => `${x(index)},${y(row[metric])}`).join(" ");
-  const point = highlight === null ? null : series[highlight];
+  const index = highlight === null ? null : Math.min(highlight, series.length - 1);
+  const point = index === null ? null : series[index];
+  const selectPoint = (event: PointerEvent<SVGSVGElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const position = (event.clientX - bounds.left) / bounds.width * width;
+    const day = Math.round((position - 8) / (right - 8) * (series.length - 1));
+    setHighlight(Math.min(series.length - 1, Math.max(0, day)));
+  };
   return (
     <section className="admin-ops-panel" aria-labelledby="ops-chart-title">
       <header className="admin-ops-header">
@@ -123,27 +142,38 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
         <div><span><TrendingUp size={15} /> Доход от комиссий</span><strong>{fmt.format(total.revenue)} <small>{asset}</small></strong></div>
         <div><span><ReceiptText size={15} /> Выполнено операций</span><strong>{fmt.format(total.count)}</strong></div>
       </div>
-      {total.count === 0 && values.every(value => value === 0) ? <p className="admin-ops-empty">За этот период завершённых операций нет.</p> : (
-        <div className="admin-ops-plot">
-          <div className="admin-ops-chart-caption">
-            {point ? `${dayFmt.format(new Date(point.day))} · ${fmt.format(point[metric])} ${asset}` : `${chartLabel} по дням`}
+      {!hasData ? <p className="admin-ops-empty">За этот период завершённых операций нет.</p> : (
+        <div className="admin-ops-plot" ref={plot}>
+          <div className="admin-ops-chart-caption" aria-live="polite">
+            <span>{point ? dayFmt.format(new Date(point.day)) : `${chartLabel} по дням`}</span>
+            {point && <strong>{fmt.format(point[metric])} {asset}</strong>}
           </div>
-          <svg className="admin-ops-chart" preserveAspectRatio="none" viewBox="0 0 900 205" role="img" aria-label={`${chartLabel} по дням, ${asset}`}
+          <svg className="admin-ops-chart" viewBox={`0 0 ${width} 180`} role="img" tabIndex={0}
+            aria-label={`${chartLabel} по дням, ${asset}. Используйте стрелки для выбора дня`}
+            onKeyDown={event => {
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+              event.preventDefault();
+              const direction = event.key === "ArrowLeft" ? -1 : 1;
+              setHighlight(Math.max(0, Math.min(series.length - 1, (index ?? series.length - 1) + direction)));
+            }}
+            onPointerDown={event => {
+              selectPoint(event);
+              if (event.pointerType === "touch") event.currentTarget.setPointerCapture(event.pointerId);
+            }}
             onPointerMove={event => {
-              const bounds = event.currentTarget.getBoundingClientRect();
-              const index = Math.round((event.clientX - bounds.left) / bounds.width * (series.length - 1));
-              setHighlight(Math.min(series.length - 1, Math.max(0, index)));
-            }} onPointerLeave={() => setHighlight(null)}>
-            <defs><linearGradient id={gradient} x2="0" y2="1"><stop stopColor="currentColor" stopOpacity=".16" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs>
+              if (event.pointerType === "touch" && !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+              selectPoint(event);
+            }}>
+            <defs><linearGradient id={gradient} x2="0" y2="1"><stop stopColor="currentColor" stopOpacity=".22" /><stop offset="1" stopColor="currentColor" stopOpacity=".02" /></linearGradient></defs>
             {[0, 1, 2, 3].map(step => {
               const value = floor + range * step / 3;
-              return <g key={step}><line x1="4" x2="896" y1={y(value)} y2={y(value)} /><text x="895" y={y(value) - 5} textAnchor="end">{fmt.format(value)}</text></g>;
+              return <g key={step}><line x1="8" x2={right} y1={y(value)} y2={y(value)} /><text x={width - 4} y={y(value) + 4} textAnchor="end">{axis.format(value)}</text></g>;
             })}
-            <polygon points={`4,${y(0)} ${line} 896,${y(0)}`} fill={`url(#${gradient})`} />
-            <polyline points={line} fill="none" stroke="currentColor" strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
-            {point && highlight !== null && <g><line x1={x(highlight)} x2={x(highlight)} y1="25" y2="175" /><circle cx={x(highlight)} cy={y(point[metric])} r="4" fill="currentColor" /></g>}
-            <text x="4" y="198">{dayFmt.format(new Date(series[0].day))}</text>
-            <text x="896" y="198" textAnchor="end">{dayFmt.format(new Date(series[series.length - 1].day))}</text>
+            <polygon points={`8,${y(0)} ${line} ${right},${y(0)}`} fill={`url(#${gradient})`} />
+            <polyline points={line} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
+            {point && index !== null && <g><line x1={x(index)} x2={x(index)} y1="14" y2="152" /><circle cx={x(index)} cy={y(point[metric])} r="5" fill="currentColor" stroke="var(--admin-surface)" strokeWidth="2" /></g>}
+            <text x="8" y="174">{dayFmt.format(new Date(series[0].day))}</text>
+            <text x={right} y="174" textAnchor="end">{dayFmt.format(new Date(series[series.length - 1].day))}</text>
           </svg>
         </div>
       )}

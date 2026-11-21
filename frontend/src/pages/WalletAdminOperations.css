@@ -100,7 +100,7 @@
 }
 .admin-ops-filters { margin-top: 12px; }
 .admin-ops-filters[hidden] { display: none; }
-.admin-ops-chart { height: clamp(180px, 20vw, 290px); }
+.admin-ops-chart { height: 180px; touch-action: pan-y; cursor: crosshair; }
 .admin-ops-table tbody tr { cursor: pointer; }
 .admin-ops-table tbody tr:hover, .admin-ops-table tbody tr:focus-within { background: var(--admin-surface-muted); }
 .admin-ops-open { display: flex; align-items: center; gap: 4px; max-width: 100%; cursor: pointer; text-align: left; }
@@ -137,7 +137,8 @@
 .admin-ops-record { min-width: 0; overflow: auto; padding: 0 var(--operation-gutter) 26px; }
 .admin-ops-record > .admin-record-menu { position: sticky; top: 0; z-index: 1; background: var(--admin-surface); margin-bottom: 8px; }
 .admin-ops-plot { margin-top: 16px; }
-.admin-ops-chart-caption { color: var(--admin-muted); font-size: 13px; min-height: 20px; }
+.admin-ops-chart-caption { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; color: var(--admin-muted); font-size: 13px; min-height: 24px; }
+.admin-ops-chart-caption strong { color: var(--admin-text); font-size: 15px; font-variant-numeric: tabular-nums; }
 .admin-ops-chart { color: #168d76; }
 .dark .admin-ops-chart { color: #55d2a9; }
 .admin-ops-table th:first-child { width: 32%; }
