@@ -973,12 +973,16 @@
 .wpay-goswap-order-art .wpay-bank-card.wpay-card-scene { width: 100%; height: auto; min-height: 0; }
 .wpay-goswap-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .wpay-goswap-payment legend { margin-bottom: 6px; font-size: 13px; opacity: .7; }
-.wpay-goswap-payment label { display: flex; align-items: center; gap: 6px; padding: 8px; border: 1px solid var(--f7-list-border-color); border-radius: 12px; font-size: 13px; }
-.wpay-goswap-payment label:has(input:checked) { border-color: var(--f7-theme-color); }
-.wpay-goswap-payment label:has(input:disabled) { opacity: .5; }
-.wpay-goswap-payment input { appearance: auto; accent-color: var(--f7-theme-color); flex: none; }
+.wpay-goswap-payment label { position: relative; display: flex; min-height: 72px; flex-direction: column; justify-content: center; align-items: flex-start; gap: 5px; padding: 10px 12px; border: 1px solid var(--f7-list-border-color); border-radius: 14px; font-size: 13px; cursor: pointer; }
+.wpay-goswap-payment label:has(input:checked),
+.wpay-goswap-payment label:has(input:focus-visible) { border-color: var(--f7-theme-color); }
+.wpay-goswap-payment label:has(input:focus-visible) { outline: 2px solid var(--f7-theme-color); outline-offset: 2px; }
+.wpay-goswap-payment label:has(input:disabled) { opacity: .5; cursor: default; }
+.wpay-goswap-payment input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
+.wpay-goswap-payment-check { position: absolute; top: 8px; right: 8px; display: none; width: 19px; height: 19px; place-items: center; border-radius: 50%; background: var(--f7-theme-color); color: #fff; pointer-events: none; }
+.wpay-goswap-payment input:checked + .wpay-goswap-payment-check { display: grid; }
 .wpay-goswap-payment small { display: block; }
-.wpay-goswap-order-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; }
-.wpay-goswap-order-total strong { font-variant-numeric: tabular-nums; }
-.wpay-goswap-order-expand { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; margin-top: 8px; padding: 6px; color: var(--f7-theme-color); }
+.wpay-goswap-order-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; font-size: 17px; font-weight: 700; }
+.wpay-goswap-order-total strong { font-weight: inherit; font-variant-numeric: tabular-nums; }
+.wpay-goswap-order-expand { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; margin-top: 8px; padding: 6px; color: var(--f7-list-item-after-text-color, #8e8e93); }
 .wpay-goswap-order-terms { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }

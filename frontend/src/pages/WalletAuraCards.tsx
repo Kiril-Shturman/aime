@@ -19,6 +19,7 @@ import {
 } from "framework7-react";
 import "framework7/components/dialog/css";
 import {
+  Check,
   CreditCard,
   Copy,
   Truck,
@@ -1520,18 +1521,20 @@ export default function WalletAuraCards({
                 <label>
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "wallet"}
                     onChange={() => setGoSwapPayment("wallet")} />
+                  <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
                   <Wallet size={18} aria-hidden="true" />
                   <span>С кошелька</span>
                 </label>
                 <label>
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "sbp"}
                     disabled={!onSbpTopUp} onChange={() => setGoSwapPayment("sbp")} />
+                  <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
                   <img src="/brands/sbp-symbol.svg" alt="" width={18} height={18} />
                   <span>Через СБП{!onSbpTopUp && <small>Недоступно</small>}</span>
                 </label>
               </fieldset>
               <div className="wpay-goswap-order-total">
-                <span>Итого</span>
+                <span>Итого:</span>
                 <strong>{offerNumber.format(Number(goSwapOrder.quote.total))} USDT</strong>
               </div>
               <Button rounded large data-wpay-primary="" className="wpay-aura-primary !mt-3 !w-full"
