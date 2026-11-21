@@ -963,7 +963,10 @@
   z-index: 13500;
   --f7-sheet-height: min(88dvh, 690px);
   --f7-sheet-border-radius: 26px;
+  translate: 0 var(--wpay-checkout-drag-y, 0px);
+  transition-property: transform, translate;
 }
+.wpay-f7-root .wpay-goswap-order-sheet--dragging.sheet-modal { transition-duration: 0s; }
 .wpay-goswap-sheet-scroll { height: 100%; overflow: auto; overscroll-behavior: contain; }
 .wpay-goswap-order-summary, .wpay-goswap-order-terms { width: min(100%, 440px); margin-inline: auto; padding-inline: 16px; }
 .wpay-goswap-order-summary { padding-bottom: max(10px, env(safe-area-inset-bottom)); }

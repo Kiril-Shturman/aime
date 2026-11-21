@@ -916,12 +916,14 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   const touch = await page.context().newCDPSession(page);
   await touch.send("Emulation.setTouchEmulationEnabled", { enabled: true });
   const box = (await art.boundingBox())!;
+  const sheetTop = (await sheet.boundingBox())!.y;
   const x = box.x + box.width / 2;
   const y = box.y + 20;
   await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
   for (const delta of [35, 85, 145, 210]) {
     await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y + delta }] });
   }
+  await expect.poll(async () => (await sheet.boundingBox())!.y - sheetTop).toBeGreaterThan(100);
   await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await expect(sheet).toBeHidden();
   await page.getByRole("button", { name: "Оформить карту" }).click();

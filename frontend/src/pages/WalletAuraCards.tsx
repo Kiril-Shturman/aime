@@ -593,7 +593,14 @@ export default function WalletAuraCards({
     );
   const [goSwapOrder, setGoSwapOrder] = useState<{ plan: StorefrontPlan; quote: GoSwapIssue } | null>(null);
   const checkoutArtwork = useRef<HTMLDivElement>(null);
-  const checkoutSwipeStart = useRef<{ x: number; y: number } | null>(null);
+  const checkoutSwipeStart = useRef<{ x: number; y: number; sheet: HTMLElement } | null>(null);
+  const resetCheckoutSwipe = () => {
+    const start = checkoutSwipeStart.current;
+    checkoutSwipeStart.current = null;
+    start?.sheet.classList.remove("wpay-goswap-order-sheet--dragging");
+    start?.sheet.style.removeProperty("--wpay-checkout-drag-y");
+    return start;
+  };
   const [goSwapSheetReady, setGoSwapSheetReady] = useState(false);
   const [goSwapSheetOpened, setGoSwapSheetOpened] = useState(false);
   useEffect(() => {
@@ -1566,13 +1573,30 @@ export default function WalletAuraCards({
                 aria-expanded={goSwapSheetExpanded} onClick={expandGoSwapSheet}><span /></button>
               <div className="wpay-goswap-order-art" ref={checkoutArtwork}
                 onTouchStart={event => {
+                  resetCheckoutSwipe();
                   const touch = event.touches[0];
-                  checkoutSwipeStart.current = event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : null;
+                  const sheet = event.currentTarget.closest<HTMLElement>(".wpay-goswap-order-sheet");
+                  if (event.touches.length === 1 && touch && sheet) {
+                    checkoutSwipeStart.current = { x: touch.clientX, y: touch.clientY, sheet };
+                  }
                 }}
-                onTouchCancel={() => { checkoutSwipeStart.current = null; }}
-                onTouchEnd={event => {
+                onTouchMove={event => {
                   const start = checkoutSwipeStart.current;
-                  checkoutSwipeStart.current = null;
+                  const touch = event.touches[0];
+                  if (!start || !touch) return;
+                  if (event.touches.length !== 1) {
+                    resetCheckoutSwipe();
+                    return;
+                  }
+                  const dx = Math.abs(touch.clientX - start.x);
+                  const dy = touch.clientY - start.y;
+                  if (dy <= dx && !start.sheet.classList.contains("wpay-goswap-order-sheet--dragging")) return;
+                  start.sheet.classList.add("wpay-goswap-order-sheet--dragging");
+                  start.sheet.style.setProperty("--wpay-checkout-drag-y", `${Math.max(0, dy)}px`);
+                }}
+                onTouchCancel={resetCheckoutSwipe}
+                onTouchEnd={event => {
+                  const start = resetCheckoutSwipe();
                   const touch = event.changedTouches[0];
                   if (!start || !touch) return;
                   const dy = touch.clientY - start.y;
