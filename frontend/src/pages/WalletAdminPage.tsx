@@ -1,3 +1,7 @@
+import { SiTether } from "@icons-pack/react-simple-icons";
+import WalletAssetAvatar from "./WalletAssetAvatar";
+import WalletNetworkIcon from "./WalletNetworkIcon";
+import "./WalletAssetPanel.css";
 import { AuraWithdrawalForm } from "./WalletAuraWithdrawal";
 import WalletKeyExport from "./WalletKeyExport";
 import WalletCustodyWithdrawal from "./WalletCustodyWithdrawal";
@@ -1723,6 +1727,8 @@ function DataView({
 }) {
   const [mode, setMode] = useState<"users" | "tables">("users");
   const [draft, setDraft] = useState(query);
+  const [userSearch, setUserSearch] = useState("");
+  const [sort, setSort] = useState({ key: "", descending: false });
   const [syncing, setSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState("");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
@@ -1825,6 +1831,37 @@ function DataView({
     },
     { key: "status", label: "Статус" },
   ];
+  const searchTerms = userSearch.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+  const visibleUsers = data.users.items.filter((row) => {
+    const values = userColumns.map(({ key, render }) =>
+      render ? render(row[key], row) : text(row[key]),
+    );
+    const searchable = [...values, row.user_id, row.aura_customer_id].join(" ").toLocaleLowerCase();
+    return searchTerms.every((term) => searchable.includes(term));
+  });
+  const sortColumn = userColumns.find(({ key }) => key === sort.key);
+  const sortValue = (row: Json) => {
+    if (!sortColumn) return "";
+    const value = row[sort.key];
+    if (sort.key === "last_miniapp_at") return Date.parse(String(value || row.last_seen || "")) || 0;
+    if (["telegram_id", "card_count", "event_count"].includes(sort.key)) return Number(value || 0);
+    if (sort.key === "balances") {
+      const usdt = (Array.isArray(value) ? value as Json[] : []).find(({ asset }) => asset === "USDT");
+      return Number(usdt?.available || 0);
+    }
+    return sortColumn.render ? sortColumn.render(value, row) : text(value);
+  };
+  if (sortColumn) visibleUsers.sort((left, right) => {
+    const a = sortValue(left);
+    const b = sortValue(right);
+    const order = typeof a === "number" && typeof b === "number"
+      ? a - b
+      : String(a).localeCompare(String(b), "ru", { numeric: true });
+    return sort.descending ? -order : order;
+  });
+  function selectSort(key: string) {
+    setSort((current) => ({ key, descending: key === current.key && !current.descending }));
+  }
   const dbColumns = data.database.columns
     .filter((key) => key !== "detail" && key !== "body")
     .slice(0, 8)
@@ -1860,17 +1897,44 @@ function DataView({
               </button>
             </div>
           </div>
+          <div className="wpay-admin-user-search">
+            <label className="relative block">
+              <Search size={17} className="pointer-events-none absolute left-3 top-3.5 opacity-50" />
+              <input type="search" value={userSearch}
+                onChange={(event) => setUserSearch(event.target.value)}
+                className={`${input} !pl-10`}
+                aria-label="Поиск пользователей" placeholder="Имя, username, Telegram ID или Aura ID" />
+            </label>
+            <div className="wpay-admin-user-sort">
+              <select className={input} value={sort.key} aria-label="Поле сортировки"
+                onChange={(event) => selectSort(event.target.value)}>
+                <option value="">Сортировка по умолчанию</option>
+                {userColumns.map(({ key, label }) => (
+                  <option key={key} value={key}>{key === "balances" ? "Баланс USDT" : label}</option>
+                ))}
+              </select>
+              <button type="button" className="wpay-admin-user-action" disabled={!sort.key}
+                onClick={() => selectSort(sort.key)} aria-label={sort.descending ? "Сортировать по возрастанию" : "Сортировать по убыванию"}>
+                {sort.descending ? "↓" : "↑"}
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-[var(--admin-muted)]" role="status">
+            Показано {visibleUsers.length} из {data.users.total}
+            {data.users.items.length < data.users.total && ` · поиск по последним ${data.users.items.length}`}
+          </p>
           <div className="wpay-admin-desktop-only">
             <AdminTable
-              rows={data.users.items}
+              rows={visibleUsers}
+              sort={{ ...sort, onSelect: selectSort }}
               columns={userColumns}
               onRowClick={(row) => void openUser(text(row.user_id))}
             />
           </div>
           <div className="wpay-admin-mobile-only wpay-admin-mobile-list">
-            {data.users.items.map((user, index) => (
+            {visibleUsers.map((user) => (
               <article
-                key={index}
+                key={text(user.user_id)}
                 className="wpay-admin-mobile-item is-clickable"
                 role="button"
                 tabIndex={0}
@@ -1997,6 +2061,7 @@ function DataView({
       )}
       {selectedUser && (
         <AdminUserDrawer
+          key={selectedUser}
           userId={selectedUser}
           detail={userDetail}
           loading={userLoading}
@@ -2006,6 +2071,84 @@ function DataView({
         />
       )}
     </div>
+  );
+}
+
+type UserCardOperation = "refresh" | "freeze" | "unfreeze" | "cancel";
+
+function AdminUserCard({ item, userId }: { item: Json; userId: string }) {
+  const [snapshot, setSnapshot] = useState<CardsData | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [notice, setNotice] = useState("");
+  const cardId = text(item.card_id);
+  const current = snapshot?.items[0] ?? item;
+  const closed = ["cancelled", "closed"].includes(text(current.status));
+
+  async function run(operation?: UserCardOperation) {
+    if (working) return;
+    if (operation === "cancel" && window.prompt("Для закрытия карты введите ЗАКРЫТЬ") !== "ЗАКРЫТЬ") return;
+    if ((operation === "freeze" || operation === "unfreeze") &&
+      !window.confirm(`${operation === "freeze" ? "Заморозить" : "Разморозить"} карту ${text(current.masked_pan)}?`)) return;
+    setWorking(true);
+    setNotice("");
+    try {
+      const load = () => walletRequest<CardsData>(`admin-cards?${new URLSearchParams({ card_id: cardId })}`);
+      const verified = snapshot ?? await load();
+      if (verified.items[0]?.user_id !== userId) {
+        setNotice("Карта недоступна в текущем окружении Aura.");
+        return;
+      }
+      if (operation) {
+        await walletRequest("admin-card-action", {
+          card_id: cardId,
+          operation,
+          ...(operation === "refresh" ? {} : { confirm: `${operation}:${cardId}` }),
+        });
+      }
+      setSnapshot(operation ? await load() : verified);
+      setExpanded(true);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Не удалось выполнить действие с картой");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <article className="wpay-admin-user-card-item">
+      <Row title={`${text(current.kind)} · ${text(current.masked_pan)}`}
+        subtitle={`${text(current.status)}${current.frozen ? " · заморожена" : ""}`}
+        right={current.balance == null ? text(current.delivery_status) : `${amount(current.balance)} ${text(current.currency)}`} />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" className="wpay-admin-user-action" disabled={working}
+          onClick={() => expanded ? setExpanded(false) : void run()}>
+          {expanded ? "Скрыть операции" : working ? "Загрузка…" : "Операции и управление"}
+        </button>
+        {expanded && <>
+          <button type="button" className="wpay-admin-user-action" disabled={working}
+            onClick={() => void run("refresh")}>Обновить из Aura</button>
+          {!closed && <>
+            {current.status === "opened" && <button type="button" className="wpay-admin-user-action" disabled={working}
+              onClick={() => void run(current.frozen ? "unfreeze" : "freeze")}>
+              {current.frozen ? "Разморозить" : "Заморозить"}
+            </button>}
+            <button type="button" className="wpay-admin-user-action" disabled={working}
+              onClick={() => void run("cancel")}>Закрыть карту</button>
+          </>}
+        </>}
+      </div>
+      {notice && <p role="status" className="mt-2 text-xs">{notice}</p>}
+      {expanded && snapshot && <div className="mt-3">
+        <h4 className="text-sm font-semibold">Последние операции</h4>
+        {snapshot.operations.length ? snapshot.operations.map((operation) => (
+          <Row key={text(operation.operation_id)}
+            title={`${text(operation.operation_type)} · ${text(operation.merchant)}`}
+            subtitle={`${date(operation.provider_created_at || operation.created_at)} · ${text(operation.status)}`}
+            right={`${amount(operation.amount)} ${text(operation.asset)}`} />
+        )) : <p className="wpay-admin-user-empty">Операций пока нет.</p>}
+      </div>}
+    </article>
   );
 }
 
@@ -2405,7 +2548,15 @@ function AdminUserDrawer({
                       {detail.wallets.map((wallet) => (
                         <div key={[wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address].join(":")}
                           className="rounded-xl border border-[var(--admin-border)] p-3">
-                          <Row title={`${wallet.asset} · ${wallet.network === "TRON" && wallet.asset === "USDT" ? "TRC‑20" : wallet.network} · ${walletProviderNames[wallet.provider]}`}
+                          <div className="wpay-admin-wallet-heading">
+                            {wallet.asset === "USDT" ? (
+                              <WalletAssetAvatar icon={<SiTether />} color="#26a17b" network={wallet.network} />
+                            ) : (
+                              <WalletAssetAvatar icon={<WalletNetworkIcon network={wallet.network} />} color={
+                                ({ BTC: "#f7931a", ETH: "#627eea", BSC: "#e5ad17", TON: "#0098ea", SOL: "#6c52cc", TRON: "#eb3348" } as Record<string, string>)[wallet.network] ?? "#67778d"
+                              } />
+                            )}
+                          <Row title={`${wallet.asset}${wallet.asset === "USDT" ? ` · ${({ TRON: "TRC‑20", BSC: "BEP‑20", ETH: "ERC‑20" } as Record<string, string>)[wallet.network] ?? wallet.network}` : ""} · ${walletProviderNames[wallet.provider]}`}
                             subtitle={[
                               wallet.chain === "nile" ? "TRON Nile · тестовая сеть" : wallet.environment,
                               wallet.provider === "aura" && wallet.address && wallet.available === null
@@ -2417,12 +2568,13 @@ function AdminUserDrawer({
                               ? (wallet.address && wallet.provider === "aura" ? "Общий остаток выше" : "Нет данных")
                               : `${wallet.available} ${wallet.asset}`}
                           />
+                          </div>
                           {wallet.reserved && Number(wallet.reserved) > 0 && (
                             <p className="mt-1 text-xs opacity-60">Резерв {wallet.reserved} {wallet.asset}</p>
                           )}
                           {wallet.address ? (
                             <button type="button" title="Скопировать адрес" onClick={() => copy(wallet.address)}
-                              className="mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
+                              className="wpay-admin-wallet-address mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
                           ) : <p className="mt-2 text-xs opacity-60">Адрес ещё не выдан</p>}
                           {wallet.provider === "aura" && wallet.managed && wallet.environment && (
                             <>
@@ -2568,13 +2720,8 @@ function AdminUserDrawer({
                 <section className="wpay-admin-user-section">
                   <h3>Карты Aura</h3>
                   {detail.aura.cards.length ? (
-                    detail.aura.cards.map((item, index) => (
-                      <Row
-                        key={index}
-                        title={`${text(item.kind)} · ${text(item.masked_pan)}`}
-                        subtitle={`${text(item.status)}${item.frozen ? " · заморожена" : ""}`}
-                        right={text(item.delivery_status)}
-                      />
+                    detail.aura.cards.map((item) => (
+                      <AdminUserCard key={text(item.card_id)} item={item} userId={userId} />
                     ))
                   ) : (
                     <p className="wpay-admin-user-empty">Карт пока нет.</p>
@@ -3366,10 +3513,12 @@ function AdminTable({
   rows,
   columns,
   onRowClick,
+  sort,
 }: {
   rows: Json[];
   columns: AdminColumn[];
   onRowClick?: (row: Json) => void;
+  sort?: { key: string; descending: boolean; onSelect: (key: string) => void };
 }) {
   return (
     <div className="wpay-admin-table-wrap">
@@ -3377,7 +3526,14 @@ function AdminTable({
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column.key}>{column.label}</th>
+              <th key={column.key} aria-sort={sort?.key === column.key ? (sort.descending ? "descending" : "ascending") : undefined}>
+                {sort ? (
+                  <button type="button" className="wpay-admin-sort-heading" onClick={() => sort.onSelect(column.key)}
+                    title={column.key === "balances" ? "Сортировать по доступному USDT" : undefined}>
+                    {column.label} <span aria-hidden="true">{sort.key === column.key ? (sort.descending ? "↓" : "↑") : "↕"}</span>
+                  </button>
+                ) : column.label}
+              </th>
             ))}
             <th>Данные</th>
           </tr>

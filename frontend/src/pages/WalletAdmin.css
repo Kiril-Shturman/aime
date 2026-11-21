@@ -2077,3 +2077,61 @@
 .wpay-admin-asset-switch[aria-checked="true"] > span::after {
   transform: translateX(18px);
 }
+
+.wpay-admin-user-search,
+.wpay-admin-user-sort {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.wpay-admin-user-search > label {
+  flex: 1;
+  min-width: 0;
+}
+.wpay-admin-user-sort select { min-width: 0; }
+.wpay-admin-sort-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  text-align: left;
+  cursor: pointer;
+}
+.wpay-admin-sort-heading span { color: var(--admin-muted); }
+.wpay-admin-table th[aria-sort] .wpay-admin-sort-heading span { color: #3b82f6; }
+
+.wpay-admin-user-search .wpay-admin-user-action,
+.wpay-admin-user-drawer .wpay-admin-user-action,
+.wpay-admin-user-drawer .wpay-admin-user-section button:not(.wpay-admin-row):not(.wpay-admin-wallet-address) {
+  border-radius: 10px;
+  background: #2563eb;
+  color: white;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wpay-admin-user-action:disabled,
+.wpay-admin-user-drawer .wpay-admin-user-section button:disabled {
+  opacity: .5;
+  cursor: default;
+}
+.wpay-admin-wallet-heading {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+}
+.wpay-admin-wallet-heading > .wpay-address-avatar .wpay-currency-icon > .wpay-network-icon {
+  background: transparent;
+  color: white;
+}
+.wpay-admin-user-card-item {
+  border: 1px solid var(--admin-border);
+  border-radius: 14px;
+  margin-top: 10px;
+  padding: 12px;
+}
+@media (max-width: 620px) {
+  .wpay-admin-user-search { align-items: stretch; flex-direction: column; }
+  .wpay-admin-user-sort select { flex: 1; }
+}
