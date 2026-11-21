@@ -384,6 +384,7 @@ export function LiveHistory() {
                 {transactions.map((item) => {
                   const income = Number(item.amount) > 0;
                   const failed = ["qr_failed", "withdrawal_failed"].includes(item.type);
+                  const cardIssue = ["card_issue", "card_topup", "card_issue_refund"].includes(item.type);
                   const { title, icon: Icon } = transactionListPresentation(item);
                   return (
                     <ListItem
