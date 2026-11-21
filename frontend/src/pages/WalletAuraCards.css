@@ -1000,3 +1000,25 @@
 .wpay-goswap-order-total strong { font-weight: inherit; font-variant-numeric: tabular-nums; }
 .wpay-goswap-order-expand { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; margin-top: 8px; padding: 6px; color: var(--f7-list-item-after-text-color, #8e8e93); }
 .wpay-goswap-order-terms { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
+
+.wpay-goswap-pay-shine {
+  position: relative;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wpay-goswap-pay-shine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(110deg, transparent 36%, rgb(255 255 255 / 32%) 50%, transparent 64%);
+    transform: translateX(-100%);
+    animation: wpay-goswap-pay-shine 4s ease-in-out infinite;
+  }
+}
+
+@keyframes wpay-goswap-pay-shine {
+  0%, 15% { transform: translateX(-100%); }
+  40%, 100% { transform: translateX(100%); }
+}

@@ -1586,7 +1586,7 @@ export default function WalletAuraCards({
                 <span>Итого:</span>
                 <strong>{offerNumber.format(Number(goSwapOrder.quote.total))} USDT</strong>
               </div>
-              <Button rounded large data-wpay-primary="" className="wpay-aura-primary !mt-3 !w-full"
+              <Button rounded large data-wpay-primary="" className={`wpay-aura-primary !mt-3 !w-full${goSwapPayment === "wallet" && !busy ? " wpay-goswap-pay-shine" : ""}`}
                 disabled={Boolean(busy) || (goSwapPayment === "sbp" && !onSbpTopUp)}
                 onClick={goSwapPayment === "wallet" ? payGoSwapOrder : () => {
                   setGoSwapOrder(null);
