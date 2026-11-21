@@ -1556,12 +1556,16 @@ export default function WalletAuraCards({
               </div>
               <p className="mt-3 text-center text-sm opacity-60">{goSwapOrder.quote.label}</p>
               <fieldset className="wpay-goswap-payment">
-                <legend>Способ оплаты</legend>
-                {goSwapOrder.quote.wallet_available != null && (
-                  <p className={`wpay-goswap-wallet-available${goSwapPayment === "sbp" ? " invisible" : ""}`}>
-                    Баланс: {offerNumber.format(Number(goSwapOrder.quote.wallet_available))} USDT
-                  </p>
-                )}
+                <legend>
+                  <span className="wpay-goswap-payment-heading">
+                    <span>Способ оплаты</span>
+                    {goSwapPayment === "wallet" && goSwapOrder.quote.wallet_available != null && (
+                      <span className="wpay-goswap-wallet-available">
+                        Баланс: {offerNumber.format(Number(goSwapOrder.quote.wallet_available))} USDT
+                      </span>
+                    )}
+                  </span>
+                </legend>
                 <label>
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "wallet"}
                     onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("wallet")} />
