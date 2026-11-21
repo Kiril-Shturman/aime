@@ -2224,6 +2224,7 @@ function AdminUserDrawer({
   const [auraWithdrawEnv, setAuraWithdrawEnv] = useState<string | null>(null);
   const [walletAction, setWalletAction] = useState<{ walletId: string; asset: string; action: "withdraw" | "export" } | null>(null);
   const [section, setSection] = useState<(typeof tabs)[number][0]>("profile");
+  const drawerScroll = useRef<HTMLDivElement>(null);
   const [balanceNetwork, setBalanceNetwork] = useState("");
   const [actionWorking, setActionWorking] = useState("");
   const [actionNotice, setActionNotice] = useState("");
@@ -2425,9 +2426,9 @@ function AdminUserDrawer({
         </header>
         <div className="admin-record-profile-menu">
           <RecordMenu label="Разделы карточки пользователя" tabs={tabs} active={section}
-            onSelect={id => { setWalletAction(null); setAuraWithdrawEnv(null); setSection(id); }} />
+            onSelect={id => { setWalletAction(null); setAuraWithdrawEnv(null); setSection(id); drawerScroll.current?.scrollTo(0, 0); }} />
         </div>
-        <div className="wpay-admin-drawer-scroll">
+        <div className="wpay-admin-drawer-scroll" ref={drawerScroll}>
           {loading ? (
             <div className="wpay-admin-drawer-state">Загружаем профиль…</div>
           ) : error ? (

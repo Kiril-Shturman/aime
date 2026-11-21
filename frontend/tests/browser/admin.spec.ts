@@ -122,7 +122,10 @@ for (const theme of ["dark", "light"]) {
     await page.locator(".wpay-admin-desktop-only").getByText("Александр", { exact: true }).click();
     const profile = page.getByRole("dialog", { name: "Карточка пользователя Александр" });
     await profile.getByRole("button", { name: "История", exact: true }).click();
-    await expect(profile.locator(".admin-ops-operation .wpay-currency-icon")).toBeVisible();
+    const icon = profile.locator(".admin-ops-operation .wpay-currency-icon");
+    await expect(icon).toBeVisible();
+    await expect(icon.locator("svg")).toHaveCSS("color", "rgb(255, 255, 255)");
+    await expect(profile.getByRole("searchbox", { name: "Поиск операций пользователя" })).toHaveCSS("padding-left", "38px");
     await profile.getByRole("button", { name: "Пополнение карты" }).click();
     const userOperation = page.getByRole("dialog", { name: "Подробности операции" });
     await expect(userOperation.getByText("user-topup-101", { exact: true })).toBeVisible();
