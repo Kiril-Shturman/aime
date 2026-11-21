@@ -790,13 +790,13 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
           <i>Все суммы в USDT</i>
         </div>
         <p className="text-xs opacity-55">
-          Комиссия WPay считается отдельно от цены Aura. Новая версия действует только на новые операции; повторы используют сохранённую версию.
+          Комиссия WPay считается отдельно от цены провайдера. Новая версия действует только на новые операции; повторы используют сохранённую версию.
         </p>
-        {([["cards", "Карты"], ["deposits", "Пополнения"], ["other", "Другие операции"]] as const).map(([category, label]) => (
-          <div key={category} className="mt-6">
+        {([["cards", "Карты Aura", "Aura"], ["cards", "Карты GoSwap", "GoSwap"], ["deposits", "Пополнения", null], ["other", "Другие операции", null]] as const).map(([category, label, provider]) => (
+          <div key={label} className="mt-6 border-t border-[var(--admin-border)] pt-4">
             <h3 className="mb-3 text-base font-semibold">{label}</h3>
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {data.items.filter((item) => (item.category ?? (item.card_plan ? "cards" : item.product === "sbp_buy" ? "deposits" : "other")) === category).map((item) => (
+          {data.items.filter((item) => (item.category ?? (item.card_plan ? "cards" : item.product === "sbp_buy" ? "deposits" : "other")) === category && (!provider || item.provider === provider)).map((item) => (
             <article key={item.product} className="rounded-2xl border border-[var(--admin-border)]">
             <button type="button" onClick={() => choose(item.product)}
               className={`w-full rounded-2xl border border-transparent p-4 text-left ${selected === item.product ? "border-blue-500 bg-blue-500/5" : "border-[var(--admin-border)]"}`}>
@@ -806,9 +806,11 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
               </small>
               {Boolean(item.card_plan) && (
                 <small className="mt-2 block text-blue-500">
-                  {text(item.provider)} · {item.kind === "physical" ? "Физическая" : "Виртуальная"}<br />
-                  Выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
-                  {item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}
+                  {item.kind === "physical" ? "Физическая" : item.kind === "virtual" ? "Виртуальная" : "Тип карты не указан"}
+                  {item.provider === "Aura" && item.provider_issue_fee != null && <>
+                    <br />Выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
+                    {item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}
+                  </>}
                 </small>
               )}
               {Array.isArray(item.conditions) && (
@@ -818,7 +820,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                 {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум {amount(item.minimum_fee)}
               </span>
             </button>
-            {Boolean(item.card_plan) && (
+            {item.provider === "Aura" && Boolean(item.card_plan) && (
               <label className="flex items-center justify-between gap-3 border-t border-[var(--admin-border)] px-4 py-3 text-xs font-semibold">
                 Выпуск карты
                 <input type="checkbox" role="switch" aria-label={`Выпуск карты «${item.label}»`}

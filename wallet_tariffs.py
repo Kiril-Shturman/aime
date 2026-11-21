@@ -25,8 +25,14 @@ CARD_PLANS = {
         "conditions": ["Физическая карта", "Покупки офлайн", "Покупки в интернете", "3D Secure"],
     },
 }
+GOSWAP_CARD_PLANS = {
+    "goswap_card_sg_1": {"label": "Сингапур 1", "kind": "virtual"},
+    "goswap_card_sg_2": {"label": "Сингапур 2", "kind": "virtual"},
+    "goswap_card_us": {"label": "США"},
+}
 PRODUCTS = {
     **{key: (value["label"], True) for key, value in CARD_PLANS.items()},
+    **{key: (value["label"], False) for key, value in GOSWAP_CARD_PLANS.items()},
     "sbp_buy": ("Покупка через СБП", False),
     "qr_pay": ("Оплата по QR", False),
     "withdrawal": ("Вывод криптовалюты (не с карты)", False),
@@ -96,6 +102,8 @@ def snapshot(ledger):
         if product in CARD_PLANS:
             item.update(CARD_PLANS[product], card_plan=True, provider="Aura", category="cards",
                         issue_enabled=card_issue_enabled(ledger, product))
+        elif product in GOSWAP_CARD_PLANS:
+            item.update(GOSWAP_CARD_PLANS[product], card_plan=True, provider="GoSwap", category="cards")
         else:
             item.update(category="deposits" if product == "sbp_buy" else "other")
         items.append(item)

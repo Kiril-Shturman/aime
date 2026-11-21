@@ -2221,7 +2221,7 @@ def install_wallet(app, root, owner_check):
                             'physical': (card_fees.get('open_physical_card_fee'), card_fees.get('physical_recharge_fee_pct')),
                         }
                         for item in result['items']:
-                            if item.get('card_plan'):
+                            if item.get('provider') == 'Aura' and item.get('kind') in provider_prices:
                                 item['provider_issue_fee'], item['provider_recharge_fee'] = provider_prices[item['kind']]
                                 item['provider_minimum'] = card_fees.get('minimum_recharge_amount')
                     except (ApiError, ValueError, asyncio.TimeoutError, OSError) as error:
