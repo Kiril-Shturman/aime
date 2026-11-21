@@ -1050,7 +1050,7 @@
 }
 
 .wpay-aura-carousel--centered {
-  --wpay-next-card-peek: 48px;
+  --wpay-next-card-peek: 28px;
   align-items: center;
 }
 .wpay-aura-carousel--centered:has(> :nth-child(2))::after { content: none; }
