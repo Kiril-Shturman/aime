@@ -3,6 +3,7 @@ import WalletAssetAvatar from "./WalletAssetAvatar";
 import {
   permanentAddressNetworks as addressNetworks,
   addressesForAsset,
+  networkLabel, networkNames, networkStandards,
   type WalletAddress,
 } from "../wallet/catalog";
 import { previewBalances, portfolioExamples } from "../wallet/demo";
@@ -22,29 +23,6 @@ import WalletCreateAddress from "./WalletCreateAddress";
 import "./WalletAssetPanel.css";
 import type { WalletAddressSelection } from "./WalletAddressDetails";
 import { Plus, Copy, Check } from "lucide-react";
-
-const networkLabels: Record<string, string> = {
-  ETH: "Ethereum · ERC-20",
-  BSC: "BNB Smart Chain · BEP-20",
-  TON: "TON",
-  SOL: "Solana · SPL",
-};
-const networkNames: Record<string, string> = {
-  ETH: "Ethereum",
-  BSC: "BNB Smart Chain",
-  TON: "TON",
-  SOL: "Solana",
-  TRON: "Tron",
-  BTC: "Bitcoin",
-};
-const networkStandards: Record<string, string> = {
-  ETH: "ERC20",
-  BSC: "BEP20",
-  TON: "TON",
-  SOL: "SPL",
-  TRON: "TRC20",
-  BTC: "BTC",
-};
 
 const descriptions: Record<string, { title: string; text: string }> = {
   USDT: {
@@ -150,35 +128,37 @@ export default function WalletAssetPanel({
     setAddresses([]);
     setAddressError("");
     setLoadingAddresses(false);
-    if (active && wallet.configured) {
-      setLoadingAddresses(true);
-      void (async () => {
-        try {
-          const result = await walletRequest<{ items?: WalletAddress[] }>(
-            "addresses",
-          );
-          const networks = (addressNetworks[code] ?? []).filter((network) =>
-            (wallet.assetRoutes[code] ?? []).includes(network),
-          );
-          const saved = addressesForAsset(result.items ?? [], code).filter(
-            (item) => item.address && networks.includes(item.network),
-          );
-          if (!current) return;
-          setAddresses(saved);
-        } catch {
-          if (current)
-            setAddressError(
-              "Не удалось загрузить адреса. Нажмите на сеть, чтобы повторить.",
+    function loadAddresses() {
+      if (active && wallet.configured) {
+        setLoadingAddresses(true);
+        void (async () => {
+          try {
+            const result = await walletRequest<{ items?: WalletAddress[] }>(
+              "addresses",
             );
-        } finally {
-          if (current) setLoadingAddresses(false);
-        }
-      })();
+            const saved = addressesForAsset(result.items ?? [], code).filter(
+              (item) => item.address,
+            );
+            if (!current) return;
+            setAddresses(saved);
+          } catch {
+            if (current)
+              setAddressError(
+                "Не удалось загрузить адреса. Нажмите на сеть, чтобы повторить.",
+              );
+          } finally {
+            if (current) setLoadingAddresses(false);
+          }
+        })();
+      }
     }
+    loadAddresses();
+    window.addEventListener("wpay:deposit-address", loadAddresses);
     return () => {
+      window.removeEventListener("wpay:deposit-address", loadAddresses);
       current = false;
     };
-  }, [active, code, wallet.configured]);
+  }, [active, code, wallet.configured, wallet.data]);
   async function copyAddress(address: string) {
     try {
       await navigator.clipboard.writeText(address);
@@ -248,6 +228,9 @@ export default function WalletAssetPanel({
       : null;
   const reserved =
     wallet.data.balances.find((item) => item.asset === code)?.reserved ?? "0";
+  const ownWallet = (wallet.assetRoutes[code] ?? []).some((network) =>
+    wallet.depositProviders[code]?.[network] === "wpay");
+  const showWithdraw = code === "USDT" || ownWallet;
   return (
     <main className="wpay-asset-layout mx-auto w-full max-w-[560px] bg-[#efeff4] pb-0 dark:bg-black">
       <Card
@@ -360,7 +343,12 @@ export default function WalletAssetPanel({
                   const provider = wallet.depositProviders[code]?.[network];
                   const item = demoPortfolio
                     ? portfolioExamples[network]
-                    : provider ? undefined : addresses.find((row) => row.network === network);
+                    : addresses.find((row) => row.network === network &&
+                        (provider ? row.provider === provider : !row.provider || row.provider === "goswap"));
+                  const providerBalance =
+                    item && "provider_available" in item &&
+                    (!item.balance_asset || item.balance_asset === code)
+                      ? item.provider_available : undefined;
                   return (
                     <button
                       key={network}
@@ -378,11 +366,12 @@ export default function WalletAssetPanel({
                       onClick={() => {
                         setAddressError("");
                         setCopiedAddress("");
-                        if (provider) onDeposit(network);
-                        else if (item)
+                        if (item)
                           onOpenAddress({
                             network,
                             address: item.address,
+                            provider: "provider" in item ? item.provider : undefined,
+                            chain: "chain" in item ? item.chain : undefined,
                             min_deposit:
                               "min_deposit" in item
                                 ? item.min_deposit
@@ -392,9 +381,10 @@ export default function WalletAssetPanel({
                               ? code === "USDT"
                                 ? portfolioExamples[network].amount
                                 : preview.amount
-                              : null,
+                              : providerBalance !== undefined ? Number(providerBalance) : null,
                             rate: demoPortfolio ? preview.rate : rate,
                           });
+                        else if (provider) onDeposit(network);
                         else if (network === "TRON" && code === "USDT")
                           onDeposit("TRON");
                         else if ((addressNetworks[code] ?? []).includes(network))
@@ -427,7 +417,7 @@ export default function WalletAssetPanel({
                           aria-label={
                             demoPortfolio
                               ? "Пример баланса сети"
-                              : "Баланс сети пока недоступен"
+                              : providerBalance !== undefined ? provider === "goswap" ? "Учётный остаток GoSwap" : "Доступно в Aura" : "Баланс сети пока недоступен"
                           }
                         >
                           {demoPortfolio
@@ -435,10 +425,10 @@ export default function WalletAssetPanel({
                               ? "$" +
                                 cryptoAmount(portfolioExamples[network].amount)
                               : cryptoAmount(preview.amount)
-                            : "—"}
+                            : providerBalance !== undefined ? `${cryptoAmount(providerBalance)} ${code}` : "—"}
                         </span>
                         <span className="mt-0.5 block text-[12px] leading-5 text-black/45 dark:text-white/45">
-                          {network === "TRON" && !demoPortfolio
+                          {wallet.depositModes[code]?.[network] === "exact"
                             ? "По точной сумме"
                             : item
                               ? item.address.slice(0, 7) +
@@ -569,7 +559,7 @@ export default function WalletAssetPanel({
                 </h2>
                 <p className="mt-1 text-[14px] text-black/45 dark:text-white/45">
                   {selectedAddress
-                    ? networkLabels[selectedAddress.network]
+                    ? networkLabel(selectedAddress.network, code)
                     : "Выберите сети · $2 за адрес"}
                 </p>
               </div>
@@ -599,7 +589,7 @@ export default function WalletAssetPanel({
                 </p>
                 <p className="my-4 text-[13px] leading-5 text-black/45 dark:text-white/45">
                   Отправляйте только {code} в сети{" "}
-                  {networkLabels[selectedAddress.network]}. Другая сеть может
+                  {networkLabel(selectedAddress.network, code)}. Другая сеть может
                   привести к потере средств.
                 </p>
                 <Button
@@ -646,9 +636,9 @@ export default function WalletAssetPanel({
         document.querySelector(".wpay-f7-root") ?? document.body,
       )}
       <div
-        className={`wpay-asset-actions ${code === "USDT" ? "wpay-asset-actions--two" : "wpay-asset-actions--pair"} pointer-events-none sticky bottom-0 z-10 grid grid-cols-[1fr_1fr_48px] gap-2 bg-transparent px-4 pt-3 dark:bg-transparent [&>button]:pointer-events-auto [&>span]:pointer-events-auto`}
+        className={`wpay-asset-actions ${showWithdraw ? "wpay-asset-actions--two" : "wpay-asset-actions--pair"} pointer-events-none sticky bottom-0 z-10 grid grid-cols-[1fr_1fr_48px] gap-2 bg-transparent px-4 pt-3 dark:bg-transparent [&>button]:pointer-events-auto [&>span]:pointer-events-auto`}
       >
-        {code === "USDT" ? (
+        {showWithdraw ? (
           <>
             <Button
               data-wpay-primary=""

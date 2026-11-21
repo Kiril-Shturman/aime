@@ -1,9 +1,19 @@
+import { currencyLabel, networkLabel, networkStandards } from "../wallet/catalog";
+import { cryptoAssetsByTicker } from "../wallet/cryptoAssets";
+import WalletAssetAvatar from "./WalletAssetAvatar";
+import WalletNetworkIcon from "./WalletNetworkIcon";
+import "./WalletAssetPanel.css";
+import { AuraWithdrawalForm } from "./WalletAuraWithdrawal";
+import WalletKeyExport from "./WalletKeyExport";
+import WalletCustodyWithdrawal from "./WalletCustodyWithdrawal";
 import Aurora from "../components/reactbits/Aurora";
+import TelegramRichEditor from "../components/TelegramRichEditor";
 import { WalletFinanceReport } from "./WalletUserFinance";
 import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type CSSProperties,
   type ComponentType,
@@ -20,6 +30,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  ImagePlus,
   Server,
   ShieldCheck,
   Users,
@@ -44,6 +55,7 @@ import Framework7React, {
   Button as F7Button,
   Preloader as F7Preloader,
 } from "framework7-react";
+import "framework7-icons/css/framework7-icons.css";
 import { walletIdempotentRequest, walletRequest } from "../lib/wallet-api";
 import { useTheme } from "../store/ThemeStore";
 import "./WalletFramework7.css";
@@ -77,11 +89,37 @@ type AdminOverview = {
   provider: { balance: Json[] };
 };
 type UsersData = { items: Json[]; total: number };
+type AdminWallet = {
+  provider: "wpay" | "aura" | "goswap";
+  environment: string | null;
+  network: string;
+  asset: string;
+  address: string | null;
+  chain?: string;
+  available: string | null;
+  reserved: string | null;
+  balance_scope: "onchain" | "provider" | "network" | "secondary_onchain";
+  hidden?: boolean;
+  wallet_id?: string;
+  managed?: boolean;
+  withdrawal_frozen?: boolean;
+  state?: "frozen" | "archived" | null;
+};
+const walletProviderNames = { wpay: "wPay", aura: "Aura", goswap: "GoSwap" };
+const walletBalanceLabels = {
+  onchain: "Баланс сети",
+  secondary_onchain: "Баланс на собственном адресе wPay",
+  provider: "Общий остаток Aura",
+  network: "Остаток по учёту wPay",
+};
+
 type AdminUserDetail = {
   account: Json;
   contacts: { email: string | null; phone: string | null; updated_at: unknown };
   aura: { customer: Json | null; kyc: Json | null; cards: Json[] };
   balances: Json[];
+  wallets?: AdminWallet[];
+  credit_assets?: Record<string, string[]>;
   addresses: Json[];
   events: Json[];
   notifications: Json[];
@@ -111,6 +149,7 @@ type CryptoData = {
   addresses: Json[];
   deposits: Json[];
   balances: Json[];
+  exchange_rules?: { id: string; label: string; method: string; methods: string[] }[];
   asset_routes: {
     asset: string;
     network: string;
@@ -136,7 +175,28 @@ type GoSwapMethod = {
   required: string[];
   example: Json;
 };
+type PartnerSummary = {
+  partner_balance: {
+    ok: boolean;
+    asset: string;
+    available?: string;
+    error?: string;
+  };
+  cards: {
+    ok: boolean;
+    total?: number;
+    statuses?: Record<string, number>;
+    error?: string;
+  };
+  profit: {
+    asset: string;
+    realized: string;
+    operations: number;
+    basis: string;
+  };
+};
 type GoSwapData = {
+  summary: PartnerSummary;
   snapshot: Record<string, GoSwapStatus>;
   methods: GoSwapMethod[];
 };
@@ -155,11 +215,14 @@ type AuraMethod = {
 type AuraConsoleData = {
   environment: string;
   configured: boolean;
+  summary: PartnerSummary;
   methods: AuraMethod[];
 };
 type BroadcastData = { items: Json[] };
+type NotificationTemplate = { title: string; message: string; button_text: string };
+type NotificationVariant = { key: string; default: NotificationTemplate; template: NotificationTemplate | null; inherited: boolean };
 type NotificationData = {
-  settings: { event_type: string; label: string; enabled: number }[];
+  settings: { event_type: string; label: string; enabled: number; template?: NotificationTemplate | null; variants?: NotificationVariant[] }[];
   counts: Record<string, number>;
   recent: Json[];
   eligible_users: number;
@@ -434,7 +497,6 @@ export default function WalletAdminPage() {
                       const item = tabs.find((candidate) => candidate.id === id)!;
                       return (
                         <F7Button
-                          aria-label={item.label}
                           large
                           fill={tab === item.id}
                           aria-current={tab === item.id ? "page" : undefined}
@@ -689,6 +751,21 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
 
+  async function toggleIssue(product: string, enabled: boolean) {
+    if (saving) return;
+    setSaving(true);
+    setNotice("");
+    try {
+      await walletRequest("admin-card-plan-availability", { product, enabled });
+      await reload();
+      setNotice(enabled ? "Выпуск включён" : "Выпуск отключён");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Не удалось изменить доступность выпуска");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function choose(product: string) {
     const item = data.items.find((row) => row.product === product);
     if (!item) return;
@@ -729,17 +806,22 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
         <p className="text-xs opacity-55">
           Комиссия WPay считается отдельно от цены Aura. Новая версия действует только на новые операции; повторы используют сохранённую версию.
         </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {data.items.map((item) => (
-            <button type="button" key={item.product} onClick={() => choose(item.product)}
-              className={`rounded-2xl border p-4 text-left ${selected === item.product ? "border-blue-500 bg-blue-500/5" : "border-[var(--admin-border)]"}`}>
+        {([["cards", "Карты"], ["deposits", "Пополнения"], ["other", "Другие операции"]] as const).map(([category, label]) => (
+          <div key={category} className="mt-6">
+            <h3 className="mb-3 text-base font-semibold">{label}</h3>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {data.items.filter((item) => (item.category ?? (item.card_plan ? "cards" : item.product === "sbp_buy" ? "deposits" : "other")) === category).map((item) => (
+            <article key={item.product} className="rounded-2xl border border-[var(--admin-border)]">
+            <button type="button" onClick={() => choose(item.product)}
+              className={`w-full rounded-2xl border border-transparent p-4 text-left ${selected === item.product ? "border-blue-500 bg-blue-500/5" : "border-[var(--admin-border)]"}`}>
               <b className="block text-sm">{item.label}</b>
               <small className="mt-1 block opacity-50">
                 {item.enforced ? (item.enabled ? "Включён" : "Выключен") : "Подключение расчёта готовится"}
               </small>
               {Boolean(item.card_plan) && (
                 <small className="mt-2 block text-blue-500">
-                  Aura: выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
+                  {text(item.provider)} · {item.kind === "physical" ? "Физическая" : "Виртуальная"}<br />
+                  Выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
                   {item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}
                 </small>
               )}
@@ -750,8 +832,19 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                 {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум {amount(item.minimum_fee)}
               </span>
             </button>
+            {Boolean(item.card_plan) && (
+              <label className="flex items-center justify-between gap-3 border-t border-[var(--admin-border)] px-4 py-3 text-xs font-semibold">
+                Выпуск карты
+                <input type="checkbox" role="switch" aria-label={`Выпуск карты «${item.label}»`}
+                  className="h-4 w-4 accent-blue-600" checked={item.issue_enabled !== false} disabled={saving}
+                  onChange={(event) => void toggleIssue(item.product, event.target.checked)} />
+              </label>
+            )}
+            </article>
           ))}
-        </div>
+            </div>
+          </div>
+        ))}
       </section>
       {current && (
         <section className={card}>
@@ -763,7 +856,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
             <label><span className="text-xs font-semibold">{current.card_plan ? "Минимальная наша комиссия пополнения" : "Минимальная комиссия"}</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
           </div>
           <label className="mt-3 block"><span className="text-xs font-semibold">Комментарий к версии</span><input className={`${input} mt-2`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Причина изменения" /></label>
-          <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять к новым операциям</label>
+          <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять комиссию wPay к новым операциям</label>
           <button type="button" disabled={saving} onClick={() => void save()} className="mt-4 rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{saving ? "Сохраняю…" : "Сохранить новую версию"}</button>
           {notice && <p className="mt-3 text-xs">{notice}</p>}
         </section>
@@ -1267,6 +1360,61 @@ function Aura({
   );
 }
 
+function PartnerEconomics({
+  summary,
+  label,
+}: {
+  summary: PartnerSummary;
+  label: string;
+}) {
+  const statuses = Object.entries(summary.cards.statuses ?? {});
+  return (
+    <section className="grid gap-3 sm:grid-cols-3">
+      <article className={card}>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+          {label} · Партнёрский аккаунт
+        </span>
+        <h2 className="mt-2 !text-2xl">
+          {summary.partner_balance.ok
+            ? `${amount(summary.partner_balance.available)} ${summary.partner_balance.asset}`
+            : "Недоступно"}
+        </h2>
+        <p className="mt-2 text-xs opacity-45">
+          {summary.partner_balance.ok
+            ? "Доступно у провайдера"
+            : summary.partner_balance.error || "Баланс не получен"}
+        </p>
+      </article>
+      <article className={card}>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+          Выпущено карт
+        </span>
+        <h2 className="mt-2 !text-2xl">
+          {summary.cards.ok ? amount(summary.cards.total ?? 0) : "Недоступно"}
+        </h2>
+        <p className="mt-2 text-xs opacity-45">
+          {summary.cards.ok
+            ? statuses.length
+              ? statuses.map(([status, count]) => `${status}: ${count}`).join(" · ")
+              : "Карт пока нет"
+            : summary.cards.error || "Список карт не получен"}
+        </p>
+      </article>
+      <article className={card}>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+          Наша прибыль
+        </span>
+        <h2 className="mt-2 !text-2xl">
+          {amount(summary.profit.realized)} {summary.profit.asset}
+        </h2>
+        <p className="mt-2 text-xs opacity-45">
+          Завершённые service fee · операций: {summary.profit.operations}
+        </p>
+      </article>
+    </section>
+  );
+}
+
 function AuraConsole({ data }: { data: AuraConsoleData }) {
   const [selected, setSelected] = useState(data.methods[0]?.method ?? "");
   const [draft, setDraft] = useState(() =>
@@ -1333,7 +1481,12 @@ function AuraConsole({ data }: { data: AuraConsoleData }) {
   }
 
   return (
-    <section className={`${card} !p-0 overflow-hidden`}>
+    <div className="space-y-4">
+      <PartnerEconomics
+        summary={data.summary}
+        label={`Aura ${data.environment.toUpperCase()}`}
+      />
+      <section className={`${card} !p-0 overflow-hidden`}>
       <div className="border-b border-[var(--admin-border)] p-5">
         <div className="wpay-admin-section-title !mb-0">
           <div>
@@ -1495,7 +1648,8 @@ function AuraConsole({ data }: { data: AuraConsoleData }) {
           <Empty />
         )}
       </div>
-    </section>
+      </section>
+    </div>
   );
 }
 
@@ -1693,6 +1847,8 @@ function DataView({
 }) {
   const [mode, setMode] = useState<"users" | "tables">("users");
   const [draft, setDraft] = useState(query);
+  const [userSearch, setUserSearch] = useState("");
+  const [sort, setSort] = useState({ key: "", descending: false });
   const [syncing, setSyncing] = useState(false);
   const [syncNotice, setSyncNotice] = useState("");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
@@ -1795,6 +1951,37 @@ function DataView({
     },
     { key: "status", label: "Статус" },
   ];
+  const searchTerms = userSearch.toLocaleLowerCase().trim().split(/\s+/).filter(Boolean);
+  const visibleUsers = data.users.items.filter((row) => {
+    const values = userColumns.map(({ key, render }) =>
+      render ? render(row[key], row) : text(row[key]),
+    );
+    const searchable = [...values, row.user_id, row.aura_customer_id].join(" ").toLocaleLowerCase();
+    return searchTerms.every((term) => searchable.includes(term));
+  });
+  const sortColumn = userColumns.find(({ key }) => key === sort.key);
+  const sortValue = (row: Json) => {
+    if (!sortColumn) return "";
+    const value = row[sort.key];
+    if (sort.key === "last_miniapp_at") return Date.parse(String(value || row.last_seen || "")) || 0;
+    if (["telegram_id", "card_count", "event_count"].includes(sort.key)) return Number(value || 0);
+    if (sort.key === "balances") {
+      const usdt = (Array.isArray(value) ? value as Json[] : []).find(({ asset }) => asset === "USDT");
+      return Number(usdt?.available || 0);
+    }
+    return sortColumn.render ? sortColumn.render(value, row) : text(value);
+  };
+  if (sortColumn) visibleUsers.sort((left, right) => {
+    const a = sortValue(left);
+    const b = sortValue(right);
+    const order = typeof a === "number" && typeof b === "number"
+      ? a - b
+      : String(a).localeCompare(String(b), "ru", { numeric: true });
+    return sort.descending ? -order : order;
+  });
+  function selectSort(key: string) {
+    setSort((current) => ({ key, descending: key === current.key && !current.descending }));
+  }
   const dbColumns = data.database.columns
     .filter((key) => key !== "detail" && key !== "body")
     .slice(0, 8)
@@ -1830,17 +2017,44 @@ function DataView({
               </button>
             </div>
           </div>
+          <div className="wpay-admin-user-search">
+            <label className="relative block">
+              <Search size={17} className="pointer-events-none absolute left-3 top-3.5 opacity-50" />
+              <input type="search" value={userSearch}
+                onChange={(event) => setUserSearch(event.target.value)}
+                className={`${input} !pl-10`}
+                aria-label="Поиск пользователей" placeholder="Имя, username, Telegram ID или Aura ID" />
+            </label>
+            <div className="wpay-admin-user-sort">
+              <select className={input} value={sort.key} aria-label="Поле сортировки"
+                onChange={(event) => selectSort(event.target.value)}>
+                <option value="">Сортировка по умолчанию</option>
+                {userColumns.map(({ key, label }) => (
+                  <option key={key} value={key}>{key === "balances" ? "Баланс USDT" : label}</option>
+                ))}
+              </select>
+              <button type="button" className="wpay-admin-user-action" disabled={!sort.key}
+                onClick={() => selectSort(sort.key)} aria-label={sort.descending ? "Сортировать по возрастанию" : "Сортировать по убыванию"}>
+                {sort.descending ? "↓" : "↑"}
+              </button>
+            </div>
+          </div>
+          <p className="text-xs text-[var(--admin-muted)]" role="status">
+            Показано {visibleUsers.length} из {data.users.total}
+            {data.users.items.length < data.users.total && ` · поиск по последним ${data.users.items.length}`}
+          </p>
           <div className="wpay-admin-desktop-only">
             <AdminTable
-              rows={data.users.items}
+              rows={visibleUsers}
+              sort={{ ...sort, onSelect: selectSort }}
               columns={userColumns}
               onRowClick={(row) => void openUser(text(row.user_id))}
             />
           </div>
           <div className="wpay-admin-mobile-only wpay-admin-mobile-list">
-            {data.users.items.map((user, index) => (
+            {visibleUsers.map((user) => (
               <article
-                key={index}
+                key={text(user.user_id)}
                 className="wpay-admin-mobile-item is-clickable"
                 role="button"
                 tabIndex={0}
@@ -1967,6 +2181,7 @@ function DataView({
       )}
       {selectedUser && (
         <AdminUserDrawer
+          key={selectedUser}
           userId={selectedUser}
           detail={userDetail}
           loading={userLoading}
@@ -1976,6 +2191,84 @@ function DataView({
         />
       )}
     </div>
+  );
+}
+
+type UserCardOperation = "refresh" | "freeze" | "unfreeze" | "cancel";
+
+function AdminUserCard({ item, userId }: { item: Json; userId: string }) {
+  const [snapshot, setSnapshot] = useState<CardsData | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [notice, setNotice] = useState("");
+  const cardId = text(item.card_id);
+  const current = snapshot?.items[0] ?? item;
+  const closed = ["cancelled", "closed"].includes(text(current.status));
+
+  async function run(operation?: UserCardOperation) {
+    if (working) return;
+    if (operation === "cancel" && window.prompt("Для закрытия карты введите ЗАКРЫТЬ") !== "ЗАКРЫТЬ") return;
+    if ((operation === "freeze" || operation === "unfreeze") &&
+      !window.confirm(`${operation === "freeze" ? "Заморозить" : "Разморозить"} карту ${text(current.masked_pan)}?`)) return;
+    setWorking(true);
+    setNotice("");
+    try {
+      const load = () => walletRequest<CardsData>(`admin-cards?${new URLSearchParams({ card_id: cardId })}`);
+      const verified = snapshot ?? await load();
+      if (verified.items[0]?.user_id !== userId) {
+        setNotice("Карта недоступна в текущем окружении Aura.");
+        return;
+      }
+      if (operation) {
+        await walletRequest("admin-card-action", {
+          card_id: cardId,
+          operation,
+          ...(operation === "refresh" ? {} : { confirm: `${operation}:${cardId}` }),
+        });
+      }
+      setSnapshot(operation ? await load() : verified);
+      setExpanded(true);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Не удалось выполнить действие с картой");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <article className="wpay-admin-user-card-item">
+      <Row title={`${text(current.kind)} · ${text(current.masked_pan)}`}
+        subtitle={`${text(current.status)}${current.frozen ? " · заморожена" : ""}`}
+        right={current.balance == null ? text(current.delivery_status) : `${amount(current.balance)} ${text(current.currency)}`} />
+      <div className="mt-2 flex flex-wrap gap-2">
+        <button type="button" className="wpay-admin-user-action" disabled={working}
+          onClick={() => expanded ? setExpanded(false) : void run()}>
+          {expanded ? "Скрыть операции" : working ? "Загрузка…" : "Операции и управление"}
+        </button>
+        {expanded && <>
+          <button type="button" className="wpay-admin-user-action" disabled={working}
+            onClick={() => void run("refresh")}>Обновить из Aura</button>
+          {!closed && <>
+            {current.status === "opened" && <button type="button" className="wpay-admin-user-action" disabled={working}
+              onClick={() => void run(current.frozen ? "unfreeze" : "freeze")}>
+              {current.frozen ? "Разморозить" : "Заморозить"}
+            </button>}
+            <button type="button" className="wpay-admin-user-action" disabled={working}
+              onClick={() => void run("cancel")}>Закрыть карту</button>
+          </>}
+        </>}
+      </div>
+      {notice && <p role="status" className="mt-2 text-xs">{notice}</p>}
+      {expanded && snapshot && <div className="mt-3">
+        <h4 className="text-sm font-semibold">Последние операции</h4>
+        {snapshot.operations.length ? snapshot.operations.map((operation) => (
+          <Row key={text(operation.operation_id)}
+            title={`${text(operation.operation_type)} · ${text(operation.merchant)}`}
+            subtitle={`${date(operation.provider_created_at || operation.created_at)} · ${text(operation.status)}`}
+            right={`${amount(operation.amount)} ${text(operation.asset)}`} />
+        )) : <p className="wpay-admin-user-empty">Операций пока нет.</p>}
+      </div>}
+    </article>
   );
 }
 
@@ -1994,9 +2287,22 @@ function AdminUserDrawer({
   onClose: () => void;
   onRetry: () => void;
 }) {
+  const tabs = [
+    ["profile", "Профиль"],
+    ["balances", "Балансы"],
+    ["wallets", "Кошельки"],
+    ["cards", "Карты"],
+    ["history", "История"],
+  ] as const;
+  const [auraWithdrawEnv, setAuraWithdrawEnv] = useState<string | null>(null);
+  const [walletAction, setWalletAction] = useState<{ walletId: string; asset: string; action: "withdraw" | "export" } | null>(null);
+  const [section, setSection] = useState<(typeof tabs)[number][0]>("profile");
+  const [balanceNetwork, setBalanceNetwork] = useState("");
   const [actionWorking, setActionWorking] = useState("");
   const [actionNotice, setActionNotice] = useState("");
   const [messageText, setMessageText] = useState("");
+  const creditRequest = useRef<{ fingerprint: string; operationId: string } | null>(null);
+  const [selectedBalanceSource, setBalanceSource] = useState("default");
   const [balanceAsset, setBalanceAsset] = useState("USDT");
   const [balanceAmount, setBalanceAmount] = useState("");
   const [balanceReason, setBalanceReason] = useState("");
@@ -2057,15 +2363,66 @@ function AdminUserDrawer({
       setActionWorking("");
     }
   }
+  async function updateWallet(wallet: AdminWallet, operation: "freeze" | "archive" | "restore") {
+    if (!wallet.wallet_id || actionWorking) return;
+    const labels = { freeze: "Заморозить", archive: "Архивировать", restore: "Восстановить" };
+    if (!window.confirm(`${labels[operation]} кошелёк ${wallet.network}?`)) return;
+    setWalletAction(null);
+    setActionWorking(operation);
+    setActionNotice("");
+    try {
+      await walletRequest("admin-wallet-control", { user_id: userId, wallet_id: wallet.wallet_id, operation });
+      setActionNotice("Статус кошелька обновлён");
+      onRetry();
+    } catch (reason) {
+      setActionNotice(reason instanceof Error ? reason.message : "Не удалось обновить кошелёк");
+    } finally {
+      setActionWorking("");
+    }
+  }
+
+  const balanceSource = balanceAsset === "USDT"
+    ? (balanceNetwork === "TRON" ? "default" : "goswap")
+    : selectedBalanceSource;
+  const creditNetworks = (detail?.credit_assets?.USDT ?? []).filter((network) =>
+    ["TRON", "BSC", "ETH", "TON", "SOL"].includes(network),
+  );
+  async function toggleAuraWithdrawal(wallet: AdminWallet) {
+    if (!wallet.environment || actionWorking) return;
+    const frozen = !wallet.withdrawal_frozen;
+    if (!window.confirm(frozen ? "Заморозить новые выводы из Aura?" : "Разрешить новые выводы из Aura?")) return;
+    setActionWorking("aura_withdrawal_freeze");
+    setActionNotice("");
+    setAuraWithdrawEnv(null);
+    try {
+      const query = new URLSearchParams({ user_id: userId, environment: wallet.environment });
+      await walletRequest(`admin-aura-withdrawal-freeze?${query}`, { frozen });
+      setActionNotice(frozen ? "Новые выводы из Aura заморожены" : "Выводы из Aura разблокированы");
+      onRetry();
+    } catch (reason) {
+      setActionNotice(reason instanceof Error ? reason.message : "Не удалось изменить статус вывода");
+    } finally {
+      setActionWorking("");
+    }
+  }
+
   async function adjustBalance() {
     const normalizedAmount = balanceAmount.trim().replace(",", ".");
+    const network = balanceAsset === "USDT" ? balanceNetwork : "";
+    if (balanceAsset === "USDT" && !creditNetworks.includes(network)) return;
     if (!normalizedAmount || !balanceReason.trim() || actionWorking) return;
     if (
       !window.confirm(
-        `Изменить баланс ${userId} на ${normalizedAmount} ${balanceAsset}?\n\nОперация попадёт в финансовый журнал и аудит.`,
+        `Изменить баланс ${userId} на ${normalizedAmount} ${balanceAsset}${network ? " · " + network : ""}${balanceSource === "goswap" ? " из резерва GoSwap" : ""}?\n\nОперация попадёт в финансовый журнал и аудит.`,
       )
     )
       return;
+    if (balanceSource === "goswap") {
+      const fingerprint = JSON.stringify([userId, balanceAsset, normalizedAmount, balanceReason.trim(), network]);
+      if (creditRequest.current?.fingerprint !== fingerprint) {
+        creditRequest.current = { fingerprint, operationId: crypto.randomUUID() };
+      }
+    }
     setActionWorking("adjust_balance");
     setActionNotice("");
     try {
@@ -2077,12 +2434,16 @@ function AdminUserDrawer({
           amount: normalizedAmount,
           reason: balanceReason.trim(),
           bucket: "available",
-          confirm: `ADJUST ${userId} ${balanceAsset} ${normalizedAmount}`,
+          source: balanceSource,
+          ...(network && { network }),
+          ...(balanceSource === "goswap" && { operation_id: creditRequest.current?.operationId }),
+          confirm: `ADJUST ${userId} ${balanceAsset} ${normalizedAmount}${balanceSource === "goswap" ? " GOSWAP" : ""}${network ? " " + network : ""}`,
         },
       );
       setActionNotice(
         `Баланс изменён: ${amount(result.before)} → ${amount(result.after)} ${balanceAsset}`,
       );
+      creditRequest.current = null;
       setBalanceAmount("");
       setBalanceReason("");
       onRetry();
@@ -2136,6 +2497,15 @@ function AdminUserDrawer({
             </div>
           ) : detail ? (
             <>
+              <nav aria-label="Разделы карточки пользователя" className="sticky top-0 z-10 mb-3 flex gap-2 overflow-x-auto rounded-2xl bg-[var(--admin-surface)] p-2">
+                {tabs.map(([id, label]) => (
+                  <button key={id} type="button" aria-pressed={section === id} onClick={() => { setWalletAction(null); setAuraWithdrawEnv(null); setSection(id); }}
+                    className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${section === id ? "bg-blue-500/15 text-blue-600 dark:text-blue-300" : "text-[var(--admin-muted)]"}`}>
+                    {label}
+                  </button>
+                ))}
+              </nav>
+              {actionNotice && <p role="status" className="wpay-admin-operator-notice mb-3">{actionNotice}</p>}
               <div className="wpay-admin-user-badges">
                 <span className={customer ? "is-good" : ""}>
                   Aura: {customer ? "подключён" : "нет клиента"}
@@ -2147,267 +2517,397 @@ function AdminUserDrawer({
                 <span>Карты: {detail.aura.cards.length}</span>
               </div>
 
-              <section className="wpay-admin-user-section wpay-admin-operator-actions">
-                <div className="wpay-admin-section-title">
-                  <div>
-                    <span>Оператор</span>
-                    <h3>Безопасные действия</h3>
+              {section === "profile" && (
+                <section className="wpay-admin-user-section wpay-admin-operator-actions">
+                  <div className="wpay-admin-section-title">
+                    <div>
+                      <span>Оператор</span>
+                      <h3>Безопасные действия</h3>
+                    </div>
                   </div>
-                </div>
-                <div className="wpay-admin-operator-buttons">
-                  <button
-                    type="button"
-                    disabled={!customer || Boolean(actionWorking)}
-                    onClick={() => void runUserAction("refresh_kyc")}
-                  >
-                    <RefreshCw
-                      size={15}
-                      className={
-                        actionWorking === "refresh_kyc" ? "animate-spin" : ""
-                      }
-                    />
-                    Обновить KYC из Aura
-                  </button>
-                  <button
-                    type="button"
-                    disabled={Boolean(actionWorking)}
-                    onClick={() => void runUserAction("retry_notifications")}
-                  >
-                    <Bell size={15} />
-                    Повторить уведомления
-                  </button>
-                </div>
-                <textarea
-                  className="wpay-admin-operator-message"
-                  value={messageText}
-                  onChange={(event) => setMessageText(event.target.value)}
-                  maxLength={4096}
-                  placeholder="Личное сообщение пользователю в Telegram"
-                />
-                <button
-                  type="button"
-                  className="wpay-admin-operator-send"
-                  disabled={!messageText.trim() || Boolean(actionWorking)}
-                  onClick={() => void runUserAction("send_message")}
-                >
-                  <Send size={15} />
-                  {actionWorking === "send_message"
-                    ? "Отправляем…"
-                    : "Отправить сообщение"}
-                </button>
-                {actionNotice && (
-                  <p className="wpay-admin-operator-notice">{actionNotice}</p>
-                )}
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <h3>Профиль и контакты</h3>
-                <div className="wpay-admin-user-facts">
-                  <div>
-                    <small>Telegram ID</small>
-                    <b>{text(account?.telegram_id)}</b>
-                  </div>
-                  <div>
-                    <small>Роль</small>
-                    <b>{text(account?.role)}</b>
-                  </div>
-                  <div>
-                    <small>Email</small>
-                    <b>{text(detail.contacts.email)}</b>
-                  </div>
-                  <div>
-                    <small>Телефон</small>
-                    <b>{text(detail.contacts.phone)}</b>
-                  </div>
-                  <div>
-                    <small>Последний вход</small>
-                    <b>
-                      {date(account?.last_miniapp_at || account?.last_seen)}
-                    </b>
-                  </div>
-                  <div>
-                    <small>Бот запущен</small>
-                    <b>{date(account?.bot_started_at)}</b>
-                  </div>
-                </div>
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <div className="wpay-admin-section-title">
-                  <div>
-                    <span>Aura</span>
-                    <h3>Клиент и KYC</h3>
-                  </div>
-                </div>
-                {customer ? (
-                  <div className="wpay-admin-user-facts">
+                  <div className="wpay-admin-operator-buttons">
                     <button
                       type="button"
-                      onClick={() => copy(customer.customer_id)}
+                      disabled={!customer || Boolean(actionWorking)}
+                      onClick={() => void runUserAction("refresh_kyc")}
                     >
-                      <small>Customer ID · нажмите для копирования</small>
-                      <b>{text(customer.customer_id)}</b>
+                      <RefreshCw
+                        size={15}
+                        className={
+                          actionWorking === "refresh_kyc" ? "animate-spin" : ""
+                        }
+                      />
+                      Обновить KYC из Aura
                     </button>
-                    <div>
-                      <small>Среда</small>
-                      <b>{text(customer.environment)}</b>
-                    </div>
-                    <div>
-                      <small>Состояние клиента</small>
-                      <b>{text(customer.state)}</b>
-                    </div>
-                    <div>
-                      <small>Статус KYC</small>
-                      <b>{text(kyc?.status || "not_started")}</b>
-                    </div>
-                    <div>
-                      <small>Обновлено Aura</small>
-                      <b>
-                        {date(
-                          kyc?.provider_updated_at ||
-                            customer.provider_updated_at,
-                        )}
-                      </b>
-                    </div>
-                    <div>
-                      <small>Причина</small>
-                      <b>{text(kyc?.reason)}</b>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="wpay-admin-user-empty">
-                    Пользователь ещё не создавал профиль в Aura.
-                  </p>
-                )}
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <h3>Балансы</h3>
-                {detail.balances.length ? (
-                  detail.balances.map((balance, index) => (
-                    <Row
-                      key={index}
-                      title={text(balance.asset)}
-                      subtitle={`Резерв: ${amount(balance.reserved)}`}
-                      right={amount(balance.available)}
-                    />
-                  ))
-                ) : (
-                  <p className="wpay-admin-user-empty">Балансов пока нет.</p>
-                )}
-                <div className="wpay-admin-balance-adjustment">
-                  <div className="wpay-admin-balance-fields">
-                    <select
-                      value={balanceAsset}
-                      onChange={(event) => setBalanceAsset(event.target.value)}
-                      aria-label="Актив корректировки"
+                    <button
+                      type="button"
+                      disabled={Boolean(actionWorking)}
+                      onClick={() => void runUserAction("retry_notifications")}
                     >
-                      {Array.from(
-                        new Set([
-                          "USDT",
-                          ...detail.balances.map((item) => text(item.asset)),
-                        ]),
-                      ).map((asset) => <option key={asset}>{asset}</option>)}
-                    </select>
-                    <input
-                      value={balanceAmount}
-                      onChange={(event) => setBalanceAmount(event.target.value.replace(/[^\d.,+-]/g, ""))}
-                      inputMode="decimal"
-                      placeholder="Сумма: 10 или -10"
-                    />
+                      <Bell size={15} />
+                      Повторить уведомления
+                    </button>
                   </div>
                   <textarea
-                    value={balanceReason}
-                    onChange={(event) => setBalanceReason(event.target.value)}
-                    maxLength={1000}
-                    placeholder="Обязательная причина корректировки"
+                    className="wpay-admin-operator-message"
+                    value={messageText}
+                    onChange={(event) => setMessageText(event.target.value)}
+                    maxLength={4096}
+                    placeholder="Личное сообщение пользователю в Telegram"
                   />
                   <button
                     type="button"
-                    disabled={!balanceAmount.trim() || !balanceReason.trim() || Boolean(actionWorking)}
-                    onClick={() => void adjustBalance()}
+                    className="wpay-admin-operator-send"
+                    disabled={!messageText.trim() || Boolean(actionWorking)}
+                    onClick={() => void runUserAction("send_message")}
                   >
-                    {actionWorking === "adjust_balance" ? "Проводим…" : "Провести корректировку"}
+                    <Send size={15} />
+                    {actionWorking === "send_message"
+                      ? "Отправляем…"
+                      : "Отправить сообщение"}
                   </button>
-                  <small>
-                    Это бухгалтерская корректировка, а не пополнение провайдера. При отсутствии обеспечения сверка покажет дефицит.
-                  </small>
-                </div>
-              </section>
+                </section>
+              )}
 
-              <section className="wpay-admin-user-section">
-                <h3>Карты Aura</h3>
-                {detail.aura.cards.length ? (
-                  detail.aura.cards.map((item, index) => (
-                    <Row
-                      key={index}
-                      title={`${text(item.kind)} · ${text(item.masked_pan)}`}
-                      subtitle={`${text(item.status)}${item.frozen ? " · заморожена" : ""}`}
-                      right={text(item.delivery_status)}
-                    />
-                  ))
-                ) : (
-                  <p className="wpay-admin-user-empty">Карт пока нет.</p>
-                )}
-              </section>
+              {section === "profile" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Профиль и контакты</h3>
+                  <div className="wpay-admin-user-facts">
+                    <div>
+                      <small>Telegram ID</small>
+                      <b>{text(account?.telegram_id)}</b>
+                    </div>
+                    <button type="button" onClick={() => copy(customer?.customer_id)}>
+                      <small>Aura · Customer ID</small><b>{text(customer?.customer_id)}</b>
+                    </button>
+                    <button type="button" onClick={() => copy(account?.client_ref)}>
+                      <small>GoSwap · client_ref</small><b>{text(account?.client_ref)}</b>
+                    </button>
+                    <div>
+                      <small>Роль</small>
+                      <b>{text(account?.role)}</b>
+                    </div>
+                    <div>
+                      <small>Email</small>
+                      <b>{text(detail.contacts.email)}</b>
+                    </div>
+                    <div>
+                      <small>Телефон</small>
+                      <b>{text(detail.contacts.phone)}</b>
+                    </div>
+                    <div>
+                      <small>Последний вход</small>
+                      <b>
+                        {date(account?.last_miniapp_at || account?.last_seen)}
+                      </b>
+                    </div>
+                    <div>
+                      <small>Бот запущен</small>
+                      <b>{date(account?.bot_started_at)}</b>
+                    </div>
+                  </div>
+                </section>
+              )}
 
-              <section className="wpay-admin-user-section">
-                <h3>Последние операции</h3>
-                {detail.events.length ? (
-                  detail.events
-                    .slice(0, 12)
-                    .map((item, index) => (
+              {section === "profile" && (
+                <section className="wpay-admin-user-section">
+                  <div className="wpay-admin-section-title">
+                    <div>
+                      <span>Aura</span>
+                      <h3>Клиент и KYC</h3>
+                    </div>
+                  </div>
+                  {customer ? (
+                    <div className="wpay-admin-user-facts">
+                      <button
+                        type="button"
+                        onClick={() => copy(customer.customer_id)}
+                      >
+                        <small>Customer ID · нажмите для копирования</small>
+                        <b>{text(customer.customer_id)}</b>
+                      </button>
+                      <div>
+                        <small>Среда</small>
+                        <b>{text(customer.environment)}</b>
+                      </div>
+                      <div>
+                        <small>Состояние клиента</small>
+                        <b>{text(customer.state)}</b>
+                      </div>
+                      <div>
+                        <small>Статус KYC</small>
+                        <b>{text(kyc?.status || "not_started")}</b>
+                      </div>
+                      <div>
+                        <small>Обновлено Aura</small>
+                        <b>
+                          {date(
+                            kyc?.provider_updated_at ||
+                              customer.provider_updated_at,
+                          )}
+                        </b>
+                      </div>
+                      <div>
+                        <small>Причина</small>
+                        <b>{text(kyc?.reason)}</b>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="wpay-admin-user-empty">
+                      Пользователь ещё не создавал профиль в Aura.
+                    </p>
+                  )}
+                </section>
+              )}
+
+              {section === "wallets" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Кошельки и адреса</h3>
+                  {detail.wallets?.length ? (
+                    <div className="grid gap-2">
+                      {detail.wallets.map((wallet) => (
+                        <div key={[wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address].join(":")}
+                          className="rounded-xl border border-[var(--admin-border)] p-3">
+                          <div className="wpay-admin-wallet-heading">
+                            {cryptoAssetsByTicker[wallet.asset] ? (
+                              <WalletAssetAvatar {...cryptoAssetsByTicker[wallet.asset]} network={wallet.asset === "USDT" ? wallet.network : undefined} />
+                            ) : <WalletNetworkIcon network={wallet.network} />}
+                          <Row title={`${currencyLabel(wallet.asset)} · ${networkLabel(wallet.network, wallet.asset)} · ${walletProviderNames[wallet.provider]}`}
+                            subtitle={[
+                              wallet.chain === "nile" ? "TRON Nile · тестовая сеть" : wallet.environment,
+                              wallet.provider === "aura" && wallet.address && wallet.available === null
+                                ? "Дополнительный адрес Aura"
+                                : walletBalanceLabels[wallet.balance_scope],
+                              wallet.hidden ? "Скрыт пользователем" : null,
+                            ].filter(Boolean).join(" · ")}
+                            right={wallet.available === null
+                              ? (wallet.address && wallet.provider === "aura" ? "Общий остаток выше" : "Нет данных")
+                              : `${wallet.available} ${wallet.asset}`}
+                          />
+                          </div>
+                          {wallet.reserved && Number(wallet.reserved) > 0 && (
+                            <p className="mt-1 text-xs opacity-60">Резерв {wallet.reserved} {wallet.asset}</p>
+                          )}
+                          {wallet.address ? (
+                            <button type="button" title="Скопировать адрес" onClick={() => copy(wallet.address)}
+                              className="wpay-admin-wallet-address mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
+                          ) : <p className="mt-2 text-xs opacity-60">Адрес ещё не выдан</p>}
+                          {wallet.provider === "aura" && wallet.managed && wallet.environment && (
+                            <>
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                {!wallet.withdrawal_frozen && <button type="button"
+                                  className="rounded-lg bg-blue-500/10 px-3 py-2 text-xs"
+                                  onClick={() => { setWalletAction(null); setAuraWithdrawEnv(wallet.environment); }}>
+                                  Вывести
+                                </button>}
+                                <button type="button" className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs"
+                                  disabled={Boolean(actionWorking)} onClick={() => void toggleAuraWithdrawal(wallet)}>
+                                  {wallet.withdrawal_frozen ? "Разморозить вывод" : "Заморозить вывод"}
+                                </button>
+                              </div>
+                              {auraWithdrawEnv === wallet.environment && (
+                                <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-2">
+                                  <button type="button" className="ml-auto block px-3 py-2 text-sm"
+                                    onClick={() => setAuraWithdrawEnv(null)}>Закрыть действие</button>
+                                  <AuraWithdrawalForm adminScope={{ userId, environment: wallet.environment }} />
+                                </div>
+                              )}
+                            </>
+                          )}
+                          {wallet.wallet_id && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              {wallet.state && <span className="rounded-lg bg-amber-500/15 px-2 py-1 text-xs">
+                                {wallet.state === "archived" ? "В архиве" : "Заморожен"}
+                              </span>}
+                              {wallet.state ? (
+                                <button type="button" className="rounded-lg bg-black/5 px-3 py-2 text-xs dark:bg-white/10"
+                                  disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "restore")}>Восстановить</button>
+                              ) : (
+                                <>
+                                  {wallet.environment === "mainnet" && wallet.asset !== "USDT" && (
+                                    <button type="button" className="rounded-lg bg-blue-500/10 px-3 py-2 text-xs"
+                                      onClick={() => setWalletAction({ walletId: wallet.wallet_id!, asset: wallet.asset, action: "withdraw" })}>Вывести</button>
+                                  )}
+                                  <button type="button" className="rounded-lg bg-black/5 px-3 py-2 text-xs dark:bg-white/10"
+                                    onClick={() => setWalletAction({ walletId: wallet.wallet_id!, asset: wallet.asset, action: "export" })}>Экспорт ключа</button>
+                                  <button type="button" className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs"
+                                    disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "freeze")}>Заморозить</button>
+                                  <button type="button" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs"
+                                    disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "archive")}>В архив</button>
+                                </>
+                              )}
+                            </div>
+                          )}
+                          {wallet.address && wallet.wallet_id && !wallet.state && walletAction?.walletId === wallet.wallet_id && walletAction.asset === wallet.asset && (
+                            <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-2" key={walletAction.action}>
+                              <button type="button" onClick={() => setWalletAction(null)}
+                                className="ml-auto block rounded-lg px-3 py-2 text-sm">Закрыть действие</button>
+                              {walletAction.action === "export" ? (
+                                <WalletKeyExport walletId={wallet.wallet_id} address={wallet.address}
+                                  network={wallet.network} adminUserId={userId} />
+                              ) : (
+                                <WalletCustodyWithdrawal asset={wallet.asset} network={wallet.network}
+                                  adminScope={{ userId, walletId: wallet.wallet_id }} />
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="wpay-admin-user-empty">Кошельков пока нет.</p>}
+                </section>
+              )}
+
+              {section === "balances" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Балансы</h3>
+                  {detail.balances.length ? (
+                    detail.balances.map((balance, index) => (
                       <Row
                         key={index}
-                        title={text(item.type)}
-                        subtitle={date(item.created_at)}
-                        right={`${amount(item.amount)} ${text(item.asset)}`}
+                        title={text(balance.asset)}
+                        subtitle={`Резерв: ${amount(balance.reserved)}`}
+                        right={amount(balance.available)}
                       />
                     ))
-                ) : (
-                  <p className="wpay-admin-user-empty">Операций пока нет.</p>
-                )}
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <h3>Уведомления и рефералы</h3>
-                <div className="wpay-admin-user-facts">
-                  <div>
-                    <small>Уведомлений</small>
-                    <b>{detail.notifications.length}</b>
-                  </div>
-                  <div>
-                    <small>Приглашено</small>
-                    <b>{detail.referrals.invited.length}</b>
-                  </div>
-                  <div>
-                    <small>Пригласил</small>
-                    <b>
-                      {text(detail.referrals.referred_by?.referrer_user_id)}
-                    </b>
-                  </div>
-                  <div>
-                    <small>Адресов</small>
-                    <b>{detail.addresses.length}</b>
-                  </div>
-                </div>
-              </section>
-
-              <section className="wpay-admin-user-section">
-                <h3>Последние действия операторов</h3>
-                {detail.audit.length ? (
-                  detail.audit.slice(0, 12).map((item, index) => (
-                    <Row
-                      key={index}
-                      title={text(item.action)}
-                      subtitle={`${date(item.created_at)} · ${text(item.admin_id)}`}
-                      right={text(item.outcome)}
+                  ) : (
+                    <p className="wpay-admin-user-empty">Балансов пока нет.</p>
+                  )}
+                  <div className="wpay-admin-balance-adjustment">
+                    <div className="wpay-admin-balance-fields">
+                      <select
+                        value={balanceAsset}
+                        onChange={(event) => { setBalanceAsset(event.target.value); setBalanceNetwork(""); }}
+                        aria-label="Актив корректировки"
+                      >
+                        {Array.from(
+                          new Set([
+                            "USDT",
+                            ...Object.keys(detail.credit_assets ?? {}),
+                            ...detail.balances.map((item) => text(item.asset)),
+                          ]),
+                        ).map((asset) => <option key={asset}>{asset}</option>)}
+                      </select>
+                      <input
+                        value={balanceAmount}
+                        onChange={(event) => setBalanceAmount(event.target.value.replace(/[^\d.,+-]/g, ""))}
+                        inputMode="decimal"
+                        placeholder="Сумма: 10 или -10"
+                      />
+                    </div>
+                    {balanceAsset !== "USDT" && (
+                      <select value={balanceSource} onChange={(event) => { setBalanceSource(event.target.value); setBalanceNetwork(""); }}
+                        aria-label="Источник корректировки">
+                        <option value="default">Текущий резерв / внутренний учёт</option>
+                        <option value="goswap">Резерв GoSwap · начисление</option>
+                      </select>
+                    )}
+                    {balanceAsset === "USDT" && (
+                      <select aria-label="Сеть USDT" value={balanceNetwork} onChange={(event) => setBalanceNetwork(event.target.value)}>
+                        <option value="">Выберите сеть USDT</option>
+                        {creditNetworks.map((net) => <option key={net} value={net}>{
+                          `${networkStandards[net] ?? net} · ${net === "TRON" ? "Aura" : "GoSwap"}`
+                        }</option>)}
+                      </select>
+                    )}
+                    <textarea
+                      value={balanceReason}
+                      onChange={(event) => setBalanceReason(event.target.value)}
+                      maxLength={1000}
+                      placeholder="Обязательная причина корректировки"
                     />
-                  ))
-                ) : (
-                  <p className="wpay-admin-user-empty">Действий пока нет.</p>
-                )}
-              </section>
+                    <button
+                      type="button"
+                      disabled={!balanceAmount.trim() || !balanceReason.trim() || Boolean(actionWorking) ||
+                        (balanceAsset === "USDT" && !creditNetworks.includes(balanceNetwork)) ||
+                        (balanceSource === "goswap" && !(Number(balanceAmount.replace(",", ".")) > 0))}
+                      onClick={() => void adjustBalance()}
+                    >
+                      {actionWorking === "adjust_balance" ? "Проводим…" : "Провести корректировку"}
+                    </button>
+                    <small>
+                      Для USDT источник определяется сетью. Начисления на собственный адрес wPay требуют перевода в блокчейне.
+                    </small>
+                  </div>
+                </section>
+              )}
+
+              {section === "cards" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Карты Aura</h3>
+                  {detail.aura.cards.length ? (
+                    detail.aura.cards.map((item) => (
+                      <AdminUserCard key={text(item.card_id)} item={item} userId={userId} />
+                    ))
+                  ) : (
+                    <p className="wpay-admin-user-empty">Карт пока нет.</p>
+                  )}
+                </section>
+              )}
+
+              {section === "history" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Последние операции</h3>
+                  {detail.events.length ? (
+                    detail.events
+                      .slice(0, 12)
+                      .map((item, index) => (
+                        <Row
+                          key={index}
+                          title={text(item.type)}
+                          subtitle={date(item.created_at)}
+                          right={`${amount(item.amount)} ${text(item.asset)}`}
+                        />
+                      ))
+                  ) : (
+                    <p className="wpay-admin-user-empty">Операций пока нет.</p>
+                  )}
+                </section>
+              )}
+
+              {section === "profile" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Уведомления и рефералы</h3>
+                  <div className="wpay-admin-user-facts">
+                    <div>
+                      <small>Уведомлений</small>
+                      <b>{detail.notifications.length}</b>
+                    </div>
+                    <div>
+                      <small>Приглашено</small>
+                      <b>{detail.referrals.invited.length}</b>
+                    </div>
+                    <div>
+                      <small>Пригласил</small>
+                      <b>
+                        {text(detail.referrals.referred_by?.referrer_user_id)}
+                      </b>
+                    </div>
+                    <div>
+                      <small>Адресов</small>
+                      <b>{detail.addresses.length}</b>
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {section === "history" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Последние действия операторов</h3>
+                  {detail.audit.length ? (
+                    detail.audit.slice(0, 12).map((item, index) => (
+                      <Row
+                        key={index}
+                        title={text(item.action)}
+                        subtitle={`${date(item.created_at)} · ${text(item.admin_id)}`}
+                        right={text(item.outcome)}
+                      />
+                    ))
+                  ) : (
+                    <p className="wpay-admin-user-empty">Действий пока нет.</p>
+                  )}
+                </section>
+              )}
             </>
           ) : null}
         </div>
@@ -2510,6 +3010,22 @@ function Crypto({
     aura: "Aura",
     goswap: "GoSwap",
   };
+  async function updateExchangeRule(rule: string, method: string) {
+    setWorkingRoute(rule);
+    setRouteNotice("");
+    try {
+      await walletRequest("admin-exchange-rule", { rule, method });
+      await reload();
+      setRouteNotice("Правило обмена сохранено");
+    } catch (error) {
+      setRouteNotice(error instanceof Error ? error.message : "Не удалось сохранить правило");
+    } finally {
+      setWorkingRoute("");
+    }
+  }
+  const exchangeMethods: Record<string, string> = {
+    internal: "GoSwap · 1:1", fixedfloat: "FixedFloat", dex: "DEX", disabled: "Отключено",
+  };
   const assets = new Map<string, CryptoData["asset_routes"]>();
   for (const route of data.asset_routes ?? []) {
     const routes = assets.get(route.asset) ?? [];
@@ -2566,22 +3082,25 @@ function Crypto({
                   aria-checked={enabled}
                   disabled={Boolean(workingRoute)}
                   onClick={() => void updateAssets({ asset, enabled: !enabled }, asset)}
-                  className={`absolute right-4 top-3 h-6 w-11 rounded-full p-0.5 transition-colors disabled:opacity-40 ${enabled ? "bg-blue-500" : "bg-gray-500"}`}
+                  className="wpay-admin-asset-switch"
                 >
-                  <span className={`block h-5 w-5 rounded-full bg-white transition-transform ${enabled ? "translate-x-5" : ""}`} />
+                  <span aria-hidden="true" />
                 </button>
                 <details>
                   <summary className="cursor-pointer rounded-xl px-4 py-3 pr-20 text-sm font-semibold">
-                    {asset}
+                    <span className="inline-flex items-center gap-3 align-middle">
+                      {cryptoAssetsByTicker[asset] && <WalletAssetAvatar {...cryptoAssetsByTicker[asset]} />}
+                      <span>{currencyLabel(asset)}</span>
+                    </span>
                   </summary>
                   <div className="divide-y divide-[var(--admin-border)] border-t border-[var(--admin-border)] px-4">
                     {routes.map((route) => {
                       const key = `${asset}:${route.network}`;
-                      const network = route.network === "TRON" && asset === "USDT" ? "TRC-20" : route.network;
+                      const network = networkLabel(route.network, asset);
                       const options = route.providers ?? [];
                       return (
                         <div key={key} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 py-3 text-sm">
-                          <span className="font-medium">{network}</span>
+                          <span className="flex items-center gap-2 font-medium"><WalletNetworkIcon network={route.network} />{network}</span>
                           <label className="flex items-center gap-2 text-xs">
                             <input
                               type="checkbox"
@@ -2617,6 +3136,19 @@ function Crypto({
           Отключение скрывает актив и запрещает новые депозиты, счета, переводы
           и выводы. Остатки и история не удаляются.
         </p>
+      </section>
+      <section className={card}>
+        <div className="wpay-admin-section-title"><h2>Правила обмена</h2></div>
+        <p className="mb-3 text-sm opacity-60">Внутренний обмен GoSwap работает 1:1. Для DEX и FixedFloat правила пока выбирают маршрут без списания.</p>
+        {(data.exchange_rules ?? []).map((rule) => (
+          <label key={rule.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--admin-border)] py-3 last:border-0">
+            <span className="text-sm font-medium">{rule.label}</span>
+            <select className={input} value={rule.method} disabled={Boolean(workingRoute)}
+              onChange={(event) => void updateExchangeRule(rule.id, event.target.value)}>
+              {rule.methods.map((method) => <option key={method} value={method}>{exchangeMethods[method]}</option>)}
+            </select>
+          </label>
+        ))}
       </section>
       <div className="inline-grid grid-cols-3 gap-1 rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface-muted)] p-1">
         {(["addresses", "deposits", "balances"] as const).map((key) => (
@@ -2722,6 +3254,7 @@ function GoSwap({ data }: { data: GoSwapData }) {
   }
   return (
     <div className="space-y-4">
+      <PartnerEconomics summary={data.summary} label="GoSwap LIVE" />
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Object.entries(data.snapshot).map(([name, value]) => (
           <article key={name} className={card}>
@@ -2872,6 +3405,74 @@ function GoSwap({ data }: { data: GoSwapData }) {
   );
 }
 
+function richTextPlain(value: string) {
+  const element = document.createElement("div");
+  element.innerHTML = value;
+  return (element.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function fileDataUrl(file: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Не удалось прочитать изображение"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function prepareBroadcastImage(file: File) {
+  if (!['image/jpeg', 'image/png'].includes(file.type))
+    throw new Error("Выберите изображение JPEG или PNG");
+  if (file.size > 12 * 1024 * 1024)
+    throw new Error("Исходное изображение должно быть не больше 12 МБ");
+  if (file.size <= 560_000) return fileDataUrl(file);
+  const bitmap = await createImageBitmap(file);
+  try {
+    const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    let width = Math.max(1, Math.round(bitmap.width * ratio));
+    let height = Math.max(1, Math.round(bitmap.height * ratio));
+    let quality = 0.88;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Не удалось обработать изображение");
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(bitmap, 0, 0, width, height);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", quality),
+      );
+      if (!blob) throw new Error("Не удалось обработать изображение");
+      if (blob.size <= 560_000) return fileDataUrl(blob);
+      quality = Math.max(0.55, quality - 0.08);
+      if (quality === 0.55) {
+        width = Math.max(1, Math.round(width * 0.82));
+        height = Math.max(1, Math.round(height * 0.82));
+      }
+    }
+    throw new Error("Не удалось уменьшить изображение до допустимого размера");
+  } finally {
+    bitmap.close();
+  }
+}
+
+const defaultNotificationTemplate: NotificationTemplate = {
+  title: "{title}", message: "{message}", button_text: "Открыть WPay",
+};
+
+const notificationExamples: Record<string, [string, string]> = {
+  deposit: ["Пополнение зачислено", "На баланс USDT TRC‑20 зачислено 10 USDT."],
+  withdrawal: ["Вывод средств", "Статус вывода: completed. Сумма: 5 USDT."],
+  kyc: ["Верификация", "Личность подтверждена."],
+  card: ["Обновление карты", "Карта выпущена и появилась в WPay."],
+  card_operation: ["Операция по карте", "Оплата картой · 5 USDT."],
+  card_otp: ["Код 3DS для карты", "000000\n\nКод действует две минуты с момента получения."],
+  sbp: ["Покупка через СБП", "Оплата через СБП подтверждена."],
+  qr: ["Оплата по QR", "Статус оплаты: completed."],
+};
+
 function Notifications({
   data,
   reload,
@@ -2880,16 +3481,34 @@ function Notifications({
   reload: () => Promise<void>;
 }) {
   const [message, setMessage] = useState("");
+  const [imageData, setImageData] = useState("");
+  const [imageName, setImageName] = useState("");
+  const [imageBusy, setImageBusy] = useState(false);
+  const imageInput = useRef<HTMLInputElement | null>(null);
   const [target, setTarget] = useState<"self" | "all">("self");
   const [buttonText, setButtonText] = useState("");
   const [buttonUrl, setButtonUrl] = useState("");
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState("");
-  const canSend = useMemo(
-    () => message.trim().length > 0 && !sending,
-    [message, sending],
-  );
+  const messageLength = useMemo(() => richTextPlain(message).length, [message]);
+  const messageLimit = 32768;
+  const canSend =
+    messageLength > 0 && messageLength <= messageLimit && !sending && !imageBusy;
+  async function pickImage(file?: File) {
+    if (!file) return;
+    setImageBusy(true);
+    setNotice("");
+    try {
+      setImageData(await prepareBroadcastImage(file));
+      setImageName(file.name);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Ошибка изображения");
+    } finally {
+      setImageBusy(false);
+      if (imageInput.current) imageInput.current.value = "";
+    }
+  }
   async function send() {
     if (!canSend) return;
     if (
@@ -2909,15 +3528,42 @@ function Notifications({
           target,
           button_text: buttonText,
           button_url: buttonUrl,
+          image_data: imageData || undefined,
         },
       );
       setNotice(`Рассылка запущена. Получателей: ${result.total}`);
       setMessage("");
+      setImageData("");
+      setImageName("");
       await reload();
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : "Ошибка отправки");
     } finally {
       setSending(false);
+    }
+  }
+  const [editor, setEditor] = useState<{ eventType: string; variant: string; draft: NotificationTemplate } | null>(null);
+  function editTemplate(setting: NotificationData["settings"][number], variant = setting.variants?.[0]) {
+    setEditor({
+      eventType: setting.event_type, variant: variant?.key ?? setting.event_type,
+      draft: { ...(variant?.template ?? variant?.default ?? setting.template ?? defaultNotificationTemplate) },
+    });
+  }
+  async function saveTemplate(template: NotificationTemplate | null) {
+    if (!editor || saving) return;
+    setSaving("template");
+    setNotice("");
+    try {
+      await walletRequest("admin-notifications", {
+        operation: "template", event_type: editor.variant, template,
+      });
+      await reload();
+      setEditor(null);
+      setNotice(template ? "Шаблон сохранён" : "Стандартный шаблон восстановлен");
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Ошибка сохранения шаблона");
+    } finally {
+      setSaving("");
     }
   }
   async function toggle(eventType: string, enabled: boolean) {
@@ -2984,23 +3630,99 @@ function Notifications({
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           {data.settings.map((setting) => (
-            <label
-              key={setting.event_type}
-              className="flex items-center justify-between rounded-2xl bg-black/[.035] p-3 dark:bg-white/[.06]"
-            >
-              <span className="text-sm font-medium">{setting.label}</span>
-              <input
-                type="checkbox"
-                checked={Boolean(setting.enabled)}
-                disabled={saving === setting.event_type}
-                onChange={(event) =>
-                  void toggle(setting.event_type, event.target.checked)
-                }
-                className="h-5 w-5 accent-blue-500"
-              />
-            </label>
+            <div key={setting.event_type}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-black/[.035] p-3 dark:bg-white/[.06]">
+              <div>
+                <span className="block text-sm font-medium">{setting.label}</span>
+                <span className="text-xs opacity-55">{(setting.template || setting.variants?.some((variant) => variant.template)) ? "Свой шаблон" : "Стандартный шаблон"}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button type="button" className="text-sm font-semibold text-blue-600 dark:text-blue-400"
+                  disabled={Boolean(saving)} aria-expanded={editor?.eventType === setting.event_type}
+                  onClick={() => editTemplate(setting)}>
+                  Редактировать
+                </button>
+                <input type="checkbox" aria-label={`Отправлять уведомления «${setting.label}»`}
+                  checked={Boolean(setting.enabled)} disabled={Boolean(saving)}
+                  onChange={(event) => void toggle(setting.event_type, event.target.checked)}
+                  className="h-5 w-5 accent-blue-500" />
+              </div>
+            </div>
           ))}
         </div>
+        {editor && (() => {
+          const [exampleTitle, exampleMessage] = notificationExamples[editor.eventType] ?? ["Уведомление", "Пример сообщения"];
+          const setting = data.settings.find((item) => item.event_type === editor.eventType);
+          const variant = setting?.variants?.find((item) => item.key === editor.variant);
+          const variables: Record<string, string> = {
+            title: exampleTitle, message: exampleMessage,
+            amount: "10", asset: "USDT", network_suffix: " USDT TRC‑20",
+            status: "completed", code: "000000", delivery_status: "shipped",
+            operation_name: "Покупка", merchant_suffix: " Получатель: Магазин.",
+            amount_suffix: editor.eventType === "withdrawal" ? " Сумма: 5 USDT." : " Сумма: 700 RUB.",
+          };
+          const preview = (value: string) =>
+            value.replace(/\{([a-z_]+)\}/g, (match, token) => variables[token] ?? match);
+          const fields = [
+            ["title", "Заголовок", 200],
+            ["message", "Текст сообщения", 3500],
+            ["button_text", "Текст кнопки", 64],
+          ] as const;
+          return (
+            <form className="mt-4 grid gap-4 rounded-2xl border border-[var(--admin-border)] p-4 lg:grid-cols-2"
+              onSubmit={(event) => { event.preventDefault(); void saveTemplate(editor.draft); }}>
+              <div className="grid gap-3">
+                <h3 className="font-semibold">{setting?.label}</h3>
+                {setting && (setting.variants?.length ?? 0) > 1 && (
+                  <select aria-label="Вариант уведомления" value={editor.variant} className={input}
+                    onChange={(event) => editTemplate(setting, setting.variants?.find((item) => item.key === event.target.value))}>
+                    {setting.variants?.map((item) => (
+                      <option key={item.key} value={item.key}>{({
+                        "withdrawal.aura": "Aura", "withdrawal.goswap": "GoSwap",
+                        "qr.aura": "Aura", "qr.goswap": "GoSwap",
+                        "kyc.pending": "Проверка продолжается", "kyc.verified": "Верификация пройдена", "kyc.rejected": "Проверка отклонена",
+                        "card.status": "Изменение статуса", "card.opened": "Карта выпущена", "card.failed": "Ошибка выпуска",
+                        "card.cancelled": "Карта закрыта", "card.delivery": "Доставка", "card.frozen": "Карта заморожена",
+                      } as Record<string, string>)[item.key] ?? item.default.title}</option>
+                    ))}
+                  </select>
+                )}
+                {variant?.inherited && <p className="text-xs opacity-70">Сейчас применяется ранее сохранённый общий шаблон. Сохранение создаст отдельный шаблон для этого варианта.</p>}
+                <p className="text-xs opacity-70">Слова в фигурных скобках заменяются данными операции. Пустое поле кнопки скрывает её.</p>
+                {fields.map(([name, label, maxLength]) => {
+                  const props = {
+                    value: editor.draft[name], maxLength, required: name !== "button_text",
+                    className: `${input} w-full`,
+                    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+                      const value = event.target.value;
+                      setEditor((current) => current && { ...current, draft: { ...current.draft, [name]: value } });
+                    },
+                  };
+                  return <label key={name} className="grid min-w-0 gap-1 text-xs font-medium">
+                    {label}
+                    {name === "message" ? <textarea {...props} rows={4} /> : <input {...props} />}
+                  </label>;
+                })}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="submit" disabled={Boolean(saving)} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Сохранить</button>
+                  <button type="button" disabled={Boolean(saving)} className="text-sm text-blue-600 dark:text-blue-400"
+                    onClick={() => void saveTemplate(null)}>Вернуть стандартный</button>
+                  <button type="button" disabled={Boolean(saving)} className="text-sm opacity-70"
+                    onClick={() => setEditor(null)}>Закрыть</button>
+                </div>
+              </div>
+              <div className="min-w-0 self-start rounded-2xl bg-black/[.035] p-4 dark:bg-white/[.06]">
+                <h4 className="mb-3 text-xs font-medium opacity-60">Предпросмотр в Telegram</h4>
+                <div className="break-words rounded-xl bg-[var(--admin-surface)] p-3">
+                  <p className="whitespace-pre-wrap font-semibold">{preview(editor.draft.title).slice(0, 200)}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm">{preview(editor.draft.message).slice(0, 3500)}</p>
+                  {editor.draft.button_text && <div className="mt-3 rounded-lg bg-blue-500/10 p-2 text-center text-sm text-blue-600 dark:text-blue-400">{editor.draft.button_text}</div>}
+                </div>
+              </div>
+            </form>
+          );
+        })()}
+        {notice && <p role="status" className="mt-3 text-sm">{notice}</p>}
       </section>
       <section className={card}>
         <div className="wpay-admin-section-title">
@@ -3040,22 +3762,63 @@ function Notifications({
           <Empty />
         )}
       </section>
-      <section className={card}>
+      <section className={`${card} wpay-admin-broadcast-card`}>
         <div className="wpay-admin-section-title">
           <div>
             <span>Ручная отправка</span>
             <h2>Новая рассылка</h2>
           </div>
+          <i className="wpay-admin-telegram-badge">Rich Message</i>
         </div>
-        <textarea
+        <p className="wpay-admin-composer-hint">
+          Оформление сохранится в Telegram. Выдели текст и выбери действие.
+        </p>
+        <TelegramRichEditor
           value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          className={`${input} mt-3 min-h-32 resize-y`}
-          maxLength={4096}
-          placeholder="Текст сообщения"
+          onChange={setMessage}
+          length={messageLength}
+          limit={messageLimit}
         />
-        <div className="mt-2 text-right text-xs opacity-40">
-          {message.length}/4096
+        <div className="mt-3">
+          <input
+            ref={imageInput}
+            type="file"
+            accept="image/jpeg,image/png"
+            className="hidden"
+            onChange={(event) => void pickImage(event.target.files?.[0])}
+          />
+          {imageData ? (
+            <div className="relative overflow-hidden rounded-2xl bg-black/[.04] dark:bg-white/[.06]">
+              <img
+                src={imageData}
+                alt="Предпросмотр рассылки"
+                className="max-h-72 w-full object-contain"
+              />
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <span className="min-w-0 truncate text-xs opacity-55">{imageName}</span>
+                <button
+                  type="button"
+                  className="shrink-0 text-xs font-semibold text-red-500"
+                  onClick={() => { setImageData(""); setImageName(""); }}
+                >
+                  Удалить
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={imageBusy}
+              onClick={() => imageInput.current?.click()}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-black/15 py-3 text-sm font-semibold dark:border-white/20"
+            >
+              <ImagePlus size={18} />
+              {imageBusy ? "Обрабатываю…" : "Добавить изображение"}
+            </button>
+          )}
+          <p className="mt-2 text-xs opacity-40">
+            JPEG или PNG. Картинка станет медиаблоком внутри Rich Message; общий лимит — 32 768 символов.
+          </p>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
@@ -3108,12 +3871,13 @@ function Notifications({
               className="border-b border-black/[.06] py-3 last:border-0 dark:border-white/[.08]"
             >
               <Row
-                title={text(row.text)}
+                title={richTextPlain(text(row.text))}
                 subtitle={`${date(row.created_at)} · ${text(row.target)}`}
                 right={`${text(row.sent)}/${text(row.total)}`}
               />
               <div className="mt-1 text-xs opacity-45">
                 Статус: {text(row.status)} · ошибок {text(row.failed)}
+                {row.has_image ? " · с изображением" : ""}
               </div>
             </div>
           ))
@@ -3129,10 +3893,12 @@ function AdminTable({
   rows,
   columns,
   onRowClick,
+  sort,
 }: {
   rows: Json[];
   columns: AdminColumn[];
   onRowClick?: (row: Json) => void;
+  sort?: { key: string; descending: boolean; onSelect: (key: string) => void };
 }) {
   return (
     <div className="wpay-admin-table-wrap">
@@ -3140,7 +3906,14 @@ function AdminTable({
         <thead>
           <tr>
             {columns.map((column) => (
-              <th key={column.key}>{column.label}</th>
+              <th key={column.key} aria-sort={sort?.key === column.key ? (sort.descending ? "descending" : "ascending") : undefined}>
+                {sort ? (
+                  <button type="button" className="wpay-admin-sort-heading" onClick={() => sort.onSelect(column.key)}
+                    title={column.key === "balances" ? "Сортировать по доступному USDT" : undefined}>
+                    {column.label} <span aria-hidden="true">{sort.key === column.key ? (sort.descending ? "↓" : "↑") : "↕"}</span>
+                  </button>
+                ) : column.label}
+              </th>
             ))}
             <th>Данные</th>
           </tr>

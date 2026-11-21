@@ -21,6 +21,7 @@ from wallet_aura_errors import CATALOG as ERROR_CATALOG, retry_policy as aura_re
 
 from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
 from wallet_notifications import enqueue as enqueue_notification, prepare as prepare_notifications
+from wallet_tariffs import card_issue_enabled
 from wallet_tariffs import calculate as calculate_tariff, resolve_card_plan, prepare as prepare_tariffs
 
 
@@ -74,6 +75,10 @@ def prepare(ledger):
     prepare_notifications(ledger)
     ledger.db.executescript(
         """
+      CREATE TABLE IF NOT EXISTS aura_user_withdrawal_freezes (
+        user_id TEXT NOT NULL, environment TEXT NOT NULL, updated_at REAL NOT NULL,
+        PRIMARY KEY(user_id,environment)
+      );
       CREATE TABLE IF NOT EXISTS wallet_provider_routes (
         product TEXT NOT NULL, asset TEXT NOT NULL, network TEXT NOT NULL,
         environment TEXT NOT NULL, provider TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0,
@@ -1776,6 +1781,7 @@ class AuraService:
         enqueue_notification(
             self.ledger, f"aura:kyc:{customer_id}:{updated or status}:{status}",
             uid, "kyc", title, message,
+            variant="kyc.verified" if verified else "kyc.rejected" if terminal else "kyc.pending",
         )
         return safe_body
 
@@ -2180,6 +2186,8 @@ class AuraService:
             if price_guard: price_guard(fee, tariff.get("version_id"))
             self.ledger.begin("aura_card_reserve", uid, idempotency_key)
             try:
+                if not card_issue_enabled(self.ledger, plan_id):
+                    raise self.client.error_cls("card_kind_unavailable", "Выпуск по этому тарифу отключён", 412)
                 self.require_card_funds(uid, fee)
                 available, reserved = self.ledger.balance(uid, "USDT")
                 self.ledger.put_balance(uid, "USDT", available - fee, reserved + fee)
@@ -3067,18 +3075,22 @@ def _store_card_event(ledger, environment, kind, data, occurred_at=None):
     _settle_card_request(ledger, environment, card_id, status)
     issue=ledger.db.execute("SELECT local_id FROM wallet_provider_entities WHERE provider='aura' AND environment=? AND entity_type='card_request' AND remote_id=?",(environment,card_id)).fetchone()
     if issue:record_card_issue_history(ledger,environment,issue['local_id'])
+    card_variant = {"opened": "card.opened", "failed_to_open": "card.failed", "cancelled": "card.cancelled"}.get(status, "card.status")
     card_text = {
         "opened": "Карта выпущена и появилась в WPay.",
         "failed_to_open": "Выпустить карту не удалось. Средства будут обработаны по статусу заявки.",
         "cancelled": "Карта закрыта.",
     }.get(status, "Статус карты изменён: " + status + ".")
     if kind == "card.delivery_updated" and delivery_status:
+        card_variant = "card.delivery"
         card_text = "Статус доставки физической карты: " + delivery_status + "."
     if kind == "card.status_changed" and frozen:
+        card_variant = "card.frozen"
         card_text = "Карта заморожена."
     enqueue_notification(
         ledger, f"aura:card:{card_id}:{incoming_updated or kind}:{status}:{delivery_status or ''}",
-        owner[0], "card", "Обновление карты", card_text,
+        owner[0], "card", "Обновление карты", card_text, variant=card_variant,
+        variables={"status": status, "delivery_status": delivery_status or ""},
     )
 
 
@@ -3224,6 +3236,8 @@ def _store_card_operation(ledger, environment, data, *, notify=True):
     enqueue_notification(
         ledger, f"aura:card-operation:{operation_id}:{incoming_updated}:{status}",
         card[0], "card_operation", "Операция по карте", message,
+        variables={"operation_name": operation_name, "amount": amount or "", "status": status,
+                   "merchant_suffix": f" Получатель: {merchant}." if merchant else ""},
     )
 
 
@@ -3281,6 +3295,7 @@ def _store_sbp_order(ledger, environment, kind, data):
     enqueue_notification(
         ledger, f"aura:sbp:{order_id}:{incoming_updated or kind}:{status}",
         owner[0], "sbp", "Покупка через СБП", message,
+        variables={"status": status, "amount_suffix": f" Сумма: {rub_amount} RUB." if rub_amount else ""},
     )
 
 
@@ -3346,7 +3361,181 @@ def _store_qr_payment(ledger, environment, kind, data):
             message += " Сумма: " + amount_rub + " RUB."
         enqueue_notification(
             ledger, f"aura:qr:{payment_id}:{updated or kind}:{status}",
-            user_id, "qr", "Оплата по QR", message,
+            user_id, "qr", "Оплата по QR", message, variant="qr.aura",
+            variables={"status": status, "amount_suffix": f" Сумма: {amount_rub} RUB." if amount_rub else ""},
+        )
+
+
+def withdrawal_frozen(ledger, environment, uid):
+    return ledger.db.execute(
+        "SELECT 1 FROM aura_user_withdrawal_freezes WHERE user_id=? AND environment=?",
+        (uid, environment),
+    ).fetchone() is not None
+
+
+async def user_withdrawal(ledger, client, environment, uid, body, key, fee, *, actor=None, audit=None):
+    error_cls = client.error_cls
+    if not isinstance(body, dict) or set(body) != {"address", "amount", "fee"}:
+        raise ValueError("Invalid withdrawal request")
+    address = body["address"]
+    if not isinstance(address, str) or not re.fullmatch(r"T[1-9A-HJ-NP-Za-km-z]{33}", address):
+        raise ValueError("Некорректный адрес TRON")
+    raw = body["amount"]
+    if not isinstance(raw, str) or not re.fullmatch(r"\d{1,12}(?:\.\d{1,6})?", raw):
+        raise ValueError("Укажите сумму с точностью до 6 знаков")
+    amount = _decimal(raw)
+    if not re.fullmatch(r"[a-f0-9-]{36}", key):
+        raise ValueError("Invalid withdrawal request ID")
+    identity = f"{environment}:{uid}:{key}" if actor is None else f"{environment}:{uid}:operator:{actor}:{key}"
+    local_id = "wpay-withdraw-" + hashlib.sha256(identity.encode()).hexdigest()
+    params = (environment, local_id)
+    query = ("FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+             "AND entity_type='withdrawal' AND local_id=?")
+    request_body = {"address": address, "amount": format(amount.normalize(), "f"), "fee": str(fee), "key": key}
+    if actor:
+        request_body["operator"] = actor
+    ledger.begin("aura_withdrawal_reserve", actor or uid, local_id)
+    try:
+        intent = ledger.db.execute("SELECT * " + query, params).fetchone()
+        if intent:
+            stored = json.loads(intent["request_body"])
+            if stored["address"] != address or Decimal(stored["amount"]) != amount:
+                raise error_cls("idempotency_key_reused", "Параметры заявки уже зафиксированы", 409)
+            if intent["status"] == "rejected":
+                raise error_cls("failed_precondition", "Заявка отклонена", 409)
+            if intent["remote_id"]:
+                snapshot = ledger.db.execute(
+                    "SELECT body FROM aura_withdrawals WHERE withdrawal_id=? AND environment=?",
+                    (intent["remote_id"], environment),
+                ).fetchone()
+                if snapshot:
+                    ledger.commit()
+                    return json.loads(snapshot["body"])
+            request_body = stored
+        else:
+            if ledger.db.execute(
+                "SELECT 1 FROM aura_deposit_addresses WHERE environment=? AND address=?",
+                (environment, address),
+            ).fetchone():
+                raise error_cls(
+                    "AURA_DEPOSIT_ADDRESS",
+                    "Это адрес пополнения Aura. Для вывода укажите внешний адрес "
+                    + ("в сети TRON Nile." if environment == "test" else "в сети TRON TRC‑20."),
+                    400,
+                )
+            if withdrawal_frozen(ledger, environment, uid):
+                raise error_cls("WALLET_FROZEN", "Вывод из Aura заморожен", 403)
+            if _decimal(body["fee"], allow_zero=True) != fee:
+                raise error_cls("fee_changed", "Комиссия изменилась. Обновите форму", 409)
+            pending = ledger.db.execute(
+                "SELECT 1 FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+                "AND entity_type='withdrawal' AND user_id=? AND remote_id IS NULL AND status='reserved'",
+                (environment, uid),
+            ).fetchone()
+            if pending:
+                raise error_cls("failed_precondition", "Предыдущая заявка ещё проверяется", 409)
+            total = amount + fee
+            available, reserved = ledger.balance(uid, "USDT")
+            position = ledger.db.execute(
+                "SELECT available FROM wallet_provider_positions WHERE provider='aura' "
+                "AND environment=? AND user_id=? AND asset='USDT'", (environment, uid),
+            ).fetchone()
+            debt = ledger.db.execute(
+                "SELECT amount FROM wallet_debts WHERE user_id=? AND asset='USDT'", (uid,),
+            ).fetchone()
+            if not position or total > min(available, Decimal(position[0])) or (debt and Decimal(debt[0]) > 0):
+                raise error_cls("insufficient_funds", "Недостаточно USDT в Aura с учётом комиссии", 409)
+            ledger.put_balance(uid, "USDT", available - total, reserved + total)
+            _position_adjust(ledger, environment, uid, "USDT", -total, Decimal(0))
+            stamp = time.time()
+            ledger.db.execute(
+                "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                ("aura", environment, "withdrawal", local_id, None, uid, "reserved", local_id,
+                 json.dumps(request_body), None, stamp, stamp),
+            )
+            if actor and audit:
+                audit(actor, "wallet.aura_withdrawal_requested", uid,
+                      detail={"job_id": local_id, "amount": str(amount), "environment": environment})
+        ledger.commit()
+    except Exception:
+        ledger.rollback()
+        raise
+    try:
+        item = await client.create_withdrawal(request_body["amount"], address, idempotency_key=local_id)
+    except Exception as error:
+        if getattr(error, "name", None) in {
+            "address_invalid", "amount_out_of_range", "insufficient_funds",
+            "withdrawal_limit_exceeded", "failed_precondition",
+        }:
+            ledger.begin("aura_withdrawal_rejected", uid, local_id)
+            try:
+                current = ledger.db.execute("SELECT * " + query, params).fetchone()
+                if current["status"] == "reserved" and not current["remote_id"]:
+                    _finish_user_withdrawal(ledger, environment, current, "rejected")
+                ledger.commit()
+            except Exception:
+                ledger.rollback()
+                raise
+        raise
+
+    ledger.begin("aura_withdrawal_snapshot", uid, local_id)
+    try:
+        current = ledger.db.execute("SELECT * " + query, params).fetchone()
+        if current["remote_id"] and current["remote_id"] != item["withdrawal_id"]:
+            raise ValueError("Aura withdrawal identity mismatch")
+        ledger.db.execute(
+            "UPDATE wallet_provider_entities SET remote_id=?,updated_at=? " + query[query.index("WHERE"):],
+            (item["withdrawal_id"], time.time(), *params),
+        )
+        existing = ledger.db.execute(
+            "SELECT body,status FROM aura_withdrawals WHERE withdrawal_id=? AND environment=?",
+            (item["withdrawal_id"], environment),
+        ).fetchone()
+        if existing and existing["status"] in {"completed", "failed"}:
+            result = json.loads(existing["body"])
+            _finish_user_withdrawal(ledger, environment, current, existing["status"], result)
+        else:
+            result = store_withdrawal_snapshot(ledger, environment, item)
+        ledger.commit()
+        return result
+    except Exception:
+        ledger.rollback()
+        raise
+
+
+def _finish_user_withdrawal(ledger, environment, intent, status, data=None):
+    if intent["status"] in {"completed", "failed", "rejected"}:
+        return
+    request = json.loads(intent["request_body"])
+    reserved_fee = Decimal(request["fee"])
+    amount = Decimal(request["amount"])
+    held = amount + reserved_fee
+    charged = Decimal(0)
+    if data is not None:
+        fee = _decimal(data["fee"], allow_zero=True)
+        if data["amount"] is None or _decimal(data["amount"]) != amount or data["recipient"] != request["address"]:
+            raise ValueError("Aura withdrawal settlement mismatch")
+        if status == "completed":
+            if fee > reserved_fee:
+                raise ValueError("Aura withdrawal exceeded reserved fee")
+            charged = amount + fee
+    uid = intent["user_id"]
+    release = held - charged
+    available, reserved = ledger.balance(uid, "USDT")
+    ledger.put_balance(uid, "USDT", available + release, reserved - held)
+    if release:
+        _position_adjust(ledger, environment, uid, "USDT", release, Decimal(0))
+    ledger.db.execute(
+        "UPDATE wallet_provider_entities SET status=?,updated_at=? "
+        "WHERE provider='aura' AND environment=? AND entity_type='withdrawal' AND local_id=?",
+        (status, time.time(), environment, intent["local_id"]),
+    )
+    if data is not None:
+        ledger.db.execute(
+            "INSERT OR IGNORE INTO wallet_events VALUES (?,?,?,?,?,?,?)",
+            ("aura:" + environment + ":withdrawal:" + intent["local_id"], uid, "USDT",
+             str(-charged), "withdrawal_" + status, datetime.now(timezone.utc).isoformat(),
+             json.dumps(data)),
         )
 
 
@@ -3355,13 +3544,16 @@ def _store_withdrawal(ledger, environment, kind, data):
         data.get("withdrawal_id") or data.get("id"), "withdrawal id"
     )
     existing = ledger.db.execute(
-        "SELECT provider_updated_at FROM aura_withdrawals WHERE withdrawal_id=? AND environment=?",
+        "SELECT provider_updated_at,status FROM aura_withdrawals WHERE withdrawal_id=? AND environment=?",
         (withdrawal_id, environment),
     ).fetchone()
     updated = str(data.get("updated_at") or "")
-    if existing and updated and existing[0] and updated <= existing[0]:
+    if existing and updated and existing["provider_updated_at"] and updated <= existing["provider_updated_at"]:
         return
     status = str(data.get("status") or kind.removeprefix("withdraw."))[:100]
+    prior_status = existing["status"] if existing else None
+    if prior_status in {"completed", "failed"} or (prior_status == "broadcast" and status == "processing"):
+        return
     value = lambda key: (None if data.get(key) is None else str(_decimal(data[key], allow_zero=True)))
     amount, fee = value("amount"), value("fee")
     recipient = data.get("recipient") or data.get("address")
@@ -3386,24 +3578,39 @@ def _store_withdrawal(ledger, environment, kind, data):
          updated or None, json.dumps(safe, separators=(",", ":")), stamp, stamp),
     )
     owner = ledger.db.execute(
-        "SELECT user_id FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
+        "SELECT * FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
         "AND entity_type='withdrawal' AND (remote_id=? OR local_id=?) LIMIT 1",
         (environment, withdrawal_id, withdrawal_id),
     ).fetchone()
     if owner:
+        if status in {"completed", "failed"}:
+            _finish_user_withdrawal(ledger, environment, owner, status, safe)
+        if prior_status == status:
+            return
         message = "Статус вывода: " + status + "."
         if amount:
             message += " Сумма: " + amount + " USDT."
         enqueue_notification(
-            ledger, f"aura:withdrawal:{withdrawal_id}:{updated or kind}:{status}",
-            owner[0], "withdrawal", "Вывод средств", message,
+            ledger, f"aura:withdrawal:{environment}:{withdrawal_id}:{status}",
+            owner["user_id"], "withdrawal", "Вывод средств", message, variant="withdrawal.aura",
+            variables={"status": status, "amount_suffix": f" Сумма: {amount} USDT." if amount else ""},
         )
 
 
 def store_withdrawal_snapshot(ledger, environment, data):
     """Persist an authenticated read/create response using the webhook projection."""
     result = _withdrawal_result(data)
-    _store_withdrawal(ledger, environment, "withdraw.snapshot", result)
+    managed = not ledger.db.in_transaction
+    if managed:
+        ledger.begin("aura_withdrawal_snapshot", "aura", result["withdrawal_id"])
+    try:
+        _store_withdrawal(ledger, environment, "withdraw.snapshot", result)
+        if managed:
+            ledger.commit()
+    except Exception:
+        if managed:
+            ledger.rollback()
+        raise
     return result
 
 
@@ -3522,6 +3729,12 @@ def process_inbox(ledger, environment, limit=20):
                 )
                 if credited:
                     _position_add(ledger, environment, owner[0], asset, net)
+                    enqueue_notification(
+                        ledger, f"aura:deposit:{environment}:{deposit_id}",
+                        owner[0], "deposit", "Пополнение зачислено",
+                        f"На баланс USDT TRC‑20 зачислено {net:f} {asset}.",
+                        variables={"amount": format(net, "f"), "asset": asset, "network_suffix": " USDT TRC‑20"},
+                    )
             elif kind in {"customer.deposit.pending", "customer.deposit.rejected"}:
                 deposit_id = _safe_identifier(data.get("id") or data.get("deposit_id"), "deposit id")
                 customer_id = _safe_identifier(data.get("customer_id") or data.get("owner_id"), "customer id")

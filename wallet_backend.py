@@ -4,17 +4,27 @@ Secrets: GOSWAP_API_TOKEN, WPAY_BOT_TOKEN (or BOARD_BOT_TOKEN).
 Only this module sees the provider token; organization funds are never a user's
 balance. All money arithmetic uses Decimal and SQLite write transactions.
 """
+from wallet_exchange_routes import (
+    prepare as prepare_exchange_rules, rules as exchange_rules,
+    save_rule as save_exchange_rule, resolve as resolve_exchange_route, internal_exchange,
+)
+from wallet_dex import PAIR as DEX_PAIR, quote_bnb
 import asyncio
+import base64
+import binascii
+from wallet_key_export import prepare as prepare_key_export, route as key_export_route, fresh as fresh_wallet_auth
+from wallet_exchange_funding import Funding
+from wallet_custody_withdrawal import CustodyWithdrawal
+from wallet_admin_wallets import control_wallet, user_wallet_inventory
 from wallet_fixedfloat_orders import Orders
 from wallet_card_ui import CardUI
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
-from wallet_key_export import prepare as prepare_key_export, route as key_export_route
-from wallet_exchange_funding import Funding
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
 from wallet_chain import ASSET_NETWORKS as CUSTODY_ASSET_NETWORKS, ChainReader
 from wallet_aura_errors import wallet_error_payload
 import hashlib
 import hmac
+import html
 import json
 import logging
 import os
@@ -25,6 +35,7 @@ import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation, localcontext
+from html.parser import HTMLParser
 from urllib.parse import parse_qsl, quote, urlsplit
 
 from aiohttp import ClientError, ClientSession, ClientTimeout, FormData, web
@@ -35,20 +46,22 @@ from wallet_book import Book
 from wallet_user_ops import prepare as prepare_user_ops, route as user_ops_route
 from wallet_inbox import prepare as prepare_inbox, receive as receive_webhook
 from wallet_finance_worker import prepare as prepare_finance_worker, Worker as FinanceWorker
-from wallet_finance import finance_route, require_coverage
+from wallet_finance import finance_route, require_coverage, require_goswap_user_funds
 from wallet_notifications import (
     prepare as prepare_notifications, snapshot as notification_snapshot,
-    NotificationWorker,
+    NotificationWorker, save_template as save_notification_template,
 )
 from wallet_referrals import capture as capture_referral, ensure_code as ensure_referral_code, prepare as prepare_referrals, summary as referral_summary
-from wallet_operations import prepare_operations, operations_route, save_address
+from wallet_operations import goswap_network_balances, prepare_operations, operations_route, save_address
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
+from wallet_tariffs import set_card_issue_enabled
 from wallet_tariffs import prepare as prepare_tariffs, snapshot as tariff_snapshot, create_version as create_tariff_version
 from wallet_aura import (
     AuraClient, AuraService, prepare as prepare_aura,
     receive_webhook as receive_aura_webhook, process_inbox as process_aura_inbox,
     reconcile as reconcile_aura, run_worker as run_aura_worker,
     reconcile_pending as reconcile_aura_pending, store_withdrawal_snapshot,
+    user_withdrawal as aura_user_withdrawal, withdrawal_frozen as aura_withdrawal_frozen,
 )
 
 BASE_URL = 'https://goswap.site/api/'
@@ -59,6 +72,278 @@ WALLET_ASSET_NETWORKS = {
     'TRX': ('TRON',), 'BNB': ('BSC',), 'ETH': ('ETH',),
     'GRAM': ('TON',), 'SOL': ('SOL',), 'BTC': ('BTC',), 'XAUT': ('ETH',),
 }
+
+
+class _TelegramHtmlSanitizer(HTMLParser):
+    """Allowlist the HTML subset accepted by Telegram Rich Messages."""
+
+    TAGS = {
+        'b': 'b', 'strong': 'b', 'i': 'i', 'em': 'i', 'u': 'u',
+        's': 's', 'strike': 's', 'del': 's', 'code': 'code',
+        'pre': 'pre', 'blockquote': 'blockquote', 'a': 'a', 'mark': 'mark',
+        'sub': 'sub', 'sup': 'sup', 'tg-spoiler': 'tg-spoiler',
+        'tg-reference': 'tg-reference', 'tg-emoji': 'tg-emoji',
+        'tg-time': 'tg-time', 'tg-math': 'tg-math',
+        'h1': 'h1', 'h2': 'h2', 'h3': 'h3', 'h4': 'h4', 'h5': 'h5',
+        'h6': 'h6', 'p': 'p', 'footer': 'footer', 'hr': 'hr', 'br': 'br',
+        'ul': 'ul', 'ol': 'ol', 'li': 'li', 'input': 'input', 'cite': 'cite',
+        'aside': 'aside', 'img': 'img', 'video': 'video', 'audio': 'audio',
+        'tg-document': 'tg-document', 'figure': 'figure',
+        'figcaption': 'figcaption', 'tg-map': 'tg-map',
+        'tg-collage': 'tg-collage', 'tg-slideshow': 'tg-slideshow',
+        'table': 'table', 'caption': 'caption', 'tr': 'tr', 'th': 'th',
+        'td': 'td', 'details': 'details', 'summary': 'summary',
+        'tg-math-block': 'tg-math-block', 'tg-button': 'tg-button',
+        'tg-button-row': 'tg-button-row',
+    }
+    BLOCKS = {'div'}
+    VOID = {'br', 'hr', 'input', 'img', 'tg-map'}
+    BOOLEAN = {
+        'expandable', 'reversed', 'checked', 'bordered', 'striped', 'compact',
+        'open', 'tg-spoiler', 'request-write-access', 'allow-user-chats',
+        'allow-bot-chats', 'allow-group-chats', 'allow-channel-chats',
+    }
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+        self.open_tags = []
+        self.skip_depth = 0
+
+    def newline(self):
+        if self.parts and not self.parts[-1].endswith('\n'):
+            self.parts.append('\n')
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        if tag in {'script', 'style'}:
+            self.skip_depth += 1
+            return
+        if self.skip_depth:
+            return
+        if tag in self.BLOCKS:
+            self.newline()
+            return
+        if tag == 'span':
+            classes = set(dict(attrs).get('class', '').split())
+            if 'tg-spoiler' in classes:
+                self.parts.append('<tg-spoiler>')
+                self.open_tags.append((tag, 'tg-spoiler'))
+            return
+        mapped = self.TAGS.get(tag)
+        if not mapped:
+            return
+        safe_attrs = self._attrs(mapped, attrs)
+        if safe_attrs is None:
+            return
+        self.parts.append('<' + mapped + safe_attrs + '>')
+        if mapped not in self.VOID:
+            self.open_tags.append((tag, mapped))
+
+    def handle_startendtag(self, tag, attrs):
+        self.handle_starttag(tag, attrs)
+
+    @staticmethod
+    def _url(value, *, media=False):
+        value = str(value or '').strip()
+        if not value:
+            return ''
+        if value.startswith('#') and not media:
+            return value if re.fullmatch(r'#[A-Za-z0-9_-]{1,64}', value) else ''
+        split = urlsplit(value)
+        allowed = {'http', 'https'} if media else {'http', 'https', 'tg', 'mailto', 'tel'}
+        return value if split.scheme.lower() in allowed else ''
+
+    def _attrs(self, tag, attrs):
+        source = {str(key).lower(): value for key, value in attrs}
+        out = []
+
+        def add(name, value):
+            if value is not None and value != '':
+                out.append(f' {name}="{html.escape(str(value), quote=True)}"')
+
+        def boolean(name):
+            if name in source:
+                out.append(' ' + name)
+
+        if tag == 'a':
+            href = self._url(source.get('href'))
+            name = str(source.get('name') or '')
+            if href:
+                add('href', href)
+            elif re.fullmatch(r'[A-Za-z0-9_-]{1,64}', name):
+                add('name', name)
+            else:
+                return None
+        elif tag == 'blockquote':
+            boolean('expandable')
+        elif tag == 'code':
+            language = str(source.get('class') or '')
+            if re.fullmatch(r'language-[A-Za-z0-9_+-]{1,32}', language):
+                add('class', language)
+        elif tag == 'tg-reference':
+            name = str(source.get('name') or '')
+            if re.fullmatch(r'[A-Za-z0-9_-]{1,64}', name):
+                add('name', name)
+            else:
+                return None
+        elif tag == 'tg-emoji':
+            if re.fullmatch(r'\d{1,32}', str(source.get('emoji-id') or '')):
+                add('emoji-id', source['emoji-id'])
+            else:
+                return None
+        elif tag == 'tg-time':
+            if re.fullmatch(r'-?\d{1,16}', str(source.get('unix') or '')):
+                add('unix', source['unix'])
+            if re.fullmatch(r'[A-Za-z]{1,16}', str(source.get('format') or '')):
+                add('format', source['format'])
+        elif tag == 'ol':
+            if re.fullmatch(r'-?\d{1,9}', str(source.get('start') or '')):
+                add('start', source['start'])
+            if source.get('type') in {'1', 'a', 'A', 'i', 'I'}:
+                add('type', source['type'])
+            boolean('reversed')
+        elif tag == 'li':
+            if re.fullmatch(r'-?\d{1,9}', str(source.get('value') or '')):
+                add('value', source['value'])
+            if source.get('type') in {'1', 'a', 'A', 'i', 'I'}:
+                add('type', source['type'])
+        elif tag == 'input':
+            if source.get('type') == 'checkbox':
+                add('type', 'checkbox')
+                boolean('checked')
+            else:
+                return None
+        elif tag in {'img', 'video', 'audio', 'tg-document'}:
+            src = self._url(source.get('src'), media=True)
+            if str(source.get('src') or '').startswith('tg://'):
+                src = self._url(source.get('src'))
+            if not src:
+                return None
+            add('src', src)
+            if tag == 'img' and source.get('alt'):
+                add('alt', str(source['alt'])[:128])
+            boolean('tg-spoiler')
+        elif tag == 'tg-map':
+            try:
+                lat = float(source.get('lat'))
+                lon = float(source.get('long'))
+                zoom = int(source.get('zoom', 13))
+                if -90 <= lat <= 90 and -180 <= lon <= 180 and 0 <= zoom <= 20:
+                    add('lat', lat); add('long', lon); add('zoom', zoom)
+            except (TypeError, ValueError):
+                pass
+        elif tag == 'table':
+            for name in ('bordered', 'striped', 'compact'):
+                boolean(name)
+        elif tag in {'td', 'th'}:
+            for name in ('colspan', 'rowspan'):
+                if re.fullmatch(r'\d{1,2}', str(source.get(name) or '')):
+                    add(name, max(1, min(20, int(source[name]))))
+            if source.get('align') in {'left', 'center', 'right'}:
+                add('align', source['align'])
+            if source.get('valign') in {'top', 'middle', 'bottom'}:
+                add('valign', source['valign'])
+        elif tag == 'details':
+            boolean('open')
+        elif tag == 'tg-button-row':
+            if source.get('align') in {'left', 'center', 'right'}:
+                add('align', source['align'])
+        elif tag == 'tg-button':
+            button_type = str(source.get('type') or '')
+            if button_type in {
+                'url', 'callback_data', 'web_app', 'login_url',
+                'switch_inline_query', 'switch_inline_query_current_chat',
+                'switch_inline_query_chosen_chat', 'copy_text', 'disabled',
+            }:
+                add('type', button_type)
+            else:
+                return None
+            if source.get('style') in {'danger', 'success', 'primary', 'link'}:
+                add('style', source['style'])
+            url = self._url(source.get('url'))
+            if url:
+                add('url', url)
+            for name in ('data', 'query', 'text', 'forward-text'):
+                if source.get(name):
+                    add(name, str(source[name])[:256])
+            for name in self.BOOLEAN:
+                boolean(name)
+        return ''.join(out)
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+        if tag in {'script', 'style'}:
+            self.skip_depth = max(0, self.skip_depth - 1)
+            return
+        if self.skip_depth:
+            return
+        if tag in self.BLOCKS:
+            self.newline()
+            return
+        for index in range(len(self.open_tags) - 1, -1, -1):
+            source, mapped = self.open_tags[index]
+            if source == tag:
+                self.parts.append('</' + mapped + '>')
+                self.open_tags.pop(index)
+                break
+
+    def handle_data(self, data):
+        if not self.skip_depth:
+            self.parts.append(html.escape(data))
+
+    def result(self):
+        for _, mapped in reversed(self.open_tags):
+            self.parts.append('</' + mapped + '>')
+        value = ''.join(self.parts)
+        value = re.sub(r'\n{3,}', '\n\n', value).strip()
+        return value
+
+
+def _telegram_html(value):
+    parser = _TelegramHtmlSanitizer()
+    parser.feed(str(value or ''))
+    return parser.result()
+
+
+def _telegram_text_length(value):
+    return len(re.sub(r'<[^>]+>', '', html.unescape(value)))
+
+
+def _broadcast_image(value):
+    if not value:
+        return None
+    match = re.fullmatch(r'data:(image/(?:jpeg|png));base64,([A-Za-z0-9+/=\s]+)', str(value))
+    if not match:
+        raise ValueError('Поддерживаются изображения JPEG и PNG')
+    try:
+        payload = base64.b64decode(match.group(2), validate=True)
+    except (ValueError, binascii.Error):
+        raise ValueError('Изображение повреждено') from None
+    if not 1 <= len(payload) <= 600_000:
+        raise ValueError('Изображение должно быть не больше 600 КБ после обработки')
+    extension = 'jpg' if match.group(1) == 'image/jpeg' else 'png'
+    return payload, match.group(1), 'broadcast.' + extension
+
+
+def _telegram_uploaded_photo_file_id(value):
+    """Find the largest uploaded photo variant in a sendRichMessage response."""
+    candidates = []
+
+    def visit(node):
+        if isinstance(node, dict):
+            file_id = node.get('file_id')
+            if file_id and isinstance(file_id, str):
+                score = int(node.get('width') or 0) * int(node.get('height') or 0)
+                candidates.append((score, file_id))
+            for child in node.values():
+                visit(child)
+        elif isinstance(node, list):
+            for child in node:
+                visit(child)
+
+    visit(value)
+    return max(candidates, default=(0, None))[1]
 
 def deposit_provider_options(asset, network):
     options = []
@@ -79,25 +364,30 @@ def default_deposit_provider(asset, network):
 
 ADMIN_GOSWAP_METHODS = {
     'getMe': {'title': 'Приложение', 'post': False, 'params': [], 'required': [], 'example': {}},
-    'getBalance': {'title': 'Баланс организации', 'post': False, 'params': [], 'required': [], 'example': {}},
+    'getBalance': {'title': 'Баланс организации', 'post': False, 'params': [], 'required': [], 'example': {}, 'description': 'Доступные остатки организации по валютам.', 'response_example': [{'currency_code': 'USDT', 'available': '1250.50'}]},
     'getCurrencies': {'title': 'Валюты', 'post': False, 'params': [], 'required': [], 'example': {}},
     'getExchangeRates': {'title': 'Курсы', 'post': False, 'params': [], 'required': [], 'example': {}},
     'getInvoices': {'title': 'Счета', 'post': False, 'params': ['invoice_ids', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
     'getTransfers': {'title': 'Выплаты', 'post': False, 'params': ['spend_id', 'user_id', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
-    'getWithdrawals': {'title': 'Выводы', 'post': False, 'params': ['withdrawal_ids', 'spend_id', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
-    'getDeposits': {'title': 'Пополнения', 'post': False, 'params': ['client_ref', 'network', 'count', 'offset'], 'required': [], 'example': {'count': 1000, 'offset': 0}},
-    'getTransactions': {'title': 'Лента операций', 'post': False, 'params': ['asset', 'type', 'count', 'before', 'after'], 'required': [], 'example': {'count': 100, 'after': 0}},
-    'getQrPayments': {'title': 'QR-платежи', 'post': False, 'params': ['payment_ids', 'spend_ids', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
-    'estimateWithdrawal': {'title': 'Расчёт вывода', 'post': False, 'params': ['asset', 'network', 'address', 'amount', 'memo'], 'required': ['asset', 'network', 'address', 'amount'], 'example': {'asset': 'USDT', 'network': 'BSC', 'address': '', 'amount': '10'}},
+    'getWithdrawals': {'title': 'Выводы', 'post': False, 'params': ['withdrawal_ids', 'spend_id', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}, 'description': 'Свежие выводы организации. История доступна, даже если новые выводы выключены.', 'notes': ['Для уточнённого исхода сохраняйте запись с большей version.']},
+    'getDeposits': {'title': 'Пополнения', 'post': False, 'params': ['client_ref', 'network', 'count', 'offset'], 'required': [], 'example': {'count': 1000, 'offset': 0}, 'description': 'Только зачисленные пополнения на адреса клиентов.', 'rate_limit': '60 запросов в минуту', 'notes': ['Листайте count=1000 и offset=0,1000… до пустого items.', 'Дедупликация строго по deposit_id.']},
+    'getTransactions': {'title': 'Лента операций', 'post': False, 'params': ['asset', 'type', 'count', 'before', 'after'], 'required': [], 'example': {'count': 100, 'after': 0}, 'description': 'Неизменяемая лента всех изменений available-баланса организации.', 'rate_limit': '60 запросов в минуту', 'notes': ['Начните с after=0, сохраняйте cursor и листайте, пока has_more=true.', 'Обработанной считается строка по id; пропуски номеров допустимы.']},
+    'getQrPayments': {'title': 'QR-платежи', 'post': False, 'params': ['payment_ids', 'spend_ids', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}, 'description': 'Статусы СБП/QR-платежей: processing, completed, failed или refunded.'},
+    'getCards': {'title': 'Карты клиентов', 'post': False, 'params': ['client_ref', 'card_ids', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}, 'description': 'Карты организации: issuing, inactive, active, frozen, closed или failed.'},
+    'getCardOps': {'title': 'Операции карт', 'post': False, 'params': ['card_ids', 'spend_id', 'kind', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}, 'description': 'Исходы выпуска и пополнения карт, в том числе после потерянного ответа.'},
+    'getCardDetails': {'title': 'Реквизиты карты', 'post': False, 'params': ['card_id'], 'required': ['card_id'], 'example': {'card_id': ''}, 'description': 'Одноразовая ссылка эмитента с PAN, сроком и CVV.', 'notes': ['Ссылка действует 60 секунд; для карт США реквизиты по API не выдаются.']},
+    'estimateWithdrawal': {'title': 'Расчёт вывода', 'post': False, 'params': ['asset', 'network', 'address', 'amount', 'memo'], 'required': ['asset', 'network', 'address', 'amount'], 'example': {'asset': 'USDT', 'network': 'BSC', 'address': '', 'amount': '10'}, 'description': 'Показывает fee и total без списания. Адресат получает amount, комиссия берётся сверху.'},
     'createInvoice': {'title': 'Создать счёт', 'post': True, 'params': ['asset', 'amount', 'description', 'payload', 'expires_in'], 'required': ['asset', 'amount'], 'example': {'asset': 'USDT', 'amount': '10', 'description': '', 'payload': '', 'expires_in': 3600}},
     'transfer': {'title': 'Выплата пользователю', 'post': True, 'dangerous': True, 'params': ['user_id', 'asset', 'amount', 'spend_id', 'comment'], 'required': ['user_id', 'asset', 'amount', 'spend_id'], 'example': {'user_id': '', 'asset': 'USDT', 'amount': '1', 'spend_id': '', 'comment': ''}},
     'revokeTransfer': {'title': 'Отозвать выплату', 'post': True, 'dangerous': True, 'params': ['spend_id'], 'required': ['spend_id'], 'example': {'spend_id': ''}},
-    'createWithdrawal': {'title': 'Вывод в сеть', 'post': True, 'dangerous': True, 'params': ['asset', 'network', 'address', 'amount', 'spend_id', 'memo', 'max_fee'], 'required': ['asset', 'network', 'address', 'amount', 'spend_id'], 'example': {'asset': 'USDT', 'network': 'BSC', 'address': '', 'amount': '1', 'spend_id': '', 'max_fee': ''}},
-    'getClientAddress': {'title': 'Адрес клиента', 'post': True, 'params': ['client_ref', 'network'], 'required': ['client_ref', 'network'], 'example': {'client_ref': '', 'network': 'BSC'}},
-    'createDeposit': {'title': 'Окно пополнения', 'post': True, 'params': ['client_ref', 'network', 'asset'], 'required': ['client_ref'], 'example': {'client_ref': '', 'network': 'BSC', 'asset': 'USDT'}},
-    'createExactDeposit': {'title': 'Точное пополнение TRON', 'post': True, 'params': ['client_ref', 'amount', 'network', 'asset'], 'required': ['client_ref', 'amount'], 'example': {'client_ref': '', 'amount': '1', 'network': 'TRON', 'asset': 'USDT'}},
-    'createQrQuote': {'title': 'Котировка QR', 'post': True, 'params': ['qr'], 'required': ['qr'], 'example': {'qr': ''}},
-    'payQr': {'title': 'Оплатить QR', 'post': True, 'dangerous': True, 'params': ['quote_id', 'spend_id'], 'required': ['quote_id', 'spend_id'], 'example': {'quote_id': '', 'spend_id': ''}},
+    'createWithdrawal': {'title': 'Вывод в сеть', 'post': True, 'dangerous': True, 'params': ['asset', 'network', 'address', 'amount', 'spend_id', 'memo', 'max_fee'], 'required': ['asset', 'network', 'address', 'amount', 'spend_id'], 'example': {'asset': 'USDT', 'network': 'BSC', 'address': '', 'amount': '1', 'spend_id': '', 'max_fee': ''}, 'description': 'Списывает amount + fee и ставит перевод в очередь. Принятый вывод отменить нельзя.', 'notes': ['Повтор с тем же spend_id идемпотентен.', 'Если комиссия выше max_fee, вывод не создаётся.']},
+    'getClientAddress': {'title': 'Адрес клиента', 'post': True, 'params': ['client_ref', 'network'], 'required': ['client_ref', 'network'], 'example': {'client_ref': '', 'network': 'BSC'}, 'description': 'Постоянный адрес USDT клиента в BSC, ETH, TON или SOL.', 'rate_limit': '30 запросов в минуту', 'notes': ['Запрашивайте адрес перед пополнением, не при регистрации.', 'Для TON/SOL обрабатывайте 503 Retry-After.', 'Показывайте min_deposit. Для TRON используйте createExactDeposit.']},
+    'createDeposit': {'title': 'Окно пополнения', 'post': True, 'params': ['client_ref', 'network', 'asset'], 'required': ['client_ref'], 'example': {'client_ref': '', 'network': 'BSC', 'asset': 'USDT'}, 'description': 'Возвращает browser url и Telegram mini_app_url с адресом и QR.', 'rate_limit': '60 запросов в минуту'},
+    'createExactDeposit': {'title': 'Точное пополнение TRON', 'post': True, 'params': ['client_ref', 'amount', 'network', 'asset'], 'required': ['client_ref', 'amount'], 'example': {'client_ref': '', 'amount': '1', 'network': 'TRON', 'asset': 'USDT'}, 'description': '25-минутная заявка с адресом и точной суммой USDT TRON.', 'notes': ['Переведите ровно amount до expires_at.', 'Доступно B2B-партнёрам; до 3 заявок на клиента и 50 на организацию.']},
+    'createCard': {'title': 'Выпустить карту', 'post': True, 'dangerous': True, 'params': ['client_ref', 'spend_id', 'product'], 'required': ['client_ref', 'spend_id'], 'example': {'client_ref': '', 'spend_id': '', 'product': 'sg'}, 'description': 'Выпускает виртуальную карту и списывает стоимость с баланса организации.', 'notes': ['Повтор с тем же spend_id возвращает already: true.', 'processing сверяйте через getCardOps.']},
+    'topUpCard': {'title': 'Пополнить карту', 'post': True, 'dangerous': True, 'params': ['card_id', 'amount', 'spend_id', 'max_fee'], 'required': ['card_id', 'amount', 'spend_id'], 'example': {'card_id': '', 'amount': '10.00', 'spend_id': '', 'max_fee': ''}, 'description': 'Зачисляет amount на карту и списывает amount + fee с баланса организации.', 'notes': ['Первое пополнение — минимум 10 USD.', 'По карте допустима только одна processing-операция.']},
+    'createQrQuote': {'title': 'Котировка QR', 'post': True, 'params': ['qr'], 'required': ['qr'], 'example': {'qr': ''}, 'description': 'Распознаёт НСПК/ST00012 и возвращает получателя, сумму RUB и стоимость USDT.', 'notes': ['До payQr покажите пользователю получателя и сумму; котировка живёт до expires_at.']},
+    'payQr': {'title': 'Оплатить QR', 'post': True, 'dangerous': True, 'params': ['quote_id', 'spend_id'], 'required': ['quote_id', 'spend_id'], 'example': {'quote_id': '', 'spend_id': ''}, 'description': 'Резервирует USDT и запускает оплату. Итог — в вебхуке и getQrPayments.', 'notes': ['Повтор с тем же spend_id идемпотентен.']},
 }
 
 
@@ -453,6 +743,15 @@ class Ledger:
           CREATE INDEX IF NOT EXISTS admin_action_audit_created ON admin_action_audit(created_at);
           CREATE INDEX IF NOT EXISTS admin_action_audit_target ON admin_action_audit(target_user_id,created_at);
         ''')
+        broadcast_columns = {
+            row[1] for row in self.db.execute('PRAGMA table_info(admin_broadcasts)')
+        }
+        if 'parse_mode' not in broadcast_columns:
+            self.db.execute("ALTER TABLE admin_broadcasts ADD COLUMN parse_mode TEXT NOT NULL DEFAULT 'HTML'")
+        if 'image_file_id' not in broadcast_columns:
+            self.db.execute('ALTER TABLE admin_broadcasts ADD COLUMN image_file_id TEXT')
+        if 'has_image' not in broadcast_columns:
+            self.db.execute('ALTER TABLE admin_broadcasts ADD COLUMN has_image INTEGER NOT NULL DEFAULT 0')
 
         prepare_withdrawals(self)
         prepare_tariffs(self)
@@ -611,6 +910,7 @@ class Ledger:
                 if debt(self, uid, quote['asset']):
                     raise ApiError('INSUFFICIENT_FUNDS', 'Есть задолженность по уточнённому выводу', 409)
                 available, reserved = self.balance(uid, quote['asset'])
+                require_goswap_user_funds(self, uid, quote['asset'], available, amount, ApiError)
                 self.put_balance(uid, quote['asset'], add(available, -amount), add(reserved, amount))
                 self.db.execute("UPDATE wallet_quotes SET state='reserved' WHERE quote_id=?", (quote_id,))
             self.commit()
@@ -697,6 +997,7 @@ def install_wallet(app, root, owner_check):
     prepare_finance_worker(ledger)
     prepare_notifications(ledger)
     prepare_exchange_limits(ledger)
+    prepare_exchange_rules(ledger)
     exchange = FixedFloat(os.environ.get('FIXEDFLOAT_API_KEY', ''), os.environ.get('FIXEDFLOAT_API_SECRET', ''), ApiError)
     exchange.ledger = ledger
     app['wpay_exchange'] = exchange
@@ -712,6 +1013,10 @@ def install_wallet(app, root, owner_check):
     app['wpay_custody'] = custody
     prepare_key_export(ledger)
     exchange_funding = Funding(ledger, exchange_orders, custody, enabled=os.environ.get('WPAY_WALLET_FUNDING_ENABLED','0') == '1')
+    custody_withdrawal = CustodyWithdrawal(
+        exchange_funding, enabled=os.environ.get('WPAY_CUSTODY_WITHDRAWAL_ENABLED') == '1',
+        bnb_enabled=os.environ.get('WPAY_CUSTODY_BNB_WITHDRAWAL_ENABLED') == '1',
+    )
     app['wpay_exchange_funding'] = exchange_funding
     app['wpay_chain'] = ChainReader(ledger, ApiError)
     prepare_tariffs(ledger)
@@ -971,7 +1276,7 @@ def install_wallet(app, root, owner_check):
         prefix = '+' + digits[0] if str(value).strip().startswith('+') else digits[0]
         return f'{prefix} *** ***-**-{digits[-2:]}'
 
-    def admin_user(request):
+    async def admin_user(request):
         user_id = str(request.query.get('user_id') or '')
         if not user_id.startswith('tg:') or not user_id[3:].isdigit():
             raise ValueError('Некорректный идентификатор пользователя')
@@ -1006,6 +1311,12 @@ def install_wallet(app, root, owner_check):
                     'ORDER BY updated_at DESC LIMIT 50', (user_id,),
                 ),
             },
+            'credit_assets': enabled_asset_routes(),
+            'wallets': await user_wallet_inventory(
+                ledger, app['wpay_chain'], user_id,
+                {network: deposit_provider('USDT', network) for network in enabled_asset_routes().get('USDT', [])},
+                aura_environment,
+            ),
             'balances': decoded_rows(
                 'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=? ORDER BY asset',
                 (user_id,),
@@ -1038,6 +1349,69 @@ def install_wallet(app, root, owner_check):
                 )), None),
             },
         }
+
+    def validate_managed_exchange(source, destination, expected_provider=None):
+        if not exchange_orders.enabled or source not in WALLET_ASSET_NETWORKS['USDT'] or destination not in WALLET_ASSET_NETWORKS['USDT']:
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Заявки для этого маршрута недоступны', 409)
+        pair = {'from_asset': 'USDT', 'to_asset': 'USDT', 'from_network': source, 'to_network': destination}
+        selected = deposit_provider('USDT', destination)
+        envs = {deposit_provider('USDT', source), selected}
+        if resolve_exchange_route(ledger, pair, asset_enabled, deposit_provider)['method'] != 'fixedfloat':
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Маршрут FixedFloat отключён', 409)
+        if selected not in {'goswap', 'aura'} or (selected == 'goswap' and (not token or destination == 'TRON')):
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Адрес зачисления недоступен', 409)
+        if 'aura' in envs and (not aura_enabled or not aura_client.configured or aura_environment != 'live'):
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Для обмена через Aura нужна основная сеть TRON', 409)
+        if expected_provider is not None and selected != expected_provider:
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Провайдер зачисления изменился. Создайте новую заявку', 409)
+        return selected
+
+    exchange_orders.validate_managed_route = validate_managed_exchange
+
+    async def aura_withdrawal_response(request, uid, actor=None):
+        require_asset_enabled('USDT', 'TRON')
+        if deposit_provider('USDT', 'TRON') != 'aura' or not aura_enabled or not aura_client.configured:
+            raise ApiError('NOT_CONFIGURED', 'Вывод через Aura недоступен', 503)
+        fee = money(os.environ.get('AURA_WITHDRAWAL_FEE_USDT', '2'), positive=False)
+        if fee < 0:
+            raise ApiError('NOT_CONFIGURED', 'Комиссия Aura не настроена', 503)
+        if request.method == 'POST':
+            return web.json_response(await aura_user_withdrawal(
+                ledger, aura_client, aura_environment, uid, await request.json(),
+                request.headers.get('Idempotency-Key', ''), fee, actor=actor, audit=record_admin_action,
+            ))
+        position = ledger.db.execute(
+            "SELECT available FROM wallet_provider_positions WHERE provider='aura' "
+            "AND environment=? AND user_id=? AND asset='USDT'", (aura_environment, uid),
+        ).fetchone()
+        pending = ledger.db.execute(
+            "SELECT request_body FROM wallet_provider_entities WHERE provider='aura' "
+            "AND environment=? AND entity_type='withdrawal' AND user_id=? "
+            "AND remote_id IS NULL AND status='reserved' AND json_extract(request_body,'$.operator') IS ? LIMIT 1",
+            (aura_environment, uid, actor),
+        ).fetchone()
+        withdrawal_id = request.query.get('withdrawal_id')
+        latest = ledger.db.execute(
+            "SELECT w.withdrawal_id,w.status,w.amount,w.fee,w.recipient,w.transaction_hash "
+            "FROM wallet_provider_entities e JOIN aura_withdrawals w "
+            "ON w.withdrawal_id=e.remote_id AND w.environment=e.environment "
+            "WHERE e.provider='aura' AND e.entity_type='withdrawal' AND e.environment=? "
+            "AND e.user_id=? AND json_extract(e.request_body,'$.operator') IS ? "
+            "AND (? IS NULL OR w.withdrawal_id=?) ORDER BY e.created_at DESC LIMIT 1",
+            (aura_environment, uid, actor, withdrawal_id, withdrawal_id),
+        ).fetchone()
+        if withdrawal_id is not None and latest is None:
+            raise ApiError('WITHDRAWAL_NOT_FOUND', 'Вывод не найден', 404)
+        available, _ = ledger.balance(uid, 'USDT')
+        response = web.json_response({
+            'available': str(min(available, Decimal(position[0])) if position else 0),
+            'fee': str(fee), 'environment': aura_environment,
+            'frozen': aura_withdrawal_frozen(ledger, aura_environment, uid),
+            'withdrawal': dict(latest) if latest else None,
+            'pending': json.loads(pending[0]) if pending else None,
+        })
+        response.headers['Cache-Control'] = 'no-store'
+        return response
 
     async def admin_user_action(request, admin_id):
         body = await request.json()
@@ -1332,6 +1706,7 @@ def install_wallet(app, root, owner_check):
         return {
             'addresses': addresses, 'deposits': deposits, 'balances': balances,
             'asset_routes': asset_route_rows(),
+            'exchange_rules': exchange_rules(ledger),
         }
 
     async def safe_provider(method, data=None):
@@ -1340,17 +1715,88 @@ def install_wallet(app, root, owner_check):
         except ApiError as error:
             return {'ok': False, 'error': error.name, 'detail': error.detail}
 
+    def realized_service_profit(provider_name, environment=None):
+        total = Decimal('0')
+        operations = 0
+        for row in ledger.db.execute(
+                "SELECT event_id,detail FROM wallet_events WHERE detail LIKE '%service_fee%'"):
+            try:
+                detail = json.loads(row['detail'])
+                event_provider = str(
+                    detail.get('provider') or str(row['event_id']).split(':', 1)[0]
+                ).lower()
+                event_environment = str(detail.get('environment') or '').lower()
+                fee = Decimal(str(detail.get('service_fee', '0')))
+            except (InvalidOperation, TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if event_provider != provider_name or detail.get('status') != 'completed':
+                continue
+            if environment and event_environment != environment.lower():
+                continue
+            if not fee.is_finite() or fee <= 0:
+                continue
+            total += fee
+            operations += 1
+        return {
+            'asset': 'USDT', 'realized': str(total), 'operations': operations,
+            'basis': 'completed_service_fees',
+        }
+
+    def partner_balance(payload):
+        if isinstance(payload, list):
+            for item in payload:
+                if isinstance(item, dict) and str(
+                        item.get('currency_code') or item.get('asset') or '').upper() == 'USDT':
+                    return str(item.get('available', item.get('balance', '0')))
+            return '0'
+        if isinstance(payload, dict):
+            candidates = [
+                payload.get('platform_balance'), payload.get('available'), payload.get('balance'),
+            ]
+            platform = payload.get('platform')
+            if isinstance(platform, dict):
+                candidates.extend([platform.get('available'), platform.get('balance')])
+            for value in candidates:
+                if value is not None and not isinstance(value, (dict, list)):
+                    return str(value)
+        raise ValueError('Partner balance is missing')
+
+    def card_summary(items):
+        statuses = defaultdict(int)
+        for item in items:
+            if isinstance(item, dict):
+                statuses[str(item.get('status') or 'unknown').lower()] += 1
+        return {'total': len(items), 'statuses': dict(sorted(statuses.items()))}
+
     async def admin_goswap():
         methods = {
             'account': ('getMe', {}), 'balance': ('getBalance', {}), 'currencies': ('getCurrencies', {}),
             'transactions': ('getTransactions', {'count': 100}), 'invoices': ('getInvoices', {'count': 100}),
             'transfers': ('getTransfers', {'count': 100}), 'withdrawals': ('getWithdrawals', {'count': 100}),
             'deposits': ('getDeposits', {'count': 100}), 'qrPayments': ('getQrPayments', {'count': 100}),
-            'rates': ('getExchangeRates', {}),
+            'rates': ('getExchangeRates', {}), 'cards': ('getCards', {'count': 1000, 'offset': 0}),
         }
         values = await asyncio.gather(*(safe_provider(method, params) for method, params in methods.values()))
+        snapshot = dict(zip(methods, values))
+        balance = snapshot['balance']
+        cards = snapshot['cards']
+        summary = {
+            'partner_balance': {
+                'ok': balance['ok'], 'asset': 'USDT',
+                **({'available': partner_balance(balance['result'])} if balance['ok'] else {
+                    'error': balance.get('detail') or balance.get('error'),
+                }),
+            },
+            'cards': {
+                'ok': cards['ok'],
+                **(card_summary(
+                    cards['result'].get('items', []) if isinstance(cards['result'], dict) else []
+                ) if cards['ok'] else {'error': cards.get('detail') or cards.get('error')}),
+            },
+            'profit': realized_service_profit('goswap'),
+        }
         catalog = [{'method': method, **spec} for method, spec in ADMIN_GOSWAP_METHODS.items()]
-        return {'snapshot': dict(zip(methods, values)), 'methods': catalog}
+        return {'summary': summary, 'snapshot': snapshot, 'methods': catalog}
 
     async def admin_goswap_action(request, admin_id):
         body = await request.json()
@@ -1381,10 +1827,35 @@ def install_wallet(app, root, owner_check):
         )
         return {'ok': True, 'method': method, 'result': result}
 
-    def admin_aura_console():
+    async def admin_aura_console():
+        balance = {'ok': False, 'asset': 'USDT', 'error': 'Aura не подключена'}
+        if aura_client.configured:
+            try:
+                balance = {
+                    'ok': True, 'asset': 'USDT',
+                    'available': partner_balance(await aura_client.get_balance()),
+                }
+            except (ApiError, TypeError, ValueError) as error:
+                balance = {
+                    'ok': False, 'asset': 'USDT',
+                    'error': getattr(error, 'detail', str(error))[:300],
+                }
+        rows = ledger.db.execute(
+            'SELECT status,COUNT(*) count FROM aura_cards WHERE environment=? GROUP BY status',
+            (aura_environment,),
+        ).fetchall()
+        statuses = {str(row['status'] or 'unknown').lower(): row['count'] for row in rows}
         return {
             'environment': aura_environment,
             'configured': aura_client.configured,
+            'summary': {
+                'partner_balance': balance,
+                'cards': {
+                    'ok': True, 'total': sum(statuses.values()),
+                    'statuses': dict(sorted(statuses.items())),
+                },
+                'profit': realized_service_profit('aura', aura_environment),
+            },
             'methods': [
                 {'method': method, **{
                     key: value for key, value in spec.items()
@@ -1467,22 +1938,58 @@ def install_wallet(app, root, owner_check):
             'response': result,
         }
 
-    async def run_broadcast(broadcast_id, targets, text, button_text, button_url):
+    async def run_broadcast(broadcast_id, targets, text, button_text, button_url, image=None):
         ledger.db.execute("UPDATE admin_broadcasts SET status='sending',started_at=? WHERE broadcast_id=?", (now(), broadcast_id))
         sent = failed = 0
+        image_file_id = None
         async with ClientSession(timeout=ClientTimeout(total=15)) as session:
             for uid in targets:
-                payload = {'chat_id': int(uid.removeprefix('tg:')), 'text': text}
+                rich_html = text
+                rich_message = {'html': rich_html}
+                if image:
+                    rich_html += '<img src="tg://photo?id=broadcast_image">'
+                    rich_message = {
+                        'html': rich_html,
+                        'media': [{
+                            'id': 'broadcast_image',
+                            'media': {
+                                'type': 'photo',
+                                'media': image_file_id or 'attach://photo',
+                            },
+                        }],
+                    }
+                payload = {
+                    'chat_id': int(uid.removeprefix('tg:')),
+                    'rich_message': rich_message,
+                }
                 if button_text and button_url:
                     payload['reply_markup'] = {'inline_keyboard': [[{'text': button_text, 'url': button_url}]]}
                 error = None
                 blocked = False
                 try:
-                    async with session.post(f'https://api.telegram.org/bot{bot_token}/sendMessage', json=payload) as response:
+                    method = 'sendRichMessage'
+                    request_kwargs = {'json': payload}
+                    if image and not image_file_id:
+                        image_bytes, image_mime, image_name = image
+                        form = FormData()
+                        for key, value in payload.items():
+                            form.add_field(key, json.dumps(value) if isinstance(value, dict) else str(value))
+                        form.add_field('photo', image_bytes, filename=image_name, content_type=image_mime)
+                        request_kwargs = {'data': form}
+                    async with session.post(
+                        f'https://api.telegram.org/bot{bot_token}/{method}', **request_kwargs
+                    ) as response:
                         body = await response.json(content_type=None)
                         if response.status >= 400 or not body.get('ok'):
                             error = str(body.get('description') or 'Telegram error')[:300]
                             blocked = response.status == 403
+                        elif image and not image_file_id:
+                            image_file_id = _telegram_uploaded_photo_file_id(body.get('result'))
+                            if image_file_id:
+                                ledger.db.execute(
+                                    'UPDATE admin_broadcasts SET image_file_id=? WHERE broadcast_id=?',
+                                    (image_file_id, broadcast_id),
+                                )
                 except (asyncio.TimeoutError, OSError, ValueError) as reason:
                     error = str(reason)[:300]
                 status = 'failed' if error else 'sent'
@@ -1499,9 +2006,13 @@ def install_wallet(app, root, owner_check):
             items = decoded_rows('SELECT * FROM admin_broadcasts ORDER BY rowid DESC LIMIT 100')
             return {'items': items}
         body = await request.json()
-        text = str(body.get('text') or '').strip()
-        if not 1 <= len(text) <= 4096:
-            raise ValueError('Текст рассылки должен быть от 1 до 4096 символов')
+        text = _telegram_html(body.get('text'))
+        image = _broadcast_image(body.get('image_data'))
+        text_limit = 32768
+        if not 1 <= _telegram_text_length(text) <= text_limit:
+            raise ValueError(
+                f'Текст рассылки должен быть от 1 до {text_limit} символов'
+            )
         target = str(body.get('target') or 'self')
         if target not in {'self', 'all'}:
             raise ValueError('Некорректная аудитория')
@@ -1516,12 +2027,24 @@ def install_wallet(app, root, owner_check):
         else:
             targets = [row[0] for row in ledger.db.execute("SELECT user_id FROM wallet_accounts WHERE user_id LIKE 'tg:%' AND status='active'")]
         broadcast_id = 'broadcast-' + uuid.uuid4().hex
-        ledger.db.execute('INSERT INTO admin_broadcasts(broadcast_id,admin_id,target,text,button_text,button_url,status,total,created_at) VALUES (?,?,?,?,?,?,?,?,?)', (broadcast_id, uid, target, text, button_text or None, button_url or None, 'queued', len(targets), now()))
+        ledger.db.execute(
+            'INSERT INTO admin_broadcasts('
+            'broadcast_id,admin_id,target,text,button_text,button_url,status,total,created_at,'
+            'parse_mode,has_image) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            (broadcast_id, uid, target, text, button_text or None, button_url or None,
+             'queued', len(targets), now(), 'RICH_HTML', int(bool(image))),
+        )
         record_admin_action(
             uid, 'broadcast.create',
-            detail={'broadcast_id': broadcast_id, 'target': target, 'total': len(targets), 'characters': len(text), 'has_button': bool(button_text)},
+            detail={
+                'broadcast_id': broadcast_id, 'target': target, 'total': len(targets),
+                'characters': _telegram_text_length(text), 'has_button': bool(button_text),
+                'has_image': bool(image),
+            },
         )
-        task = asyncio.create_task(run_broadcast(broadcast_id, targets, text, button_text, button_url))
+        task = asyncio.create_task(
+            run_broadcast(broadcast_id, targets, text, button_text, button_url, image)
+        )
         app['wpay_broadcast_tasks'].add(task)
         task.add_done_callback(app['wpay_broadcast_tasks'].discard)
         return {'broadcast_id': broadcast_id, 'status': 'queued', 'total': len(targets)}
@@ -1543,6 +2066,10 @@ def install_wallet(app, root, owner_check):
                 'UPDATE notification_settings SET enabled=?,updated_at=?,updated_by=? WHERE event_type=?',
                 [(int(value), stamp, uid, key) for key, value in values.items()],
             )
+        elif operation == 'template':
+            if 'template' not in body:
+                raise ValueError('Шаблон уведомления не передан')
+            save_notification_template(ledger, str(body.get('event_type') or ''), body['template'], uid)
         elif operation == 'retry':
             notification_id = str(body.get('notification_id') or '')
             cursor = ledger.db.execute(
@@ -1563,6 +2090,7 @@ def install_wallet(app, root, owner_check):
             uid, 'notifications.' + operation,
             detail={
                 'notification_id': str(body.get('notification_id') or '') or None,
+                'event_type': body.get('event_type') if operation == 'template' else None,
                 'setting_names': sorted((body.get('settings') or {}).keys()),
             },
         )
@@ -1734,11 +2262,143 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            if action == 'exchange-internal' and request.method == 'POST':
+                return web.json_response(internal_exchange(
+                    ledger, uid, await request.json(), request.headers.get('Idempotency-Key', ''),
+                    asset_enabled, deposit_provider, ApiError,
+                ), headers={'Cache-Control': 'no-store'})
+            if action == 'exchange-destinations' and request.method == 'GET':
+                source = request.query.get('from_asset')
+                source_network = request.query.get('from_network')
+                if not source or not source_network or not asset_enabled(source, source_network):
+                    raise ValueError('Выберите доступную исходную валюту')
+                exchange.throttle(uid)
+                nets = {}
+                if exchange.configured and source in {'BTC', 'USDT'}:
+                    try:
+                        nets = {item['network']: item for item in await exchange.networks()}
+                    except (ApiError, ValueError):
+                        pass
+                available = []
+                for target, networks in enabled_asset_routes().items():
+                    for network in networks:
+                        pair = {'from_asset': source, 'from_network': source_network,
+                                'to_asset': target, 'to_network': network}
+                        method = resolve_exchange_route(ledger, pair, asset_enabled, deposit_provider)['method']
+                        can_send = bool(nets) and exchange.btc_can_send if source == 'BTC' else nets.get(source_network, {}).get('can_send')
+                        if (method == 'internal' or
+                            (method == 'dex' and pair == DEX_PAIR) or
+                            (method == 'fixedfloat' and target == 'USDT' and can_send and nets.get(network, {}).get('can_receive'))):
+                            available.append(f'{target}:{network}')
+                return web.json_response({'available': available}, headers={'Cache-Control': 'no-store'})
+            if action == 'exchange-btc-quote' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'from_network', 'to_network', 'amount', 'rate_type'}:
+                    raise ValueError('Укажите сети и сумму BTC')
+                if body.get('from_network') != 'BTC' or not isinstance(body.get('to_network'), str):
+                    raise ValueError('Укажите сеть получения USDT')
+                pair = {**body, 'from_asset': 'BTC', 'to_asset': 'USDT'}
+                if resolve_exchange_route(ledger, pair, asset_enabled, deposit_provider)['method'] != 'fixedfloat':
+                    raise ApiError('EXCHANGE_UNAVAILABLE', 'Обмен BTC для этой пары отключён', 409)
+                exchange.throttle(uid)
+                return web.json_response(await exchange.quote(body, from_asset='BTC'), headers={'Cache-Control': 'no-store'})
+            if action == 'exchange-dex-quote' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != set(DEX_PAIR) | {'amount'}:
+                    raise ValueError('Укажите пару и сумму DEX')
+                if any(body[key] != value for key, value in DEX_PAIR.items()) or resolve_exchange_route(
+                    ledger, body, asset_enabled, deposit_provider,
+                )['method'] != 'dex':
+                    raise ApiError('EXCHANGE_UNAVAILABLE', 'Котировка DEX для этой пары недоступна', 409)
+                exchange.throttle(uid)
+                quote = await quote_bnb(app['wpay_chain'], body['amount'])
+                if quote is None:
+                    raise ApiError('DEX_UNAVAILABLE', 'PancakeSwap пока не вернул котировку', 503)
+                return web.json_response(quote, headers={'Cache-Control': 'no-store'})
+            if action == 'exchange-route' and request.method == 'GET':
+                route = resolve_exchange_route(ledger, request.query, asset_enabled, deposit_provider)
+                route['managed_order_enabled'] = False
+                if route['method'] == 'fixedfloat' and request.query.get('from_asset') == request.query.get('to_asset') == 'USDT':
+                    try:
+                        route['payout_provider'] = validate_managed_exchange(
+                            request.query.get('from_network'), request.query.get('to_network'),
+                        )
+                        route['managed_order_enabled'] = True
+                    except ApiError:
+                        pass
+                return web.json_response(route, headers={'Cache-Control': 'no-store'})
+            if action == 'exchange-managed-prepare' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'from_network', 'to_network', 'amount', 'rate_type'} or any(not isinstance(value, str) for value in body.values()):
+                    raise ValueError('Укажите сети и сумму обмена')
+                if body['rate_type'] != 'fixed':
+                    raise ValueError('Для зачисления на баланс используйте фиксированный курс')
+                source, destination = body['from_network'], body['to_network']
+                selected = validate_managed_exchange(source, destination)
+                exchange.throttle(uid)
+                if selected == 'goswap':
+                    address = await provider.call('getClientAddress', {'client_ref': client_ref, 'network': destination}, post=True)
+                    if address.get('network') != destination or address.get('client_ref') != client_ref:
+                        raise ApiError('EXCHANGE_UNAVAILABLE', 'GoSwap не подтвердил реквизиты пользователя', 502)
+                    save_address(ledger, uid, address, 'USDT')
+                else:
+                    if not await aura_client.product_enabled('crypto_processing'):
+                        raise ApiError('EXCHANGE_UNAVAILABLE', 'Зачисления Aura отключены', 409)
+                    address = await aura_service.get_or_create_deposit_address(uid, client_ref)
+                    if address.get('chain') != 'mainnet':
+                        raise ApiError('EXCHANGE_UNAVAILABLE', 'Aura не вернула адрес основной сети', 502)
+                validate_managed_exchange(source, destination, selected)
+                result = await exchange_orders.prepare(
+                    uid, {**body, 'to_address': address['address']}, managed_provider=selected,
+                    min_deposit=address.get('min_deposit'),
+                )
+                return web.json_response(result, headers={'Cache-Control': 'no-store'})
+            if action == 'aura-user-withdrawal' and request.method in {'GET', 'POST'}:
+                return await aura_withdrawal_response(request, uid)
+            if action == 'addresses' and request.method == 'GET':
+                items = [
+                    {**json.loads(row['body']), 'provider': 'goswap'}
+                    for row in ledger.db.execute(
+                        'SELECT body FROM wallet_addresses WHERE user_id=? ORDER BY network', (uid,),
+                    )
+                ]
+                balances = goswap_network_balances(ledger, uid, 'USDT')
+                for network in enabled_asset_routes().get('USDT', []):
+                    if deposit_provider('USDT', network) == 'goswap':
+                        balances.setdefault(network, Decimal(0))
+                if items:
+                    for item in items:
+                        if 'USDT' in item.get('assets', [item.get('asset')]):
+                            item['provider_available'] = str(balances.get(item['network'], 0))
+                            item['balance_asset'] = 'USDT'
+                if aura_enabled and aura_client.configured:
+                    row = ledger.db.execute(
+                        'SELECT address,network FROM aura_deposit_addresses WHERE user_id=? '
+                        'AND environment=? ORDER BY is_default DESC, created_at ASC, address_id LIMIT 1',
+                        (uid, aura_environment),
+                    ).fetchone()
+                    if row:
+                        position = ledger.db.execute(
+                            "SELECT available FROM wallet_provider_positions WHERE provider='aura' "
+                            "AND environment=? AND user_id=? AND asset='USDT'",
+                            (aura_environment, uid),
+                        ).fetchone()
+                        items.append({'provider': 'aura', 'asset': 'USDT', 'network': 'TRON',
+                                      'address': row['address'], 'chain': row['network'],
+                                      'provider_available': position['available'] if position else '0'})
+                response = web.json_response({'items': items, 'goswap_usdt_balances': {
+                    network: str(value) for network, value in balances.items()
+                }})
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             export_response = await key_export_route(request, action, uid, custody)
             if export_response is not None:return export_response
             custody_response = await custody_route(request, action, uid, custody)
             if custody_response is not None:
                 return custody_response
+            custody_withdrawal_response = await custody_withdrawal.route(request, action, uid, require_asset_enabled)
+            if custody_withdrawal_response is not None:
+                return custody_withdrawal_response
             funding_response = await exchange_funding.route(request, action, uid)
             if funding_response is not None:return funding_response
             order_response = await exchange_orders.route(request, action, uid)
@@ -1782,7 +2442,75 @@ def install_wallet(app, root, owner_check):
             if action == 'admin-users' and request.method == 'GET':
                 return web.json_response(admin_users())
             if action == 'admin-user' and request.method == 'GET':
-                return web.json_response(admin_user(request), headers={'Cache-Control': 'private, no-store'})
+                return web.json_response(await admin_user(request), headers={'Cache-Control': 'private, no-store'})
+            if action in {'admin-custody-export-prepare', 'admin-custody-export-status', 'admin-custody-export-reveal'}:
+                target = request.query.get('user_id', '')
+                if not re.fullmatch(r'tg:[0-9]+', target):
+                    raise ValueError('Некорректный идентификатор пользователя')
+                return await key_export_route(
+                    request, action.removeprefix('admin-'), target, custody,
+                    actor=uid, audit=record_admin_action,
+                )
+            if action in {'admin-custody-withdrawal', 'admin-custody-withdrawal-prepare', 'admin-custody-withdrawal-confirm'}:
+                target = request.query.get('user_id', '')
+                wallet_id = request.query.get('wallet_id', '')
+                if not re.fullmatch(r'tg:[0-9]+', target) or not re.fullmatch(r'[a-f0-9]{32}', wallet_id):
+                    raise ValueError('Некорректный идентификатор кошелька')
+                if request.method == 'POST':
+                    fresh_wallet_auth(request, uid, ApiError)
+                return await custody_withdrawal.route(
+                    request, action.removeprefix('admin-'), target, require_asset_enabled,
+                    actor=uid, wallet_id=wallet_id, audit=record_admin_action,
+                )
+            if action in {'admin-aura-user-withdrawal', 'admin-aura-withdrawal-freeze'}:
+                target = request.query.get('user_id', '')
+                env = request.query.get('environment', '')
+                if not re.fullmatch(r'tg:[0-9]+', target) or env != aura_environment:
+                    raise ApiError('NOT_FOUND', 'Баланс Aura в этом окружении недоступен', 404)
+                if not ledger.db.execute(
+                    "SELECT 1 FROM wallet_provider_positions WHERE provider='aura' AND user_id=? AND environment=? AND asset='USDT' "
+                    "UNION SELECT 1 FROM aura_deposit_addresses WHERE user_id=? AND environment=? LIMIT 1",
+                    (target, env, target, env),
+                ).fetchone():
+                    raise ApiError('NOT_FOUND', 'Кошелёк Aura не найден', 404)
+                if action == 'admin-aura-user-withdrawal' and request.method in {'GET', 'POST'}:
+                    if request.method == 'POST':
+                        fresh_wallet_auth(request, uid, ApiError)
+                    return await aura_withdrawal_response(request, target, actor=uid)
+                if action == 'admin-aura-withdrawal-freeze' and request.method == 'POST':
+                    body = await request.json()
+                    if not isinstance(body, dict) or set(body) != {'frozen'} or type(body['frozen']) is not bool:
+                        raise ValueError('Укажите статус заморозки')
+                    ledger.begin('admin_aura_withdrawal_freeze', uid, target)
+                    try:
+                        if body['frozen']:
+                            ledger.db.execute(
+                                'INSERT OR REPLACE INTO aura_user_withdrawal_freezes VALUES (?,?,?)',
+                                (target, env, time.time()),
+                            )
+                        else:
+                            ledger.db.execute(
+                                'DELETE FROM aura_user_withdrawal_freezes WHERE user_id=? AND environment=?',
+                                (target, env),
+                            )
+                        record_admin_action(uid, 'wallet.aura_withdrawal_freeze', target,
+                                            detail={'frozen': body['frozen'], 'environment': env})
+                        ledger.commit()
+                    except Exception:
+                        ledger.rollback()
+                        raise
+                    return web.json_response({'frozen': body['frozen']})
+                raise ApiError('METHOD_NOT_ALLOWED', 'Неверный метод', 405)
+            if action == 'admin-wallet-control' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'user_id', 'wallet_id', 'operation'}:
+                    raise ValueError('Некорректная команда оператора')
+                if not isinstance(body['operation'], str):
+                    raise ValueError('Некорректное действие')
+                return web.json_response(control_wallet(
+                    ledger, body['user_id'], body['wallet_id'], body['operation'],
+                    uid, record_admin_action, ApiError,
+                ), headers={'Cache-Control': 'private, no-store'})
             if action == 'admin-user-action' and request.method == 'POST':
                 return web.json_response(
                     await admin_user_action(request, uid),
@@ -1797,6 +2525,19 @@ def install_wallet(app, root, owner_check):
                     await admin_card_action(request, uid),
                     headers={'Cache-Control': 'private, no-store'},
                 )
+            if action == 'admin-card-plan-availability' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'product', 'enabled'}:
+                    raise ValueError('Некорректная настройка выпуска карты')
+                ledger.begin('admin_card_plan_availability', uid, 'Change card issuance availability')
+                try:
+                    set_card_issue_enabled(ledger, body['product'], body['enabled'], uid)
+                    record_admin_action(uid, 'tariffs.card_issue_availability', detail=body)
+                    ledger.commit()
+                except Exception:
+                    ledger.rollback()
+                    raise
+                return web.json_response({'ok': True})
             if action == 'admin-tariffs' and request.method == 'GET':
                 result = tariff_snapshot(ledger)
                 result['provider'] = {'currency': 'USDT'}
@@ -1844,6 +2585,17 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(admin_payments())
             if action == 'admin-crypto' and request.method == 'GET':
                 return web.json_response(admin_crypto())
+            if action == 'admin-exchange-rule' and request.method == 'POST':
+                body = await request.json()
+                ledger.begin('admin_exchange_rule', uid, 'Update exchange routing')
+                try:
+                    save_exchange_rule(ledger, body, uid)
+                    record_admin_action(uid, 'exchange.rule', detail=body)
+                    ledger.commit()
+                except Exception:
+                    ledger.rollback()
+                    raise
+                return web.json_response({'rules': exchange_rules(ledger)})
             if action == 'admin-assets' and request.method == 'POST':
                 body = await request.json()
                 if not isinstance(body, dict):
@@ -1916,7 +2668,7 @@ def install_wallet(app, root, owner_check):
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
                 return web.json_response(await admin_goswap_action(request, uid))
             if action == 'admin-aura-console' and request.method == 'GET':
-                return web.json_response(admin_aura_console())
+                return web.json_response(await admin_aura_console())
             if action == 'admin-aura-action' and request.method == 'POST':
                 return web.json_response(await admin_aura_action(request, uid))
             if action == 'admin-providers' and request.method == 'GET':
@@ -2714,7 +3466,7 @@ def install_wallet(app, root, owner_check):
                 pending=ledger.db.execute('SELECT state,body FROM wallet_quotes WHERE quote_id=? AND user_id=?',(str(body.get('quote_id','')),uid)).fetchone()
                 if pending and pending['state']=='quoted':
                     check=json.loads(pending['body'])
-                    if ledger.balance(uid,check['asset'])[0]<money(check['amount']):raise ApiError('INSUFFICIENT_FUNDS','Недостаточно средств',409)
+                    require_goswap_user_funds(ledger, uid, check['asset'], ledger.balance(uid, check['asset'])[0], money(check['amount']), ApiError)
                     await require_coverage(ledger,provider,check['asset'],ApiError)
                 row, quote = ledger.reserve(uid, str(body.get('quote_id', '')))
                 if row['state'] in {'completed', 'failed', 'refunded', 'processing'}:

@@ -2349,3 +2349,40 @@
   -webkit-user-select: none;
   user-select: none;
 }
+
+.wpay-overflow-menu li:not(:last-child) .wpay-overflow-menu-inner::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0 12px;
+  bottom: 0;
+  height: 1px;
+  background: rgb(0 0 0 / 8%);
+  transform: scaleY(.5);
+  pointer-events: none;
+}
+
+.dark .wpay-overflow-menu li:not(:last-child) .wpay-overflow-menu-inner::before {
+  background: rgb(255 255 255 / 15%);
+}
+
+.wpay-overflow-menu li svg {
+  max-width: 16px;
+  max-height: 16px;
+}
+
+
+.wpay-overflow-menu li [class*="text-primary"] {
+  color: #111;
+}
+
+.dark .wpay-overflow-menu li [class*="text-primary"] {
+  color: #fff;
+}
+
+.wpay-overflow-menu {
+  border-radius: 18px !important;
+}
+
+.wpay-overflow-menu > div {
+  border-radius: inherit;
+}

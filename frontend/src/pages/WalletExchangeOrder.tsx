@@ -57,6 +57,7 @@ export default function WalletExchangeOrder({
   quoteValid,
   enabled,
   onIntentChange,
+  managedPayout,
 }: {
   active: boolean;
   from: string;
@@ -66,10 +67,10 @@ export default function WalletExchangeOrder({
   quoteValid: boolean;
   enabled: boolean;
   onIntentChange: (open: boolean) => void;
+  managedPayout?: string;
 }) {
   const [destination, setDestination] = useState("");
   const [memo, setMemo] = useState("");
-  const [ownAddress, setOwnAddress] = useState(false);
   const [intent, setIntent] = useState<ExchangeIntent | null>(null);
   const [history, setHistory] = useState<ExchangeIntent[]>([]);
   const [busy, setBusy] = useState("");
@@ -101,7 +102,6 @@ export default function WalletExchangeOrder({
   useEffect(() => {
     setDestination("");
     setMemo("");
-    setOwnAddress(false);
   }, [to]);
   useEffect(() => {
     if (!active || !enabled) return;
@@ -189,14 +189,16 @@ export default function WalletExchangeOrder({
     const current = scope.current;
     const signal = life.current?.signal;
     const result = await walletRequest<ExchangeIntent>(
-      "exchange-prepare",
+      managedPayout ? "exchange-managed-prepare" : "exchange-prepare",
       {
         from_network: from,
         to_network: to,
         amount: value,
         rate_type: mode,
-        to_address: destination.trim(),
-        ...(memo.trim() ? { to_tag: memo.trim() } : {}),
+        ...(managedPayout ? {} : {
+          to_address: destination.trim(),
+          ...(memo.trim() ? { to_tag: memo.trim() } : {}),
+        }),
       },
       signal,
     );
@@ -261,15 +263,16 @@ export default function WalletExchangeOrder({
     >
       {!intent && (
         <>
-          <Card className="!m-0 !rounded-[28px]" contentWrapPadding="p-5">
+          {managedPayout ? (
+            <p className="px-2 text-sm">Выплата на ваш адрес пополнения в {managedPayout === "aura" ? "Aura" : "GoSwap"}.</p>
+          ) : <Card className="!m-0 !rounded-[28px]" contentWrapPadding="p-5">
             <label className="block text-sm text-black/45 dark:text-white/45">
               Адрес получения · {networkNames[to] ?? to}
               <input
                 aria-label="Адрес получения обмена"
                 value={destination}
                 onChange={(e) => {
-                  setOwnAddress(false);
-                  setDestination(e.target.value);
+                                setDestination(e.target.value);
                 }}
                 placeholder="Вставьте адрес кошелька"
                 autoCapitalize="none"
@@ -291,35 +294,7 @@ export default function WalletExchangeOrder({
                 />
               </label>
             )}
-            <button
-              type="button"
-              className="mt-2 text-sm font-medium text-primary"
-              disabled={Boolean(busy)}
-              onClick={() =>
-                void action("address", async () => {
-                  const current = scope.current;
-                  const result = await walletRequest<{ address: string }>(
-                    "exchange-own-address",
-                    { network: to },
-                    life.current?.signal,
-                  );
-                  if (current === scope.current) {
-                    setDestination(result.address);
-                    setMemo("");
-                    setOwnAddress(true);
-                  }
-                })
-              }
-            >
-              {busy === "address" ? <Preloader size={18} /> : "Мой адрес wPay"}
-            </button>
-            {ownAddress && (
-              <p className="mt-3 text-xs leading-5 text-black/50 dark:text-white/50">
-                Это собственный mainnet-адрес. Автоматическое зачисление на
-                баланс приложения и вывод с него ещё не подключены.
-              </p>
-            )}
-          </Card>
+          </Card>}
           <p className="px-2 text-sm leading-5 text-black/50 dark:text-white/50">
             Обмен оплачивается переводом USDT на адрес заявки. С баланса
             приложения ничего не списывается.
@@ -328,7 +303,7 @@ export default function WalletExchangeOrder({
             large
             rounded
             data-wpay-primary=""
-            disabled={!quoteValid || !destination.trim() || Boolean(busy)}
+            disabled={!quoteValid || (!managedPayout && !destination.trim()) || Boolean(busy)}
             onClick={() => void action("prepare", prepare)}
           >
             {busy === "prepare" ? (
@@ -359,12 +334,6 @@ export default function WalletExchangeOrder({
             Адрес получения: {intent.to_address}
             {intent.to_tag ? ` · Memo: ${intent.to_tag}` : ""}
           </p>
-          {ownAddress && (
-            <p className="mt-2 text-xs leading-5 opacity-60">
-              Средства придут на собственный адрес wPay, отдельно от баланса
-              приложения.
-            </p>
-          )}
           {intent.error === "RATE_LIMITED" && (
             <p className="mt-3 text-sm">
               Обменник ограничил запросы. Повторите после указанного времени.

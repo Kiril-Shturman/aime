@@ -1,6 +1,6 @@
 import WalletCryptoDeposit from "./WalletCryptoDeposit";
 import WalletSbpDeposit from "./WalletSbpDeposit";
-import { depositNetworks as networks, networkNames } from "../wallet/catalog";
+import { networkNames, networkStandards } from "../wallet/catalog";
 import WalletNetworkIcon from "./WalletNetworkIcon";
 import WalletSheetClose from "./WalletSheetClose";
 import {
@@ -48,9 +48,7 @@ export default function WalletDeposit({
   const wallet = useLiveWallet(),
     asset = defaultAsset;
   const meta = options.find((item) => item.code === asset);
-  const supported = (wallet.depositRoutes[asset] ?? []).filter((network) =>
-    (networks[asset] ?? []).includes(network),
-  );
+  const supported = wallet.depositRoutes[asset] ?? [];
   const [retryAt, setRetryAt] = useState(0);
   useEffect(() => {
     if (!retryAt) return;
@@ -97,8 +95,9 @@ export default function WalletDeposit({
     return () => window.clearInterval(timer);
   }, [deposit?.expires_at]);
   const mode = wallet.depositModes[asset]?.[network];
+  const provider = wallet.depositProviders[asset]?.[network];
   const available = supported.includes(network) && mode !== "disabled";
-  const exact = mode ? mode === "exact" : network === "TRON";
+  const exact = mode === "exact" || (!provider && !mode && network === "TRON");
   const numeric = Number(amount.replace(",", "."));
   async function create() {
     if (busy || !available || !wallet.configured || Date.now() < retryAt)
@@ -132,6 +131,7 @@ export default function WalletDeposit({
     }
   }
   useEffect(() => {
+    setDeposit(null);
     if (mode !== "address" || !available || !wallet.configured || !wallet.ready)
       return;
     const controller = new AbortController();
@@ -160,7 +160,7 @@ export default function WalletDeposit({
           setBusy(false);
       });
     return () => controller.abort();
-  }, [asset, network, mode, available, wallet.configured, wallet.ready]);
+  }, [asset, network, mode, provider, available, wallet.configured, wallet.ready]);
   function changeNetwork(code: string) {
     generation.current++;
     setNetwork(code);
@@ -468,9 +468,11 @@ export default function WalletDeposit({
               <p className="mt-4 text-[13px] text-black/40 dark:text-white/40">
                 Адрес для пополнения
               </p>
-              <p className="mt-2 select-text break-all font-mono text-[14px] leading-6">
-                {deposit.address}
-              </p>
+              <button type="button" aria-label="Скопировать адрес пополнения" onClick={() => void copy()}
+                className="mt-2 flex min-h-9 w-full items-center justify-between gap-3 text-left text-[14px] text-blue-600 dark:text-blue-400">
+                <span className="min-w-0 break-all">{deposit.address}</span>
+                {copied ? <Check size={19} className="shrink-0" /> : <Copy size={19} className="shrink-0" />}
+              </button>
               <Button
                 data-wpay-primary=""
                 rounded
@@ -630,11 +632,13 @@ export default function WalletDeposit({
                         <span className="flex h-full w-full min-w-0 items-center justify-between gap-4">
                           <span className="min-w-0">
                             <span className="block truncate text-[17px] font-semibold text-black dark:text-white">
-                              {code === "TRON" ? "Tron" : networkNames[code]}
+                              {networkNames[code] ?? code}
                             </span>
                             <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
-                              {code}
-                              {code === "TRON" ? " · Точная сумма" : ""}
+                              {networkStandards[code] ?? code}
+                              {wallet.depositModes[asset]?.[code] === "exact"
+                                ? " · Точная сумма"
+                                : ""}
                             </span>
                           </span>
                           <span className="flex h-full w-6 shrink-0 items-center justify-center text-primary">

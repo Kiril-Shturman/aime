@@ -1,6 +1,7 @@
 """GoSwap history. Provider-wide resources are restricted to the organization owner."""
 import json
 import re
+from collections import deque
 from decimal import Decimal, localcontext
 from aiohttp import web
 from wallet_reconciliation import audit
@@ -53,6 +54,82 @@ def save_address(ledger, uid, result, asset='USDT', migrating=False):
     public['assets'] = sorted(set(previous.get('assets', [previous.get('asset', asset)])) | {asset})
     public['asset'] = previous.get('asset', asset)
     ledger.db.execute('INSERT OR REPLACE INTO wallet_addresses VALUES (?,?,?)', (uid, result['network'], json.dumps(public)))
+
+
+def goswap_network_balances(ledger, uid, asset):
+    """Project remaining GoSwap deposits using FIFO and cap by unreserved funds."""
+    lots = deque()
+    by_id = {}
+    with localcontext() as ctx:
+        ctx.prec = 80
+        for row in ledger.db.execute(
+            "SELECT event_id,amount,type,detail FROM wallet_events "
+            "WHERE user_id=? AND asset=? ORDER BY rowid", (uid, asset),
+        ):
+            event_id, raw, kind, raw_detail = row
+            if event_id.startswith('aura:'):
+                continue
+            delta = Decimal(raw)
+            if kind == 'exchange_internal':
+                detail = json.loads(raw_detail)
+                left = Decimal(detail['amount'])
+                reordered = deque()
+                for lot in reversed(lots):
+                    if left and lot[0] == detail['from_network'] and lot[1] > 0:
+                        moved = min(left, lot[1])
+                        lot[1] -= moved
+                        target = [detail['to_network'], moved, lot[2]]
+                        reordered.appendleft(target)
+                        by_id[lot[2]].append(target)
+                        left -= moved
+                    reordered.appendleft(lot)
+                if left:
+                    raise ValueError('Cannot replay GoSwap network reallocation')
+                lots = reordered
+            elif delta > 0 and kind in {'deposit', 'admin_adjustment'}:
+                detail = json.loads(raw_detail)
+                if not (kind == 'deposit' and event_id.startswith('deposit:')
+                        or kind == 'admin_adjustment' and detail.get('source') == 'goswap'):
+                    continue
+                network = detail.get('network')
+                if network not in {'BSC', 'ETH', 'SOL', 'TON', 'TRON'}:
+                    continue
+                origin = event_id.removeprefix('deposit:')
+                lot = [network, delta, origin]
+                by_id.setdefault(origin, []).append(lot)
+                lots.append(lot)
+            elif delta < 0:
+                remaining = -delta
+                if kind == 'deposit_return':
+                    detail = json.loads(raw_detail).get('details') or {}
+                    for lot in by_id.get(str(detail.get('deposit_id')), ()):
+                        debit = min(lot[1], remaining)
+                        lot[1] -= debit
+                        remaining -= debit
+                        if not remaining:
+                            break
+                while remaining and lots:
+                    lot = lots[0]
+                    debit = min(lot[1], remaining)
+                    lot[1] -= debit
+                    remaining -= debit
+                    if not lot[1]:
+                        lots.popleft()
+
+        available, _ = ledger.balance(uid, asset)
+        backed_elsewhere = sum(
+            (Decimal(row[0]) for row in ledger.db.execute(
+                "SELECT available FROM wallet_provider_positions "
+                "WHERE user_id=? AND asset=? AND provider!='goswap'", (uid, asset),
+            )), Decimal(0),
+        )
+        remaining = max(Decimal(0), available - backed_elsewhere)
+        balances = {}
+        for network, amount, _ in reversed(lots):
+            allocated = min(amount, remaining)
+            balances[network] = balances.get(network, Decimal(0)) + allocated
+            remaining -= allocated
+    return balances
 
 
 def page_number(raw):

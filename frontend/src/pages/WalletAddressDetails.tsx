@@ -129,7 +129,9 @@ export default function WalletAddressDetails({
       setToastTick((value) => value + 1);
     }
   }
-  const name = addressNetworkNames[entry.network] ?? entry.network;
+  const name = entry.chain === "nile"
+    ? "TRON Nile (тестовая сеть)"
+    : (addressNetworkNames[entry.network] ?? entry.network);
   const rubQuote = wallet.data.rates.find(
     (item) =>
       item.is_valid &&

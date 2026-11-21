@@ -9,9 +9,7 @@ export default function WalletMarketChart({code,period,active=true,icon,onPeriod
   const [data,setData]=useState<MarketHistory|null>(null),[error,setError]=useState(''),[loading,setLoading]=useState(false),[attempt,setAttempt]=useState(0),[selected,setSelected]=useState<number|null>(null)
   const finger=useRef(false)
   const chartRef = useRef<HTMLElement>(null)
-  const [desktopWidth, setDesktopWidth] = useState(0)
-  const W = desktopWidth || 360
-  const H = desktopWidth ? 280 : 207
+  const [{ width: W, height: H }, setChartSize] = useState({ width: 360, height: 207 })
   const R = W - 3
   const B = H - 16
 
@@ -19,7 +17,10 @@ export default function WalletMarketChart({code,period,active=true,icon,onPeriod
     const chart = chartRef.current
     if (!chart || !active) return
     const media = window.matchMedia("(min-width: 1100px)")
-    const resize = () => setDesktopWidth(media.matches ? Math.round(chart.clientWidth) : 0)
+    const resize = () => {
+      const width = Math.round(chart.clientWidth)
+      if (width > L * 2) setChartSize({ width, height: media.matches ? 280 : 207 })
+    }
     const observer = new ResizeObserver(resize)
     observer.observe(chart)
     media.addEventListener("change", resize)

@@ -55,6 +55,7 @@ class Orders:
         self.enabled=bool(enabled and provider.configured)
         provider.orders_enabled=self.enabled
         self.locks={}
+        self.validate_managed_route = None
         ledger.db.executescript('''
           CREATE TABLE IF NOT EXISTS fixedfloat_order_intents (
             id TEXT PRIMARY KEY,user_id TEXT NOT NULL,fingerprint TEXT NOT NULL,
@@ -87,7 +88,7 @@ class Orders:
     def require_enabled(self):
         if not self.enabled:raise self.provider.error('EXCHANGE_NOT_ENABLED','Создание обменов пока не включено',503)
 
-    async def prepare(self,uid,body):
+    async def prepare(self,uid,body, *, managed_provider=None, min_deposit=None):
         self.require_enabled()
         if not isinstance(body,dict) or set(body)-{'from_network','to_network','amount','rate_type','to_address','to_tag'}:
             raise ValueError('Invalid exchange parameters')
@@ -98,6 +99,9 @@ class Orders:
         except ValueError:raise self.provider.error('ADDRESS_INVALID','Проверьте адрес получения и выбранную сеть',400) from None
         tag=text(body.get('to_tag'),128) or None
         params={**base,'to_address':body['to_address'],'to_tag':tag}
+        if managed_provider:
+            params['managed_provider'] = managed_provider
+            params['min_deposit'] = str(min_deposit) if min_deposit is not None else None
         # Strict amount/direction validation is shared with the existing quote adapter.
         fingerprint=hashlib.sha256(json.dumps(params,sort_keys=True,separators=(',',':')).encode()).hexdigest()
         existing=self.ledger.db.execute(
@@ -108,6 +112,8 @@ class Orders:
             return self.public(existing)
         quote=await self.provider.quote(base)
         if not quote['available']:raise self.provider.error('EXCHANGE_UNAVAILABLE','Направление или сумма сейчас недоступны',409)
+        if min_deposit is not None and Decimal(str(quote['to_amount'])) < Decimal(str(min_deposit)):
+            raise self.provider.error('AMOUNT_TOO_SMALL', 'Сумма выплаты меньше минимума пополнения', 400)
         self.ledger.begin('exchange_prepare',uid,'Prepare externally funded exchange')
         try:
             # A second process may have prepared the same operation while price was loading.
@@ -138,6 +144,8 @@ class Orders:
             if not isinstance(part,dict) or part.get('code')!=NETWORKS[network][0] or part.get('coin')!='USDT' or part.get('network')!=NETWORKS[network][1]:
                 raise ValueError('Order asset/network mismatch')
         pay_amount=positive(source.get('amount'));receive_amount=positive(destination.get('amount'))
+        if status == 'NEW' and params.get('min_deposit') is not None and receive_amount < positive(params['min_deposit']):
+            raise ValueError('Order payout below deposit minimum')
         if creating and pay_amount!=positive(params['amount']):raise ValueError('Changed sending amount')
         address(params['from_network'],source.get('address'))
         if address(params['to_network'],destination.get('address'))!=address(params['to_network'],params['to_address']):
@@ -176,6 +184,11 @@ class Orders:
             row=self.owned(uid,intent_id)
             if row['state']!='prepared':
                 self.ledger.commit();return self.public(row)
+            params = json.loads(row["params"])
+            if params.get("managed_provider"):
+                if not self.validate_managed_route:
+                    raise self.provider.error("EXCHANGE_UNAVAILABLE", "Маршрут обмена недоступен", 409)
+                self.validate_managed_route(params["from_network"], params["to_network"], params["managed_provider"])
             if row['expires_at']<time.time():raise self.provider.error('QUOTE_EXPIRED','Расчёт устарел. Рассчитайте обмен заново',400)
             if row['next_check_at']>time.time():raise self.provider.error('RATE_LIMITED','Повторите после окончания ограничения',429,str(max(1,int(row['next_check_at']-time.time()))))
             self.ledger.db.execute("UPDATE fixedfloat_order_intents SET state='creating',error=NULL WHERE id=?",(intent_id,))

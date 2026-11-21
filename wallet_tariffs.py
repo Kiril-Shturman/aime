@@ -39,6 +39,10 @@ def prepare(ledger):
         fixed_fee TEXT NOT NULL, percent_fee TEXT NOT NULL, minimum_fee TEXT NOT NULL,
         currency TEXT NOT NULL, note TEXT, created_at REAL NOT NULL, created_by TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS wallet_card_plan_availability (
+        product TEXT PRIMARY KEY, enabled INTEGER NOT NULL,
+        updated_at REAL NOT NULL, updated_by TEXT NOT NULL
+      );
       CREATE INDEX IF NOT EXISTS wallet_tariff_product_created
         ON wallet_tariff_versions(product,created_at DESC);
     """)
@@ -67,13 +71,33 @@ def active(ledger, product):
     result["enabled"] = bool(result["enabled"])
     return result
 
+def card_issue_enabled(ledger, product):
+    row = ledger.db.execute(
+        "SELECT enabled FROM wallet_card_plan_availability WHERE product=?", (product,),
+    ).fetchone()
+    return row is None or bool(row[0])
+
+
+def set_card_issue_enabled(ledger, product, enabled, actor):
+    if not isinstance(product, str) or product not in CARD_PLANS or type(enabled) is not bool:
+        raise ValueError("Некорректная настройка выпуска карты")
+    ledger.db.execute(
+        "INSERT INTO wallet_card_plan_availability VALUES (?,?,?,?) ON CONFLICT(product) "
+        "DO UPDATE SET enabled=excluded.enabled,updated_at=excluded.updated_at,updated_by=excluded.updated_by",
+        (product, int(enabled), time.time(), actor),
+    )
+
+
 def snapshot(ledger):
     items = []
     for product, (label, enforced) in PRODUCTS.items():
         item = active(ledger, product)
         item.update(label=label, enforced=enforced)
         if product in CARD_PLANS:
-            item.update(CARD_PLANS[product], card_plan=True)
+            item.update(CARD_PLANS[product], card_plan=True, provider="Aura", category="cards",
+                        issue_enabled=card_issue_enabled(ledger, product))
+        else:
+            item.update(category="deposits" if product == "sbp_buy" else "other")
         items.append(item)
     history = [dict(row) for row in ledger.db.execute(
         "SELECT * FROM wallet_tariff_versions ORDER BY created_at DESC,rowid DESC LIMIT 200"

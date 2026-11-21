@@ -1,7 +1,7 @@
 import { currencyNames } from "../wallet/catalog";
 import { useEffect, useState, type ReactNode } from "react";
 import { Button, Card } from "konsta/react";
-import { Check, ShieldAlert } from "lucide-react";
+import { Check, Copy, ShieldAlert } from "lucide-react";
 import QRCode from "react-qr-code";
 import WalletNetworkIcon from "./WalletNetworkIcon";
 import {
@@ -96,7 +96,7 @@ export default function WalletCryptoDeposit({
                 {currencyNames[code] ?? code} · {code}
               </dd>
             </div>
-            <div className="flex min-h-14 items-center justify-between gap-4 border-b border-black/[.06] py-3 dark:border-white/[.08]">
+            <div className="flex min-h-14 items-center justify-between gap-4 py-3">
               <dt className="text-[15px] text-black/45 dark:text-white/45">
                 Сеть
               </dt>
@@ -112,16 +112,16 @@ export default function WalletCryptoDeposit({
                 </span>
               </dd>
             </div>
-            <div className="flex min-h-16 items-start justify-between gap-4 py-4">
-              <dt className="shrink-0 text-[15px] leading-6 text-black/45 dark:text-white/45">
-                Адрес
-              </dt>
-              <dd className="min-w-0 select-text break-all text-right font-mono text-[14px] leading-6">
-                {entry.address}
-              </dd>
-            </div>
           </dl>
         </Card>
+      </section>
+      <section className="rounded-[28px] bg-white p-4 dark:bg-[#1c1c1e]" aria-label="Адрес пополнения">
+        <p className="text-[13px] text-black/45 dark:text-white/45">Адрес</p>
+        <button type="button" aria-label="Скопировать адрес пополнения" onClick={() => void copy()}
+          className="mt-2 flex min-h-9 w-full items-center justify-between gap-3 text-left text-[14px] text-blue-600 dark:text-blue-400">
+          <span className="min-w-0 break-all">{entry.address}</span>
+          {copied ? <Check size={19} className="shrink-0" /> : <Copy size={19} className="shrink-0" />}
+        </button>
       </section>
       <div className="flex gap-3 px-2">
         <ShieldAlert

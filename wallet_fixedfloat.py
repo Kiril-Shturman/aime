@@ -28,6 +28,7 @@ class FixedFloat:
         self.window = deque()
         self.user_windows = defaultdict(deque)
         self.currency_cache = None
+        self.btc_can_send = False
         self.currency_until = 0
         self.currency_lock = asyncio.Lock()
         self.ledger = None
@@ -203,6 +204,8 @@ class FixedFloat:
                     for row in rows
                     if isinstance(row, dict) and isinstance(row.get("code"), str)
                 }
+                bitcoin = by_code.get("BTC", {})
+                self.btc_can_send = bitcoin.get("coin") == "BTC" and bitcoin.get("network") == "BTC" and bitcoin.get("recv") in (True, 1)
                 result = []
                 for network, (code, chain, name, standard) in NETWORKS.items():
                     row = by_code.get(code, {})
@@ -220,7 +223,7 @@ class FixedFloat:
                 self.currency_cache, self.currency_until = result, time.monotonic() + 30
             return self.currency_cache
 
-    async def quote(self, body):
+    async def quote(self, body, *, from_asset="USDT"):
         if not isinstance(body, dict) or set(body) != {
             "from_network",
             "to_network",
@@ -231,25 +234,28 @@ class FixedFloat:
         source, destination, mode, amount = (
             body[key] for key in ("from_network", "to_network", "rate_type", "amount")
         )
+        bitcoin = from_asset == "BTC"
         if (
             not isinstance(source, str)
             or not isinstance(destination, str)
-            or source not in NETWORKS
+            or (source != "BTC" if bitcoin else source not in NETWORKS)
             or destination not in NETWORKS
             or source == destination
             or mode not in {"float", "fixed"}
         ):
             raise ValueError("Invalid exchange direction")
-        if (
-            not isinstance(amount, str)
-            or not re.fullmatch(r"(?:0|[1-9]\d{0,8})(?:\.\d{1,6})?", amount)
-            or Decimal(amount) <= 0
-        ):
-            raise ValueError("Invalid amount")
+        precision = 8 if bitcoin else 6
+        if not isinstance(amount, str) or not re.fullmatch(
+            rf"(?:[0-9]{{1,9}}(?:[.,][0-9]{{0,{precision}}})?|[.,][0-9]{{1,{precision}}})",
+            amount.strip(),
+        ) or Decimal(amount.strip().replace(",", ".")) <= 0:
+            raise self.error("INVALID_AMOUNT", f"Введите сумму больше нуля, до {precision} знаков после запятой", 400)
+        amount = format(Decimal(amount.strip().replace(",", ".")).normalize(), "f")
         networks = {row["network"]: row for row in await self.networks()}
         summary = {
             "provider": "fixedfloat",
             "asset": "USDT",
+            "from_asset": from_asset,
             "from_network": source,
             "to_network": destination,
             "rate_type": mode,
@@ -262,12 +268,20 @@ class FixedFloat:
             "refresh_after_seconds": 20,
             "execution_enabled": False,
         }
-        if not networks[source]["can_send"] or not networks[destination]["can_receive"]:
-            return {**summary, "reasons": ["NETWORK_UNAVAILABLE"]}
+        can_send = self.btc_can_send if bitcoin else networks[source]["can_send"]
+        if not can_send or not networks[destination]["can_receive"]:
+            return {
+                **summary, "reasons": ["NETWORK_UNAVAILABLE"],
+                "unavailable_sides": [
+                    side for side, ready in (("from", can_send),
+                                             ("to", networks[destination]["can_receive"]))
+                    if not ready
+                ],
+            }
         result = await self.call(
             "price",
             {
-                "fromCcy": NETWORKS[source][0],
+                "fromCcy": "BTC" if bitcoin else NETWORKS[source][0],
                 "toCcy": NETWORKS[destination][0],
                 "amount": amount,
                 "direction": "from",
@@ -275,15 +289,11 @@ class FixedFloat:
             },
         )
         sending, receiving = result["from"], result["to"]
-        for row, network in ((sending, source), (receiving, destination)):
-            if (
-                row.get("code") != NETWORKS[network][0]
-                or row.get("network") != NETWORKS[network][1]
-                or row.get("coin") != "USDT"
-            ):
+        expected_source = ("BTC", "BTC", "BTC") if bitcoin else (*NETWORKS[source][:2], "USDT")
+        expected_target = (*NETWORKS[destination][:2], "USDT")
+        for row, expected in ((sending, expected_source), (receiving, expected_target)):
+            if (row.get("code"), row.get("network"), row.get("coin")) != expected:
                 raise ValueError("Mismatched quote asset/network")
-        if Decimal(str(sending["amount"])) != Decimal(amount):
-            raise ValueError("Provider changed sending amount")
         errors = result.get("errors")
         if not isinstance(errors, list) or not all(
             isinstance(error, str) for error in errors
@@ -308,17 +318,19 @@ class FixedFloat:
                     for error in errors
                 ],
             }
+        if Decimal(str(sending["amount"])) != Decimal(amount):
+            raise ValueError("Provider changed sending amount")
         payout = Decimal(str(receiving["amount"]))
         if not payout.is_finite() or payout <= 0:
             raise ValueError("Invalid payout")
         with localcontext() as ctx:
             ctx.prec = 60
-            difference = Decimal(amount) - payout
+            difference = None if bitcoin else str(Decimal(amount) - payout)
         return {
             **summary,
             "available": True,
             "to_amount": str(payout),
-            "difference": str(difference),
+            "difference": difference,
         }
 
     async def close(self):

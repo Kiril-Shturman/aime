@@ -1775,15 +1775,73 @@ def _wpay_bot_snapshot(ledger, sender_id, environment):
         (uid,),
     )]
     cards = [dict(row) for row in ledger.db.execute(
-        "SELECT kind,status,frozen,masked_pan,delivery_status FROM aura_cards "
+        "SELECT card_id,kind,status,frozen,masked_pan,delivery_status FROM aura_cards "
         "WHERE user_id=? AND environment=? ORDER BY updated_at DESC",
         (uid, environment),
     )]
     return balances, cards
 
 
+_WPAY_CARD_WIDGET_HTML = r"""<style>
+*{box-sizing:border-box}body{margin:0;padding:0;font-family:system-ui,sans-serif;color:#fff}
+.card{height:220px;padding:18px;border-radius:20px;background:linear-gradient(135deg,#171a24,#34394b 55%,#171a24);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;position:relative}
+.card:after{content:"";position:absolute;width:190px;height:190px;border-radius:50%;right:-65px;top:-85px;background:rgba(255,255,255,.08)}
+.top,.bottom{display:flex;align-items:center;justify-content:space-between;gap:12px;position:relative;z-index:1}.brand{font-weight:800;font-size:23px;letter-spacing:-1px}.kind{font-size:12px;color:rgba(255,255,255,.72)}
+.chip{width:36px;height:27px;border-radius:7px;background:linear-gradient(135deg,#f7df9a,#ad7d27);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18)}
+.number{font-family:ui-monospace,monospace;font-size:19px;letter-spacing:1.3px;white-space:nowrap;position:relative;z-index:1}.meta{font-size:11px;color:rgba(255,255,255,.62);text-transform:uppercase;letter-spacing:.7px}.value{font-size:14px;margin-top:3px}.status{display:flex;align-items:center;gap:7px;font-size:13px}.dot{width:8px;height:8px;border-radius:50%;background:#79e09b;box-shadow:0 0 0 4px rgba(121,224,155,.13)}
+.pending .dot{background:#f4c45e;box-shadow:0 0 0 4px rgba(244,196,94,.13)}.danger .dot{background:#ff7777;box-shadow:0 0 0 4px rgba(255,119,119,.13)}
+.refresh{border:0;background:rgba(255,255,255,.12);color:#fff;border-radius:10px;padding:7px 10px;font:600 12px system-ui;position:relative;z-index:2}
+</style><div class="card" id="card"><div class="top"><div><div class="brand">WPay</div><div class="kind" id="kind"></div></div><div class="chip"></div></div><div class="number" id="number"></div><div class="bottom"><div><div class="meta">Статус</div><div class="status"><span class="dot"></span><span id="status"></span></div></div><button class="refresh" id="refresh">Обновить</button></div></div><script>
+const W=TelegramWidget,C=document.getElementById('card');function state(){try{return JSON.parse(W.chatData)||{}}catch(e){return{}}}function draw(){const s=state();document.getElementById('kind').textContent=s.kind||'Карта';document.getElementById('number').textContent=s.masked||'•••• •••• •••• ••••';document.getElementById('status').textContent=s.status||'Обновляется';C.className='card '+(s.tone||'pending')}draw();W.onEvent('chatDataChanged',draw);document.getElementById('refresh').onclick=()=>{const b=document.getElementById('refresh');b.disabled=true;b.textContent='Обновляем…';W.request('card:refresh').then(a=>{b.textContent=a.result==='card_not_found'?'Карты пока нет':'Готово';setTimeout(()=>{b.disabled=false;b.textContent='Обновить'},1200)},()=>{b.disabled=false;b.textContent='Повторить'})};W.ready();
+</script>"""
+
+
+def _wpay_card_widget_state(card):
+    """Return display-only card state; never expose credentials or provider payloads."""
+    raw_status = str(card.get("status") or "processing")
+    frozen = bool(card.get("frozen"))
+    labels = {
+        "opened": "Активна", "active": "Активна", "processing": "Выпускается",
+        "pending": "Выпускается", "not_issued": "Не выпущена",
+        "failed_to_open": "Ошибка выпуска",
+        "cancelled": "Закрыта", "closed": "Закрыта",
+    }
+    status = "Заморожена" if frozen else labels.get(raw_status, "Статус обновлён")
+    tone = "danger" if frozen or raw_status in {"failed_to_open", "cancelled", "closed"} else (
+        "pending" if raw_status in {"processing", "pending", "not_issued"} else "active"
+    )
+    masked = str(card.get("masked_pan") or "•••• •••• •••• ••••")[:32]
+    kind = "Виртуальная карта" if card.get("kind") == "virtual" else "Физическая карта"
+    return json.dumps(
+        {"kind": kind, "masked": masked, "status": status, "tone": tone},
+        ensure_ascii=False, separators=(",", ":"),
+    )
+
+
+def _wpay_card_widget_payload(chat_id, card, app_url, reply_markup=None):
+    payload = {
+        "chat_id": chat_id,
+        "html": _WPAY_CARD_WIDGET_HTML,
+        "height": 220,
+        "chat_data": _wpay_card_widget_state(card),
+        "caption": "Карта WPay · реквизиты доступны только в защищённом Mini App",
+        "allow_queries": True,
+        "protect_content": True,
+        "reply_markup": reply_markup or {"inline_keyboard": [[{
+            "text": "Открыть карту", "web_app": {"url": app_url}, "style": "primary",
+        }]]},
+    }
+    return payload
+
+
 def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, referral=None):
     """Return rich HTML and a classic-message fallback for a bot screen."""
+    start_text_emoji_id = os.environ.get(
+        "WPAY_START_TEXT_EMOJI_ID", "5467913823631484285",
+    ).strip()
+    start_button_emoji_id = os.environ.get(
+        "WPAY_START_BUTTON_EMOJI_ID", "5467871067232052983",
+    ).strip()
     first_name = html.escape(str(sender.get("first_name") or "друг")[:80])
     balance_rows = [
         f"<tr><td><b>{html.escape(str(row['asset']))}</b></td>"
@@ -1797,6 +1855,34 @@ def _wpay_bot_view(view, sender, balances, cards, app_url, admin_url=None, refer
         for row in balances
     ] or ["USDT: 0 доступно"]
 
+    if view == "start":
+        start_emoji = (
+            f'<tg-emoji emoji-id="{html.escape(start_text_emoji_id, quote=True)}">💸</tg-emoji> '
+            if start_text_emoji_id else ""
+        )
+        rich = (
+            f"<h1>{start_emoji}WPay</h1>"
+            "<p>Виртуальная карта для оплаты по всему миру.</p>"
+            "<p>Пополняйте баланс в USDT, подключайте карту к Apple Pay "
+            "и Google Pay и оплачивайте покупки онлайн и офлайн.</p>"
+        )
+        plain = (
+            f"{start_emoji}<b>WPay</b> — виртуальная карта для оплаты по всему миру.\n\n"
+            "Пополняйте баланс в USDT, подключайте карту к Apple Pay и Google Pay "
+            "и оплачивайте покупки онлайн и офлайн."
+        )
+        rich += (
+            "<tg-button-row><tg-button type=\"web_app\" style=\"primary\" url=\""
+            + html.escape(app_url, quote=True) + "\">Открыть WPay</tg-button></tg-button-row>"
+        )
+        start_button = {
+            "text": "Открыть WPay",
+            "web_app": {"url": app_url},
+            "style": "primary",
+        }
+        if start_button_emoji_id:
+            start_button["icon_custom_emoji_id"] = start_button_emoji_id
+        return rich, plain, {"inline_keyboard": [[start_button]]}
     if view == "balance":
         rich = (
             "<h1>Баланс WPay</h1>"
@@ -2169,7 +2255,8 @@ async def wpay_telegram_webhook(request):
         return web.json_response({"ok": False}, status=400)
     message = update.get("message") or update.get("edited_message") or {}
     callback = update.get("callback_query") or {}
-    sender = message.get("from") or callback.get("from") or {}
+    widget_query = update.get("widget_query") or {}
+    sender = message.get("from") or callback.get("from") or widget_query.get("from") or {}
     text = message.get("text") or ""
     command = text.split(maxsplit=1)[0].split("@", 1)[0] if text else ""
     sender_id = sender.get("id")
@@ -2181,9 +2268,57 @@ async def wpay_telegram_webhook(request):
             f"tg:{sender_id}", sender, bot_started=True, source="bot",
             start_param=start_param, touch=True,
         )
+    if widget_query:
+        query_id = str(widget_query.get("id") or "")
+        query_data = str(widget_query.get("data") or "")
+        widget_chat = widget_query.get("chat") or {}
+        widget_chat_id = widget_chat.get("id")
+        widget_message_id = widget_query.get("message_id")
+        request["wpay_audit_detail"] = "bot:widget-card"
+
+        def answer_widget():
+            if (
+                query_data != "card:refresh" or not query_id
+                or not isinstance(sender_id, int) or sender_id <= 0
+                or widget_chat.get("type") != "private" or widget_chat_id != sender_id
+                or not isinstance(widget_message_id, int)
+            ):
+                if query_id:
+                    _telegram_bot_api(token, "answerWidgetQuery", {
+                        "widget_query_id": query_id, "data": "unsupported",
+                    })
+                return
+            environment = os.environ.get("AURA_ENVIRONMENT", "test")
+            _, cards = _wpay_bot_snapshot(request.app["wpay_ledger"], sender_id, environment)
+            if not cards:
+                _telegram_bot_api(token, "answerWidgetQuery", {
+                    "widget_query_id": query_id, "data": "card_not_found",
+                })
+                return
+            _telegram_bot_api(token, "editMessageWidgetData", {
+                "chat_id": widget_chat_id,
+                "message_id": widget_message_id,
+                "chat_data": _wpay_card_widget_state(cards[0]),
+            })
+            _telegram_bot_api(token, "answerWidgetQuery", {
+                "widget_query_id": query_id, "data": "updated",
+            })
+
+        try:
+            await asyncio.to_thread(answer_widget)
+        except Exception as exc:
+            print(f"[wpay-bot] widget query failed: {exc}", flush=True)
+            if query_id:
+                try:
+                    await asyncio.to_thread(_telegram_bot_api, token, "answerWidgetQuery", {
+                        "widget_query_id": query_id, "data": "failed",
+                    })
+                except Exception:
+                    pass
+        return web.json_response({"ok": True})
     callback_data = str(callback.get("data") or "")
     view_by_command = {
-        "/start": "home", "/wallet": "home", "/balance": "balance",
+        "/start": "start", "/wallet": "home", "/balance": "balance",
         "/cards": "cards", "/deposit": "deposit", "/verify": "verify",
         "/help": "help", "/referral": "referral", "/admin": "admin",
     }
@@ -2225,6 +2360,33 @@ async def wpay_telegram_webhook(request):
                 _telegram_bot_api(token, "answerCallbackQuery", {"callback_query_id": callback["id"]})
             except Exception:
                 pass
+        start_animation = os.environ.get("WPAY_START_VIDEO_FILE_ID", "").strip()
+        if command == "/start" and start_animation:
+            try:
+                return _telegram_bot_api(token, "sendAnimation", {
+                    "chat_id": chat_id,
+                    "animation": start_animation,
+                    "caption": plain,
+                    "parse_mode": "HTML",
+                    "reply_markup": reply_markup,
+                })
+            except Exception as exc:
+                print(f"[wpay-bot] start animation failed: {exc}", flush=True)
+        widgets_enabled = os.environ.get("WPAY_CARD_WIDGETS_ENABLED", "").lower() in {
+            "1", "true", "yes",
+        }
+        if view == "cards" and widgets_enabled:
+            try:
+                card = cards[0] if cards else {
+                    "kind": "virtual", "status": "not_issued", "frozen": False,
+                    "masked_pan": None,
+                }
+                return _telegram_bot_api(
+                    token, "sendWidget",
+                    _wpay_card_widget_payload(chat_id, card, app_url, reply_markup),
+                )
+            except Exception as exc:
+                print(f"[wpay-bot] card widget failed, using fallback: {exc}", flush=True)
         try:
             return _telegram_bot_api(token, "sendRichMessage", {
                 "chat_id": chat_id,
@@ -2232,12 +2394,15 @@ async def wpay_telegram_webhook(request):
                 "protect_content": view in {"balance", "cards"},
             })
         except Exception:
-            return _telegram_bot_api(token, "sendMessage", {
+            fallback = {
                 "chat_id": chat_id,
                 "text": plain,
                 "reply_markup": reply_markup,
                 "protect_content": view in {"balance", "cards"},
-            })
+            }
+            if view == "start":
+                fallback["parse_mode"] = "HTML"
+            return _telegram_bot_api(token, "sendMessage", fallback)
 
     try:
         await asyncio.to_thread(send_message)

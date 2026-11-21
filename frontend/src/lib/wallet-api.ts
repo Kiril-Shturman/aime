@@ -103,7 +103,9 @@ export async function walletRequest<T>(
 ): Promise<T> {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      return await requestOnce<T>(action, body, signal);
+      const result = await requestOnce<T>(action, body, signal);
+      if (action === "deposit") window.dispatchEvent(new Event("wpay:deposit-address"));
+      return result;
     } catch (error) {
       if (
         !(error instanceof WalletApiError) ||

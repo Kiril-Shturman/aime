@@ -7,7 +7,7 @@ from collections import deque
 from decimal import Decimal, localcontext
 from datetime import datetime, timezone
 from aiohttp import web
-from wallet_tariffs import CARD_PLANS, calculate, resolve_card_plan, prepare as prepare_tariffs
+from wallet_tariffs import card_issue_enabled, CARD_PLANS, calculate, resolve_card_plan, prepare as prepare_tariffs
 from wallet_aura import _decimal, _store_card_event, _store_card_operation, _list_data
 
 
@@ -57,7 +57,7 @@ class CardUI:
             provider_fee = _decimal(provider, allow_zero=True) if available else Decimal(0)
             service_fee, tariff = calculate(self.ledger, plan_id, provider_fee, operation='issue')
             plans.append({
-                'plan_id': plan_id, **plan, 'available': available and tariff['version_id'] is not None,
+                'plan_id': plan_id, **plan, 'available': available and tariff['version_id'] is not None and card_issue_enabled(self.ledger, plan_id),
                 'tariff_configured': tariff['version_id'] is not None,
                 'issue_fee': str(provider_fee + service_fee) if available and tariff['version_id'] is not None else None,
                 'provider_issue_fee': str(provider_fee) if available else None,
@@ -183,6 +183,8 @@ class CardUI:
         card_id, amount = None, None
         if operation == 'issue':
             plan_id, plan = resolve_card_plan(body.get('plan_id'), '')
+            if not card_issue_enabled(self.ledger, plan_id):
+                raise self.client.error_cls('card_kind_unavailable', 'Выпуск по этому тарифу отключён', 412)
             value = raw.get('open_' + plan['kind'] + '_card_fee')
             if value is None or value == '':
                 raise self.client.error_cls('card_kind_unavailable', 'Выпуск недоступен', 412)

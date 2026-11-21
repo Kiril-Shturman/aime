@@ -1,14 +1,13 @@
-import { Search, CreditCard } from "lucide-react";
+import { Search } from "lucide-react";
 import WalletOperations from "./WalletOperations";
 import {
   TransactionDetails,
   TransactionDetailContent,
   TransactionExamples,
   transactionFromApi,
+  transactionListPresentation,
   type TransactionView,
 } from "./WalletTransaction";
-import ArrowDownCircleFill from "framework7-icons/react/esm/ArrowDownCircleFill.js";
-import Qrcode from "framework7-icons/react/esm/Qrcode.js";
 import Clock from "framework7-icons/react/esm/Clock.js";
 import {
   createContext,
@@ -208,8 +207,15 @@ export function WalletLiveProvider({ children }: { children: ReactNode }) {
   );
   useEffect(() => {
     void refresh();
-    return () => walletRequestController.current?.abort();
-  }, [refresh]);
+    const refreshOnReturn = () => {
+      if (!demo && document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    return () => {
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+      walletRequestController.current?.abort();
+    };
+  }, [demo, refresh]);
   const balance = useCallback(
     (asset: string) =>
       data.balances.find((x) => x.asset === asset)?.available ?? "0",
@@ -294,7 +300,7 @@ export function LiveHistory() {
         (filter === "income"
           ? Number(x.amount) > 0
           : Number(x.amount) < 0 || x.type === "qr_failed")) &&
-      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${x.type === "card_topup" ? "Пополнение карты" : x.type === "card_issue" ? "Выпуск карты" : x.type === "card_issue_refund" ? "Возврат за выпуск карты" : ""} ${x.detail.plan ?? ""}`
+      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${transactionListPresentation(x).title} ${transactionListPresentation(x).network} ${transactionListPresentation(x).currency} ${x.detail.plan ?? ""}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -377,32 +383,15 @@ export function LiveHistory() {
               >
                 {transactions.map((item) => {
                   const income = Number(item.amount) > 0;
-                  const failed = item.type === "qr_failed";
-                  const cardIssue =
-                    item.type === "card_issue" ||
-                    item.type === "card_topup" ||
-                    item.type === "card_issue_refund";
-                  const Icon = cardIssue
-                    ? CreditCard
-                    : income
-                      ? ArrowDownCircleFill
-                      : Qrcode;
-                  const title =
-                    item.type === "card_topup"
-                      ? "Пополнение карты"
-                      : item.type === "card_issue"
-                        ? "Выпуск карты"
-                        : item.type === "card_issue_refund"
-                          ? "Возврат за выпуск карты"
-                          : item.type === "deposit"
-                            ? "Пополнение"
-                            : item.type === "qr_refunded"
-                              ? "Возврат QR"
-                              : failed
-                                ? "Платёж не прошёл"
-                                : String(
-                                    item.detail.merchant_name || "Оплата QR",
-                                  );
+                  const failed = ["qr_failed", "withdrawal_failed"].includes(item.type);
+                  const displayAmount = item.type === "exchange_internal"
+                    ? String(item.detail.amount ?? "0") : item.amount;
+                  const formattedAmount = item.asset === "USD"
+                    ? usd(Number(displayAmount))
+                    : item.asset === "RUB"
+                      ? Number(displayAmount).toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " ₽"
+                      : `${cryptoAmount(displayAmount)} ${item.asset}`;
+                  const { title, icon: Icon, network, currency } = transactionListPresentation(item);
                   return (
                     <ListItem
                       key={item.event_id}
@@ -426,25 +415,16 @@ export function LiveHistory() {
                             <span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">
                               {title}
                             </span>
-                            <span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">
+                            <span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">
                               {new Date(item.created_at).toLocaleTimeString(
                                 "ru-RU",
                                 { hour: "2-digit", minute: "2-digit" },
                               )}{" "}
-                              · {item.asset}
+                              · {currency}{network && ` · ${network}`}
                             </span>
                           </span>
-                          <span className="shrink-0 text-right">
-                            <span
-                              className={`block text-[16px] font-medium leading-6 tabular-nums ${income ? "text-green-600 dark:text-green-400" : "text-black dark:text-white"}`}
-                            >
-                              {cardIssue
-                                ? `${income ? "+" : ""}${usd(Number(item.amount))}`
-                                : `${income ? "+" : ""}${cryptoAmount(item.amount)}`}
-                            </span>
-                            <span className="block text-[12px] leading-5 text-black/40 dark:text-white/40">
-                              {item.asset}
-                            </span>
+                          <span className={`shrink-0 whitespace-nowrap text-right text-[16px] font-medium leading-6 tabular-nums ${income ? "text-green-600 dark:text-green-400" : "text-black dark:text-white"}`}>
+                            {income ? "+" : ""}{formattedAmount}
                           </span>
                         </span>
                       }

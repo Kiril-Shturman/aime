@@ -11,17 +11,35 @@ from decimal import Decimal
 from pathlib import Path
 
 import requests
-from bip_utils import Bip44, Bip44Coins
+from bip_utils import Base58Encoder, Bip44, Bip44Coins, Bip84, Bip84Coins
+from nacl.signing import SigningKey
 from nacl.public import SealedBox
 
 from wallet_custody import decode, fingerprint
 from wallet_custody_tools import load_private, verify_wallet
 from wallet_fixedfloat_orders import Orders, address
-from wallet_signer_chains import Chains, PaymentError
+from wallet_signer_chains import Chains, PaymentError, atomic
+from wallet_exchange_funding import CUSTODY_WITHDRAWAL_NETWORKS, CUSTODY_WITHDRAWAL_CAPABILITIES
+from wallet_custody_withdrawal import CustodyWithdrawal
+from wallet_key_export import EXPORT_NETWORKS, EXPORT_CAPABILITY
 
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=True).encode()
+
+
+def export_material(wallet, key):
+    network = wallet['network']
+    if network == 'BTC':
+        prefix = b'\x80' if wallet['chain_env'] == 'mainnet' else b'\xef'
+        return "wif", Base58Encoder.CheckEncode(prefix + key + b'\x01')
+    if network == 'SOL':
+        return "solana_keypair_base58", Base58Encoder.Encode(key + bytes(SigningKey(key).verify_key))
+    if network == 'TON':
+        return "ton_v4r2_ed25519_seed_hex", key.hex()
+    if network in {'ETH', 'BSC', 'TRON'}:
+        return "hex", key.hex()
+    raise ValueError('Unsupported export network')
 
 
 class Controller:
@@ -95,6 +113,45 @@ class Controller:
             raise ValueError('Provider changed payment instructions')
         return snapshot
 
+    def instructions(self, item):
+        if 'withdrawal' not in item:
+            return self.payable(item)
+        job, wallet, withdrawal = item['job'], item['wallet'], item['withdrawal']
+        if (
+            job['id'] != withdrawal['job_id'] or job['wallet_id'] != wallet['id']
+            or job['user_id'] != wallet['user_id']
+            or CUSTODY_WITHDRAWAL_NETWORKS.get(withdrawal['asset']) != job['network']
+            or wallet['network'] != job['network'] or wallet['chain_env'] != 'mainnet'
+            or wallet['key_id'] != self.key_id
+        ):
+            raise ValueError('Invalid BNB withdrawal binding')
+        return {
+            'pay_address': CustodyWithdrawal.recipient(job['network'], withdrawal['recipient']),
+            'from_amount': withdrawal['amount'],
+        }
+
+    def approval_binding(self, item):
+        job, wallet = item['job'], item['wallet']
+        binding = {'job_id': job['id'], 'intent_id': job['intent_id'], 'user_id': job['user_id'],
+                   'wallet_id': wallet['id']}
+        if 'withdrawal' in item:
+            binding['kind'] = 'custody_withdrawal'
+            binding['asset'] = item['withdrawal']['asset']
+        else:
+            binding['provider_id'] = item['order']['provider_id']
+        return binding
+
+    def estimate(self, item, instructions):
+        job, wallet = item['job'], item['wallet']
+        if 'withdrawal' in item:
+            quote = self.chains.estimate_withdrawal(item['withdrawal']['asset'], job['network'], wallet['address'],
+                                                    instructions['pay_address'], instructions['from_amount'],
+                                                    public_key=wallet['public_key'])
+            quote['recipient'] = instructions['pay_address']
+            return quote
+        return self.chains.estimate(job['network'], wallet['address'], instructions['pay_address'],
+                                    instructions['from_amount'], instructions['expires_at'])
+
     def seal(self, value):
         return hmac.new(self.seal_key, canonical(value), hashlib.sha256).hexdigest()
 
@@ -102,9 +159,12 @@ class Controller:
         clean = {k: v for k, v in quote.items() if k != 'seal'}
         if not hmac.compare_digest(self.seal(clean), quote['seal']):
             raise ValueError('Approval tampered')
-        job, wallet = item['job'], item['wallet']
-        binding = {'job_id': job['id'], 'intent_id': job['intent_id'], 'user_id': job['user_id'],
-                   'wallet_id': wallet['id'], 'provider_id': item['order']['provider_id']}
+        wallet = item['wallet']
+        binding = self.approval_binding(item)
+        legacy = 'withdrawal' in item and item['withdrawal']['asset'] == 'BNB' and quote['binding'].get('kind') == 'bnb_withdrawal'
+        if legacy:
+            binding = {**binding, 'kind': 'bnb_withdrawal'}
+            del binding['asset']
         if quote['binding'] != binding or quote['network'] != wallet['network'] or quote['source_address'] != wallet['address']:
             raise ValueError('Approval belongs to another job')
 
@@ -114,6 +174,11 @@ class Controller:
         document = json.loads(SealedBox(self.private).decrypt(wallet['encrypted_secret']))
         seed = decode(document['seed'])
         try:
+            if wallet['network'] in {'SOL', 'TON'}:
+                return seed
+            if wallet['network'] == 'BTC':
+                coin = Bip84Coins.BITCOIN if wallet['chain_env'] == 'mainnet' else Bip84Coins.BITCOIN_TESTNET
+                return Bip84.FromSeed(seed, coin).DeriveDefaultPath().PrivateKey().Raw().ToBytes()
             coin = {'TRON': Bip44Coins.TRON, 'ETH': Bip44Coins.ETHEREUM, 'BSC': Bip44Coins.BINANCE_SMART_CHAIN}[wallet['network']]
             return Bip44.FromSeed(seed, coin).DeriveDefaultPath().PrivateKey().Raw().ToBytes()
         finally:
@@ -133,18 +198,17 @@ class Controller:
                     self.bridge('status', job_id=identifier, state='done')
                     return
                 # No re-signing, even after expiry/restart. EVM transactions have no chain expiry.
-                fresh = self.payable(item)
+                fresh = self.instructions(item)
                 if fresh['pay_address'] != quote['recipient'] or fresh['from_amount'] != quote['amount']:
                     raise ValueError('Payment instructions changed')
                 self.chains.broadcast(quote, payload, txid)
                 self.bridge('status', job_id=identifier, state='broadcast')
                 return
-            fresh = self.payable(item)
+            fresh = self.instructions(item)
             if job['state'] == 'estimating':
-                quote = self.chains.estimate(job['network'], wallet['address'], fresh['pay_address'], fresh['from_amount'], fresh['expires_at'])
+                quote = self.estimate(item, fresh)
                 quote['approval_id'] = uuid.uuid4().hex
-                quote['binding'] = {'job_id': identifier, 'intent_id': job['intent_id'], 'user_id': job['user_id'],
-                                    'wallet_id': wallet['id'], 'provider_id': item['order']['provider_id']}
+                quote['binding'] = self.approval_binding(item)
                 quote['seal'] = self.seal(quote)
                 self.bridge('quote', job_id=identifier, quote=quote)
                 return
@@ -155,10 +219,20 @@ class Controller:
             if fresh['pay_address'] != quote['recipient'] or fresh['from_amount'] != quote['amount']:
                 raise ValueError('Payment instructions changed')
             # Re-estimation validates live balances, nonce, fee and execution; never silently alter approval.
-            current = self.chains.estimate(job['network'], wallet['address'], quote['recipient'], quote['amount'], fresh['expires_at'])
-            if job['network'] != 'TRON' and (current['unsigned']['nonce'] != quote['unsigned']['nonce']):
+            current = self.estimate(item, fresh)
+            if job['network'] in {'BSC','ETH'} and (current['unsigned']['nonce'] != quote['unsigned']['nonce']):
                 raise PaymentError('QUOTE_EXPIRED')
             if Decimal(current['max_fee']) > Decimal(quote['max_fee']):
+                raise PaymentError('QUOTE_EXPIRED')
+            if 'withdrawal' in item and job['network'] in {'BSC','ETH'}:
+                if current['unsigned']['gas'] > quote['unsigned']['gas']:
+                    raise PaymentError('QUOTE_EXPIRED')
+                approved_cost = quote['unsigned']['value'] + quote['unsigned']['gas'] * quote['unsigned']['gasPrice']
+                if atomic(current['native_balance'], 18) < approved_cost:
+                    raise PaymentError('NO_GAS')
+            if job['network'] == 'TON' and current['unsigned']['seqno'] != quote['unsigned']['seqno']:
+                raise PaymentError('QUOTE_EXPIRED')
+            if job['network'] == 'BTC' and current['unsigned'] != quote['unsigned']:
                 raise PaymentError('QUOTE_EXPIRED')
             private_key = self.key(wallet)
             try:
@@ -182,7 +256,7 @@ class Controller:
         job, wallet = item['job'], item['wallet']
         try:
             if (job['user_id'] != wallet['user_id'] or job['wallet_id'] != wallet['id'] or
-                    wallet['network'] not in {'ETH','BSC'} or wallet['key_id'] != self.key_id or
+                    wallet['network'] not in EXPORT_NETWORKS or wallet['key_id'] != self.key_id or
                     job['expires_at'] <= time.time()):
                 raise ValueError('Invalid export ownership')
             recipient = RSA.import_key(base64.b64decode(job['public_key'], validate=True))
@@ -190,22 +264,23 @@ class Controller:
                 raise ValueError('Invalid export recipient')
             key = self.key(wallet)
             try:
+                key_format, secret = export_material(wallet, key)
                 document = {'job_id': job['id'], 'wallet_id': wallet['id'], 'network': wallet['network'],
-                            'address': wallet['address'], 'private_key': key.hex()}
+                            'address': wallet['address'], 'private_key': secret, 'format': key_format}
                 encrypted = PKCS1_OAEP.new(recipient, hashAlgo=SHA256).encrypt(canonical(document))
             finally:
                 del key
-            del document
+            del document, secret
             self.bridge('export-complete', job_id=job['id'], ciphertext=base64.b64encode(encrypted).decode())
         except Exception:
             self.bridge('export-complete', job_id=job['id'], ciphertext=None)
 
     def cycle(self):
-        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON'], key_id=self.key_id)
-        export = self.bridge('export-claim')
+        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'SOL', 'BTC', 'TON', EXPORT_CAPABILITY, *CUSTODY_WITHDRAWAL_CAPABILITIES.values()], key_id=self.key_id)
+        export = self.bridge('export-claim', multi_network=True)
         if export.get('job'):
             self.process_export(export)
-        item = self.bridge('claim')
+        item = self.bridge('claim', custody_withdrawals=True)
         if item.get('job'):
             self.process(item)
 

@@ -537,6 +537,7 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
             "asset": "USDT",
             "amount": "2",
             "reason": "Support correction",
+            "confirm": "ADJUST tg:123 USDT 2",
         }
         self.assertEqual((await self.post("finance-adjustment", body)).status, 403)
         self.assertEqual(
@@ -545,16 +546,29 @@ class FinancialCoreTests(unittest.IsolatedAsyncioTestCase):
             ).status,
             400,
         )
-        self.assertEqual((await self.post("finance-adjustment", body, OWNER)).status, 409)
         self.assertEqual(
-            (await self.post("finance-adjustment", {**body, "confirm": "ADJUST tg:123 USDT 2"}, OWNER)).status, 200
+            (await self.post(
+                "finance-adjustment", {**body, "confirm": "wrong"}, OWNER
+            )).status,
+            409,
         )
+        response = await self.post("finance-adjustment", body, OWNER)
+        self.assertEqual(
+            response.status, 200
+        )
+        result = await response.json()
+        self.assertEqual((result["before"], result["after"]), ("100", "102"))
         self.assertEqual(self.balance(), (D(102), D(0)))
         row = self.ledger.db.execute(
             "SELECT * FROM finance_transactions WHERE kind='admin_adjustment'"
         ).fetchone()
         self.assertEqual(row["actor"], "owner")
         self.assertEqual(row["reason"], "Support correction")
+        audit = self.ledger.db.execute(
+            "SELECT action,target_user_id,detail FROM admin_action_audit ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
+        self.assertEqual((audit["action"], audit["target_user_id"]), ("balance.adjust", "tg:123"))
+        self.assertEqual(json.loads(audit["detail"])["after"], "102")
 
     async def test_accounting_mismatch_blocks_without_modifying_projection(self):
         self.ledger.db.execute(

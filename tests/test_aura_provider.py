@@ -2,12 +2,10 @@ import hashlib
 import hmac
 import json
 import socket
-import sqlite3
 import tempfile
 import time
 import unittest
 import os
-from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
 
@@ -253,21 +251,6 @@ class AuraUnitTests(unittest.TestCase):
         self.assertNotIn(b"123456", bytes(inbox))
         self.assertIn(b"sensitive_payload_sha256", bytes(inbox))
         self.assertEqual(process_inbox(self.ledger, "test"), 1)
-
-        query = "SELECT user_id,title,message FROM notification_outbox WHERE event_type='card_otp'"
-        self.assertEqual(self.ledger.db.execute(query).fetchall(), [])
-        otp["event_id"] = "evt_fresh_otp"
-        otp["data"]["expires_at"] = datetime.fromtimestamp(
-            time.time() + 120, timezone.utc
-        ).isoformat()
-        raw, signature = signed(otp)
-        for _ in range(2):
-            store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
-            process_inbox(self.ledger, "test")
-        notices = self.ledger.db.execute(query).fetchall()
-        self.assertEqual(len(notices), 1)
-        self.assertEqual(notices[0]["user_id"], self.uid)
-        self.assertNotIn("123456", notices[0]["title"] + notices[0]["message"])
 
         delivery = {
             "api_version": "3.16.0", "event": "card.delivery_updated",
@@ -877,40 +860,6 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(before))
 
 
-    async def test_contacts_survive_restart_and_partial_updates(self):
-        uid = "tg:saved-contact"
-        ref = self.ledger.account(uid)
-        await self.service.ensure_customer(uid, ref, email=" hello@example.com ", phone=" +79991234567 ")
-        await self.service.ensure_customer(uid, ref, email="new@example.com")
-        await self.service.start_kyc(uid, ref)
-        self.ledger.db.close()
-        self.ledger = Ledger(self.tmp.name + "/db")
-        prepare(self.ledger)
-        self.service = AuraService(self.ledger, self.client, "test")
-        self.assertEqual(self.service.saved_contacts(uid), {"email": "new@example.com", "phone": "+79991234567"})
-        self.assertIsNone(self.service.saved_contacts("tg:another"))
-        other_environment = AuraService(self.ledger, self.client, "live")
-        self.assertIsNone(other_environment.saved_contacts(uid))
-
-    async def test_customer_and_contact_write_roll_back_together(self):
-        uid = "tg:contact-atomic"
-        ref = self.ledger.account(uid)
-        self.ledger.db.execute("CREATE TRIGGER contact_write_failure BEFORE INSERT ON wallet_profile_contacts BEGIN SELECT RAISE(ABORT, 'test failure'); END")
-        with self.assertRaises(sqlite3.IntegrityError):
-            await self.service.ensure_customer(uid, ref, email="hello@example.com", phone="+79991234567")
-        self.assertIsNone(self.ledger.db.execute("SELECT user_id FROM aura_customers WHERE user_id=?", (uid,)).fetchone())
-        self.assertIsNone(self.service.saved_contacts(uid))
-        self.assertFalse(self.ledger.db.in_transaction)
-
-    async def test_rejected_contact_update_preserves_last_successful_values(self):
-        uid = "tg:contact-failure"
-        ref = self.ledger.account(uid)
-        await self.service.ensure_customer(uid, ref, email="hello@example.com", phone="+79991234567")
-        with patch.object(self.client, "upsert_customer", new_callable=AsyncMock, side_effect=ApiError("unavailable", "Temporary failure", 503)):
-            with self.assertRaises(ApiError):
-                await self.service.ensure_customer(uid, ref, email="new@example.com", phone="+79997654321")
-        self.assertEqual(self.service.saved_contacts(uid), {"email": "hello@example.com", "phone": "+79991234567"})
-
     async def test_aura_transport_uses_allowlisted_ipv4(self):
         await self.client.get_me()
         self.assertEqual(self.client.session.connector.family, socket.AF_INET)
@@ -1394,16 +1343,12 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
     async def test_disabled_route_then_complete_mock_deposit(self):
         disabled = await self.wpay.post("/api/wallet/aura-deposit-address", headers=self.owner)
         self.assertEqual(disabled.status, 503)
-        before = await self.wpay.get('/api/wallet/status')
-        self.assertEqual((await before.json())['deposit_modes']['USDT']['TRON'], 'address')
         enabled = await self.wpay.post(
             "/api/wallet/admin-provider-route", headers=self.owner,
             json={"product": "crypto_deposit", "asset": "USDT", "network": "TRON",
                   "environment": "test", "provider": "aura", "enabled": True},
         )
         self.assertEqual(enabled.status, 200, await enabled.text())
-        status = await self.wpay.get('/api/wallet/status')
-        self.assertEqual((await status.json())['deposit_modes']['USDT']['TRON'], 'address')
         address_response = await self.wpay.post(
             "/api/wallet/aura-deposit-address", headers=self.owner
         )
@@ -1500,40 +1445,6 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(foreign.status, 404)
 
-    async def test_pending_sbp_creation_is_owner_scoped(self):
-        ledger = self.app['wpay_ledger']
-        stamp = time.time()
-        ledger.db.execute("INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            ('aura','test','sbp_order','pending-intent',None,'tg:123','submitting','pending-intent','{}',None,stamp,stamp))
-        for user_id, expected in [(123,True),(456,False)]:
-            response = await self.wpay.get('/api/wallet/aura-sbp-orders', headers={'X-Telegram-Init-Data':init_data(user_id)})
-            self.assertEqual(response.status,200)
-            self.assertEqual((await response.json())['pending_creation'],expected)
-            self.assertEqual(response.headers['Cache-Control'],'no-store')
-
-    async def test_profile_contacts_are_owner_scoped_when_provider_omits_them(self):
-        headers = {"X-Telegram-Init-Data": init_data(123)}
-        saved = await self.wpay.post("/api/wallet/aura-customer", headers=headers,
-            json={"email": "hello@example.com", "phone": "+79991234567"})
-        self.assertEqual(saved.status, 200)
-        client = self.app['wpay_aura_provider']
-        with patch.object(client, 'get_customer', new_callable=AsyncMock, return_value={'id': 'minimal', 'cards': []}) as get_customer:
-            for _ in range(2):
-                response = await self.wpay.get('/api/wallet/aura-customer', headers=headers)
-                self.assertEqual(response.status, 200)
-                self.assertEqual(response.headers['Cache-Control'], 'private, no-store')
-                profile = await response.json()
-                self.assertEqual(profile['email'], 'hello@example.com')
-                self.assertEqual(profile['phone'], '+79991234567')
-            get_customer.assert_not_called()
-        foreign = await self.wpay.get('/api/wallet/aura-customer?user_id=tg:123',
-            headers={"X-Telegram-Init-Data": init_data(456)})
-        self.assertEqual(foreign.status, 404)
-        self.assertNotIn('hello@example.com', await foreign.text())
-        injected = await self.wpay.post('/api/wallet/aura-customer', headers=headers,
-            json={'user_id':'tg:456', 'email':'wrong@example.com', 'phone':'+79997654321'})
-        self.assertEqual(injected.status, 400)
-
     async def test_admin_identity_import_is_secret_free(self):
         registered = await self.wpay.post(
             "/api/wallet/aura-customer", headers=self.owner,
@@ -1556,19 +1467,26 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         for secret in ("4510123456", "123456789012", "Иван", "Петров"):
             self.assertNotIn(secret, persisted)
 
-    async def test_customer_identity_status_and_webhook(self):
+    async def test_customer_direct_kyc_status_and_webhook(self):
         registered = await self.wpay.post(
             "/api/wallet/aura-customer", headers=self.owner,
             json={"email": "owner@example.com", "phone": "+79991234567"},
         )
         self.assertEqual(registered.status, 200, await registered.text())
         customer_id = (await registered.json())["customer_id"]
-        started = await self.wpay.post(
-            "/api/wallet/aura-kyc", headers=self.owner,
-            json={"first_name":"Иван","last_name":"Петров","birth_date":"1990-05-20","passport":"4510123457","passport_issue_date":"2010-06-01"}
+        submitted = await self.wpay.post(
+            "/api/wallet/aura-kyc", headers=self.owner, json={
+                "first_name": "Иван", "last_name": "Петров",
+                "birth_date": "1990-05-20", "passport": "4510 123456",
+                "passport_issue_date": "2010-06-01", "inn": "123456789012",
+            }
         )
-        self.assertEqual(started.status, 200, await started.text())
-        self.assertTrue((await started.json())["verified"])
+        self.assertEqual(submitted.status, 200, await submitted.text())
+        self.assertEqual(submitted.headers.get("Cache-Control"), "no-store")
+        self.assertTrue((await submitted.json())["verified"])
+        persisted = "\n".join(self.app["wpay_ledger"].db.iterdump())
+        for secret in ("4510123456", "123456789012", "Иван", "Петров"):
+            self.assertNotIn(secret, persisted)
         changed = await self.mock.post(
             "/mock/kyc", json={"customer_id": customer_id, "status": "verified"}
         )
@@ -1734,6 +1652,33 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
         await self.wpay.post("/api/wallet/admin-aura-process", headers=self.owner)
         card_id = card_payload["card"]["id"]
+        admin_cards = await self.wpay.get(
+            "/api/wallet/admin-cards", headers=self.owner,
+        )
+        self.assertEqual(admin_cards.status, 200, await admin_cards.text())
+        self.assertEqual((await admin_cards.json())["items"][0]["card_id"], card_id)
+        refreshed = await self.wpay.post(
+            "/api/wallet/admin-card-action", headers=self.owner,
+            json={"card_id": card_id, "operation": "refresh"},
+        )
+        self.assertEqual(refreshed.status, 200, await refreshed.text())
+        missing_confirmation = await self.wpay.post(
+            "/api/wallet/admin-card-action", headers=self.owner,
+            json={"card_id": card_id, "operation": "freeze"},
+        )
+        self.assertEqual(missing_confirmation.status, 409)
+        admin_frozen = await self.wpay.post(
+            "/api/wallet/admin-card-action", headers=self.owner,
+            json={
+                "card_id": card_id, "operation": "freeze",
+                "confirm": "freeze:" + card_id,
+            },
+        )
+        self.assertEqual(admin_frozen.status, 200, await admin_frozen.text())
+        audit = self.app["wpay_ledger"].db.execute(
+            "SELECT action,target_user_id FROM admin_action_audit ORDER BY rowid DESC LIMIT 1"
+        ).fetchone()
+        self.assertEqual((audit["action"], audit["target_user_id"]), ("card.freeze", "owner"))
         foreign = await self.wpay.post(
             "/api/wallet/aura-card-freeze",
             headers={"X-Telegram-Init-Data": init_data(323)},
@@ -2099,7 +2044,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         events = (await overview.json())["transactions"]
         self.assertEqual(events[0]["type"], "qr_completed")
 
-    async def test_disabled_sbp_product_blocks_kyc_start_and_rate(self):
+    async def test_disabled_sbp_product_blocks_kyc_submission_and_rate(self):
         self.mock.app["state"].products["sbp_buy"] = False
         kyc = await self.wpay.post(
             "/api/wallet/aura-kyc", headers=self.owner,

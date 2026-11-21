@@ -4,7 +4,7 @@ export const networkNames: Record<string, string> = {
   ETH: "Ethereum",
   TON: "TON",
   SOL: "Solana",
-  TRON: "Tron",
+  TRON: "TRON",
   BTC: "Bitcoin",
 };
 export const networkStandards: Record<string, string> = {
@@ -45,8 +45,27 @@ export const currencyNames: Record<string, string> = {
   BTC: "Bitcoin",
   XAUT: "Tether Gold",
 };
+export function currencyLabel(asset: string): string {
+  const ticker = asset.toUpperCase();
+  const name = currencyNames[ticker];
+  return name ? `${name} (${ticker})` : asset;
+}
+
+export function networkLabel(network: string, asset?: string): string {
+  const input = network.toUpperCase().replace(/[-‑]/g, "");
+  const aliases: Record<string, string> = { BEP20: "BSC", ERC20: "ETH", TRC20: "TRON", NILE: "TRON" };
+  const code = aliases[input] ?? input;
+  const name = input === "NILE" ? "TRON Nile" : networkNames[code] ?? network;
+  const standard = networkStandards[code];
+  const showStandard = asset === "USDT" || Boolean(aliases[input]);
+  const displayStandard = standard?.replace(/^(BEP|ERC|TRC)(\d+)$/, "$1‑$2");
+  return showStandard && displayStandard && displayStandard !== name ? `${name} · ${displayStandard}` : name;
+}
+
 export interface WalletAddress {
   provider?: string;
+  provider_available?: string;
+  balance_asset?: string;
   chain?: string;
   network: string;
   address: string;
