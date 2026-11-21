@@ -1002,7 +1002,7 @@
 .wpay-goswap-payment-check { position: absolute; top: 8px; right: 8px; z-index: 2; display: none; width: 19px; height: 19px; place-items: center; border-radius: 50%; background: var(--f7-theme-color); color: #fff; pointer-events: none; }
 .wpay-goswap-payment input:checked ~ .wpay-goswap-payment-check { display: grid; }
 .wpay-goswap-payment small { display: block; }
-.wpay-goswap-order-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; font-size: 17px; font-weight: 700; }
+.wpay-goswap-order-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; font-size: 21px; font-weight: 700; }
 .wpay-goswap-order-total strong { font-weight: inherit; font-variant-numeric: tabular-nums; }
 .wpay-goswap-order-expand { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; margin-top: 8px; padding: 6px; color: var(--f7-list-item-after-text-color, #8e8e93); }
 .dark .wpay-goswap-order-expand { color: #c0c3cc; }
