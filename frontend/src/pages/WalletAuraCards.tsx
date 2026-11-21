@@ -263,7 +263,6 @@ export default function WalletAuraCards({
   const desktop = useDesktopWalletLayout();
   const [activeSlide, setActiveSlide] = useState(0);
   const carousel = useRef<HTMLDivElement>(null);
-  const scrollTarget = useRef<number | null>(null);
   const touchingCarousel = useRef(false);
   const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -713,7 +712,6 @@ export default function WalletAuraCards({
   const activeOffer = carouselOffers[activeSlide - cards.length];
   useEffect(() => {
     if (desktop && activeSlide >= cards.length && activeSlide !== 0) {
-      scrollTarget.current = null;
       carousel.current?.scrollTo({ left: 0, behavior: "instant" });
       setActiveSlide(0);
     }
@@ -752,30 +750,36 @@ export default function WalletAuraCards({
     });
     return nearest;
   };
-  const settleCarousel = () => {
-    if (settleTimer.current) clearTimeout(settleTimer.current);
-    settleTimer.current = setTimeout(() => {
-      const el = carousel.current;
-      if (!el || touchingCarousel.current || drag.current) return;
-      const index = scrollTarget.current ?? nearestSlide(el);
-      const left = slideLeft(el, index);
-      if (Math.abs(el.scrollLeft - left) > 1.5) {
-        scrollTarget.current = index;
-        el.scrollTo({ left, behavior: "smooth" });
-      } else scrollTarget.current = null;
-    }, 140);
-  };
-  const jumpTo = (index: number) => {
-    const el = carousel.current;
-    scrollTarget.current = index;
-    if (el) el.scrollTo({ left: slideLeft(el, index), behavior: "smooth" });
+  const activateSlide = (index: number) => {
+    if (index === activeSlide) return;
     setActiveSlide(index);
-    if (cards[index]) selectCard(cards[index].card_id);
-    else {
+    const card = cards[index];
+    if (card && card.card_id !== selectedId) selectCard(card.card_id);
+    else if (!card) {
       revealRequest.current?.abort();
       setCredentials(null);
       setCvvVisible(false);
     }
+  };
+  const settleCarousel = () => {
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    settleTimer.current = setTimeout(() => {
+      settleTimer.current = null;
+      const el = carousel.current;
+      if (!el || touchingCarousel.current || drag.current) return;
+      activateSlide(nearestSlide(el));
+    }, 100);
+  };
+  const jumpTo = (index: number) => {
+    const el = carousel.current;
+    if (!el) return;
+    const left = slideLeft(el, index);
+    if (Math.abs(el.scrollLeft - left) <= 1.5) {
+      activateSlide(index);
+      return;
+    }
+    el.scrollTo({ left, behavior: "smooth" });
+    settleCarousel();
   };
   const order = (
     kind: "virtual" | "physical",
@@ -1023,7 +1027,6 @@ export default function WalletAuraCards({
                   className="wpay-aura-carousel wpay-card-peek-carousel"
                   onTouchStart={() => {
                     touchingCarousel.current = true;
-                    scrollTarget.current = null;
                     if (settleTimer.current) clearTimeout(settleTimer.current);
                   }}
                   onTouchEnd={() => {
@@ -1035,7 +1038,6 @@ export default function WalletAuraCards({
                     settleCarousel();
                   }}
                   onPointerDown={(event) => {
-                    scrollTarget.current = null;
                     if (event.pointerType !== "mouse" || event.button !== 0)
                       return;
                     drag.current = {
@@ -1058,8 +1060,10 @@ export default function WalletAuraCards({
                     event.currentTarget.scrollLeft = current.scroll - delta;
                   }}
                   onPointerUp={(event) => {
+                    const moved = drag.current?.moved;
                     drag.current = null;
                     event.currentTarget.style.scrollSnapType = "";
+                    if (moved) jumpTo(nearestSlide(event.currentTarget));
                     settleCarousel();
                     if (event.currentTarget.hasPointerCapture(event.pointerId))
                       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -1080,27 +1084,6 @@ export default function WalletAuraCards({
                   onScroll={(event) => {
                     if (event.target !== event.currentTarget) return;
                     settleCarousel();
-                    const index = nearestSlide(event.currentTarget);
-                    if (scrollTarget.current !== null) {
-                      const target = scrollTarget.current;
-                      if (
-                        Math.abs(
-                          event.currentTarget.scrollLeft -
-                            slideLeft(event.currentTarget, target),
-                        ) > 2
-                      )
-                        return;
-                      scrollTarget.current = null;
-                    }
-                    setActiveSlide(index);
-                    const card = cards[index];
-                    if (card && card.card_id !== selectedId)
-                      selectCard(card.card_id);
-                    else if (!card) {
-                      revealRequest.current?.abort();
-                      setCredentials(null);
-                      setCvvVisible(false);
-                    }
                   }}
                 >
                   {cards.map((card) => (
