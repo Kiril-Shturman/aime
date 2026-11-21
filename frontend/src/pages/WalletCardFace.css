@@ -249,3 +249,7 @@
   box-shadow: 0 4px 12px #07132f45;
 }
 .wpay-card-design--usa .wpay-card-face-waves { display: none; }
+.wpay-card-design--usa :is(.wpay-card-face-status, .wpay-card-face-bottom, .wpay-card-face-contactless) {
+  color: #fff;
+  opacity: 1;
+}
