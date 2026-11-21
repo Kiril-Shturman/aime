@@ -1,3 +1,4 @@
+import travelArtwork from "../assets/card-benefits/travel-composition.png";
 import subscriptionClaude from "../assets/card-benefits/subscription-claude.png";
 import subscriptionArtwork from "../assets/card-benefits/subscription-composition.png";
 import LogoApple from "framework7-icons/react/esm/LogoApple.js";
@@ -1085,6 +1086,11 @@ export default function WalletAuraCards({
             </span>
             <span className="wpay-card-catalog-art" aria-hidden="true">
               <LiveCardArtwork kind={kind} skin={appearance} />
+              {appearance === "navy" && kind === "virtual" && (
+                <span className="wpay-subscription-stage wpay-card-catalog-subscription-art">
+                  <img className="subscription-composition" src={travelArtwork} alt="" />
+                </span>
+              )}
               {appearance === "silver" && kind === "virtual" && (
                 <span className="wpay-card-catalog-subscription-art wpay-subscription-stage">
                   <img className="subscription-composition" src={subscriptionArtwork} alt="" />
