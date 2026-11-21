@@ -1070,21 +1070,28 @@
 .wpay-card-catalog h2 { font-size: 25px; font-weight: 700; }
 .wpay-card-catalog-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 40%);
-  align-items: center;
-  gap: 10px;
-  min-height: 122px;
-  padding: 14px;
+  gap: 14px;
+  padding: 16px;
   text-align: left;
-  border-radius: 24px;
-  background: var(--color-ios-light-surface-1, #fff);
+  border-radius: 28px;
+  background: radial-gradient(ellipse at 95% 0%, var(--catalog-glow, #6b83ac35), transparent 58%),
+    var(--color-ios-light-surface-1, #fff);
 }
-.dark .wpay-card-catalog-item { background: var(--color-ios-dark-surface-1, #1c1c1e); }
-.wpay-card-catalog-item > span { display: grid; gap: 5px; }
-.wpay-card-catalog-item strong { font-size: 18px; line-height: 1.16; }
-.wpay-card-catalog-item small { opacity: .64; }
-.wpay-card-catalog-item > span > span { color: var(--f7-theme-color); font-size: 13px; }
-.wpay-card-catalog-art { pointer-events: none; }
+.wpay-card-catalog-item[data-skin="navy"] { --catalog-glow: #256ef95c; }
+.wpay-card-catalog-item[data-skin="ice"] { --catalog-glow: #62c5e955; }
+.wpay-card-catalog-item[data-skin="graphite"] { --catalog-glow: #9a7bdd50; }
+.dark .wpay-card-catalog-item {
+  background: radial-gradient(ellipse at 95% 0%, var(--catalog-glow, #6b83ac35), transparent 58%),
+    var(--color-ios-dark-surface-1, #1c1c1e);
+}
+.wpay-card-catalog-item:active { opacity: .84; }
+.wpay-card-catalog-item-heading, .wpay-card-catalog-price { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.wpay-card-catalog-item-heading > span, .wpay-card-catalog-benefits { display: grid; gap: 5px; }
+.wpay-card-catalog-item strong { font-size: 21px; line-height: 1.16; }
+.wpay-card-catalog-item small { opacity: .68; }
+.wpay-card-catalog-item-heading svg { color: var(--f7-theme-color); flex: none; }
+.wpay-card-catalog-art { display: block; width: 100%; pointer-events: none; }
 .wpay-card-catalog-art .wpay-bank-card.wpay-card-scene { min-height: 0; width: 100%; height: auto; }
-.wpay-card-catalog-art .wpay-card-face-status,
-.wpay-card-catalog-art .wpay-card-face-bottom { display: none; }
+.wpay-card-catalog-benefits { font-size: 14px; }
+.wpay-card-catalog-price { padding-top: 12px; border-top: 1px solid currentColor; border-top-color: color-mix(in srgb, currentColor 15%, transparent); font-size: 14px; }
+.wpay-card-catalog-price b { color: var(--f7-theme-color); }

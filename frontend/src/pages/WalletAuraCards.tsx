@@ -1040,14 +1040,29 @@ export default function WalletAuraCards({
         <h2>Выберите карту</h2>
         {offers.map(({ kind, skin: appearance, plan }, index) => (
           <button key={plan?.plan_id ?? appearance} type="button" className="wpay-card-catalog-item"
-            onClick={() => { haptic("light"); onCatalogOffer(index); }}>
-            <span>
-              <small>{kind === "physical" ? "Физическая карта" : "Виртуальная карта"}{plan?.region ? ` · ${plan.region}` : ""}</small>
-              <strong>{plan?.label ?? ({ silver: "Для подписок", navy: "Для путешествий", ice: "Премиальная", graphite: "Платина" }[appearance])}</strong>
-              <span>{plan?.available === false ? "Выпуск пока недоступен" : plan?.issue_fee != null
-                ? `Выпуск · ${offerNumber.format(Number(plan.issue_fee))} USDT` : planPrice(kind, appearance)}</span>
+            data-skin={appearance} onClick={() => { haptic("light"); onCatalogOffer(index); }}>
+            <span className="wpay-card-catalog-item-heading">
+              <span>
+                <small>{kind === "physical" ? "Физическая карта" : "Виртуальная карта"}{plan?.region ? ` · ${plan.region}` : ""}</small>
+                <strong>{plan?.label ?? ({ silver: "Для подписок", navy: "Для путешествий", ice: "Премиальная", graphite: "Платина" }[appearance])}</strong>
+              </span>
+              <ChevronRight size={20} aria-hidden="true" />
             </span>
-            <div className="wpay-card-catalog-art" aria-hidden="true"><LiveCardArtwork kind={kind} skin={appearance} /></div>
+            <span className="wpay-card-catalog-art" aria-hidden="true"><LiveCardArtwork kind={kind} skin={appearance} /></span>
+            <span className="wpay-card-catalog-benefits">
+              {appearance === "silver" ? "Подписки и онлайн-покупки"
+                : appearance === "navy" ? "Бронирования и покупки в поездках"
+                : appearance === "ice" ? "Физическая карта с бесплатной доставкой"
+                : "Физическая карта с доставкой"}
+              {plan?.total_recharge_pct != null && (
+                <small>Пополнение · {offerNumber.format(Number(plan.total_recharge_pct))}%</small>
+              )}
+            </span>
+            <span className="wpay-card-catalog-price">
+              <span>Выпуск</span>
+              <b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
+                ? `${offerNumber.format(Number(plan.issue_fee))} USDT` : planPrice(kind, appearance)}</b>
+            </span>
           </button>
         ))}
       </main>
