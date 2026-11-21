@@ -1,3 +1,4 @@
+import usaSceneFlag from "../assets/card-benefits/usa-scene-flag.png";
 import usaArtwork from "../assets/card-benefits/usa-composition.png";
 import travelArtwork from "../assets/card-benefits/travel-composition.png";
 import subscriptionClaude from "../assets/card-benefits/subscription-claude.png";
@@ -1087,7 +1088,8 @@ export default function WalletAuraCards({
             <span className="wpay-card-catalog-art" aria-hidden="true">
               <LiveCardArtwork kind={kind} skin={appearance} usa={plan?.plan_id === "goswap_card_us"} />
               {plan?.plan_id === "goswap_card_us" && (
-                <span className="wpay-subscription-stage wpay-card-catalog-subscription-art">
+                <span className="wpay-subscription-stage wpay-card-catalog-subscription-art wpay-usa-stage">
+                  <img className="wpay-usa-scene-flag" src={usaSceneFlag} alt="" />
                   <img className="subscription-composition" src={usaArtwork} alt="" />
                 </span>
               )}
