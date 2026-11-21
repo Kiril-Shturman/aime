@@ -25,9 +25,14 @@ CARD_PLANS = {
         "conditions": ["Физическая карта", "Покупки офлайн", "Покупки в интернете", "3D Secure"],
     },
 }
+GOSWAP_SINGAPORE_TERMS = {
+    "kind": "virtual", "region": "Сингапур",
+    "provider_issue_fee": "7.00", "provider_issue_currency": "USD",
+    "provider_recharge_fee": "1.3", "conditions": ["Apple Pay", "Google Pay"],
+}
 GOSWAP_CARD_PLANS = {
-    "goswap_card_sg_1": {"label": "Сингапур 1", "kind": "virtual"},
-    "goswap_card_sg_2": {"label": "Сингапур 2", "kind": "virtual"},
+    "goswap_card_sg_1": {**GOSWAP_SINGAPORE_TERMS, "label": CARD_PLANS["card_subscriptions"]["label"]},
+    "goswap_card_sg_2": {**GOSWAP_SINGAPORE_TERMS, "label": CARD_PLANS["card_travel"]["label"]},
     "goswap_card_us": {"label": "США"},
 }
 PRODUCTS = {

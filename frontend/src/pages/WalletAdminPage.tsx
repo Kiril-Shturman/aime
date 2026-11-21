@@ -787,7 +787,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
       <section className={card}>
         <div className="wpay-admin-section-title">
           <div><span>Ценообразование</span><h2>Тарифы WPay</h2></div>
-          <i>Все суммы в USDT</i>
+          <i>Комиссии wPay в USDT</i>
         </div>
         <p className="text-xs opacity-55">
           Комиссия WPay считается отдельно от цены провайдера. Новая версия действует только на новые операции; повторы используют сохранённую версию.
@@ -807,6 +807,10 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
               {Boolean(item.card_plan) && (
                 <small className="mt-2 block text-blue-500">
                   {item.kind === "physical" ? "Физическая" : item.kind === "virtual" ? "Виртуальная" : "Тип карты не указан"}
+                  {Boolean(item.region) && ` · ${text(item.region)}`}
+                  {item.provider === "GoSwap" && item.provider_issue_currency === "USD" && <>
+                    <br />Выпуск {Number(item.provider_issue_fee).toFixed(2)} $ · пополнение {amount(item.provider_recharge_fee)}% сверху
+                  </>}
                   {item.provider === "Aura" && item.provider_issue_fee != null && <>
                     <br />Выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
                     {item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}
@@ -817,7 +821,9 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                 <small className="mt-2 block opacity-55">{item.conditions.join(" · ")}</small>
               )}
               <span className="mt-3 block text-xs">
-                {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум {amount(item.minimum_fee)}
+                {item.card_plan
+                  ? `Наценка wPay: выпуск +${amount(item.fixed_fee)} USDT · пополнение +${amount(item.percent_fee)}% (мин. ${amount(item.minimum_fee)} USDT)`
+                  : `${amount(item.fixed_fee)} + ${amount(item.percent_fee)}% · минимум ${amount(item.minimum_fee)}`}
               </span>
             </button>
             {item.provider === "Aura" && Boolean(item.card_plan) && (
