@@ -1410,25 +1410,39 @@ def install_wallet(app, root, owner_check):
         )]
         for item in items:
             item['detail'] = json.loads(item['detail'])
+        recorded_topups = {
+            (item['detail'].get('environment'), item['detail'].get('operation_id'))
+            for item in items if item['type'] == 'card_topup'
+        }
         for row in ledger.db.execute(
             "SELECT operation_id,operation_type,status,asset,amount,merchant,original_amount,"
             "original_currency,provider_created_at,created_at FROM aura_card_operations "
-            "WHERE user_id=? AND environment=? AND operation_type IN ('purchase','refund','reversal') "
+            "WHERE user_id=? AND environment=? AND operation_type IN ('purchase','refund','reversal','topup') "
             "ORDER BY created_at DESC LIMIT 100", (uid, aura_environment),
         ):
+            operation_type = row['operation_type']
+            if operation_type == 'topup' and (aura_environment, row['operation_id']) in recorded_topups:
+                continue
             amount = row['original_amount'] if row['original_currency'] and row['original_amount'] is not None else row['amount']
             asset = (row['original_currency'] if row['original_amount'] is not None else None) or row['asset']
             if amount is None or not asset:
                 continue
             value = Decimal(amount).copy_abs()
-            if row['operation_type'] == 'purchase':
+            status = row['status']
+            if operation_type == 'purchase':
                 value = value.copy_negate()
+            if operation_type == 'topup':
+                status = {'declined': 'failed', 'cancelled': 'failed', 'pending': 'processing'}.get(status, status)
+            event_type = {
+                'purchase': 'card_payment', 'refund': 'card_payment_refund',
+                'reversal': 'card_payment_refund', 'topup': 'card_topup',
+            }[operation_type]
             items.append({
                 'event_id': f"aura:{aura_environment}:card_operation:{row['operation_id']}",
                 'asset': asset, 'amount': str(value),
-                'type': 'card_payment' if row['operation_type'] == 'purchase' else 'card_payment_refund',
+                'type': event_type,
                 'created_at': row['provider_created_at'] or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(row['created_at'])),
-                'detail': {'merchant_name': row['merchant'], 'status': row['status']},
+                'detail': {'merchant_name': row['merchant'], 'status': status, 'operation_id': row['operation_id']},
             })
         return sorted(items, key=lambda item: item['created_at'] or '', reverse=True)[:100]
 

@@ -1485,6 +1485,28 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([(row["type"], row["amount"], row["asset"]) for row in items],
                          [("card_payment", "-7.99", "USD")])
 
+    async def test_overview_includes_provider_card_topups_without_duplicates(self):
+        db = self.app["wpay_ledger"].db
+        for operation_id, uid in (("legacy", "tg:123"), ("linked", "tg:123"), ("foreign", "tg:456")):
+            db.execute(
+                "INSERT INTO aura_card_operations(operation_id,card_id,user_id,environment,operation_type,"
+                "status,asset,amount,body,created_at,updated_at) "
+                "VALUES (?,'card-one',?,'test','topup','completed','USDT','15','{}',?,?)",
+                (operation_id, uid, time.time(), time.time()),
+            )
+        db.execute(
+            "INSERT INTO wallet_events VALUES "
+            "('local-topup','tg:123','USDT','-16','card_topup','2026-11-17T10:00:00Z',?)",
+            (json.dumps({"operation_id": "linked", "environment": "test"}),),
+        )
+        response = await self.wpay.get("/api/wallet/overview", headers={"X-Telegram-Init-Data": init_data(123)})
+        self.assertEqual(response.status, 200, await response.text())
+        items = (await response.json())["transactions"]
+        self.assertEqual(
+            {row["event_id"]: (row["type"], row["amount"]) for row in items},
+            {"aura:test:card_operation:legacy": ("card_topup", "15"), "local-topup": ("card_topup", "-16")},
+        )
+
     async def test_admin_can_pause_single_card_plan(self):
         route = "/api/wallet/admin-card-plan-availability"
         body = {"product": "card_subscriptions", "enabled": False}
