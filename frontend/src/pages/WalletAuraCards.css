@@ -1066,7 +1066,7 @@
   .wpay-aura-carousel--centered > .wpay-aura-carousel-item { transition: none; }
 }
 
-.wpay-card-catalog { display: grid; gap: 46px; padding-top: 24px; }
+.wpay-card-catalog { display: grid; gap: 38px; padding-top: 24px; }
 .wpay-card-catalog h2 { font-size: 25px; font-weight: 700; }
 .wpay-card-catalog-item {
   display: grid;
