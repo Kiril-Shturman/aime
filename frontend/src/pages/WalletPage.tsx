@@ -280,6 +280,7 @@ function WalletScreen() {
   const { theme, toggle: toggleTheme } = useTheme();
   const menuButton = useRef<HTMLElement | null>(null);
   const pageRef = useRef<HTMLElement | null>(null);
+  const [cardActionSlot, setCardActionSlot] = useState<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<WalletTab>("wallet");
   useLayoutEffect(() => {
     pageRef.current?.scrollTo({ top: 0, behavior: "instant" });
@@ -705,6 +706,7 @@ function WalletScreen() {
                 <CardsSection showNotice={showNotice} />
               ) : (
                 <WalletAuraCards
+                  bottomActionSlot={cardActionSlot}
                   showNotice={showNotice}
                   onSbpTopUp={live.capabilities.sbp_buy
                     ? () => setCryptoFlow({ kind: "deposit", assetCode: "RUB" })
@@ -763,6 +765,7 @@ function WalletScreen() {
         <LiveQrPanel initialQr={qrValue} onClose={() => setQrValue(null)} />
       )}
 
+      <div ref={setCardActionSlot} className="wpay-card-action-slot" />
       {/* Нижняя панель — та же Konsta Tabbar, что у доски (TabPill); QR-оплата пятой кнопкой */}
       <Tabbar
         labels

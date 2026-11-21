@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { TransactionDetails, TransactionListRow, type TransactionView } from "./WalletTransaction";
 import WalletSubscriptionFeatures from "./WalletSubscriptionFeatures";
 import desktopWalletIcon from "../assets/desktop-wallet-icon.svg";
@@ -227,9 +228,11 @@ const emptyShipping: ShippingAddress = {
 export default function WalletAuraCards({
   showNotice,
   onSbpTopUp,
+  bottomActionSlot,
 }: {
   showNotice: (text: string) => void;
   onSbpTopUp?: () => void;
+  bottomActionSlot: HTMLDivElement | null;
 }) {
   const wallet = useLiveWallet();
   const [cards, setCards] = useState<AuraCard[]>([]);
@@ -1354,10 +1357,6 @@ export default function WalletAuraCards({
               }}
             />
             {offerTerms()}
-            <Button rounded large data-wpay-primary="" disabled={!storefrontPlan.available || Boolean(busy)}
-              onClick={() => void issueGoSwap(storefrontPlan)} className="wpay-aura-primary !mt-4 !w-full">
-              {busy === "goswap-quote" ? "Загрузка…" : "Оформить карту"}
-            </Button>
             {!storefrontPlan.available && <p className="mt-2 text-center text-sm opacity-60">Выпуск по этому тарифу пока недоступен.</p>}
           </section>
         ) : showOffer ? (
@@ -1400,24 +1399,6 @@ export default function WalletAuraCards({
               />
             )}
             {offerTerms()}
-            <Button
-              rounded
-              large
-              data-wpay-primary=""
-              className="wpay-aura-primary !mt-4 !w-full"
-              disabled={
-                !fees ||
-                Boolean(busy) ||
-                fees.plans?.find(
-                  (plan) =>
-                    plan.kind === currentKind &&
-                    plan.skin === activeOffer?.skin,
-                )?.available === false
-              }
-              onClick={() => order(currentKind, activeOffer?.skin)}
-            >
-              Оформить карту
-            </Button>
           </section>
         ) : !desktop && !selected && !offers.length ? (
           <p className="px-4 pt-4 text-sm opacity-60">Тарифы пока недоступны</p>
@@ -1534,6 +1515,18 @@ export default function WalletAuraCards({
           )}
         </section>}
       </aside>
+      {showOffer && bottomActionSlot && createPortal(
+        <Button rounded large data-wpay-primary="" className="wpay-aura-primary !w-full"
+          disabled={!fees || Boolean(busy) || (storefrontPlan?.available === false)
+            || (!storefrontPlan && fees.plans?.find(plan => plan.kind === currentKind && plan.skin === activeOffer?.skin)?.available === false)}
+          onClick={() => {
+            if (goSwapOffer) void issueGoSwap(storefrontPlan);
+            else order(currentKind, activeOffer?.skin);
+          }}>
+          {busy === "goswap-quote" ? "Загрузка…" : "Оформить карту"}
+        </Button>,
+        bottomActionSlot,
+      )}
       <Sheet
         opened={goSwapSheetOpened && goSwapOrder !== null}
         className={`wpay-goswap-order-sheet${goSwapSheetExpanded ? "" : " wpay-goswap-order-sheet--collapsed"}`}
