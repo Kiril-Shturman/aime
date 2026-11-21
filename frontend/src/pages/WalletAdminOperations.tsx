@@ -112,7 +112,11 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
   const right = width - 52;
   const x = (index: number) => 8 + index * (right - 8) / (series.length - 1);
   const y = (value: number) => 152 - (value - floor) / range * 134;
-  const line = series.map((row, index) => `${x(index)},${y(row[metric])}`).join(" ");
+  const line = series.map((row, index) => {
+    if (!index) return `M ${x(0)} ${y(row[metric])}`;
+    const midpoint = (x(index - 1) + x(index)) / 2;
+    return `C ${midpoint} ${y(series[index - 1][metric])}, ${midpoint} ${y(row[metric])}, ${x(index)} ${y(row[metric])}`;
+  }).join(" ");
   const index = highlight === null ? null : Math.min(highlight, series.length - 1);
   const point = index === null ? null : series[index];
   const selectPoint = (event: PointerEvent<SVGSVGElement>) => {
@@ -145,8 +149,7 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
       {!hasData ? <p className="admin-ops-empty">За этот период завершённых операций нет.</p> : (
         <div className="admin-ops-plot" ref={plot}>
           <div className="admin-ops-chart-caption" aria-live="polite">
-            <span>{point ? dayFmt.format(new Date(point.day)) : `${chartLabel} по дням`}</span>
-            {point && <strong>{fmt.format(point[metric])} {asset}</strong>}
+            <strong>{chartLabel} · {asset}</strong>
           </div>
           <svg className="admin-ops-chart" viewBox={`0 0 ${width} 180`} role="img" tabIndex={0}
             aria-label={`${chartLabel} по дням, ${asset}. Используйте стрелки для выбора дня`}
@@ -169,12 +172,26 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
               const value = floor + range * step / 3;
               return <g key={step}><line x1="8" x2={right} y1={y(value)} y2={y(value)} /><text x={width - 4} y={y(value) + 4} textAnchor="end">{axis.format(value)}</text></g>;
             })}
-            <polygon points={`8,${y(0)} ${line} ${right},${y(0)}`} fill={`url(#${gradient})`} />
-            <polyline points={line} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round" />
-            {point && index !== null && <g><line x1={x(index)} x2={x(index)} y1="14" y2="152" /><circle cx={x(index)} cy={y(point[metric])} r="5" fill="currentColor" stroke="var(--admin-surface)" strokeWidth="2" /></g>}
+            {[0, 1, 2, 3].map(step => {
+              const tick = 8 + (right - 8) * step / 3;
+              return <line key={step} x1={tick} x2={tick} y1="18" y2="152" />;
+            })}
+            <path d={`${line} L ${right} ${y(0)} L 8 ${y(0)} Z`} fill={`url(#${gradient})`} />
+            <path d={line} fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" />
+            {series.length <= 14 && series.map((row, day) =>
+              <circle key={row.day} cx={x(day)} cy={y(row[metric])} r="3" fill="var(--admin-surface)" stroke="currentColor" strokeWidth="2" />
+            )}
+            {point && index !== null && <g><line className="admin-ops-cursor" x1={x(index)} x2={x(index)} y1="14" y2="152" /><circle cx={x(index)} cy={y(point[metric])} r="5" fill="currentColor" stroke="var(--admin-surface)" strokeWidth="2" /></g>}
             <text x="8" y="174">{dayFmt.format(new Date(series[0].day))}</text>
             <text x={right} y="174" textAnchor="end">{dayFmt.format(new Date(series[series.length - 1].day))}</text>
           </svg>
+          {point && index !== null && (
+            <div className="admin-ops-tooltip" role="status"
+              style={{ left: `clamp(76px, ${x(index) / width * 100}%, calc(100% - 76px))` }}>
+              <strong>{fmt.format(point[metric])} {asset}</strong>
+              <span>{dayFmt.format(new Date(point.day))}</span>
+            </div>
+          )}
         </div>
       )}
       <p className="admin-ops-note">Оборот — сумма абсолютных значений операций. Доход — комиссии wPay, записанные в журнале, за вычетом возвратов. Данные по прочим расходам сюда не входят.</p>
