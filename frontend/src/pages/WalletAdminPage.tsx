@@ -2586,6 +2586,8 @@ function AdminUserDrawer({
                     <RecordValue label="Email" value={text(detail.contacts.email)} copyable />
                     <RecordValue label="Телефон" value={text(detail.contacts.phone)} copyable />
                     <RecordValue label="Последний вход" value={date(account?.last_miniapp_at || account?.last_seen)} />
+                    <RecordValue label="Первая метка входа (startapp)" value={text(account?.first_start_param)} copyable />
+                    <RecordValue label="Последняя сохранённая метка (startapp)" value={text(account?.last_start_param)} copyable />
                     <RecordValue label="Бот запущен" value={date(account?.bot_started_at)} />
                   </dl>
                 </section>
