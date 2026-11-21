@@ -2366,6 +2366,15 @@
 }
 
 .wpay-overflow-menu li svg {
-  max-width: 18px;
-  max-height: 18px;
+  max-width: 16px;
+  max-height: 16px;
+}
+
+
+.wpay-overflow-menu li [class*="text-primary"] {
+  color: #111;
+}
+
+.dark .wpay-overflow-menu li [class*="text-primary"] {
+  color: #fff;
 }

@@ -424,16 +424,16 @@ function WalletScreen() {
             link
             onClick={() => runMenuAction(item.action)}
             chevron={false}
-            contentClassName="!h-11"
-            innerClassName="wpay-overflow-menu-inner !min-w-0 !h-11 !py-0 after:!hidden"
+            contentClassName="!h-9"
+            innerClassName="wpay-overflow-menu-inner !min-w-0 !h-9 !py-0 after:!hidden"
             media={
-              <span className="flex h-5 w-5 items-center justify-center text-[18px] text-primary">
+              <span className="flex h-5 w-5 items-center justify-center text-[15px] text-black dark:text-white">
                 {item.icon}
               </span>
             }
             innerChildren={
               <span className="flex h-full min-w-0 items-center justify-between gap-3">
-                <span className="truncate text-[15px] font-medium text-black dark:text-white">
+                <span className="truncate text-[14px] font-medium text-black dark:text-white">
                   {item.title}
                 </span>
                 <ChevronRight

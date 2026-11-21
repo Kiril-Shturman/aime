@@ -89,16 +89,16 @@ export function WalletNavbar({
                     key={item.title}
                     link
                     chevron={false}
-                    contentClassName="!h-11"
-                    innerClassName="wpay-overflow-menu-inner !min-w-0 !h-11 !py-0 after:!hidden"
+                    contentClassName="!h-9"
+                    innerClassName="wpay-overflow-menu-inner !min-w-0 !h-9 !py-0 after:!hidden"
                     media={
-                      <span className="flex h-5 w-5 items-center justify-center text-[18px] text-primary">
+                      <span className="flex h-5 w-5 items-center justify-center text-[15px] text-black dark:text-white">
                         {item.icon}
                       </span>
                     }
                     innerChildren={
                       <span className="flex h-full min-w-0 items-center justify-between gap-3">
-                        <span className="truncate text-[15px] font-medium text-black dark:text-white">
+                        <span className="truncate text-[14px] font-medium text-black dark:text-white">
                           {item.title}
                         </span>
                         <ChevronRight
@@ -116,14 +116,14 @@ export function WalletNavbar({
               ) : (
                 <ListItem
                   link
-                  contentClassName="!h-11"
-                  innerClassName="wpay-overflow-menu-inner !h-11 !py-0 !text-[15px] after:!hidden"
+                  contentClassName="!h-9"
+                  innerClassName="wpay-overflow-menu-inner !h-9 !py-0 !text-[14px] after:!hidden"
                   title={theme === "dark" ? "Светлая тема" : "Тёмная тема"}
                   media={
                     theme === "dark" ? (
-                      <SunMax className="text-[18px] text-primary" />
+                      <SunMax className="text-[15px] text-black dark:text-white" />
                     ) : (
-                      <MoonStars className="text-[18px] text-primary" />
+                      <MoonStars className="text-[15px] text-black dark:text-white" />
                     )
                   }
                   onClick={() => {
