@@ -2296,6 +2296,39 @@ class AuraUserWithdrawalTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ledger.balance(uid, "USDT"), (Decimal("10"), Decimal("0")))
             ledger.db.close()
 
+    async def test_aura_deposit_address_is_rejected_before_reserving_or_calling_provider(self):
+        from types import SimpleNamespace
+        from wallet_aura import user_withdrawal
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Ledger(tmp + "/wallet")
+            self.addCleanup(ledger.db.close)
+            prepare_inbox(ledger)
+            prepare(ledger)
+            uid, other_user = "tg:123", "tg:456"
+            customer = ledger.account(other_user)
+            ledger.account(uid)
+            ledger.put_balance(uid, "USDT", Decimal("10"), Decimal("0"))
+            address = "TPNWn4RJy2zzZHU189J1Y7N3LVgUg7q1aX"
+            stamp = time.time()
+            ledger.db.execute(
+                "INSERT INTO aura_deposit_addresses VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                ("addr_one", other_user, customer, "test", "nile", address,
+                 None, 1, "{}", stamp, stamp),
+            )
+            client = SimpleNamespace(error_cls=ApiError, create_withdrawal=AsyncMock())
+            for actor in (None, "tg:321"):
+                with self.assertRaises(ApiError) as error:
+                    await user_withdrawal(
+                        ledger, client, "test", uid,
+                        {"address": address, "amount": "5", "fee": "2"},
+                        "11111111-1111-4111-8111-111111111111", Decimal("2"), actor=actor,
+                    )
+                self.assertEqual(error.exception.name, "AURA_DEPOSIT_ADDRESS")
+                self.assertIn("Nile", error.exception.detail)
+            client.create_withdrawal.assert_not_awaited()
+            self.assertEqual(ledger.balance(uid, "USDT"), (Decimal("10"), Decimal("0")))
+
     async def test_timeout_reuses_reservation_and_terminal_result_settles_once(self):
         from types import SimpleNamespace
         from wallet_aura import _position_adjust, store_withdrawal_snapshot, user_withdrawal

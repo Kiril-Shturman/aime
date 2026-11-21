@@ -3401,6 +3401,16 @@ async def user_withdrawal(ledger, client, environment, uid, body, key, fee, *, a
                     return json.loads(snapshot["body"])
             request_body = stored
         else:
+            if ledger.db.execute(
+                "SELECT 1 FROM aura_deposit_addresses WHERE environment=? AND address=?",
+                (environment, address),
+            ).fetchone():
+                raise error_cls(
+                    "AURA_DEPOSIT_ADDRESS",
+                    "Это адрес пополнения Aura. Для вывода укажите внешний адрес "
+                    + ("в сети TRON Nile." if environment == "test" else "в сети TRON TRC‑20."),
+                    400,
+                )
             if withdrawal_frozen(ledger, environment, uid):
                 raise error_cls("WALLET_FROZEN", "Вывод из Aura заморожен", 403)
             if _decimal(body["fee"], allow_zero=True) != fee:
