@@ -958,8 +958,3 @@
   padding-right: 36px;
   font-size: clamp(16px, 5vw, 26px);
 }
-
-.wpay-aura-card-terms .wpay-aura-info-row { margin: 0 14px; padding-inline: 0; border: 0; }
-.wpay-aura-card-terms .wpay-aura-info-row + .wpay-aura-info-row {
-  border-top: 1px solid color-mix(in srgb, currentColor 9%, transparent);
-}

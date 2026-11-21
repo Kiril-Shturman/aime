@@ -6,7 +6,7 @@ import EyeFill from "framework7-icons/react/esm/EyeFill.js";
 import Snow from "framework7-icons/react/esm/Snow.js";
 import Ellipsis from "framework7-icons/react/esm/Ellipsis.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, List, ListItem } from "konsta/react";
+import { Button, Card, List, ListItem } from "konsta/react";
 import {
   f7,
   Popup,
@@ -826,16 +826,28 @@ export default function WalletAuraCards({
       : fees?.minimum_recharge_amount ? `От ${fees.minimum_recharge_amount} USDT` : "—";
     const issue = goSwapOffer ? storefrontPlan.issue_fee ? `${storefrontPlan.issue_fee} USDT` : "—"
       : fees ? planPrice(currentKind, activeOffer?.skin) : "—";
-    return <>
-      <h3 className="mt-5 text-base font-semibold">Условия карты</h3>
-      <div className="wpay-aura-info wpay-aura-card-terms mt-2">
-        {infoRow("Выпуск карты", issue)}
-        {infoRow("Комиссия за пополнение", totalTopup == null ? "—" :
-          `${totalTopup}%${Number(plan?.service_minimum_fee) > 0 ? ` · мин. wPay ${plan?.service_minimum_fee} USDT` : ""}`)}
-        {infoRow("Минимум пополнения", minimum)}
-        {premiumOffer && infoRow("Доставка", "Бесплатно")}
-      </div>
-    </>;
+    const rows = [
+      ["Выпуск карты", issue],
+      ["Комиссия за пополнение", totalTopup == null ? "—" :
+        `${totalTopup}%${Number(plan?.service_minimum_fee) > 0 ? ` · мин. wPay ${plan?.service_minimum_fee} USDT` : ""}`],
+      ["Минимум пополнения", minimum],
+    ];
+    if (premiumOffer) rows.push(["Доставка", "Бесплатно"]);
+    return (
+      <section aria-label="Условия карты" className="mt-5">
+        <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">Условия карты</h3>
+        <Card className="!m-0 !rounded-[26px]" contentWrapPadding="px-4 py-0">
+          <dl>
+            {rows.map(([label, value]) => (
+              <div key={label} className="flex min-h-14 items-center justify-between gap-3 border-b border-black/[.06] py-3 last:border-0 dark:border-white/[.08]">
+                <dt className="text-[15px] text-black/45 dark:text-white/45">{label}</dt>
+                <dd className="min-w-0 text-right text-[15px] font-medium">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+      </section>
+    );
   };
   const historyItem = (op: CardOperation): TransactionView => {
     const topup = ["recharge", "topup"].includes(op.operation_type);
