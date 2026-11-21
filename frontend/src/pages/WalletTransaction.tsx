@@ -1,30 +1,64 @@
 import { useState } from 'react'
 import { List, ListItem } from 'konsta/react'
 import { Popup, Page, Navbar, NavRight, Link } from 'framework7-react'
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, QrCode, CreditCard, Gift, Ticket, Copy, Check, Clock, X, RotateCcw } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, QrCode, CreditCard, Gift, Ticket, Copy, Check, Clock, X, RotateCcw, SlidersHorizontal, ReceiptText } from 'lucide-react'
 import type { WalletTransaction } from '../lib/wallet-api'
 
-type Kind = 'deposit'|'ruble_deposit'|'withdrawal'|'transfer'|'check'|'exchange'|'qr'|'card_payment'|'card_topup'|'card_issue'|'refund'|'referral'
+type Kind = 'deposit'|'ruble_deposit'|'withdrawal'|'transfer'|'check'|'exchange'|'qr'|'card_payment'|'card_topup'|'card_issue'|'refund'|'referral'|'adjustment'|'other'
 type Status = 'completed'|'processing'|'failed'|'refunded'
 export interface TransactionView { id:string; kind:Kind; status:Status; amount:string; asset:string; date:string; rows:[string,string][]; demo?:boolean }
 const kinds = {
   deposit: {title:'Пополнение криптовалютой',icon:ArrowDownLeft}, ruble_deposit:{title:'Пополнение рублями',icon:ArrowDownLeft},
   withdrawal:{title:'Вывод криптовалюты',icon:ArrowUpRight}, transfer:{title:'Перевод пользователю',icon:ArrowUpRight}, check:{title:'Крипточек',icon:Ticket},
   exchange:{title:'Обмен валют',icon:ArrowLeftRight}, qr:{title:'Оплата по QR-коду',icon:QrCode}, card_payment:{title:'Покупка картой',icon:CreditCard},
+  adjustment:{title:'Корректировка баланса',icon:SlidersHorizontal}, other:{title:'Операция',icon:ReceiptText},
   card_topup:{title:'Пополнение карты',icon:CreditCard}, card_issue:{title:'Выпуск карты',icon:CreditCard}, refund:{title:'Возврат средств',icon:RotateCcw}, referral:{title:'Реферальное начисление',icon:Gift},
 }
 const statuses = {completed:{label:'Выполнено',icon:Check},processing:{label:'В обработке',icon:Clock},failed:{label:'Не выполнено',icon:X},refunded:{label:'Возвращено',icon:RotateCcw}}
 const incoming = (kind:Kind)=>['deposit','ruble_deposit','refund','referral'].includes(kind)
 const number = (value:string)=>Number(value).toLocaleString('en-US',{maximumFractionDigits:8})
+function transactionKind(type: string): Kind {
+  if (type.startsWith('withdrawal_') || type === 'withdrawal') return 'withdrawal'
+  if (type.startsWith('qr_')) return 'qr'
+  if (type.startsWith('transfer')) return 'transfer'
+  if (type === 'admin_adjustment' || type === 'adjustment') return 'adjustment'
+  if (type === 'card_issue_refund' || type === 'deposit_return') return 'refund'
+  if (type === 'deposit' || type === 'card_issue' || type === 'card_topup' || type === 'card_payment') return type
+  return 'other'
+}
+
+export function transactionListPresentation(item: WalletTransaction) {
+  const kind = transactionKind(item.type)
+  const title = item.type === 'qr_failed' ? 'Платёж не прошёл'
+    : item.type === 'qr_refunded' ? 'Возврат QR'
+    : kind === 'qr' ? String(item.detail.merchant_name || 'Оплата QR')
+    : item.type === 'card_issue_refund' ? 'Возврат за выпуск карты'
+    : item.type === 'deposit_return' ? 'Возврат пополнения'
+    : item.type === 'withdrawal_failed' ? 'Вывод не выполнен'
+    : kind === 'deposit' ? 'Пополнение'
+    : kinds[kind].title
+  return { title, icon: kinds[kind].icon }
+}
+
 export function transactionFromApi(item:WalletTransaction):TransactionView {
   const d=item.detail
-  const status:Status=(['card_issue','card_topup'].includes(item.type) && d.status==='processing')?'processing':(item.type==='card_topup' && d.status==='failed')?'failed':item.type==='qr_failed'?'failed':item.type==='qr_refunded'?'refunded':item.type==='qr_processing'?'processing':'completed'
-  const kind:Kind=item.type==='card_topup'?'card_topup':item.type==='card_issue'?'card_issue':item.type==='card_issue_refund'?'refund':item.type==='deposit'?'deposit':item.type.startsWith('qr_')?'qr':'transfer'
+  const kind = transactionKind(item.type)
+  const status: Status = item.type === 'withdrawal_failed' || item.type === 'qr_failed' ||
+    (item.type === 'card_topup' && d.status === 'failed') ? 'failed'
+    : item.type === 'qr_refunded' ? 'refunded'
+    : item.type === 'qr_processing' || (['card_issue','card_topup'].includes(item.type) && d.status === 'processing')
+      || (kind === 'withdrawal' && ['processing', 'broadcast'].includes(String(d.status))) ? 'processing'
+    : 'completed'
   const rows:[string,string][]=[]
   for(const [label,key] of [['Получатель','merchant_name'],['Сумма покупки, ₽','amount_rub'],['Сеть','network'],['Адрес','address'],['Хеш транзакции','tx_hash'],['Курс, ₽ за 1 USDT','rate'],['Номер платежа','payment_id'],['Ваш номер платежа','spend_id'],['Причина','failure_reason']] as const) {
     if(d[key]!==undefined&&d[key]!==null&&d[key]!=='') rows.push([label,String(d[key])])
   }
   for (const [label,key] of [['Карта','card'],['На карту, USDT','card_credit'],['Номер операции','operation_id'],['Тариф','plan'],['Комиссия провайдера, USDT','provider_fee'],['Комиссия wPay, USDT','service_fee'],['Основание','reason']] as const) { if(d[key]!==undefined&&d[key]!==null&&d[key]!=='') rows.push([label,String(d[key])]) }
+  if (kind === 'withdrawal') {
+    if (d.recipient && !d.address) rows.push(['Адрес получателя', String(d.recipient)])
+    if (d.transaction_hash && !d.tx_hash) rows.push(['Хеш транзакции', String(d.transaction_hash)])
+    if (d.fee != null) rows.push(['Комиссия', `${d.fee} ${item.asset}`])
+  }
   return {id:item.event_id,kind,status,amount:status==='failed'?'0':item.amount,asset:item.asset,date:item.created_at,rows}
 }
 const examples:TransactionView[] = [
@@ -53,7 +87,7 @@ export function TransactionDetails({item,onClose}:{item:TransactionView|null;onC
 export function TransactionDetailContent({model}:{model:TransactionView}) {
   const [copied,setCopied]=useState(false),[copyError,setCopyError]=useState(false)
   const meta=kinds[model.kind], Icon=meta.icon, state=statuses[model.status], StateIcon=state.icon
-  const positive=incoming(model.kind)||model.status==='refunded'
+  const positive=Number(model.amount)>0 || (model.demo && incoming(model.kind))
   const amount=Number(model.amount)
   const date=new Date(model.date)
   async function copy(){try{await navigator.clipboard.writeText(model.id);setCopied(true);setCopyError(false)}catch{setCopyError(true)}}

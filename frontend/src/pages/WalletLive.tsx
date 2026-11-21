@@ -1,14 +1,13 @@
-import { Search, CreditCard } from "lucide-react";
+import { Search } from "lucide-react";
 import WalletOperations from "./WalletOperations";
 import {
   TransactionDetails,
   TransactionDetailContent,
   TransactionExamples,
   transactionFromApi,
+  transactionListPresentation,
   type TransactionView,
 } from "./WalletTransaction";
-import ArrowDownCircleFill from "framework7-icons/react/esm/ArrowDownCircleFill.js";
-import Qrcode from "framework7-icons/react/esm/Qrcode.js";
 import Clock from "framework7-icons/react/esm/Clock.js";
 import {
   createContext,
@@ -301,7 +300,7 @@ export function LiveHistory() {
         (filter === "income"
           ? Number(x.amount) > 0
           : Number(x.amount) < 0 || x.type === "qr_failed")) &&
-      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${x.type === "card_topup" ? "Пополнение карты" : x.type === "card_issue" ? "Выпуск карты" : x.type === "card_issue_refund" ? "Возврат за выпуск карты" : ""} ${x.detail.plan ?? ""}`
+      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${transactionListPresentation(x).title} ${x.detail.plan ?? ""}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -384,32 +383,8 @@ export function LiveHistory() {
               >
                 {transactions.map((item) => {
                   const income = Number(item.amount) > 0;
-                  const failed = item.type === "qr_failed";
-                  const cardIssue =
-                    item.type === "card_issue" ||
-                    item.type === "card_topup" ||
-                    item.type === "card_issue_refund";
-                  const Icon = cardIssue
-                    ? CreditCard
-                    : income
-                      ? ArrowDownCircleFill
-                      : Qrcode;
-                  const title =
-                    item.type === "card_topup"
-                      ? "Пополнение карты"
-                      : item.type === "card_issue"
-                        ? "Выпуск карты"
-                        : item.type === "card_issue_refund"
-                          ? "Возврат за выпуск карты"
-                          : item.type === "deposit"
-                            ? "Пополнение"
-                            : item.type === "qr_refunded"
-                              ? "Возврат QR"
-                              : failed
-                                ? "Платёж не прошёл"
-                                : String(
-                                    item.detail.merchant_name || "Оплата QR",
-                                  );
+                  const failed = ["qr_failed", "withdrawal_failed"].includes(item.type);
+                  const { title, icon: Icon } = transactionListPresentation(item);
                   return (
                     <ListItem
                       key={item.event_id}
