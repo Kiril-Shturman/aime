@@ -21,10 +21,25 @@ function transactionKind(type: string): Kind {
   if (type.startsWith('withdrawal_') || type === 'withdrawal') return 'withdrawal'
   if (type.startsWith('qr_')) return 'qr'
   if (type.startsWith('transfer')) return 'transfer'
+  if (type === 'exchange' || type.startsWith('exchange_')) return 'exchange'
+  if (type === 'ruble_deposit' || type === 'referral' || type === 'check') return type
   if (type === 'admin_adjustment' || type === 'adjustment') return 'adjustment'
   if (type === 'card_issue_refund' || type === 'deposit_return') return 'refund'
   if (type === 'deposit' || type === 'card_issue' || type === 'card_topup' || type === 'card_payment') return type
   return 'other'
+}
+
+export function transactionNetwork(item: WalletTransaction): string {
+  if (/^(deposit:)?aura:test:/.test(item.event_id)) return 'TRON Nile · TRC‑20'
+  const network = String(item.detail.network ?? '').trim()
+  const labels: Record<string, string> = {
+    BSC: 'BNB Smart Chain · BEP‑20', BEP20: 'BNB Smart Chain · BEP‑20',
+    ETH: 'Ethereum', ERC20: 'Ethereum · ERC‑20',
+    TRON: 'TRON · TRC‑20', TRC20: 'TRON · TRC‑20', NILE: 'TRON Nile · TRC‑20',
+    TON: 'TON', SOL: 'Solana', BTC: 'Bitcoin',
+  }
+  if (network === 'ETH' && item.asset === 'USDT') return labels.ERC20
+  return labels[network.toUpperCase()] ?? (network || (/^(deposit:)?aura:mainnet:/.test(item.event_id) ? labels.TRON : ''))
 }
 
 export function transactionListPresentation(item: WalletTransaction) {
@@ -37,7 +52,7 @@ export function transactionListPresentation(item: WalletTransaction) {
     : item.type === 'withdrawal_failed' ? 'Вывод не выполнен'
     : kind === 'deposit' ? 'Пополнение'
     : kinds[kind].title
-  return { title, icon: kinds[kind].icon }
+  return { title, icon: kinds[kind].icon, network: kind === 'deposit' || kind === 'withdrawal' ? transactionNetwork(item) : '' }
 }
 
 export function transactionFromApi(item:WalletTransaction):TransactionView {
@@ -50,11 +65,17 @@ export function transactionFromApi(item:WalletTransaction):TransactionView {
       || (kind === 'withdrawal' && ['processing', 'broadcast'].includes(String(d.status))) ? 'processing'
     : 'completed'
   const rows:[string,string][]=[]
-  for(const [label,key] of [['Получатель','merchant_name'],['Сумма покупки, ₽','amount_rub'],['Сеть','network'],['Адрес','address'],['Хеш транзакции','tx_hash'],['Курс, ₽ за 1 USDT','rate'],['Номер платежа','payment_id'],['Ваш номер платежа','spend_id'],['Причина','failure_reason']] as const) {
+  for(const [label,key] of [['Получатель','merchant_name'],['Сумма покупки, ₽','amount_rub'],['Адрес','address'],['Хеш транзакции','tx_hash'],['Курс, ₽ за 1 USDT','rate'],['Номер платежа','payment_id'],['Ваш номер платежа','spend_id'],['Причина','failure_reason']] as const) {
     if(d[key]!==undefined&&d[key]!==null&&d[key]!=='') rows.push([label,String(d[key])])
   }
   for (const [label,key] of [['Карта','card'],['На карту, USDT','card_credit'],['Номер операции','operation_id'],['Тариф','plan'],['Комиссия провайдера, USDT','provider_fee'],['Комиссия wPay, USDT','service_fee'],['Основание','reason']] as const) { if(d[key]!==undefined&&d[key]!==null&&d[key]!=='') rows.push([label,String(d[key])]) }
+  if (kind === 'deposit' || kind === 'withdrawal') {
+    rows.unshift(['Валюта', item.asset])
+    const network = transactionNetwork(item)
+    if (network) rows.splice(1, 0, ['Сеть', network])
+  }
   if (kind === 'withdrawal') {
+    if (d.amount != null) rows.push(['Получатель получил', `${d.amount} ${item.asset}`])
     if (d.recipient && !d.address) rows.push(['Адрес получателя', String(d.recipient)])
     if (d.transaction_hash && !d.tx_hash) rows.push(['Хеш транзакции', String(d.transaction_hash)])
     if (d.fee != null) rows.push(['Комиссия', `${d.fee} ${item.asset}`])
@@ -62,15 +83,15 @@ export function transactionFromApi(item:WalletTransaction):TransactionView {
   return {id:item.event_id,kind,status,amount:status==='failed'?'0':item.amount,asset:item.asset,date:item.created_at,rows}
 }
 const examples:TransactionView[] = [
-  ['deposit','150','USDT',[['Сеть','TRON · TRC20'],['Отправитель','Внешний кошелёк']]],
+  ['deposit','150','USDT',[['Валюта','Tether (USDT)'],['Сеть','TRON · TRC‑20'],['Зачислено','150 USDT']]],
   ['ruble_deposit','10000','RUB',[['Способ','СБП'],['Банк','Банк отправителя']]],
-  ['withdrawal','-50','USDT',[['Сеть','TRON · TRC20'],['Получатель','Внешний кошелёк'],['Комиссия сети','1 USDT']]],
+  ['withdrawal','-51','USDT',[['Валюта','Tether (USDT)'],['Сеть','BNB Smart Chain · BEP‑20'],['Получатель получил','50 USDT'],['Комиссия сети','1 USDT'],['Всего списано','51 USDT']]],
   ['transfer','-25','USDT',[['Получатель','@username'],['Комментарий','За ужин']]],
   ['check','-10','USDT',[['Получатель','Предъявитель чека'],['Состояние чека','Активирован']]],
-  ['exchange','-100','USDT',[['Получено','0.0011 BTC'],['Курс','1 BTC = 90,909.09 USDT'],['Комиссия','Включена в курс']]],
+  ['exchange','-100','USDT',[['Получено','0.0011 BTC'],['Курс','1 BTC = 90 909,09 USDT'],['Комиссия','Включена в курс']]],
   ['qr','-9.13','USDT',[['Получатель','Кофейня'],['Сумма покупки','700 ₽'],['Курс','76.67 ₽ за 1 USDT']]],
   ['card_payment','-20','USD',[['Магазин','OpenAI'],['Карта','Visa · •• 0001'],['Категория','Подписки']]],
-  ['card_topup','100','USD',[['Карта','Visa · •• 0001'],['Списано с кошелька','100 USDT']]],
+  ['card_topup','-100','USDT',[['Карта','Visa · •• 0001'],['Списано с кошелька','100 USDT'],['Зачислено на карту','$100']]],
   ['card_issue','-5','USD',[['Карта','Виртуальная Visa'],['Тариф','Пример тарифа']]],
   ['refund','20','USD',[['Магазин','OpenAI'],['Карта','Visa · •• 0001'],['Основание','Отмена покупки']]],
   ['referral','3','USDT',[['Основание','Комиссия за операции приглашённых'],['Период','Ноябрь 2026']]],
@@ -116,8 +137,12 @@ export function TransactionExamples({onSelect}:{onSelect:(item:TransactionView)=
 }
 
 export function TransactionListRow({item,onSelect}:{item:TransactionView;onSelect:(item:TransactionView)=>void}) {
- const Icon=kinds[item.kind].icon,positive=incoming(item.kind)
- const context=item.rows.find(([label])=>['Магазин','Получатель','Сеть','Способ','Карта','Получено','Период'].includes(label))?.[1]??'WPay'
- const amount=`${positive?'+':'−'}${number(String(Math.abs(Number(item.amount))))} ${item.asset==='RUB'?'₽':item.asset}`
+ const Icon=kinds[item.kind].icon,positive=Number(item.amount)>0
+ const crypto = item.kind === 'deposit' || item.kind === 'withdrawal'
+ const network = item.rows.find(([label]) => label === 'Сеть')?.[1]
+ const context = crypto ? [item.asset, network].filter(Boolean).join(' · ') : item.rows.find(([label])=>['Магазин','Получатель','Сеть','Способ','Карта','Получено','Период'].includes(label))?.[1]??'WPay'
+ const currency = item.asset === 'USD' ? '$' : ''
+ const unit = item.asset === 'RUB' ? ' ₽' : item.asset === 'USD' ? '' : ' ' + item.asset
+ const amount = `${positive ? '+' : Number(item.amount) < 0 ? '−' : ''}${currency}${number(String(Math.abs(Number(item.amount))))}${unit}`
  return <ListItem link chevron={false} onClick={()=>onSelect(item)} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={22}/></span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{kinds[item.kind].title}</span><span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">{context}{item.demo?' · Демо':''}</span></span><span className={`shrink-0 text-right text-[16px] font-medium tabular-nums ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{amount}</span></span>}/>
 }

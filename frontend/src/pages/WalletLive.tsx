@@ -300,7 +300,7 @@ export function LiveHistory() {
         (filter === "income"
           ? Number(x.amount) > 0
           : Number(x.amount) < 0 || x.type === "qr_failed")) &&
-      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${transactionListPresentation(x).title} ${x.detail.plan ?? ""}`
+      `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${transactionListPresentation(x).title} ${transactionListPresentation(x).network} ${x.detail.plan ?? ""}`
         .toLowerCase()
         .includes(query.toLowerCase()),
   );
@@ -385,7 +385,7 @@ export function LiveHistory() {
                   const income = Number(item.amount) > 0;
                   const failed = ["qr_failed", "withdrawal_failed"].includes(item.type);
                   const cardIssue = ["card_issue", "card_topup", "card_issue_refund"].includes(item.type);
-                  const { title, icon: Icon } = transactionListPresentation(item);
+                  const { title, icon: Icon, network } = transactionListPresentation(item);
                   return (
                     <ListItem
                       key={item.event_id}
@@ -414,7 +414,7 @@ export function LiveHistory() {
                                 "ru-RU",
                                 { hour: "2-digit", minute: "2-digit" },
                               )}{" "}
-                              · {item.asset}
+                              · {item.asset}{network && ` · ${network}`}
                             </span>
                           </span>
                           <span className="shrink-0 text-right">
