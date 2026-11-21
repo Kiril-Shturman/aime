@@ -1354,19 +1354,19 @@
   position: absolute;
   top: -39%;
   left: 15%;
-  width: 68%;
+  width: 79%;
   z-index: 1;
 }
 .wpay-usa-stage .subscription-composition {
   position: relative;
   z-index: 3;
   object-position: 32% center;
-  transform: translate(-5%, -15%) scale(1.12);
+  transform: translate(-5%, -15%) scale(1.26);
 }
 .wpay-usa-stage .wpay-usa-scene-services {
   position: absolute;
   right: -1%;
   bottom: -1%;
-  width: 73%;
+  width: 84%;
   z-index: 4;
 }
