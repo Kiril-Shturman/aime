@@ -1,3 +1,4 @@
+import { useNavigate } from "react-router-dom";
 import { RecordMenu, RecordValue } from "./WalletAdminRecord";
 import { AdminOperations, AdminUserOperationHistory, type AdminOperationsData } from "./WalletAdminOperations";
 import { currencyLabel, networkLabel, networkStandards } from "../wallet/catalog";
@@ -320,6 +321,7 @@ const navGroups: { label: string; items: Tab[] }[] = [
 ];
 
 export default function WalletAdminPage() {
+  const navigate = useNavigate();
   const { theme, toggle: toggleTheme } = useTheme();
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
@@ -468,9 +470,7 @@ export default function WalletAdminPage() {
           <F7Button
             large
             className="wpay-admin-back"
-            onClick={() => {
-              window.location.href = "/wallet";
-            }}
+            onClick={() => navigate("/wallet")}
           >
             <ArrowLeft size={19} />
             <span>В кошелёк</span>
