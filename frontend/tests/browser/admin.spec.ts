@@ -67,7 +67,8 @@ async function setup(page: Page, theme = "dark") {
           { event_id: "topup-101", user_id: "tg:123", asset: "USDT", amount: "-18.225002", type: "card_topup", created_at: new Date().toISOString(), detail: { status: "completed" } },
           { event_id: "qr-102", user_id: "tg:456", asset: "USDT", amount: "0", type: "qr_failed", created_at: new Date().toISOString(), detail: { status: "failed" } },
         ],
-        daily: [{ day: new Date().toISOString().slice(0, 10), asset: "USDT", volume: "18.225002", revenue: "3", count: 1 }],
+        as_of: "2026-11-21",
+        daily: [{ day: "2026-11-21", asset: "USDT", volume: "18.225002", revenue: "3", count: 1 }],
         quotes: [],
         invoices: [],
         transfers: [],
@@ -119,6 +120,13 @@ for (const theme of ["dark", "light"]) {
     await page.getByRole("textbox", { name: "Поиск" }).fill("topup-101");
     await expect(page.getByRole("table").getByText("Пополнение карты", { exact: true })).toBeVisible();
     await expect(page.getByRole("table").getByText("Ошибка оплаты по QR", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Пополнение карты" }).click();
+    const details = page.getByRole("dialog", { name: "Детали операции" });
+    await expect(details.getByText("topup-101", { exact: true })).toBeVisible();
+    await details.getByRole("button", { name: "Закрыть детали операции" }).click();
+    await expect(details).toBeHidden();
+    await page.getByRole("button", { name: "Фильтры" }).click();
+    await expect(page.getByLabel("Статус", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Сбросить" }).click();
     await expect(page.getByRole("table").getByText("Ошибка оплаты по QR", { exact: true })).toBeVisible();
     expect(posts).toHaveLength(0);

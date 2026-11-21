@@ -1450,7 +1450,9 @@ def install_wallet(app, root, owner_check):
         result = {'events': decoded_rows('SELECT rowid,* FROM wallet_events ORDER BY rowid DESC LIMIT 500')}
         for table, key in [('wallet_quotes', 'quotes'), ('wallet_invoices', 'invoices'), ('wallet_transfers', 'transfers'), ('wallet_withdrawal_intents', 'withdrawals')]:
             result[key] = decoded_rows(f'SELECT rowid,* FROM {table} ORDER BY rowid DESC LIMIT 500') if table in tables() else []
-        cutoff = (datetime.now(timezone.utc).date() - timedelta(days=89)).isoformat()
+        today = datetime.now(timezone.utc).date()
+        cutoff = (today - timedelta(days=89)).isoformat()
+        result['as_of'] = today.isoformat()
         daily = defaultdict(lambda: {'volume': Decimal(0), 'revenue': Decimal(0), 'count': 0})
         for row in ledger.db.execute(
             "SELECT date(created_at) AS day,asset,amount,type,detail FROM wallet_events "

@@ -159,8 +159,21 @@ export function TransactionExamples({ onSelect }: { onSelect: (item: Transaction
   )
 }
 
+export function TransactionAvatar({ kind, positive, compact = false }: {
+  kind: TransactionView["kind"]; positive: boolean; compact?: boolean;
+}) {
+  const Icon = kinds[kind].icon;
+  const size = compact ? "h-9 w-9" : "h-11 w-11";
+  const gradient = positive
+    ? "bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600"
+    : "bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600";
+  return <span aria-hidden="true" className={`wpay-currency-icon flex ${size} shrink-0 items-center justify-center rounded-full text-white ${gradient}`}>
+    <Icon size={compact ? 18 : 22} />
+  </span>;
+}
+
 export function TransactionListRow({item,onSelect,compact=false}:{item:TransactionView;onSelect:(item:TransactionView)=>void;compact?:boolean}) {
- const Icon=kinds[item.kind].icon,positive=Number(item.amount)>0
+ const positive=Number(item.amount)>0
  const crypto = item.kind === 'deposit' || item.kind === 'withdrawal'
  const network = item.rows.find(([label]) => label === 'Сеть')?.[1]
  const context = crypto ? [currencyLabel(item.asset), network].filter(Boolean).join(' · ') : item.rows.find(([label])=>['Магазин','Получатель','Сеть','Способ','Карта','Получено','Период'].includes(label))?.[1]??'WPay'
@@ -169,5 +182,5 @@ export function TransactionListRow({item,onSelect,compact=false}:{item:Transacti
  const currency = item.asset === 'USD' ? '$' : ''
  const unit = item.asset === 'RUB' ? ' ₽' : item.asset === 'USD' ? '' : ' ' + item.asset
  const amount = `${positive ? '+' : Number(item.amount) < 0 ? '−' : ''}${currency}${number(String(Math.abs(Number(item.amount))))}${unit}`
- return <ListItem link chevron={false} onClick={()=>onSelect(item)} contentClassName={compact ? "!h-14 !ps-0" : "!h-16"} mediaClassName={compact ? "!me-2.5" : undefined} innerClassName={compact ? "!min-w-0 !h-14 !py-1 !pe-0 after:!opacity-30" : "!min-w-0 !h-16 !py-2 after:!opacity-30"} media={<span className={`wpay-currency-icon flex ${compact ? 'h-9 w-9' : 'h-11 w-11'} shrink-0 items-center justify-center rounded-full text-white ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={compact ? 18 : 22}/></span>} innerChildren={<span className={`flex h-full min-w-0 items-center justify-between ${compact ? "gap-2" : "gap-3"}`}><span className="min-w-0"><span className={`block truncate font-semibold text-black dark:text-white ${compact ? "text-[14px] leading-5" : "text-[17px] leading-6"}`}>{item.title ?? kinds[item.kind].title}</span><span className={`mt-0.5 block truncate text-black/45 dark:text-white/45 ${compact ? "text-[12px] leading-4" : "text-[14px] leading-5"}`}>{[timestamp, context, item.demo ? 'Демо' : ''].filter(Boolean).join(' · ')}</span></span><span className={`text-right font-medium tabular-nums ${compact ? "min-w-0 max-w-[55%] truncate text-[13px]" : "shrink-0 whitespace-nowrap text-[16px]"} ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`} title={compact ? amount : undefined}>{amount}</span></span>}/>
+ return <ListItem link chevron={false} onClick={()=>onSelect(item)} contentClassName={compact ? "!h-14 !ps-0" : "!h-16"} mediaClassName={compact ? "!me-2.5" : undefined} innerClassName={compact ? "!min-w-0 !h-14 !py-1 !pe-0 after:!opacity-30" : "!min-w-0 !h-16 !py-2 after:!opacity-30"} media={<TransactionAvatar kind={item.kind} positive={positive} compact={compact} />} innerChildren={<span className={`flex h-full min-w-0 items-center justify-between ${compact ? "gap-2" : "gap-3"}`}><span className="min-w-0"><span className={`block truncate font-semibold text-black dark:text-white ${compact ? "text-[14px] leading-5" : "text-[17px] leading-6"}`}>{item.title ?? kinds[item.kind].title}</span><span className={`mt-0.5 block truncate text-black/45 dark:text-white/45 ${compact ? "text-[12px] leading-4" : "text-[14px] leading-5"}`}>{[timestamp, context, item.demo ? 'Демо' : ''].filter(Boolean).join(' · ')}</span></span><span className={`text-right font-medium tabular-nums ${compact ? "min-w-0 max-w-[55%] truncate text-[13px]" : "shrink-0 whitespace-nowrap text-[16px]"} ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`} title={compact ? amount : undefined}>{amount}</span></span>}/>
 }
