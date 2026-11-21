@@ -1522,7 +1522,19 @@ function CryptoFlowPushView({
     return () => { controller?.abort(); window.removeEventListener("focus", load); };
   }, [flow?.kind, pair, sourceNetwork, destinationNetwork]);
   const exchangeMethod = exchangeRoute?.pair === pair ? exchangeRoute.method : "";
-  const managedPayout = exchangeRoute?.pair === pair ? exchangeRoute.payout : undefined;
+  const [manualPayout, setManualPayout] = useState(false);
+  const [fixedFloatOrdersEnabled, setFixedFloatOrdersEnabled] = useState(false);
+  useEffect(() => {
+    if (flow?.kind !== "exchange" || exchangeMethod !== "fixedfloat" ||
+        fromAsset.code !== "USDT" || toAsset.code !== "USDT") return;
+    const controller = new AbortController();
+    void walletRequest<{ orders_enabled?: boolean }>("exchange-status", undefined, controller.signal)
+      .then((status) => { if (!controller.signal.aborted) setFixedFloatOrdersEnabled(Boolean(status.orders_enabled)); })
+      .catch(() => { if (!controller.signal.aborted) setFixedFloatOrdersEnabled(false); });
+    return () => controller.abort();
+  }, [flow?.kind, exchangeMethod, fromAsset.code, toAsset.code]);
+  const defaultPayout = exchangeRoute?.pair === pair ? exchangeRoute.payout : undefined;
+  const managedPayout = manualPayout ? undefined : defaultPayout;
   const [, setExchangeOrderOpen] = useState(false);
 
   const [providerQuote, setProviderQuote] = useState<{ key: string; text: string; payout?: string } | null>(null);
@@ -1819,10 +1831,17 @@ function CryptoFlowPushView({
           {(canQuote || canQuoteDex) && currentQuote && (
             <p role="status" className="mt-3 text-center text-sm">{currentQuote.text}</p>
           )}
-          {managedPayout && sourceNetwork && destinationNetwork && canQuote && (
-            <WalletExchangeOrder key={pair} active={flow?.kind === "exchange"} enabled
+          {exchangeMethod === "fixedfloat" && fixedFloatOrdersEnabled && defaultPayout && (
+            <label className="my-3 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={manualPayout}
+                onChange={(event) => setManualPayout(event.target.checked)} />
+              Указать адрес получения вручную
+            </label>
+          )}
+          {(managedPayout || fixedFloatOrdersEnabled) && sourceNetwork && destinationNetwork && canQuote && (
+            <WalletExchangeOrder key={`${pair}:${managedPayout ?? "manual"}`} active={flow?.kind === "exchange"} enabled
               managedPayout={managedPayout} from={sourceNetwork} to={destinationNetwork}
-              value={amount.replace(",", ".")} mode="fixed" quoteValid={Boolean(currentQuote?.payout)}
+              value={amount.replace(",", ".")} mode={managedPayout ? "fixed" : "float"} quoteValid={Boolean(currentQuote?.payout)}
               onIntentChange={setExchangeOrderOpen} />
           )}
           {exchangeMethod === "internal" ? (
@@ -1831,7 +1850,7 @@ function CryptoFlowPushView({
               onClick={() => void submitInternalExchange()}>
               {internalBusy ? "Перемещаем…" : "Переместить USDT 1:1"}
             </Button>
-          ) : !managedPayout && <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">Исполнение обмена пока недоступно</p>}
+          ) : !(managedPayout || (canQuote && fixedFloatOrdersEnabled)) && <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">Исполнение обмена пока недоступно</p>}
           <p className="mt-3 text-center text-[12px] text-black/35 dark:text-white/35">
             Расчёт справочный. Обмен пока недоступен.
           </p>
