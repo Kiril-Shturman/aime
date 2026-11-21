@@ -1048,8 +1048,9 @@ export default function WalletAuraCards({
               {plan?.conditions?.includes("Google Pay") && <span aria-label="Google Pay"><LogoGoogle aria-hidden="true" />Pay</span>}
               {(appearance === "silver" || appearance === "navy") && (
                 <span className="wpay-catalog-app-store" role="img" aria-label="App Store">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
-                    <path d="m6.5 19 8.2-14.2M9.3 4.8l3.1 5.4m2.1 3.7 3 5.1M4 15h8.8m3.5 0H20" />
+                  {/* Font Awesome Free 6.7.2, CC BY 4.0 */}
+                  <svg viewBox="0 0 448 512" preserveAspectRatio="xMidYMid meet" aria-hidden="true">
+                    <path fill="white" d="M400 32H48C21.5 32 0 53.5 0 80v352c0 26.5 21.5 48 48 48h352c26.5 0 48-21.5 48-48V80c0-26.5-21.5-48-48-48zM127 384.5c-5.5 9.6-17.8 12.8-27.3 7.3-9.6-5.5-12.8-17.8-7.3-27.3l14.3-24.7c16.1-4.9 29.3-1.1 39.6 11.4L127 384.5zm138.9-53.9H84c-11 0-20-9-20-20s9-20 20-20h51l65.4-113.2-20.5-35.4c-5.5-9.6-2.2-21.8 7.3-27.3 9.6-5.5 21.8-2.2 27.3 7.3l8.9 15.4 8.9-15.4c5.5-9.6 17.8-12.8 27.3-7.3 9.6 5.5 12.8 17.8 7.3 27.3l-85.8 148.6h62.1c20.2 0 31.5 23.7 22.7 40zm98.1 0h-29l19.6 33.9c5.5 9.6 2.2 21.8-7.3 27.3-9.6 5.5-21.8 2.2-27.3-7.3-32.9-56.9-57.5-99.7-74-128.1-16.7-29-4.8-58 7.1-67.8 13.1 22.7 32.7 56.7 58.9 102h52c11 0 20 9 20 20 0 11.1-9 20-20 20z" />
                   </svg>
                 </span>
               )}
@@ -1080,7 +1081,7 @@ export default function WalletAuraCards({
             )}
             <span className="wpay-card-catalog-price">
               <span><b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
-                ? (Number(plan.issue_fee) === 10 ? "10$ или ≈850₽" : `${offerNumber.format(Number(plan.issue_fee))}$`) : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
+                ? (Number(plan.issue_fee) === 10 ? "10$ или 850₽" : `${offerNumber.format(Number(plan.issue_fee))}$`) : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
               {plan?.total_recharge_pct != null && (
                 <span><b>{offerNumber.format(Number(plan.total_recharge_pct))}%</b><small>Пополнение</small></span>
               )}

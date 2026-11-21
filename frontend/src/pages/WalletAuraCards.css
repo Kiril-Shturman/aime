@@ -1239,3 +1239,5 @@
   background: linear-gradient(145deg, #46baff, #0873ed 62%, #0852bf);
 }
 .wpay-catalog-app-store svg { position: relative; width: 17px; height: 17px; }
+
+.wpay-catalog-app-store svg { width: 20px; height: 20px; flex: 0 0 20px; }
