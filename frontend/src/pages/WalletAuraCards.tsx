@@ -69,15 +69,16 @@ function ripplePaymentTile(event: MouseEvent<HTMLInputElement>) {
   const diameter = Math.hypot(width, height) * 2;
   const x = event.detail ? event.clientX - left : width / 2;
   const y = event.detail ? event.clientY - top : height / 2;
-  tile.querySelectorAll<HTMLElement>(".wpay-goswap-payment-ripple").forEach((ring, index) => {
-    ring.getAnimations().forEach(animation => animation.cancel());
-    ring.style.left = `${x}px`;
-    ring.style.top = `${y}px`;
-    ring.animate([
-      { width: "4px", height: "4px", opacity: 0.85 },
-      { width: `${diameter}px`, height: `${diameter}px`, opacity: 0 },
-    ], { delay: index * 110, duration: 720, easing: "ease-out" });
-  });
+  const ripple = tile.querySelector<HTMLElement>(".wpay-goswap-payment-ripple");
+  if (!ripple) return;
+  ripple.getAnimations().forEach(animation => animation.cancel());
+  ripple.style.left = `${x}px`;
+  ripple.style.top = `${y}px`;
+  ripple.style.width = ripple.style.height = `${diameter}px`;
+  ripple.animate([
+    { transform: "translate(-50%, -50%) scale(0)", opacity: 0.19 },
+    { transform: "translate(-50%, -50%) scale(1)", opacity: 0 },
+  ], { duration: 360, easing: "ease-out" });
 }
 
 const offerNumber = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 8 });
@@ -1568,7 +1569,6 @@ export default function WalletAuraCards({
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "wallet"}
                     onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("wallet")} />
                   <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
-                  <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
                   <img src={desktopWalletIcon} alt="" width={25} height={25} />
                   <span>С кошелька</span>
@@ -1576,7 +1576,6 @@ export default function WalletAuraCards({
                 <label>
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "sbp"}
                     disabled={!onSbpTopUp} onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("sbp")} />
-                  <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
                   <img src="/brands/sbp-symbol.svg" alt="" width={18} height={18} />

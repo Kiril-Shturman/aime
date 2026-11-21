@@ -977,22 +977,22 @@
   .wpay-goswap-order-art .wpay-bank-card.wpay-card-scene { transform: none; transition: none; }
 }
 .wpay-goswap-payment {
-  --wpay-payment-tile-bg: #cdd4e2;
+  --wpay-payment-tile-bg: var(--color-ios-light-surface-1, #fff);
   --wpay-payment-tile-selected-bg: #abcfff;
   --wpay-payment-tile-accent: var(--f7-theme-color, #007aff);
 }
 .dark .wpay-goswap-payment {
-  --wpay-payment-tile-bg: #333b4b;
+  --wpay-payment-tile-bg: var(--color-ios-dark-surface-1, #1c1c1e);
   --wpay-payment-tile-selected-bg: #254b77;
 }
 .wpay-goswap-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .wpay-goswap-payment legend { margin-bottom: 6px; font-size: 13px; opacity: .7; }
 .wpay-goswap-payment label { position: relative; display: flex; min-height: 72px; flex-direction: column; justify-content: center; align-items: flex-start; gap: 5px; padding: 10px 12px; overflow: hidden; border: 0; border-radius: 22px; background: var(--wpay-payment-tile-bg); font-size: 13px; cursor: pointer; }
-.wpay-goswap-payment label:has(input:checked) { background: var(--wpay-payment-tile-selected-bg); }
+.wpay-goswap-payment label:has(input:checked) { background: var(--wpay-payment-tile-selected-bg); box-shadow: inset 0 0 0 2px var(--wpay-payment-tile-accent); }
 .wpay-goswap-payment label:has(input:focus-visible) { outline: 2px solid var(--f7-theme-color); outline-offset: 2px; }
 .wpay-goswap-payment label:has(input:disabled) { opacity: .5; cursor: default; }
 .wpay-goswap-payment input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
-.wpay-goswap-payment-ripple { position: absolute; z-index: 1; transform: translate(-50%, -50%); border: 2px solid var(--wpay-payment-tile-accent); border-radius: 50%; opacity: 0; pointer-events: none; }
+.wpay-goswap-payment-ripple { position: absolute; z-index: 1; transform: translate(-50%, -50%); background: var(--wpay-payment-tile-accent); border-radius: 50%; opacity: 0; pointer-events: none; }
 .wpay-goswap-payment-check { position: absolute; top: 8px; right: 8px; z-index: 2; display: none; width: 19px; height: 19px; place-items: center; border-radius: 50%; background: var(--f7-theme-color); color: #fff; pointer-events: none; }
 .wpay-goswap-payment input:checked ~ .wpay-goswap-payment-check { display: grid; }
 .wpay-goswap-payment small { display: block; }
