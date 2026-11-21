@@ -42,6 +42,7 @@ import {
 } from "../lib/wallet-api";
 import { useLiveWallet } from "./WalletLive";
 
+const offerNumber = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 8 });
 const DEMO_CARD_ID = "wpay-ui-demo-card";
 type AuraCard = {
   demo?: boolean;
@@ -821,16 +822,16 @@ export default function WalletAuraCards({
     const serviceTopup = plan?.service_recharge_pct ?? "0";
     const totalTopup = goSwapOffer ? storefrontPlan.total_recharge_pct
       : providerTopup == null || providerTopup === "" ? undefined
-        : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 8 }).format(Number(providerTopup) + Number(serviceTopup));
-    const minimum = goSwapOffer ? "От $10 · при первом пополнении"
-      : fees?.minimum_recharge_amount ? `От ${fees.minimum_recharge_amount} USDT` : "—";
-    const issue = goSwapOffer ? storefrontPlan.issue_fee ? `${storefrontPlan.issue_fee} USDT` : "—"
-      : fees ? planPrice(currentKind, activeOffer?.skin) : "—";
-    const rows = [
+        : Number(providerTopup) + Number(serviceTopup);
+    const minimum = goSwapOffer ? "От 10 USD"
+      : fees?.minimum_recharge_amount ? `От ${offerNumber.format(Number(fees.minimum_recharge_amount))} USDT` : "—";
+    const issue = plan?.issue_fee != null ? `${offerNumber.format(Number(plan.issue_fee))} USDT`
+      : goSwapOffer || !fees ? "—" : planPrice(currentKind, activeOffer?.skin);
+    const rows: [string, string, string?][] = [
       ["Выпуск карты", issue],
-      ["Комиссия за пополнение", totalTopup == null ? "—" :
-        `${totalTopup}%${Number(plan?.service_minimum_fee) > 0 ? ` · мин. wPay ${plan?.service_minimum_fee} USDT` : ""}`],
-      ["Минимум пополнения", minimum],
+      ["Комиссия за пополнение", totalTopup == null ? "—" : `${offerNumber.format(Number(totalTopup))}%`,
+        Number(plan?.service_minimum_fee) > 0 ? `Мин. wPay ${offerNumber.format(Number(plan?.service_minimum_fee))} USDT` : undefined],
+      ["Минимум пополнения", minimum, goSwapOffer ? "При первом пополнении" : undefined],
     ];
     if (premiumOffer) rows.push(["Доставка", "Бесплатно"]);
     return (
@@ -838,10 +839,13 @@ export default function WalletAuraCards({
         <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">Условия карты</h3>
         <Card className="!m-0 !rounded-[26px]" contentWrapPadding="px-4 py-0">
           <dl>
-            {rows.map(([label, value]) => (
+            {rows.map(([label, value, note]) => (
               <div key={label} className="flex min-h-14 items-center justify-between gap-3 border-b border-black/[.06] py-3 last:border-0 dark:border-white/[.08]">
                 <dt className="text-[15px] text-black/45 dark:text-white/45">{label}</dt>
-                <dd className="min-w-0 text-right text-[15px] font-medium">{value}</dd>
+                <dd className="min-w-0 text-right text-[15px] font-medium">
+                  {value}
+                  {note && <small className="mt-0.5 block text-[12px] font-normal text-black/50 dark:text-white/50">{note}</small>}
+                </dd>
               </div>
             ))}
           </dl>
