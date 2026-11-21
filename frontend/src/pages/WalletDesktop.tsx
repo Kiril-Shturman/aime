@@ -145,9 +145,27 @@ export function DesktopOverview({onHistory,onDeposit,onExchange}:{onHistory:()=>
  const wallet=useLiveWallet()
  const [selectedTransaction, setSelectedTransaction] = useState<TransactionView | null>(null)
  const transactions=wallet.data.transactions.slice(0,4)
- return <aside className="wpay-desktop-overview-side"><section className="wpay-desktop-card"><div className="wpay-desktop-section-head"><h2>Последние операции</h2><button type="button" onClick={onHistory}>Все <ArrowUpRight size={15}/></button></div>{transactions.length?<List strong inset dividers className="!m-0 overflow-hidden !rounded-[24px]">
-   {transactions.map(item => <TransactionListRow key={item.event_id} item={transactionFromApi(item)} onSelect={setSelectedTransaction} />)}
- </List>:<div className="wpay-desktop-empty"><Clock3 size={30} strokeWidth={1.5}/><strong>Пока без операций</strong><p>Пополнения и платежи появятся здесь.</p></div>}</section><section className="wpay-desktop-card"><div className="wpay-desktop-section-head"><h2>На рынке</h2><span>USD</span></div>{['BTC','ETH','SOL'].map(code=><div className="wpay-desktop-rate" key={code}><span>{code}</span><strong>{wallet.rate(code)!==null?usdPrice(wallet.rate(code)!):'—'}</strong></div>)}</section><CbrRate /><section className="wpay-desktop-quick"><span className="wpay-desktop-quick-icon"><ArrowLeftRight size={24}/></span><h2>Ваши активы.<br/>Ваши возможности.</h2><p>Пополняйте кошелёк и управляйте валютами в одном месте.</p><button type="button" onClick={onDeposit}>Пополнить кошелёк <ArrowUpRight size={17}/></button><button type="button" onClick={onExchange}>Перейти к обмену <ArrowUpRight size={17}/></button></section><TransactionDetails item={selectedTransaction} onClose={() => setSelectedTransaction(null)} /></aside>
+ return <aside className="wpay-desktop-overview-side">
+   <section className="wpay-desktop-card">
+     <div className="wpay-desktop-section-head">
+       <h2>Последние операции</h2>
+       <button type="button" onClick={onHistory}>Все <ArrowUpRight size={15}/></button>
+     </div>
+     {transactions.length > 0 ? (
+       <List dividers className="!mx-0 !mb-0 !mt-2 min-w-0">
+         {transactions.map(item => (
+           <TransactionListRow key={item.event_id} item={transactionFromApi(item)} compact onSelect={setSelectedTransaction} />
+         ))}
+       </List>
+     ) : (
+       <div className="wpay-desktop-empty">
+         <Clock3 size={30} strokeWidth={1.5}/>
+         <strong>Пока без операций</strong>
+         <p>Пополнения и платежи появятся здесь.</p>
+       </div>
+     )}
+   </section>
+   <section className="wpay-desktop-card"><div className="wpay-desktop-section-head"><h2>На рынке</h2><span>USD</span></div>{['BTC','ETH','SOL'].map(code=><div className="wpay-desktop-rate" key={code}><span>{code}</span><strong>{wallet.rate(code)!==null?usdPrice(wallet.rate(code)!):'—'}</strong></div>)}</section><CbrRate /><section className="wpay-desktop-quick"><span className="wpay-desktop-quick-icon"><ArrowLeftRight size={24}/></span><h2>Ваши активы.<br/>Ваши возможности.</h2><p>Пополняйте кошелёк и управляйте валютами в одном месте.</p><button type="button" onClick={onDeposit}>Пополнить кошелёк <ArrowUpRight size={17}/></button><button type="button" onClick={onExchange}>Перейти к обмену <ArrowUpRight size={17}/></button></section><TransactionDetails item={selectedTransaction} onClose={() => setSelectedTransaction(null)} /></aside>
 }
 
 

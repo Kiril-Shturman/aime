@@ -287,7 +287,7 @@
  .wpay-desktop-card-selection .wpay-card-peek-carousel:has(> :only-child) { overflow: visible; }
  .wpay-desktop-card-selection .wpay-aura-card-dots:has(> :only-child) { display: none; }
  .wpay-desktop-card-selection > .h-5 { display: none; }
- .wpay-desktop-overview-side{display:grid;gap:20px}
+ .wpay-desktop-overview-side{display:grid;grid-template-columns:minmax(0,1fr);min-width:0;gap:20px}
  .wpay-desktop-card{padding:24px;border-radius:28px;background:#fff;box-shadow:0 3px 16px #16223a03}
  .dark :is(.wpay-desktop-balance-card,.wpay-desktop-card){background:var(--color-ios-dark-surface-1);box-shadow:none}
  .wpay-desktop-section-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
