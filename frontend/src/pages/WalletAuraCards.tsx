@@ -1570,7 +1570,7 @@ export default function WalletAuraCards({
                     onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("wallet")} />
                   <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
-                  <img src={desktopWalletIcon} alt="" width={25} height={25} />
+                  <img src={desktopWalletIcon} alt="" width={34} height={34} />
                   <span>С кошелька</span>
                 </label>
                 <label>
@@ -1578,7 +1578,7 @@ export default function WalletAuraCards({
                     disabled={!onSbpTopUp} onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("sbp")} />
                   <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
-                  <img src="/brands/sbp-symbol.svg" alt="" width={18} height={18} />
+                  <img src="/brands/sbp-symbol.svg" alt="" width={28} height={28} />
                   <span>Через СБП{!onSbpTopUp && <small>Недоступно</small>}</span>
                 </label>
               </fieldset>

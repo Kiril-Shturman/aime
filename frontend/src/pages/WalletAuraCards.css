@@ -978,12 +978,12 @@
 }
 .wpay-goswap-payment {
   --wpay-payment-tile-bg: var(--color-ios-light-surface-1, #fff);
-  --wpay-payment-tile-selected-bg: #abcfff;
+  --wpay-payment-tile-selected-bg: #e9f2ff;
   --wpay-payment-tile-accent: var(--f7-theme-color, #007aff);
 }
 .dark .wpay-goswap-payment {
   --wpay-payment-tile-bg: var(--color-ios-dark-surface-1, #1c1c1e);
-  --wpay-payment-tile-selected-bg: #254b77;
+  --wpay-payment-tile-selected-bg: #25364c;
 }
 .wpay-goswap-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .wpay-goswap-payment legend { margin-bottom: 6px; font-size: 13px; opacity: .7; }
