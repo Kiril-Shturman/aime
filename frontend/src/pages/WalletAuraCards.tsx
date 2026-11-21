@@ -1,3 +1,4 @@
+import usaServices from "../assets/card-benefits/usa-services.png";
 import usaSceneFlag from "../assets/card-benefits/usa-scene-flag.png";
 import usaArtwork from "../assets/card-benefits/usa-composition.png";
 import travelArtwork from "../assets/card-benefits/travel-composition.png";
@@ -1091,6 +1092,7 @@ export default function WalletAuraCards({
                 <span className="wpay-subscription-stage wpay-card-catalog-subscription-art wpay-usa-stage">
                   <img className="wpay-usa-scene-flag" src={usaSceneFlag} alt="" />
                   <img className="subscription-composition" src={usaArtwork} alt="" />
+                  <img className="wpay-usa-scene-services" src={usaServices} alt="" />
                 </span>
               )}
               {appearance === "navy" && kind === "virtual" && (

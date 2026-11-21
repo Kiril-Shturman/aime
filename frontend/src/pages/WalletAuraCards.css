@@ -1341,14 +1341,32 @@
     #111c35 url("../assets/card-benefits/usa-catalog-background.jpg") center / cover no-repeat;
   border-color: #87b8ff70;
 }
+.wpay-card-catalog-art:has(.wpay-usa-stage) > .wpay-bank-card {
+  position: relative;
+  z-index: 2;
+}
+.wpay-card-catalog-art .wpay-usa-stage {
+  isolation: auto;
+  margin-top: -18%;
+  aspect-ratio: 1.93;
+}
 .wpay-usa-stage .wpay-usa-scene-flag {
   position: absolute;
-  inset: 0 1% auto auto;
-  width: 63%;
-  opacity: .78;
-  transform: translateY(10%);
-  pointer-events: none;
+  top: -39%;
+  left: 15%;
+  width: 68%;
+  z-index: 1;
 }
 .wpay-usa-stage .subscription-composition {
   position: relative;
+  z-index: 3;
+  object-position: 32% center;
+  transform: translate(-5%, -15%) scale(1.12);
+}
+.wpay-usa-stage .wpay-usa-scene-services {
+  position: absolute;
+  right: -1%;
+  bottom: -1%;
+  width: 73%;
+  z-index: 4;
 }
