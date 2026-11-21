@@ -1,3 +1,4 @@
+import WalletExchangeOrder from "./WalletExchangeOrder";
 import { assetNetworks } from "../wallet/catalog";
 import SupportChatPushView from "./WalletSupportChat";
 import WalletPromos from "./WalletPromos";
@@ -1426,7 +1427,7 @@ function CryptoFlowPushView({
   const [displayFlow, setDisplayFlow] = useState<CryptoFlow>({
     kind: "withdraw",
   });
-  const [exchangeRoute, setExchangeRoute] = useState<{ pair: string; method: string } | null>(null);
+  const [exchangeRoute, setExchangeRoute] = useState<{ pair: string; method: string; payout?: string } | null>(null);
   const [fromCode, setFromCode] = useState("USDT");
   const [toCode, setToCode] = useState("USDT");
   const [amount, setAmount] = useState("");
@@ -1510,11 +1511,10 @@ function CryptoFlowPushView({
     let controller: AbortController | undefined;
     const load = () => {
       controller?.abort();
-      setExchangeRoute(null);
       const request = new AbortController();
       controller = request;
-      void walletRequest<{ method: string }>(`exchange-route?${pair}`, undefined, request.signal)
-        .then(({ method }) => { if (!request.signal.aborted) setExchangeRoute({ pair, method }); })
+      void walletRequest<{ method: string; managed_order_enabled: boolean; payout_provider?: string }>(`exchange-route?${pair}`, undefined, request.signal)
+        .then(({ method, managed_order_enabled, payout_provider }) => { if (!request.signal.aborted) setExchangeRoute({ pair, method, payout: managed_order_enabled ? payout_provider : undefined }); })
         .catch(() => { if (!request.signal.aborted) setExchangeRoute({ pair, method: "unavailable" }); });
     };
     load();
@@ -1522,6 +1522,8 @@ function CryptoFlowPushView({
     return () => { controller?.abort(); window.removeEventListener("focus", load); };
   }, [flow?.kind, pair, sourceNetwork, destinationNetwork]);
   const exchangeMethod = exchangeRoute?.pair === pair ? exchangeRoute.method : "";
+  const managedPayout = exchangeRoute?.pair === pair ? exchangeRoute.payout : undefined;
+  const [, setExchangeOrderOpen] = useState(false);
 
   const [providerQuote, setProviderQuote] = useState<{ key: string; text: string } | null>(null);
   const quoteRequest = useRef<AbortController | null>(null);
@@ -1537,7 +1539,7 @@ function CryptoFlowPushView({
     try {
       const quote = await walletRequest<{ available: boolean; to_amount: string | null }>("exchange-quote", {
         from_network: sourceNetwork, to_network: destinationNetwork,
-        amount: amount.replace(",", "."), rate_type: "float",
+        amount: amount.replace(",", "."), rate_type: managedPayout ? "fixed" : "float",
       }, controller.signal);
       if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, text: quote.available && quote.to_amount
         ? `Оценка FixedFloat · ${quote.to_amount} USDT`
@@ -1778,13 +1780,19 @@ function CryptoFlowPushView({
           {canQuote && providerQuote?.key === quoteKey && (
             <p role="status" className="mt-3 text-center text-sm">{providerQuote.text}</p>
           )}
+          {managedPayout && sourceNetwork && destinationNetwork && canQuote && (
+            <WalletExchangeOrder key={pair} active={flow?.kind === "exchange"} enabled
+              managedPayout={managedPayout} from={sourceNetwork} to={destinationNetwork}
+              value={amount.replace(",", ".")} mode="fixed" quoteValid={parsedAmount > 0}
+              onIntentChange={setExchangeOrderOpen} />
+          )}
           {exchangeMethod === "internal" ? (
             <Button data-wpay-primary="" rounded large className="!w-full"
               disabled={internalBusy || parsedAmount <= 0 || parsedAmount > (networkBalance("from") ?? 0)}
               onClick={() => void submitInternalExchange()}>
               {internalBusy ? "Перемещаем…" : "Переместить USDT 1:1"}
             </Button>
-          ) : <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">Исполнение обмена пока недоступно</p>}
+          ) : !managedPayout && <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">Исполнение обмена пока недоступно</p>}
           <p className="mt-3 text-center text-[12px] text-black/35 dark:text-white/35">
             Расчёт справочный. Обмен пока недоступен.
           </p>

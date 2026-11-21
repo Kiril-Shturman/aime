@@ -1058,6 +1058,24 @@ def install_wallet(app, root, owner_check):
             },
         }
 
+    def validate_managed_exchange(source, destination, expected_provider=None):
+        if not exchange_orders.enabled or source not in WALLET_ASSET_NETWORKS['USDT'] or destination not in WALLET_ASSET_NETWORKS['USDT']:
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Заявки для этого маршрута недоступны', 409)
+        pair = {'from_asset': 'USDT', 'to_asset': 'USDT', 'from_network': source, 'to_network': destination}
+        selected = deposit_provider('USDT', destination)
+        envs = {deposit_provider('USDT', source), selected}
+        if resolve_exchange_route(ledger, pair, asset_enabled, deposit_provider)['method'] != 'fixedfloat':
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Маршрут FixedFloat отключён', 409)
+        if selected not in {'goswap', 'aura'} or (selected == 'goswap' and (not token or destination == 'TRON')):
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Адрес зачисления недоступен', 409)
+        if 'aura' in envs and (not aura_enabled or not aura_client.configured or aura_environment != 'live'):
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Для обмена через Aura нужна основная сеть TRON', 409)
+        if expected_provider is not None and selected != expected_provider:
+            raise ApiError('EXCHANGE_UNAVAILABLE', 'Провайдер зачисления изменился. Создайте новую заявку', 409)
+        return selected
+
+    exchange_orders.validate_managed_route = validate_managed_exchange
+
     async def aura_withdrawal_response(request, uid, actor=None):
         require_asset_enabled('USDT', 'TRON')
         if deposit_provider('USDT', 'TRON') != 'aura' or not aura_enabled or not aura_client.configured:
@@ -1810,10 +1828,43 @@ def install_wallet(app, root, owner_check):
                     asset_enabled, deposit_provider, ApiError,
                 ), headers={'Cache-Control': 'no-store'})
             if action == 'exchange-route' and request.method == 'GET':
-                return web.json_response(
-                    resolve_exchange_route(ledger, request.query, asset_enabled, deposit_provider),
-                    headers={'Cache-Control': 'no-store'},
+                route = resolve_exchange_route(ledger, request.query, asset_enabled, deposit_provider)
+                route['managed_order_enabled'] = False
+                if route['method'] == 'fixedfloat' and request.query.get('from_asset') == request.query.get('to_asset') == 'USDT':
+                    try:
+                        route['payout_provider'] = validate_managed_exchange(
+                            request.query.get('from_network'), request.query.get('to_network'),
+                        )
+                        route['managed_order_enabled'] = True
+                    except ApiError:
+                        pass
+                return web.json_response(route, headers={'Cache-Control': 'no-store'})
+            if action == 'exchange-managed-prepare' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'from_network', 'to_network', 'amount', 'rate_type'} or any(not isinstance(value, str) for value in body.values()):
+                    raise ValueError('Укажите сети и сумму обмена')
+                if body['rate_type'] != 'fixed':
+                    raise ValueError('Для зачисления на баланс используйте фиксированный курс')
+                source, destination = body['from_network'], body['to_network']
+                selected = validate_managed_exchange(source, destination)
+                exchange.throttle(uid)
+                if selected == 'goswap':
+                    address = await provider.call('getClientAddress', {'client_ref': client_ref, 'network': destination}, post=True)
+                    if address.get('network') != destination or address.get('client_ref') != client_ref:
+                        raise ApiError('EXCHANGE_UNAVAILABLE', 'GoSwap не подтвердил реквизиты пользователя', 502)
+                    save_address(ledger, uid, address, 'USDT')
+                else:
+                    if not await aura_client.product_enabled('crypto_processing'):
+                        raise ApiError('EXCHANGE_UNAVAILABLE', 'Зачисления Aura отключены', 409)
+                    address = await aura_service.get_or_create_deposit_address(uid, client_ref)
+                    if address.get('chain') != 'mainnet':
+                        raise ApiError('EXCHANGE_UNAVAILABLE', 'Aura не вернула адрес основной сети', 502)
+                validate_managed_exchange(source, destination, selected)
+                result = await exchange_orders.prepare(
+                    uid, {**body, 'to_address': address['address']}, managed_provider=selected,
+                    min_deposit=address.get('min_deposit'),
                 )
+                return web.json_response(result, headers={'Cache-Control': 'no-store'})
             if action == 'aura-user-withdrawal' and request.method in {'GET', 'POST'}:
                 return await aura_withdrawal_response(request, uid)
             if action == 'addresses' and request.method == 'GET':

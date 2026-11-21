@@ -57,6 +57,7 @@ export default function WalletExchangeOrder({
   quoteValid,
   enabled,
   onIntentChange,
+  managedPayout,
 }: {
   active: boolean;
   from: string;
@@ -66,6 +67,7 @@ export default function WalletExchangeOrder({
   quoteValid: boolean;
   enabled: boolean;
   onIntentChange: (open: boolean) => void;
+  managedPayout?: string;
 }) {
   const [destination, setDestination] = useState("");
   const [memo, setMemo] = useState("");
@@ -189,14 +191,16 @@ export default function WalletExchangeOrder({
     const current = scope.current;
     const signal = life.current?.signal;
     const result = await walletRequest<ExchangeIntent>(
-      "exchange-prepare",
+      managedPayout ? "exchange-managed-prepare" : "exchange-prepare",
       {
         from_network: from,
         to_network: to,
         amount: value,
         rate_type: mode,
-        to_address: destination.trim(),
-        ...(memo.trim() ? { to_tag: memo.trim() } : {}),
+        ...(managedPayout ? {} : {
+          to_address: destination.trim(),
+          ...(memo.trim() ? { to_tag: memo.trim() } : {}),
+        }),
       },
       signal,
     );
@@ -261,7 +265,9 @@ export default function WalletExchangeOrder({
     >
       {!intent && (
         <>
-          <Card className="!m-0 !rounded-[28px]" contentWrapPadding="p-5">
+          {managedPayout ? (
+            <p className="px-2 text-sm">Выплата на ваш адрес пополнения в {managedPayout === "aura" ? "Aura" : "GoSwap"}.</p>
+          ) : <Card className="!m-0 !rounded-[28px]" contentWrapPadding="p-5">
             <label className="block text-sm text-black/45 dark:text-white/45">
               Адрес получения · {networkNames[to] ?? to}
               <input
@@ -319,7 +325,7 @@ export default function WalletExchangeOrder({
                 баланс приложения и вывод с него ещё не подключены.
               </p>
             )}
-          </Card>
+          </Card>}
           <p className="px-2 text-sm leading-5 text-black/50 dark:text-white/50">
             Обмен оплачивается переводом USDT на адрес заявки. С баланса
             приложения ничего не списывается.
@@ -328,7 +334,7 @@ export default function WalletExchangeOrder({
             large
             rounded
             data-wpay-primary=""
-            disabled={!quoteValid || !destination.trim() || Boolean(busy)}
+            disabled={!quoteValid || (!managedPayout && !destination.trim()) || Boolean(busy)}
             onClick={() => void action("prepare", prepare)}
           >
             {busy === "prepare" ? (

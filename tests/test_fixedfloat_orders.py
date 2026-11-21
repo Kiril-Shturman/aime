@@ -79,6 +79,20 @@ class OrderTests(unittest.IsolatedAsyncioTestCase):
         done=await self.due(prepared['intent_id']);self.assertEqual(done['order']['status'],'DONE')
         self.assertEqual(done['order']['payout_tx_hash'],'payout-hash')
 
+    async def test_managed_payout_checks_minimum_and_revalidates_route_before_create(self):
+        with self.assertRaises(ApiError):
+            await self.orders.prepare("tg:1", self.body(), managed_provider="goswap", min_deposit="1000")
+        prepared = await self.orders.prepare("tg:1", self.body(), managed_provider="goswap", min_deposit="1")
+        with self.assertRaises(ApiError):
+            await self.orders.create("tg:1", prepared["intent_id"])
+        self.assertFalse(any(method == "create" for method, _ in self.calls))
+        checks = []
+        self.orders.validate_managed_route = lambda *pair: checks.append(pair)
+        ready = await self.orders.create("tg:1", prepared["intent_id"])
+        self.assertEqual(ready["state"], "ready")
+        self.assertEqual(checks, [("TRON", "BSC", "goswap")])
+        self.assertEqual(ready["to_address"], self.addresses["BSC"])
+
     async def test_parallel_prepare_reuses_owned_intent(self):
         one,two=await asyncio.gather(self.prepared(),self.prepared());self.assertEqual(one['intent_id'],two['intent_id'])
 
