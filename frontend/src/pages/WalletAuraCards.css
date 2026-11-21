@@ -1361,12 +1361,20 @@
   position: relative;
   z-index: 3;
   object-position: 32% center;
-  transform: translate(-5%, -15%) scale(1.26);
+  transform: translate(5%, -15%) scale(1.26);
 }
 .wpay-usa-stage .wpay-usa-scene-services {
   position: absolute;
   right: -1%;
-  bottom: -1%;
+  bottom: -10%;
   width: 84%;
   z-index: 4;
+}
+
+.wpay-card-catalog-services > .wpay-card-catalog-usa-badge {
+  white-space: nowrap;
+}
+.wpay-card-catalog-services > .wpay-card-catalog-usa-badge svg {
+  border-radius: 50%;
+  flex: none;
 }

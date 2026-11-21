@@ -1079,6 +1079,17 @@ export default function WalletAuraCards({
                   </svg>
                 </span>
               )}
+              {plan?.plan_id === "goswap_card_us" && (
+                <span className="wpay-card-catalog-usa-badge">
+                  <svg viewBox="0 0 26 26" aria-hidden="true">
+                    <path fill="#fff" d="M0 0h26v26H0z" />
+                    <path stroke="#bf2944" strokeWidth="2" d="M0 1h26M0 5h26M0 9h26M0 13h26M0 17h26M0 21h26M0 25h26" />
+                    <path fill="#23457d" d="M0 0h13v14H0z" />
+                    <path stroke="#fff" strokeWidth="1.4" strokeLinecap="round" d="M3 3h.1m4 0h.1m4 0h.1M5 7h.1m4 0h.1M3 11h.1m4 0h.1m4 0h.1" />
+                  </svg>
+                  США
+                </span>
+              )}
             </span>
             <span className="wpay-card-catalog-item-heading">
               <span>
@@ -1113,17 +1124,6 @@ export default function WalletAuraCards({
                 : appearance === "ice" ? "Физическая карта с бесплатной доставкой"
                 : "Физическая карта с доставкой"}
             </span>
-            {plan?.plan_id === "goswap_card_us" && (
-              <span className="wpay-card-catalog-region">
-                <svg viewBox="0 0 26 26" aria-hidden="true">
-                  <path fill="#fff" d="M0 0h26v26H0z" />
-                  <path stroke="#bf2944" strokeWidth="2" d="M0 1h26M0 5h26M0 9h26M0 13h26M0 17h26M0 21h26M0 25h26" />
-                  <path fill="#23457d" d="M0 0h13v14H0z" />
-                  <path stroke="#fff" strokeWidth="1.4" strokeLinecap="round" d="M3 3h.1m4 0h.1m4 0h.1M5 7h.1m4 0h.1M3 11h.1m4 0h.1m4 0h.1" />
-                </svg>
-                США
-              </span>
-            )}
             {appearance !== "navy" && plan?.region === "Сингапур" && (
               <span className="wpay-card-catalog-region">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
