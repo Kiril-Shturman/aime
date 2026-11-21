@@ -1195,9 +1195,20 @@ export default function WalletAuraCards({
                 issue: storefrontPlan.provider_issue_fee,
                 topup: storefrontPlan.provider_recharge_fee,
                 conditions: storefrontPlan.conditions,
+                firstTopup: "$10",
+                issuerDetails: storefrontPlan.region === "Сингапур",
               }}
             />
-            <Button rounded large disabled className="wpay-aura-primary !mt-4 !w-full">Выпуск пока недоступен</Button>
+            <h3 className="mt-5 text-base font-semibold">Условия карты</h3>
+            <div className="wpay-aura-info mt-2">
+              {infoRow("Валюта карты", "USD")}
+              {storefrontPlan.provider_issue_fee && infoRow("Выпуск · комиссия GoSwap", `${storefrontPlan.provider_issue_fee} USDT`)}
+              {storefrontPlan.provider_recharge_fee && infoRow("Пополнение · комиссия GoSwap", `${storefrontPlan.provider_recharge_fee}% сверху`)}
+              {infoRow("Первое пополнение", "От $10 · активирует карту")}
+              {storefrontPlan.conditions?.length ? infoRow("Оплата телефоном", storefrontPlan.conditions.join(" · ")) : null}
+            </div>
+            <Button rounded large disabled className="wpay-aura-primary !mt-4 !w-full">Оформить карту</Button>
+            <p className="mt-2 text-center text-sm opacity-60">Выпуск и оплата GoSwap в мини-аппе пока не подключены.</p>
           </section>
         ) : showOffer ? (
           <section className="px-4 pt-2">

@@ -16,7 +16,7 @@ export default function WalletSubscriptionFeatures({
 }: {
   variant?: "subscriptions" | "travel" | "premium";
   skin?: CardSkin;
-  goswap?: { issue?: string | null; topup?: string; conditions?: string[] };
+  goswap?: { issue?: string | null; topup?: string; conditions?: string[]; firstTopup?: string; issuerDetails?: boolean };
 }) {
   const tiles = [
     {
@@ -108,6 +108,8 @@ export default function WalletSubscriptionFeatures({
     ...(goswap.issue ? [{ ...tiles[2], title: "Выпуск карты", description: `${goswap.issue} USDT по тарифу GoSwap.` }] : []),
     ...(goswap.topup ? [{ ...tiles[0], title: "Пополнение карты", description: `Комиссия GoSwap — ${goswap.topup}% сверху.` }] : []),
     ...(goswap.conditions?.length ? [{ ...tiles[5], title: goswap.conditions.join(" и "), description: "Поддержка оплаты телефоном." }] : []),
+    ...(goswap.firstTopup ? [{ ...tiles[1], title: "Активация карты", description: `Первое пополнение от ${goswap.firstTopup}.` }] : []),
+    ...(goswap.issuerDetails ? [{ key: "travel", title: "Реквизиты карты", description: "Открываются на защищённой странице эмитента.", image: travelArtwork }] : []),
   ] : variant === "premium" ? premiumTiles : variant === "travel" ? travelTiles : tiles;
   return (
     <section
