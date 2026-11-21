@@ -1042,6 +1042,12 @@ export default function WalletAuraCards({
         {offers.map(({ kind, skin: appearance, plan }, index) => (
           <button key={plan?.plan_id ?? appearance} type="button" className="wpay-card-catalog-item"
             data-skin={appearance} onClick={() => { haptic("light"); onCatalogOffer(index); }}>
+            <span className="wpay-card-catalog-services">
+              {plan?.conditions?.includes("Apple Pay") && <img src="/brands/apple-pay.svg" alt="Apple Pay" />}
+              {plan?.conditions?.includes("Google Pay") && <img src="/brands/google-pay.svg" alt="Google Pay" />}
+              {appearance === "silver" && <span><Store size={13} aria-hidden="true" />App Store</span>}
+              {plan?.region === "Сингапур" && <span><span aria-hidden="true">🇸🇬</span>Сингапур</span>}
+            </span>
             <span className="wpay-card-catalog-item-heading">
               <span>
                 <small>{kind === "physical" ? "Физическая карта" : "Виртуальная карта"}{plan?.region ? ` · ${plan.region}` : ""}</small>
@@ -1062,12 +1068,6 @@ export default function WalletAuraCards({
               {plan?.total_recharge_pct != null && (
                 <span><b>{offerNumber.format(Number(plan.total_recharge_pct))}%</b><small>Пополнение</small></span>
               )}
-            </span>
-            <span className="wpay-card-catalog-services">
-              {plan?.conditions?.includes("Apple Pay") && <img src="/brands/apple-pay.svg" alt="Apple Pay" />}
-              {plan?.conditions?.includes("Google Pay") && <img src="/brands/google-pay.svg" alt="Google Pay" />}
-              {appearance === "silver" && <span><Store size={13} aria-hidden="true" />App Store</span>}
-              {plan?.region === "Сингапур" && <span><span aria-hidden="true">🇸🇬</span>Сингапур</span>}
             </span>
           </button>
         ))}
