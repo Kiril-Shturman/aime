@@ -1353,7 +1353,7 @@
 .wpay-usa-stage .wpay-usa-scene-flag {
   position: absolute;
   top: calc(-39% - 30px);
-  left: 15%;
+  left: calc(15% + 10px);
   width: 79%;
   z-index: 1;
 }
