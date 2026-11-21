@@ -384,7 +384,13 @@ export function LiveHistory() {
                 {transactions.map((item) => {
                   const income = Number(item.amount) > 0;
                   const failed = ["qr_failed", "withdrawal_failed"].includes(item.type);
-                  const cardIssue = ["card_issue", "card_topup", "card_issue_refund"].includes(item.type);
+                  const displayAmount = item.type === "exchange_internal"
+                    ? String(item.detail.amount ?? "0") : item.amount;
+                  const formattedAmount = item.asset === "USD"
+                    ? usd(Number(displayAmount))
+                    : item.asset === "RUB"
+                      ? Number(displayAmount).toLocaleString("ru-RU", { maximumFractionDigits: 2 }) + " ₽"
+                      : `${cryptoAmount(displayAmount)} ${item.asset}`;
                   const { title, icon: Icon, network, currency } = transactionListPresentation(item);
                   return (
                     <ListItem
@@ -409,7 +415,7 @@ export function LiveHistory() {
                             <span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">
                               {title}
                             </span>
-                            <span className="mt-0.5 block text-[14px] leading-5 text-black/45 dark:text-white/45">
+                            <span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">
                               {new Date(item.created_at).toLocaleTimeString(
                                 "ru-RU",
                                 { hour: "2-digit", minute: "2-digit" },
@@ -417,19 +423,8 @@ export function LiveHistory() {
                               · {currency}{network && ` · ${network}`}
                             </span>
                           </span>
-                          <span className="shrink-0 text-right">
-                            <span
-                              className={`block text-[16px] font-medium leading-6 tabular-nums ${income ? "text-green-600 dark:text-green-400" : "text-black dark:text-white"}`}
-                            >
-                              {item.type === "exchange_internal"
-                                ? cryptoAmount(String(item.detail.amount ?? "0"))
-                                : cardIssue
-                                ? `${income ? "+" : ""}${usd(Number(item.amount))}`
-                                : `${income ? "+" : ""}${cryptoAmount(item.amount)}`}
-                            </span>
-                            <span className="block text-[12px] leading-5 text-black/40 dark:text-white/40">
-                              {item.asset}
-                            </span>
+                          <span className={`shrink-0 whitespace-nowrap text-right text-[16px] font-medium leading-6 tabular-nums ${income ? "text-green-600 dark:text-green-400" : "text-black dark:text-white"}`}>
+                            {income ? "+" : ""}{formattedAmount}
                           </span>
                         </span>
                       }
