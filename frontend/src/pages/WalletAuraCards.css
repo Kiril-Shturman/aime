@@ -1268,8 +1268,8 @@
   background: radial-gradient(ellipse at 92% 8%, var(--catalog-glow, #64799b99), transparent 72%), #18253c;
 }
 .wpay-card-catalog-item[data-skin="navy"]::before {
-  background: linear-gradient(90deg, #061737a8, transparent 80%),
-    #075b9e url("../assets/card-benefits/travel-background.png") center / 104% 116% no-repeat;
+  background: linear-gradient(90deg, #00396f70, #00caff33 72%, transparent),
+    #078ed0 url("../assets/card-benefits/travel-background.png") center / 104% 116% no-repeat;
 }
 .wpay-card-catalog-item[data-skin="silver"]:has(.wpay-card-catalog-subscription-art)::before {
   background: linear-gradient(90deg, #12101de8, #12101d18 76%),
