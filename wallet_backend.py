@@ -1828,6 +1828,30 @@ def install_wallet(app, root, owner_check):
                     ledger, uid, await request.json(), request.headers.get('Idempotency-Key', ''),
                     asset_enabled, deposit_provider, ApiError,
                 ), headers={'Cache-Control': 'no-store'})
+            if action == 'exchange-destinations' and request.method == 'GET':
+                source = request.query.get('from_asset')
+                source_network = request.query.get('from_network')
+                if not source or not source_network or not asset_enabled(source, source_network):
+                    raise ValueError('Выберите доступную исходную валюту')
+                exchange.throttle(uid)
+                nets = {}
+                if exchange.configured and source in {'BTC', 'USDT'}:
+                    try:
+                        nets = {item['network']: item for item in await exchange.networks()}
+                    except (ApiError, ValueError):
+                        pass
+                available = []
+                for target, networks in enabled_asset_routes().items():
+                    for network in networks:
+                        pair = {'from_asset': source, 'from_network': source_network,
+                                'to_asset': target, 'to_network': network}
+                        method = resolve_exchange_route(ledger, pair, asset_enabled, deposit_provider)['method']
+                        can_send = bool(nets) and exchange.btc_can_send if source == 'BTC' else nets.get(source_network, {}).get('can_send')
+                        if (method == 'internal' or
+                            (method == 'dex' and pair == DEX_PAIR) or
+                            (method == 'fixedfloat' and target == 'USDT' and can_send and nets.get(network, {}).get('can_receive'))):
+                            available.append(f'{target}:{network}')
+                return web.json_response({'available': available}, headers={'Cache-Control': 'no-store'})
             if action == 'exchange-btc-quote' and request.method == 'POST':
                 body = await request.json()
                 if not isinstance(body, dict) or set(body) != {'from_network', 'to_network', 'amount', 'rate_type'}:

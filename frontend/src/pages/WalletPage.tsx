@@ -1501,6 +1501,20 @@ function CryptoFlowPushView({
     return network ? usdtNetworkBalances[network] : undefined;
   };
   const sourceNetwork = fromAsset.code === "USDT" ? networkFor("from") : assetNetworks[fromAsset.code]?.[0];
+  const [destinationAvailability, setDestinationAvailability] = useState<{ key: string; available: string[] } | null>(null);
+  const destinationKey = new URLSearchParams({ from_asset: fromAsset.code, from_network: sourceNetwork ?? "" }).toString();
+  useEffect(() => {
+    if (assetPicker !== "to" || flow?.kind !== "exchange" || !sourceNetwork) return;
+    const controller = new AbortController();
+    setDestinationAvailability(null);
+    void walletRequest<{ available: string[] }>(`exchange-destinations?${destinationKey}`, undefined, controller.signal)
+      .then(({ available }) => { if (!controller.signal.aborted) setDestinationAvailability({ key: destinationKey, available }); })
+      .catch(() => { if (!controller.signal.aborted) setDestinationAvailability({ key: destinationKey, available: [] }); });
+    return () => controller.abort();
+  }, [assetPicker, destinationKey, flow?.kind, sourceNetwork]);
+  const canSelectDestination = (asset: string, network: string) =>
+    assetPicker !== "to" || (destinationAvailability?.key === destinationKey &&
+      destinationAvailability.available.includes(`${asset}:${network}`));
   const destinationNetwork = toAsset.code === "USDT" ? networkFor("to") : assetNetworks[toAsset.code]?.[0];
   const pair = new URLSearchParams({
     from_asset: fromAsset.code, from_network: sourceNetwork ?? "",
@@ -1915,12 +1929,14 @@ function CryptoFlowPushView({
                   {label === "USDT" && tether && networks.map((network) => (
                     <ListItem
                       key={network}
-                      link
+                      link={canSelectDestination("USDT", network)}
+                      aria-disabled={!canSelectDestination("USDT", network)}
+                      className={canSelectDestination("USDT", network) ? undefined : "opacity-40"}
                       chevron={false}
                       contentClassName="!h-16"
                       innerClassName="!h-16 !min-w-0 !py-2 after:!opacity-30"
                       onClick={() => {
-                        if (!assetPicker) return;
+                        if (!assetPicker || !canSelectDestination("USDT", network)) return;
                         const oppositeSide = assetPicker === "from" ? "to" : "from";
                         const opposite = oppositeSide === "from" ? fromAsset : toAsset;
                         if (opposite.code === "USDT" && networkFor(oppositeSide) === network) {
@@ -1963,14 +1979,17 @@ function CryptoFlowPushView({
                     />
                   ))}
                   {items.map((item) => {
+                    const selectable = canSelectDestination(item.code, assetNetworks[item.code]?.[0] ?? "");
                     const selected =
                       item.code === (assetPicker === "from" ? fromCode : toCode);
                     return (
                       <ListItem
                         key={item.code}
-                        link
+                        link={selectable}
+                        aria-disabled={!selectable}
+                        className={selectable ? undefined : "opacity-40"}
                         chevron={false}
-                        onClick={() => selectExchangeAsset(item.code)}
+                        onClick={() => { if (selectable) selectExchangeAsset(item.code); }}
                         contentClassName="!h-16"
                         innerClassName="!h-16 !min-w-0 !py-2 after:!opacity-30"
                         media={
