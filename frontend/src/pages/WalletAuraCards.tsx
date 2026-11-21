@@ -23,6 +23,7 @@ import "framework7/components/dialog/css";
 import {
   Check,
   CreditCard,
+  ShoppingBasket,
   Copy,
   Truck,
   KeyRound,
@@ -1545,7 +1546,7 @@ export default function WalletAuraCards({
             else order(currentKind, activeOffer?.skin);
           }}>
           <span className="wpay-card-action-label">
-            <CreditCard size={20} aria-hidden="true" />
+            <ShoppingBasket size={20} aria-hidden="true" />
             {busy === "goswap-quote" ? "Загрузка…" : "Оформить карту"}
           </span>
         </Button>,
