@@ -1352,7 +1352,7 @@
 }
 .wpay-usa-stage .wpay-usa-scene-flag {
   position: absolute;
-  top: -39%;
+  top: calc(-39% - 20px);
   left: 15%;
   width: 79%;
   z-index: 1;
@@ -1361,7 +1361,7 @@
   position: relative;
   z-index: 3;
   object-position: 32% center;
-  transform: translate(5%, -15%) scale(1.26);
+  transform: translate(calc(5% + 15px), calc(-15% - 20px)) scale(1.26);
 }
 .wpay-usa-stage .wpay-usa-scene-services {
   position: absolute;
