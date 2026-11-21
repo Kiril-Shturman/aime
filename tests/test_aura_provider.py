@@ -124,6 +124,16 @@ class AuraUnitTests(unittest.TestCase):
         self.assertEqual(row["provider"], "aura")
         self.assertEqual(process_inbox(self.ledger, "test"), 1)
         self.assertEqual(process_inbox(self.ledger, "test"), 0)
+        raw, signature = signed(self.event("evt_redelivered"))
+        store_webhook(self.ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+        self.assertEqual(process_inbox(self.ledger, "test"), 1)
+        notifications = self.ledger.db.execute(
+            "SELECT user_id,event_type,title,message FROM notification_outbox"
+        ).fetchall()
+        self.assertEqual([tuple(row) for row in notifications], [
+            (self.uid, "deposit", "Пополнение зачислено",
+             "На баланс USDT TRC‑20 зачислено 9 USDT."),
+        ])
         self.assertEqual(str(self.ledger.balance(self.uid, "USDT")[0]), "9")
         position = self.ledger.db.execute(
             "SELECT available FROM wallet_provider_positions WHERE provider='aura'"
