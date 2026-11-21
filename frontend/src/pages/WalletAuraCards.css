@@ -1285,7 +1285,7 @@
   transform: rotate(-22deg);
   pointer-events: none;
 }
-.wpay-card-catalog-item[data-skin="silver"]:has(.wpay-card-catalog-subscription-art)::before {
+.wpay-card-catalog-item[data-skin="silver"]:not([data-region="США"]):has(.wpay-card-catalog-subscription-art)::before {
   background: linear-gradient(90deg, #12101de8, #12101d18 76%),
     #16121a url("../assets/card-benefits/subscription-background.jpg") center / cover no-repeat;
 }
@@ -1310,7 +1310,7 @@
   margin: -20% auto -5%;
   filter: drop-shadow(0 7px 13px #ff711a8c);
 }
-.wpay-card-catalog-item[data-skin="silver"]:has(.wpay-card-catalog-subscription-art) .wpay-card-catalog-price {
+.wpay-card-catalog-item[data-skin="silver"]:not([data-region="США"]):has(.wpay-card-catalog-subscription-art) .wpay-card-catalog-price {
   border-color: #ffc39955;
   background: linear-gradient(120deg, #291c2aab, #9b3b1b91);
 }
