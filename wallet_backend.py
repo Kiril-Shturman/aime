@@ -1015,7 +1015,11 @@ def install_wallet(app, root, owner_check):
                 ),
             },
             'credit_assets': enabled_asset_routes(),
-            'wallets': await user_wallet_inventory(ledger, app['wpay_chain'], user_id),
+            'wallets': await user_wallet_inventory(
+                ledger, app['wpay_chain'], user_id,
+                {network: deposit_provider('USDT', network) for network in enabled_asset_routes().get('USDT', [])},
+                aura_environment,
+            ),
             'balances': decoded_rows(
                 'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=? ORDER BY asset',
                 (user_id,),

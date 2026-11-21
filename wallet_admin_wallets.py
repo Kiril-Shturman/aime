@@ -9,7 +9,7 @@ from wallet_chain import ASSET_NETWORKS
 from wallet_operations import goswap_network_balances
 
 
-async def user_wallet_inventory(ledger, chain, user_id):
+async def user_wallet_inventory(ledger, chain, user_id, usdt_routes, aura_environment):
     rows = []
     goswap = list(ledger.db.execute(
         "SELECT body FROM wallet_addresses WHERE user_id=? ORDER BY network", (user_id,),
@@ -40,7 +40,7 @@ async def user_wallet_inventory(ledger, chain, user_id):
         shown_aura.add(address["environment"])
         rows.append({
             "provider": "aura", "environment": address["environment"], "asset": "USDT",
-            "network": address["network"], "address": address["address"],
+            "network": "TRON", "chain": address["network"], "address": address["address"],
             "available": (address["available"] or "0") if first else None,
             "reserved": (address["reserved"] or "0") if first else None,
             "balance_scope": "provider",
@@ -65,12 +65,32 @@ async def user_wallet_inventory(ledger, chain, user_id):
             "available": result.get("amount"), "reserved": None, "balance_scope": "onchain",
         }
 
-    rows.extend(await asyncio.gather(*(
+    observations = await asyncio.gather(*(
         observe(dict(wallet), asset) for wallet in own
         for asset, networks in ASSET_NETWORKS.items()
         if wallet["network"] in networks and asset != "TON"
         and (wallet["chain_env"] == "mainnet" or asset not in {"USDT", "XAUT"})
-    )))
+    ))
+    for row in observations:
+        alternate_usdt = row["asset"] == "USDT" and usdt_routes.get(row["network"]) != "wpay"
+        if alternate_usdt:
+            if row["available"] is None or Decimal(row["available"]) == 0:
+                continue
+            row["balance_scope"] = "secondary_onchain"
+        rows.append(row)
+
+    present = {(row["provider"], row["network"]) for row in rows
+               if row["asset"] == "USDT" and
+               (row["provider"] != "aura" or row["environment"] == aura_environment)}
+    for network, provider in usdt_routes.items():
+        if (provider, network) in present:
+            continue
+        rows.append({
+            "provider": provider, "network": network, "asset": "USDT", "address": None,
+            "environment": aura_environment if provider == "aura" else None,
+            "available": None, "reserved": None,
+            "balance_scope": "onchain" if provider == "wpay" else "provider" if provider == "aura" else "network",
+        })
     return rows
 
 def control_wallet(ledger, uid, wallet_id, operation, actor, record, error):

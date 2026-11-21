@@ -85,10 +85,11 @@ type AdminWallet = {
   environment: string | null;
   network: string;
   asset: string;
-  address: string;
+  address: string | null;
+  chain?: string;
   available: string | null;
   reserved: string | null;
-  balance_scope: "onchain" | "provider" | "network";
+  balance_scope: "onchain" | "provider" | "network" | "secondary_onchain";
   hidden?: boolean;
   wallet_id?: string;
   state?: "frozen" | "archived" | null;
@@ -96,6 +97,7 @@ type AdminWallet = {
 const walletProviderNames = { wpay: "wPay", aura: "Aura", goswap: "GoSwap" };
 const walletBalanceLabels = {
   onchain: "Баланс сети",
+  secondary_onchain: "Баланс на собственном адресе wPay",
   provider: "Общий остаток Aura",
   network: "Остаток по учёту wPay",
 };
@@ -2380,23 +2382,25 @@ function AdminUserDrawer({
                       {detail.wallets.map((wallet) => (
                         <div key={[wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address].join(":")}
                           className="rounded-xl border border-[var(--admin-border)] p-3">
-                          <Row title={`${wallet.asset} · ${wallet.network} · ${walletProviderNames[wallet.provider]}`}
+                          <Row title={`${wallet.asset} · ${wallet.network === "TRON" && wallet.asset === "USDT" ? "TRC‑20" : wallet.network} · ${walletProviderNames[wallet.provider]}`}
                             subtitle={[
-                              wallet.environment,
-                              wallet.provider === "aura" && wallet.available === null
+                              wallet.chain === "nile" ? "TRON Nile · тестовая сеть" : wallet.environment,
+                              wallet.provider === "aura" && wallet.address && wallet.available === null
                                 ? "Дополнительный адрес Aura"
                                 : walletBalanceLabels[wallet.balance_scope],
                               wallet.hidden ? "Скрыт пользователем" : null,
                             ].filter(Boolean).join(" · ")}
                             right={wallet.available === null
-                              ? (wallet.provider === "aura" ? "Общий остаток выше" : "Нет данных")
+                              ? (wallet.address && wallet.provider === "aura" ? "Общий остаток выше" : "Нет данных")
                               : `${wallet.available} ${wallet.asset}`}
                           />
                           {wallet.reserved && Number(wallet.reserved) > 0 && (
                             <p className="mt-1 text-xs opacity-60">Резерв {wallet.reserved} {wallet.asset}</p>
                           )}
-                          <button type="button" title="Скопировать адрес" onClick={() => copy(wallet.address)}
-                            className="mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
+                          {wallet.address ? (
+                            <button type="button" title="Скопировать адрес" onClick={() => copy(wallet.address)}
+                              className="mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
+                          ) : <p className="mt-2 text-xs opacity-60">Адрес ещё не выдан</p>}
                           {wallet.wallet_id && (
                             <div className="mt-3 flex flex-wrap items-center gap-2">
                               {wallet.state && <span className="rounded-lg bg-amber-500/15 px-2 py-1 text-xs">
@@ -2421,7 +2425,7 @@ function AdminUserDrawer({
                               )}
                             </div>
                           )}
-                          {wallet.wallet_id && !wallet.state && walletAction?.walletId === wallet.wallet_id && walletAction.asset === wallet.asset && (
+                          {wallet.address && wallet.wallet_id && !wallet.state && walletAction?.walletId === wallet.wallet_id && walletAction.asset === wallet.asset && (
                             <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-2" key={walletAction.action}>
                               <button type="button" onClick={() => setWalletAction(null)}
                                 className="ml-auto block rounded-lg px-3 py-2 text-sm">Закрыть действие</button>

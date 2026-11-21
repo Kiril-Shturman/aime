@@ -467,11 +467,14 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.client.get(url, headers=user)).status, 403)
         detail = await self.client.get(url, headers=OWNER)
         self.assertEqual(detail.status, 200, await detail.text())
-        self.assertEqual((await detail.json())['wallets'], [{
+        wallets = (await detail.json())['wallets']
+        self.assertEqual([wallet for wallet in wallets if wallet['address']], [{
             'provider': 'goswap', 'environment': None, 'network': 'BSC',
             'asset': 'USDT', 'address': 'test-address', 'available': '0',
             'reserved': None, 'balance_scope': 'network',
         }])
+        expected_tron = next(wallet for wallet in wallets if wallet['network'] == 'TRON')
+        self.assertEqual((expected_tron['provider'], expected_tron['address']), ('aura', None))
         foreign = await (await self.client.get('/api/wallet/addresses', headers={'X-Telegram-Init-Data': init_data(999)})).json()
         self.assertEqual(foreign['items'], [])
         self.assertEqual((await self.client.post('/api/wallet/address', json={'network': 'TRON'}, headers=user)).status, 400)
