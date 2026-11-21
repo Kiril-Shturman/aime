@@ -1221,3 +1221,21 @@
 .wpay-card-catalog-services > span:not(.wpay-catalog-app-store) svg { width: 16px; height: 16px; }
 .wpay-card-catalog-services > .wpay-catalog-app-store { padding: 0; border-radius: 50%; border-color: #a9d5ff66; box-shadow: inset 0 1px 2px #ffffff38; }
 .wpay-card-catalog-price { margin-inline: -4px; margin-bottom: 8px; }
+
+.wpay-card-catalog-art { margin-top: -36px; }
+.wpay-card-catalog-region { grid-area: 4 / 1; justify-self: start; margin-inline-start: 4px; }
+.wpay-card-catalog-price { padding-block: 7px; }
+.wpay-card-catalog-price > span { gap: 0; }
+.wpay-card-catalog-services > .wpay-catalog-app-store {
+  background: linear-gradient(155deg, #ffffff34, #ffffff10);
+  border-color: #ffffff54;
+  position: relative;
+}
+.wpay-catalog-app-store::before {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #46baff, #0873ed 62%, #0852bf);
+}
+.wpay-catalog-app-store svg { position: relative; width: 17px; height: 17px; }

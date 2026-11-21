@@ -1080,7 +1080,7 @@ export default function WalletAuraCards({
             )}
             <span className="wpay-card-catalog-price">
               <span><b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
-                ? `${offerNumber.format(Number(plan.issue_fee))}$` : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
+                ? (Number(plan.issue_fee) === 10 ? "10$ или ≈850₽" : `${offerNumber.format(Number(plan.issue_fee))}$`) : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
               {plan?.total_recharge_pct != null && (
                 <span><b>{offerNumber.format(Number(plan.total_recharge_pct))}%</b><small>Пополнение</small></span>
               )}
