@@ -816,7 +816,6 @@ export default function WalletAuraCards({
   const offerTerms = () => {
     const auraPlan = fees?.plans?.find(plan => plan.kind === currentKind && plan.skin === activeOffer?.skin);
     const plan = goSwapOffer ? storefrontPlan : auraPlan;
-    const provider = goSwapOffer ? "GoSwap" : "Aura";
     const providerTopup = goSwapOffer ? storefrontPlan.provider_recharge_fee
       : currentKind === "physical" ? fees?.physical_recharge_fee_pct : fees?.recharge_fee_pct;
     const serviceTopup = plan?.service_recharge_pct ?? "0";
@@ -831,12 +830,9 @@ export default function WalletAuraCards({
       <h3 className="mt-5 text-base font-semibold">Условия карты</h3>
       <div className="wpay-aura-info wpay-aura-card-terms mt-2">
         {infoRow("Выпуск карты", issue)}
-        {plan?.provider_issue_fee != null && infoRow(`${provider} + wPay`, `${plan.provider_issue_fee} + ${plan.service_issue_fee ?? "0"} USDT`)}
-        {infoRow("Комиссия за пополнение", totalTopup != null ? `${totalTopup}%` : "—")}
-        {providerTopup != null && providerTopup !== "" && infoRow(`${provider} + wPay`, `${providerTopup}% + ${serviceTopup}%`)}
-        {Number(plan?.service_minimum_fee) > 0 && infoRow("Минимальная комиссия wPay", `${plan?.service_minimum_fee} USDT`)}
+        {infoRow("Комиссия за пополнение", totalTopup == null ? "—" :
+          `${totalTopup}%${Number(plan?.service_minimum_fee) > 0 ? ` · мин. wPay ${plan?.service_minimum_fee} USDT` : ""}`)}
         {infoRow("Минимум пополнения", minimum)}
-        {goSwapOffer && storefrontPlan.conditions?.length ? infoRow("Оплата телефоном", storefrontPlan.conditions.join(" · ")) : null}
         {premiumOffer && infoRow("Доставка", "Бесплатно")}
       </div>
     </>;
