@@ -1075,11 +1075,24 @@ def install_wallet(app, root, owner_check):
             "AND remote_id IS NULL AND status='reserved' AND json_extract(request_body,'$.operator') IS ? LIMIT 1",
             (aura_environment, uid, actor),
         ).fetchone()
+        withdrawal_id = request.query.get('withdrawal_id')
+        latest = ledger.db.execute(
+            "SELECT w.withdrawal_id,w.status,w.amount,w.fee,w.recipient,w.transaction_hash "
+            "FROM wallet_provider_entities e JOIN aura_withdrawals w "
+            "ON w.withdrawal_id=e.remote_id AND w.environment=e.environment "
+            "WHERE e.provider='aura' AND e.entity_type='withdrawal' AND e.environment=? "
+            "AND e.user_id=? AND json_extract(e.request_body,'$.operator') IS ? "
+            "AND (? IS NULL OR w.withdrawal_id=?) ORDER BY e.created_at DESC LIMIT 1",
+            (aura_environment, uid, actor, withdrawal_id, withdrawal_id),
+        ).fetchone()
+        if withdrawal_id is not None and latest is None:
+            raise ApiError('WITHDRAWAL_NOT_FOUND', 'Вывод не найден', 404)
         available, _ = ledger.balance(uid, 'USDT')
         response = web.json_response({
             'available': str(min(available, Decimal(position[0])) if position else 0),
             'fee': str(fee), 'environment': aura_environment,
             'frozen': aura_withdrawal_frozen(ledger, aura_environment, uid),
+            'withdrawal': dict(latest) if latest else None,
             'pending': json.loads(pending[0]) if pending else None,
         })
         response.headers['Cache-Control'] = 'no-store'

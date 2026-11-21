@@ -1488,6 +1488,45 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(body["routes"]["qr_pay"])
         self.assertFalse(body["providers"]["aura"]["products"]["cards"])
 
+    async def test_aura_withdrawal_status_tracks_snapshots_and_is_owner_scoped(self):
+        enabled = await self.wpay.post(
+            "/api/wallet/admin-provider-route", headers=self.owner,
+            json={"product": "crypto_deposit", "asset": "USDT", "network": "TRON",
+                  "environment": "test", "provider": "aura", "enabled": True},
+        )
+        self.assertEqual(enabled.status, 200, await enabled.text())
+        ledger = self.app["wpay_ledger"]
+        ledger.account("tg:123")
+        stamp = time.time()
+        ledger.db.execute(
+            "INSERT INTO wallet_provider_entities VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+            ("aura", "test", "withdrawal", "intent", "withdrawal-one", "tg:123",
+             "completed", "intent", "{}", None, stamp, stamp),
+        )
+        ledger.db.execute(
+            "INSERT INTO aura_withdrawals VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            ("withdrawal-one", "test", "processing", "5", "2", "recipient", None, None, "{}", stamp, stamp),
+        )
+        endpoint = "/api/wallet/aura-user-withdrawal"
+        headers = {"X-Telegram-Init-Data": init_data(123)}
+        first = await self.wpay.get(endpoint, headers=headers)
+        self.assertEqual(first.status, 200, await first.text())
+        self.assertEqual(first.headers["Cache-Control"], "no-store")
+        self.assertEqual((await first.json())["withdrawal"]["status"], "processing")
+        ledger.db.execute(
+            "UPDATE aura_withdrawals SET status='completed',transaction_hash='hash-one' "
+            "WHERE withdrawal_id='withdrawal-one'"
+        )
+        params = {"withdrawal_id": "withdrawal-one"}
+        updated = await self.wpay.get(endpoint, params=params, headers=headers)
+        self.assertEqual(updated.status, 200, await updated.text())
+        info = (await updated.json())["withdrawal"]
+        self.assertEqual((info["status"], info["transaction_hash"]), ("completed", "hash-one"))
+        foreign = await self.wpay.get(
+            endpoint, params=params, headers={"X-Telegram-Init-Data": init_data(456)},
+        )
+        self.assertEqual(foreign.status, 404)
+
     async def test_additional_deposit_address_is_owner_scoped(self):
         await self.wpay.post(
             "/api/wallet/admin-provider-route", headers=self.owner,
