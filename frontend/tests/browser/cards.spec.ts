@@ -905,7 +905,27 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   await page.getByRole("button", { name: "Оформить карту" }).click();
   const sheet = page.locator(".wpay-goswap-order-sheet");
   await expect(sheet).toHaveClass(/wpay-goswap-order-sheet--collapsed/);
-  await expect(sheet.locator(".wpay-goswap-order-art")).toBeVisible();
+  const art = sheet.locator(".wpay-goswap-order-art");
+  await expect(art).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Оплатить", exact: true })).toBeEnabled();
+  await page.evaluate(() => {
+    window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { beta: 10, gamma: 0 }));
+    window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { beta: 30, gamma: 15 }));
+  });
+  await expect.poll(() => art.evaluate(el => (el as HTMLElement).style.getPropertyValue("--card-tilt-x"))).toBe("9deg");
+  const touch = await page.context().newCDPSession(page);
+  await touch.send("Emulation.setTouchEmulationEnabled", { enabled: true });
+  const box = (await art.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + 20;
+  await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+  for (const delta of [35, 85, 145, 210]) {
+    await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y + delta }] });
+  }
+  await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(sheet).toBeHidden();
+  await page.getByRole("button", { name: "Оформить карту" }).click();
+  await expect(sheet.getByRole("button", { name: "Оплатить", exact: true })).toBeEnabled();
   await expect(sheet.locator(".wpay-goswap-order-summary").getByText("10 USDT", { exact: true })).toBeVisible();
   await expect(sheet.getByText("Итого:", { exact: true })).toBeVisible();
   await expect(sheet.getByRole("radio", { name: "С кошелька" })).toBeChecked();

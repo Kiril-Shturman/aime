@@ -971,7 +971,7 @@
 .wpay-goswap-order-sheet--collapsed .wpay-goswap-order-terms { display: none; }
 .wpay-goswap-sheet-handle { display: grid; width: 100%; height: 26px; place-items: center; touch-action: none; }
 .wpay-goswap-sheet-handle span { width: 36px; height: 4px; border-radius: 10px; background: currentColor; opacity: .24; }
-.wpay-goswap-order-art { width: 100%; perspective: 850px; touch-action: pan-y; }
+.wpay-goswap-order-art { width: 100%; perspective: 850px; touch-action: none; }
 .wpay-goswap-order-art .wpay-bank-card.wpay-card-scene { width: 100%; height: auto; min-height: 0; transform: rotateX(var(--card-tilt-x, 0deg)) rotateY(var(--card-tilt-y, 0deg)); transition: transform 180ms ease-out; }
 @media (prefers-reduced-motion: reduce) {
   .wpay-goswap-order-art .wpay-bank-card.wpay-card-scene { transform: none; transition: none; }

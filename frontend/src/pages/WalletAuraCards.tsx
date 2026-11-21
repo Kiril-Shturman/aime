@@ -7,7 +7,7 @@ import PlusCircleFill from "framework7-icons/react/esm/PlusCircleFill.js";
 import EyeFill from "framework7-icons/react/esm/EyeFill.js";
 import Snow from "framework7-icons/react/esm/Snow.js";
 import Ellipsis from "framework7-icons/react/esm/Ellipsis.js";
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Button, Card, List, ListItem } from "konsta/react";
 import {
   f7,
@@ -36,7 +36,7 @@ import {
   ArrowUpRight,
   Trash2,
 } from "lucide-react";
-import { haptic } from "../lib/telegram";
+import { haptic, tg } from "../lib/telegram";
 import "./WalletAuraCards.css";
 import { DesktopOwnedCards, useDesktopWalletLayout } from "./WalletDesktop";
 import {
@@ -47,19 +47,42 @@ import {
 } from "../lib/wallet-api";
 import { useLiveWallet } from "./WalletLive";
 
-function tiltCheckoutCard(event: PointerEvent<HTMLDivElement>) {
-  const card = event.currentTarget;
-  if (event.pointerType === "touch" && event.buttons === 0) return;
-  const rect = card.getBoundingClientRect();
-  const x = Math.max(-0.5, Math.min(0.5, (event.clientX - rect.left) / rect.width - 0.5));
-  const y = Math.max(-0.5, Math.min(0.5, (event.clientY - rect.top) / rect.height - 0.5));
-  card.style.setProperty("--card-tilt-x", `${-y * 16}deg`);
-  card.style.setProperty("--card-tilt-y", `${x * 20}deg`);
-}
-
-function resetCheckoutCard(event: PointerEvent<HTMLDivElement>) {
-  event.currentTarget.style.removeProperty("--card-tilt-x");
-  event.currentTarget.style.removeProperty("--card-tilt-y");
+function watchCheckoutTilt(card: HTMLDivElement) {
+  const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const app = tg();
+  const orientation = app?.isVersionAtLeast?.("8.0") ? app.DeviceOrientation : undefined;
+  let neutral: { beta: number; gamma: number } | undefined;
+  let stopped = false;
+  const clampTilt = (value: number) => Math.max(-9, Math.min(9, value * 0.45));
+  const update = (beta: number, gamma: number) => {
+    if (motion.matches || !Number.isFinite(beta) || !Number.isFinite(gamma)) return;
+    neutral ??= { beta, gamma };
+    const pitch = ((beta - neutral.beta + 540) % 360) - 180;
+    card.style.setProperty("--card-tilt-x", `${clampTilt(pitch)}deg`);
+    card.style.setProperty("--card-tilt-y", `${clampTilt(gamma - neutral.gamma)}deg`);
+  };
+  const nativeUpdate = () => {
+    if (orientation) update(orientation.beta * 180 / Math.PI, orientation.gamma * 180 / Math.PI);
+  };
+  const browserUpdate = (event: DeviceOrientationEvent) => {
+    if (event.beta !== null && event.gamma !== null) update(event.beta, event.gamma);
+  };
+  const listenInBrowser = () => window.addEventListener("deviceorientation", browserUpdate);
+  if (orientation && app?.onEvent) {
+    app.onEvent("deviceOrientationChanged", nativeUpdate);
+    orientation.start({ refresh_rate: 40 }, started => {
+      if (stopped && started) orientation.stop();
+      else if (!stopped && !started) listenInBrowser();
+    });
+  } else listenInBrowser();
+  return () => {
+    stopped = true;
+    window.removeEventListener("deviceorientation", browserUpdate);
+    app?.offEvent?.("deviceOrientationChanged", nativeUpdate);
+    orientation?.stop();
+    card.style.removeProperty("--card-tilt-x");
+    card.style.removeProperty("--card-tilt-y");
+  };
 }
 
 function ripplePaymentTile(event: MouseEvent<HTMLInputElement>) {
@@ -569,6 +592,8 @@ export default function WalletAuraCards({
       "Заявка на карту отправлена",
     );
   const [goSwapOrder, setGoSwapOrder] = useState<{ plan: StorefrontPlan; quote: GoSwapIssue } | null>(null);
+  const checkoutArtwork = useRef<HTMLDivElement>(null);
+  const checkoutSwipeStart = useRef<{ x: number; y: number } | null>(null);
   const [goSwapSheetReady, setGoSwapSheetReady] = useState(false);
   const [goSwapSheetOpened, setGoSwapSheetOpened] = useState(false);
   useEffect(() => {
@@ -579,6 +604,12 @@ export default function WalletAuraCards({
     const frame = requestAnimationFrame(() => setGoSwapSheetOpened(true));
     return () => cancelAnimationFrame(frame);
   }, [goSwapOrder]);
+  useEffect(() => {
+    const artwork = checkoutArtwork.current;
+    if (goSwapSheetOpened && artwork && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      return watchCheckoutTilt(artwork);
+    }
+  }, [goSwapSheetOpened]);
   const [goSwapPayment, setGoSwapPayment] = useState<"wallet" | "sbp">("wallet");
   const [goSwapSheetExpanded, setGoSwapSheetExpanded] = useState(false);
   const expandGoSwapSheet = () => {
@@ -1533,8 +1564,22 @@ export default function WalletAuraCards({
             <div className="sheet-modal-swipe-step wpay-goswap-order-summary">
               <button type="button" className="wpay-goswap-sheet-handle" aria-label="Раскрыть условия карты"
                 aria-expanded={goSwapSheetExpanded} onClick={expandGoSwapSheet}><span /></button>
-              <div className="wpay-goswap-order-art" onPointerDown={tiltCheckoutCard} onPointerMove={tiltCheckoutCard}
-                onPointerLeave={resetCheckoutCard} onPointerUp={resetCheckoutCard} onPointerCancel={resetCheckoutCard}>
+              <div className="wpay-goswap-order-art" ref={checkoutArtwork}
+                onTouchStart={event => {
+                  const touch = event.touches[0];
+                  checkoutSwipeStart.current = event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : null;
+                }}
+                onTouchCancel={() => { checkoutSwipeStart.current = null; }}
+                onTouchEnd={event => {
+                  const start = checkoutSwipeStart.current;
+                  checkoutSwipeStart.current = null;
+                  const touch = event.changedTouches[0];
+                  if (!start || !touch) return;
+                  const dy = touch.clientY - start.y;
+                  if (dy > 55 && dy > Math.abs(touch.clientX - start.x)) {
+                    f7.sheet.get(".wpay-goswap-order-sheet")?.close();
+                  }
+                }}>
                 <LiveCardArtwork kind="virtual" skin={goSwapOrder.plan.skin} />
               </div>
               <p className="mt-3 text-center text-sm opacity-60">{goSwapOrder.quote.label}</p>

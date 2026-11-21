@@ -30,6 +30,12 @@ interface TG {
   isActive?: boolean
   isFullscreen?: boolean
   requestFullscreen?: () => void
+  DeviceOrientation?: {
+    beta: number
+    gamma: number
+    start: (params: { refresh_rate: number }, callback?: (started: boolean) => void) => void
+    stop: () => void
+  }
   onEvent?: (event: string, callback: () => void) => void
   offEvent?: (event: string, callback: () => void) => void
   isVersionAtLeast?: (version: string) => boolean
