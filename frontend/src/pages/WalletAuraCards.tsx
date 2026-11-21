@@ -32,6 +32,7 @@ import {
   EyeOff,
   ArrowUpRight,
   Trash2,
+  Wallet,
 } from "lucide-react";
 import { haptic } from "../lib/telegram";
 import "./WalletAuraCards.css";
@@ -187,8 +188,10 @@ const emptyShipping: ShippingAddress = {
 
 export default function WalletAuraCards({
   showNotice,
+  onSbpTopUp,
 }: {
   showNotice: (text: string) => void;
+  onSbpTopUp?: () => void;
 }) {
   const wallet = useLiveWallet();
   const [cards, setCards] = useState<AuraCard[]>([]);
@@ -526,6 +529,7 @@ export default function WalletAuraCards({
       "Заявка на карту отправлена",
     );
   const [goSwapOrder, setGoSwapOrder] = useState<{ plan: StorefrontPlan; quote: GoSwapIssue } | null>(null);
+  const [goSwapPayment, setGoSwapPayment] = useState<"wallet" | "sbp">("wallet");
   const [goSwapSheetExpanded, setGoSwapSheetExpanded] = useState(false);
   const goSwapHandleStart = useRef<number | null>(null);
   const expandGoSwapSheet = () => {
@@ -535,6 +539,7 @@ export default function WalletAuraCards({
   const issueGoSwap = (plan: StorefrontPlan) => mutate("goswap-quote", async () => {
     const quote = await walletRequest<GoSwapIssue>("goswap-card-quote", { plan_id: plan.plan_id });
     if (quote.state === "quoted") {
+      setGoSwapPayment("wallet");
       setGoSwapSheetExpanded(false);
       setGoSwapOrder({ plan, quote });
     }
@@ -1510,10 +1515,32 @@ export default function WalletAuraCards({
                 }}><span /></button>
               <div className="wpay-goswap-order-art"><LiveCardArtwork kind="virtual" skin={goSwapOrder.plan.skin} /></div>
               <p className="mt-3 text-center text-sm opacity-60">{goSwapOrder.quote.label}</p>
-              <p className="text-center text-3xl font-semibold tabular-nums">{offerNumber.format(Number(goSwapOrder.quote.total))} USDT</p>
-              <Button rounded large data-wpay-primary="" className="wpay-aura-primary !mt-4 !w-full"
-                disabled={Boolean(busy)} onClick={payGoSwapOrder}>
-                {busy === "goswap-issue" ? "Оплачиваем…" : "Оплатить"}
+              <fieldset className="wpay-goswap-payment">
+                <legend>Способ оплаты</legend>
+                <label>
+                  <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "wallet"}
+                    onChange={() => setGoSwapPayment("wallet")} />
+                  <Wallet size={18} aria-hidden="true" />
+                  <span>С кошелька</span>
+                </label>
+                <label>
+                  <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "sbp"}
+                    disabled={!onSbpTopUp} onChange={() => setGoSwapPayment("sbp")} />
+                  <img src="/brands/sbp-symbol.svg" alt="" width={18} height={18} />
+                  <span>Через СБП{!onSbpTopUp && <small>Недоступно</small>}</span>
+                </label>
+              </fieldset>
+              <div className="wpay-goswap-order-total">
+                <span>Итого</span>
+                <strong>{offerNumber.format(Number(goSwapOrder.quote.total))} USDT</strong>
+              </div>
+              <Button rounded large data-wpay-primary="" className="wpay-aura-primary !mt-3 !w-full"
+                disabled={Boolean(busy) || (goSwapPayment === "sbp" && !onSbpTopUp)}
+                onClick={goSwapPayment === "wallet" ? payGoSwapOrder : () => {
+                  setGoSwapOrder(null);
+                  onSbpTopUp?.();
+                }}>
+                {goSwapPayment === "sbp" ? "Пополнить через СБП" : busy === "goswap-issue" ? "Оплачиваем…" : "Оплатить"}
               </Button>
               <button type="button" className="wpay-goswap-order-expand" onClick={expandGoSwapSheet}>Условия карты <ChevronDown size={15} /></button>
             </div>

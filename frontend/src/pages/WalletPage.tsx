@@ -704,7 +704,12 @@ function WalletScreen() {
               (live.demo ? (
                 <CardsSection showNotice={showNotice} />
               ) : (
-                <WalletAuraCards showNotice={showNotice} />
+                <WalletAuraCards
+                  showNotice={showNotice}
+                  onSbpTopUp={live.capabilities.sbp_buy
+                    ? () => setCryptoFlow({ kind: "deposit", assetCode: "RUB" })
+                    : undefined}
+                />
               ))}
             {activeTab === "profile" && (
               <ProfileSection

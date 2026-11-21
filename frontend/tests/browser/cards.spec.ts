@@ -882,6 +882,9 @@ test("card topup appears as positive dollar credit",async({page})=>{
 
 test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", async ({ page }) => {
   await setup(page, "light");
+  await page.route("**/api/wallet/status", route => route.fulfill({ json: {
+    configured: true, capabilities: { cards: true, sbp_buy: true }, asset_routes: { USDT: ["TRON"] },
+  } }));
   await page.route("**/api/wallet/aura-cards", route => route.fulfill({ json: { data: [] } }));
   await page.route("**/api/wallet/aura-card-fees", route => route.fulfill({ json: {
     currency: "USDT", open_virtual_card_fee: "2",
@@ -904,6 +907,11 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   await expect(sheet).toHaveClass(/modal-in-swipe-step/);
   await expect(sheet.locator(".wpay-goswap-order-art")).toBeVisible();
   await expect(sheet.locator(".wpay-goswap-order-summary").getByText("10 USDT", { exact: true })).toBeVisible();
+  await expect(sheet.getByText("Итого", { exact: true })).toBeVisible();
+  await expect(sheet.getByRole("radio", { name: "С кошелька" })).toBeChecked();
+  await sheet.getByRole("radio", { name: "Через СБП" }).check();
+  await expect(sheet.getByRole("button", { name: "Пополнить через СБП" })).toBeVisible();
+  await sheet.getByRole("radio", { name: "С кошелька" }).check();
   expect(payments).toBe(0);
   const handle = sheet.getByRole("button", { name: "Раскрыть условия карты" });
   await handle.evaluate(element => {
