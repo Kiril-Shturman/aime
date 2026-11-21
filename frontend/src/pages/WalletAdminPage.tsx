@@ -850,7 +850,8 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                     <strong>{item.label}</strong>
                     <span className="admin-wallet-provider" data-provider={item.provider === "GoSwap" ? "goswap" : "aura"}>{text(item.provider)}</span>
                     <small className="ml-auto text-[var(--admin-muted)]">
-                      {item.issue_enabled === false ? "Выпуск выключен"
+                      {item.provider === "GoSwap" ? "Выпуск пока недоступен"
+                        : item.issue_enabled === false ? "Выпуск выключен"
                         : !item.version_id ? "Тариф не настроен"
                         : item.provider_issue_fee == null ? "Цена выпуска недоступна"
                         : "Выпуск включён в тарифе"}
@@ -859,7 +860,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                 ))}
             </ol>
             {notice && <p role="status" className="mt-2 text-xs">{notice}</p>}
-            <p className="mt-3 text-xs text-[var(--admin-muted)]">Порядок настраивается в таблицах ниже. Клиентская витрина пока использует действующий каталог Aura.</p>
+            <p className="mt-3 text-xs text-[var(--admin-muted)]">Порядок настраивается в таблицах ниже. Мини-апп показывает тарифы в этом порядке. Выпуск карт GoSwap пока недоступен.</p>
           </div>
         )}
         {section === "cards" && ([["Карты Aura", "Aura"], ["Карты GoSwap", "GoSwap"]] as const).map(([label, provider]) => (

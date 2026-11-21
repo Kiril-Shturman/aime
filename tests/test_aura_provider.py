@@ -1595,6 +1595,22 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             {"USDT": ("18.225002", "2", 1), "BTC": ("0.1", "0", 1)},
         )
 
+    async def test_card_storefront_projects_admin_order_and_keeps_goswap_unavailable(self):
+        from wallet_tariffs import set_storefront_position
+
+        ledger = self.app["wpay_ledger"]
+        set_storefront_position(ledger, "goswap_card_sg_1", 1, "test")
+        set_storefront_position(ledger, "card_travel", 4, "test")
+        result = await self.wpay.get("/api/wallet/aura-card-fees", headers=self.owner)
+        self.assertEqual(result.status, 200, await result.text())
+        payload = await result.json()
+        offers = payload["storefront"]
+        self.assertEqual(offers[0]["plan_id"], "goswap_card_sg_1")
+        self.assertFalse(offers[0]["available"])
+        self.assertNotIn("card_subscriptions", [row["plan_id"] for row in offers])
+        self.assertEqual([row["position"] for row in offers], sorted(row["position"] for row in offers))
+        self.assertIn("card_subscriptions", [row["plan_id"] for row in payload["plans"]])
+
     async def test_admin_can_toggle_goswap_card_availability_independently(self):
         from wallet_tariffs import snapshot
 

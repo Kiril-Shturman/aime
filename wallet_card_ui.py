@@ -7,7 +7,7 @@ from collections import deque
 from decimal import Decimal, localcontext
 from datetime import datetime, timezone
 from aiohttp import web
-from wallet_tariffs import card_issue_enabled, CARD_PLANS, calculate, resolve_card_plan, prepare as prepare_tariffs
+from wallet_tariffs import card_issue_enabled, CARD_PLANS, GOSWAP_CARD_PLANS, calculate, resolve_card_plan, storefront_positions, prepare as prepare_tariffs
 from wallet_aura import _decimal, _store_card_event, _store_card_operation, _list_data
 
 
@@ -66,7 +66,23 @@ class CardUI:
                 'service_minimum_fee': tariff['minimum_fee'] if tariff['enabled'] else '0',
                 'tariff_version': tariff['version_id'],
             })
-        return {**raw, 'plans': plans}
+        aura_plans = {plan['plan_id']: plan for plan in plans}
+        storefront = []
+        goswap_skins = {'goswap_card_sg_1': 'silver', 'goswap_card_sg_2': 'navy', 'goswap_card_us': 'silver'}
+        ordered = sorted((position, product) for product, position in storefront_positions(self.ledger).items() if position is not None)
+        for position, product in ordered:
+            if product in aura_plans:
+                plan = aura_plans[product]
+                if plan['kind'] == 'physical' and plan['provider_issue_fee'] is None:
+                    continue
+                storefront.append({**plan, 'provider': 'Aura', 'position': position})
+            elif product in GOSWAP_CARD_PLANS:
+                storefront.append({
+                    **GOSWAP_CARD_PLANS[product], 'kind': 'virtual', 'skin': goswap_skins[product],
+                    'plan_id': product, 'provider': 'GoSwap', 'position': position,
+                    'available': False, 'issue_fee': None,
+                })
+        return {**raw, 'plans': plans, 'storefront': storefront}
 
     def cards(self, uid):
         result = []

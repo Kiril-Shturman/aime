@@ -69,6 +69,19 @@ type CardPlan = {
   service_recharge_pct: string;
   service_minimum_fee: string;
 };
+type StorefrontPlan = {
+  plan_id: string;
+  label: string;
+  kind: "virtual" | "physical";
+  skin: CardSkin;
+  available: boolean;
+  provider: "Aura" | "GoSwap";
+  issue_fee: string | null;
+  conditions?: string[];
+  region?: string;
+  provider_issue_fee?: string | null;
+  provider_recharge_fee?: string;
+};
 type CardQuote = {
   spendable?: string;
   funding_error?: string | null;
@@ -84,6 +97,7 @@ type CardQuote = {
 };
 type CardFees = {
   plans?: CardPlan[];
+  storefront?: StorefrontPlan[];
   currency: "USDT";
   minimum_recharge_amount: string;
   open_virtual_card_fee: string;
@@ -579,7 +593,7 @@ export default function WalletAuraCards({
       setBusy("");
     }
   };
-  const offers: { kind: "virtual" | "physical"; skin: CardSkin }[] = [
+  const legacyOffers: { kind: "virtual" | "physical"; skin: CardSkin }[] = [
     { kind: "virtual", skin: "silver" },
     { kind: "virtual", skin: "navy" },
     ...(fees?.open_physical_card_fee
@@ -589,6 +603,8 @@ export default function WalletAuraCards({
         ]
       : []),
   ];
+  const offers = fees?.storefront?.map(plan => ({ kind: plan.kind, skin: plan.skin, plan }))
+    ?? legacyOffers.map(offer => ({ ...offer, plan: undefined }));
   const carouselOffers = desktop ? [] : offers;
   const activeOffer = carouselOffers[activeSlide - cards.length];
   useEffect(() => {
@@ -599,7 +615,9 @@ export default function WalletAuraCards({
     }
   }, [desktop, activeSlide, cards.length]);
   const offerKind = activeOffer?.kind;
-  const showOffer = !desktop && !loading && Boolean(offerKind || !cards.length);
+  const storefrontPlan = activeOffer?.plan;
+  const goSwapOffer = storefrontPlan?.provider === "GoSwap";
+  const showOffer = !desktop && !loading && Boolean(offerKind || (!cards.length && offers.length));
   const currentKind = offerKind ?? issueKind;
   const travelOffer = currentKind === "virtual" && activeOffer?.skin === "navy";
   const premiumOffer =
@@ -1066,13 +1084,13 @@ export default function WalletAuraCards({
                       )}
                     </div>
                   ))}
-                  {carouselOffers.map(({ kind, skin: appearance }) => (
+                  {carouselOffers.map(({ kind, skin: appearance, plan }) => (
                     <button
                       type="button"
                       className="wpay-aura-carousel-item"
-                      key={appearance}
-                      aria-label={`Заказать ${kind === "physical" ? "физическую" : "виртуальную"} карту`}
-                      onClick={() => order(kind, appearance)}
+                      key={plan?.plan_id ?? appearance}
+                      aria-label={plan ? `${plan.label} · ${plan.provider}` : `Заказать ${kind === "physical" ? "физическую" : "виртуальную"} карту`}
+                      onClick={() => { if (plan?.provider !== "GoSwap" && plan?.available !== false) order(kind, appearance); }}
                     >
                       <LiveCardArtwork kind={kind} skin={appearance} />
                     </button>
@@ -1167,17 +1185,29 @@ export default function WalletAuraCards({
               ))}
             </div>
           </section>
+        ) : showOffer && goSwapOffer ? (
+          <section className="px-4 pt-2">
+            <h2 className="text-[21px] font-semibold">{storefrontPlan.label}</h2>
+            <p className="mt-1 text-sm opacity-60">GoSwap{storefrontPlan.region && ` · ${storefrontPlan.region}`}</p>
+            <div className="wpay-aura-info mt-4">
+              {storefrontPlan.provider_issue_fee && infoRow("Выпуск", `${storefrontPlan.provider_issue_fee} USDT`)}
+              {storefrontPlan.provider_recharge_fee && infoRow("Пополнение", `${storefrontPlan.provider_recharge_fee}% сверху`)}
+              {storefrontPlan.conditions?.length ? infoRow("Поддержка оплаты", storefrontPlan.conditions.join(" · ")) : null}
+            </div>
+            <Button rounded large disabled className="wpay-aura-primary !mt-4 !w-full">Выпуск пока недоступен</Button>
+          </section>
         ) : showOffer ? (
           <section className="px-4 pt-2">
             <h2 className="text-[21px] font-semibold">
-              {currentKind === "physical"
+              {storefrontPlan?.label ?? (currentKind === "physical"
                 ? premiumOffer
                   ? "Премиальная"
                   : "Платина"
                 : travelOffer
                   ? "Для путешествий"
-                  : "Для подписок"}
+                  : "Для подписок")}
             </h2>
+            {storefrontPlan && <p className="mt-1 text-sm opacity-60">{storefrontPlan.provider}</p>}
             {premiumOffer && (
               <div className="wpay-premium-delivery">
                 <Truck size={18} aria-hidden="true" />
@@ -1253,6 +1283,8 @@ export default function WalletAuraCards({
               Оформить карту
             </Button>
           </section>
+        ) : !desktop && !selected && !offers.length ? (
+          <p className="px-4 pt-4 text-sm opacity-60">Тарифы пока недоступны</p>
         ) : (
           selected && (
             <>
@@ -1319,16 +1351,16 @@ export default function WalletAuraCards({
           <div className="wpay-desktop-section-head"><h2>Тарифы и выпуск</h2></div>
           {fees ? (
             <div className="wpay-desktop-card-offers">
-              {offers.map(({ kind, skin: appearance }) => {
+              {offers.map(({ kind, skin: appearance, plan: storefront }) => {
                 const plan = fees.plans?.find((item) => item.kind === kind && item.skin === appearance);
-                const label = plan?.label ?? {
+                const label = storefront?.label ?? plan?.label ?? {
                   silver: "Для подписок", navy: "Для путешествий",
                   ice: "Премиальная", graphite: "Платина",
                 }[appearance];
                 return (
-                  <button key={appearance} type="button" disabled={Boolean(busy) || plan?.available === false || plan?.issue_fee === null || (!plan && !(kind === "physical" ? fees.open_physical_card_fee : fees.open_virtual_card_fee))}
+                  <button key={storefront?.plan_id ?? appearance} type="button" disabled={Boolean(busy) || storefront?.available === false || plan?.available === false || plan?.issue_fee === null || (!plan && !(kind === "physical" ? fees.open_physical_card_fee : fees.open_virtual_card_fee))}
                     onClick={() => order(kind, appearance)}>
-                    <span><strong>{label}</strong><small>{planPrice(kind, appearance)}</small></span>
+                    <span><strong>{label}</strong><small>{storefront ? `${storefront.provider} · ${storefront.provider === "GoSwap" ? "Выпуск пока недоступен" : planPrice(kind, appearance)}` : planPrice(kind, appearance)}</small></span>
                     <ChevronRight size={18} aria-hidden="true" />
                   </button>
                 );
