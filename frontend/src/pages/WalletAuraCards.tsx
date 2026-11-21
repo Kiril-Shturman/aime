@@ -64,17 +64,20 @@ function resetCheckoutCard(event: PointerEvent<HTMLDivElement>) {
 function ripplePaymentTile(event: MouseEvent<HTMLInputElement>) {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const tile = event.currentTarget.parentElement;
-  const ripple = tile?.querySelector(".wpay-goswap-payment-ripple");
-  if (!tile || !ripple) return;
+  if (!tile) return;
   const { left, top, width, height } = tile.getBoundingClientRect();
-  const size = Math.hypot(width, height) * 2;
+  const diameter = Math.hypot(width, height) * 2;
   const x = event.detail ? event.clientX - left : width / 2;
   const y = event.detail ? event.clientY - top : height / 2;
-  ripple.getAnimations().forEach(animation => animation.cancel());
-  ripple.animate([
-    { transform: `translate(${x}px, ${y}px) scale(0)`, opacity: 0.24 },
-    { transform: `translate(${x}px, ${y}px) scale(${size})`, opacity: 0 },
-  ], { duration: 420, easing: "ease-out" });
+  tile.querySelectorAll<HTMLElement>(".wpay-goswap-payment-ripple").forEach((ring, index) => {
+    ring.getAnimations().forEach(animation => animation.cancel());
+    ring.style.left = `${x}px`;
+    ring.style.top = `${y}px`;
+    ring.animate([
+      { width: "4px", height: "4px", opacity: 0.85 },
+      { width: `${diameter}px`, height: `${diameter}px`, opacity: 0 },
+    ], { delay: index * 110, duration: 720, easing: "ease-out" });
+  });
 }
 
 const offerNumber = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 8 });
@@ -1528,7 +1531,7 @@ export default function WalletAuraCards({
       </aside>
       <Sheet
         opened={goSwapSheetOpened && goSwapOrder !== null}
-        className="wpay-goswap-order-sheet"
+        className={`wpay-goswap-order-sheet${goSwapSheetExpanded ? "" : " wpay-goswap-order-sheet--collapsed"}`}
         swipeToStep
         swipeHandler=".wpay-goswap-sheet-handle"
         backdrop
@@ -1565,6 +1568,7 @@ export default function WalletAuraCards({
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "wallet"}
                     onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("wallet")} />
                   <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
+                  <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
                   <img src={desktopWalletIcon} alt="" width={25} height={25} />
                   <span>С кошелька</span>
@@ -1572,6 +1576,7 @@ export default function WalletAuraCards({
                 <label>
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "sbp"}
                     disabled={!onSbpTopUp} onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("sbp")} />
+                  <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
                   <img src="/brands/sbp-symbol.svg" alt="" width={18} height={18} />

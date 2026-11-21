@@ -904,15 +904,18 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   await page.getByRole("link", { name: "Карты", exact: true }).click();
   await page.getByRole("button", { name: "Оформить карту" }).click();
   const sheet = page.locator(".wpay-goswap-order-sheet");
-  await expect(sheet).toHaveClass(/modal-in-swipe-step/);
+  await expect(sheet).toHaveClass(/wpay-goswap-order-sheet--collapsed/);
   await expect(sheet.locator(".wpay-goswap-order-art")).toBeVisible();
   await expect(sheet.locator(".wpay-goswap-order-summary").getByText("10 USDT", { exact: true })).toBeVisible();
   await expect(sheet.getByText("Итого:", { exact: true })).toBeVisible();
   await expect(sheet.getByRole("radio", { name: "С кошелька" })).toBeChecked();
   const activeCheck = sheet.locator("input:checked ~ .wpay-goswap-payment-check");
   await expect(activeCheck).toBeVisible();
+  await expect(sheet.locator(".wpay-goswap-payment-check:visible")).toHaveCount(1);
+  await expect(sheet.locator(".wpay-goswap-order-terms")).toBeHidden();
   await sheet.getByRole("radio", { name: "Через СБП" }).check();
   await expect(sheet.getByRole("button", { name: "Пополнить через СБП" })).toBeVisible();
+  await expect(sheet.locator(".wpay-goswap-payment-check:visible")).toHaveCount(1);
   await sheet.getByRole("radio", { name: "С кошелька" }).check();
   expect(payments).toBe(0);
   const handle = sheet.getByRole("button", { name: "Раскрыть условия карты" });
@@ -922,7 +925,7 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
     element.dispatchEvent(new TouchEvent("touchend", { bubbles: true, changedTouches: [touchAt(155)] }));
   });
   await expect(handle).toHaveAttribute("aria-expanded", "true");
-  await expect(sheet).not.toHaveClass(/modal-in-swipe-step/);
+  await expect(sheet).not.toHaveClass(/wpay-goswap-order-sheet--collapsed/);
   await expect(sheet.getByText("Минимум пополнения", { exact: true })).toBeInViewport();
   await sheet.getByRole("button", { name: "Оплатить", exact: true }).click();
   await expect(sheet).toBeHidden();

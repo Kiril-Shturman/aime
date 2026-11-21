@@ -966,7 +966,9 @@
 }
 .wpay-goswap-sheet-scroll { height: 100%; overflow: auto; overscroll-behavior: contain; }
 .wpay-goswap-order-summary, .wpay-goswap-order-terms { width: min(100%, 440px); margin-inline: auto; padding-inline: 16px; }
-.wpay-goswap-order-summary { padding-bottom: 10px; }
+.wpay-goswap-order-summary { padding-bottom: max(10px, env(safe-area-inset-bottom)); }
+.wpay-f7-root .wpay-goswap-order-sheet--collapsed.modal-in { transform: translate3d(0, var(--f7-sheet-swipe-step, 0px), 0); }
+.wpay-goswap-order-sheet--collapsed .wpay-goswap-order-terms { display: none; }
 .wpay-goswap-sheet-handle { display: grid; width: 100%; height: 26px; place-items: center; touch-action: none; }
 .wpay-goswap-sheet-handle span { width: 36px; height: 4px; border-radius: 10px; background: currentColor; opacity: .24; }
 .wpay-goswap-order-art { width: 100%; perspective: 850px; touch-action: pan-y; }
@@ -975,13 +977,13 @@
   .wpay-goswap-order-art .wpay-bank-card.wpay-card-scene { transform: none; transition: none; }
 }
 .wpay-goswap-payment {
-  --wpay-payment-tile-bg: #e0e3e9;
-  --wpay-payment-tile-selected-bg: #d3e4fc;
+  --wpay-payment-tile-bg: #cdd4e2;
+  --wpay-payment-tile-selected-bg: #abcfff;
   --wpay-payment-tile-accent: var(--f7-theme-color, #007aff);
 }
 .dark .wpay-goswap-payment {
-  --wpay-payment-tile-bg: #23252b;
-  --wpay-payment-tile-selected-bg: #1d3554;
+  --wpay-payment-tile-bg: #333b4b;
+  --wpay-payment-tile-selected-bg: #254b77;
 }
 .wpay-goswap-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .wpay-goswap-payment legend { margin-bottom: 6px; font-size: 13px; opacity: .7; }
@@ -990,10 +992,9 @@
 .wpay-goswap-payment label:has(input:focus-visible) { outline: 2px solid var(--f7-theme-color); outline-offset: 2px; }
 .wpay-goswap-payment label:has(input:disabled) { opacity: .5; cursor: default; }
 .wpay-goswap-payment input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
-.wpay-goswap-payment-ripple { position: absolute; top: 0; left: 0; width: 1px; height: 1px; border-radius: 50%; background: var(--wpay-payment-tile-accent); opacity: 0; pointer-events: none; }
-.wpay-goswap-payment-check { position: absolute; top: 8px; right: 8px; display: none; width: 19px; height: 19px; place-items: center; border-radius: 50%; background: var(--f7-theme-color); color: #fff; pointer-events: none; }
-.wpay-goswap-payment input:checked + .wpay-goswap-payment-ripple { position: absolute; top: 0; left: 0; width: 1px; height: 1px; border-radius: 50%; background: var(--wpay-payment-tile-accent); opacity: 0; pointer-events: none; }
-.wpay-goswap-payment-check { display: grid; }
+.wpay-goswap-payment-ripple { position: absolute; z-index: 1; transform: translate(-50%, -50%); border: 2px solid var(--wpay-payment-tile-accent); border-radius: 50%; opacity: 0; pointer-events: none; }
+.wpay-goswap-payment-check { position: absolute; top: 8px; right: 8px; z-index: 2; display: none; width: 19px; height: 19px; place-items: center; border-radius: 50%; background: var(--f7-theme-color); color: #fff; pointer-events: none; }
+.wpay-goswap-payment input:checked ~ .wpay-goswap-payment-check { display: grid; }
 .wpay-goswap-payment small { display: block; }
 .wpay-goswap-order-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; font-size: 17px; font-weight: 700; }
 .wpay-goswap-order-total strong { font-weight: inherit; font-variant-numeric: tabular-nums; }
