@@ -240,3 +240,18 @@
   letter-spacing: -0.8px;
   font-variant-numeric: tabular-nums;
 }
+
+.wpay-card-scene.wpay-card-design--usa .wpay-card-face {
+  color: #fff;
+  background:
+    linear-gradient(135deg, #122b54 32%, transparent 75%),
+    repeating-linear-gradient(155deg, #a82542 0 10%, #e8edf5 10% 13%, #18345e 13% 23%);
+}
+.wpay-card-usa-stars {
+  position: absolute;
+  left: 9%;
+  top: 13%;
+  font-size: clamp(9px, 2.4vw, 18px);
+  letter-spacing: .14em;
+  color: #fff;
+}

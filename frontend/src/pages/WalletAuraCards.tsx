@@ -1064,7 +1064,7 @@ export default function WalletAuraCards({
       <main className="wpay-card-catalog mx-auto w-full max-w-[560px] px-4 pb-6" aria-label="Витрина карт">
         {offers.map(({ kind, skin: appearance, plan }, index) => (
           <button key={plan?.plan_id ?? appearance} type="button" className="wpay-card-catalog-item"
-            data-skin={appearance} onClick={() => { haptic("light"); onCatalogOffer(index); }}>
+            data-skin={appearance} data-region={plan?.region} onClick={() => { haptic("light"); onCatalogOffer(index); }}>
             <span className="wpay-card-catalog-services">
               {plan?.conditions?.includes("Apple Pay") && <span aria-label="Apple Pay"><LogoApple aria-hidden="true" />Pay</span>}
               {plan?.conditions?.includes("Google Pay") && <span aria-label="Google Pay"><LogoGoogle aria-hidden="true" />Pay</span>}
@@ -1084,13 +1084,13 @@ export default function WalletAuraCards({
               <ChevronRight size={20} aria-hidden="true" />
             </span>
             <span className="wpay-card-catalog-art" aria-hidden="true">
-              <LiveCardArtwork kind={kind} skin={appearance} />
+              <LiveCardArtwork kind={kind} skin={appearance} usa={plan?.plan_id === "goswap_card_us"} />
               {appearance === "navy" && kind === "virtual" && (
                 <span className="wpay-subscription-stage wpay-card-catalog-subscription-art">
                   <img className="subscription-composition" src={travelArtwork} alt="" />
                 </span>
               )}
-              {appearance === "silver" && kind === "virtual" && (
+              {appearance === "silver" && kind === "virtual" && plan?.plan_id !== "goswap_card_us" && (
                 <span className="wpay-card-catalog-subscription-art wpay-subscription-stage">
                   <img className="subscription-composition" src={subscriptionArtwork} alt="" />
                   <img className="subscription-claude" src={subscriptionClaude} alt="" />
@@ -1098,7 +1098,7 @@ export default function WalletAuraCards({
               )}
             </span>
             <span className="wpay-card-catalog-benefits">
-              {appearance === "silver" ? "Подписки и онлайн-покупки"
+              {plan?.plan_id === "goswap_card_us" ? "Виртуальная карта США" : appearance === "silver" ? "Подписки и онлайн-покупки"
                 : appearance === "navy" ? "Бронирования и покупки в поездках"
                 : appearance === "ice" ? "Физическая карта с бесплатной доставкой"
                 : "Физическая карта с доставкой"}
@@ -1403,7 +1403,7 @@ export default function WalletAuraCards({
                       aria-label={plan ? `${plan.label} · ${plan.provider}` : `Заказать ${kind === "physical" ? "физическую" : "виртуальную"} карту`}
                       onClick={() => { if (plan?.provider !== "GoSwap" && plan?.available !== false) order(kind, appearance); }}
                     >
-                      <LiveCardArtwork kind={kind} skin={appearance} />
+                      <LiveCardArtwork kind={kind} skin={appearance} usa={plan?.plan_id === "goswap_card_us"} />
                     </button>
                   ))}
                 </div>
@@ -1743,7 +1743,7 @@ export default function WalletAuraCards({
                   if (dy > 55) f7.sheet.get(".wpay-goswap-order-sheet")?.close();
                   else if (dy < -55 && !goSwapSheetExpanded) expandGoSwapSheet();
                 }}>
-                <LiveCardArtwork kind="virtual" skin={goSwapOrder.plan.skin} />
+                <LiveCardArtwork kind="virtual" skin={goSwapOrder.plan.skin} usa={goSwapOrder.plan.plan_id === "goswap_card_us"} />
               </div>
               <p className="mt-3 text-center text-sm opacity-60">{goSwapOrder.quote.label}</p>
               <fieldset className="wpay-goswap-payment">
@@ -2541,14 +2541,17 @@ function LiveCardArtwork({
   card,
   kind,
   skin,
+  usa = false,
 }: {
   card?: AuraCard;
   kind?: "physical" | "virtual";
   skin: CardSkin;
+  usa?: boolean;
 }) {
   return (
     <WalletCardFace
       skin={skin}
+      usa={usa}
       kind={card?.kind ?? kind ?? "virtual"}
       status={
         card?.demo

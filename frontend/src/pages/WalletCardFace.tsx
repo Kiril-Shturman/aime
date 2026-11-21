@@ -15,6 +15,7 @@ export default function WalletCardFace({
   status,
   maskedPan,
   offer = false,
+  usa = false,
   balance,
   currency = "USDT",
 }: {
@@ -25,14 +26,16 @@ export default function WalletCardFace({
   status: string;
   maskedPan?: string | null;
   offer?: boolean;
+  usa?: boolean;
 }) {
   const id = useId().replace(/:/g, "");
-  const dark = skin === "navy" || skin === "graphite";
+  const dark = usa || skin === "navy" || skin === "graphite";
   return (
     <span
-      className={`wpay-bank-card wpay-aura-artwork wpay-card-scene wpay-card-skin--${skin}`}
+      className={`wpay-bank-card wpay-aura-artwork wpay-card-scene wpay-card-skin--${skin}${usa ? " wpay-card-design--usa" : ""}`}
     >
       <span className="wpay-card-face">
+        {usa && <span className="wpay-card-usa-stars" aria-hidden="true">★ ★ ★</span>}
         <svg
           className="wpay-card-face-waves"
           viewBox="0 0 500 315"
