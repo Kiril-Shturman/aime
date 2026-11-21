@@ -1,4 +1,4 @@
-import subscriptionArtwork from "../assets/card-benefits/subscription-services-amber.png";
+import subscriptionArtwork from "../assets/card-benefits/subscription-objects.png";
 import LogoApple from "framework7-icons/react/esm/LogoApple.js";
 import LogoGoogle from "framework7-icons/react/esm/LogoGoogle.js";
 import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
@@ -1066,7 +1066,18 @@ export default function WalletAuraCards({
             <span className="wpay-card-catalog-art" aria-hidden="true">
               <LiveCardArtwork kind={kind} skin={appearance} />
               {appearance === "silver" && kind === "virtual" && (
-                <img className="wpay-card-catalog-subscription-art" src={subscriptionArtwork} alt="" />
+                <span className="wpay-card-catalog-subscription-art wpay-subscription-stage" style={{ backgroundImage: `url(${subscriptionArtwork})` }}>
+                  <svg viewBox="0 0 200 100" aria-hidden="true">
+                    <ellipse cx="105" cy="75" rx="88" ry="18" fill="none" stroke="#ff6d19" strokeWidth="6" opacity=".45" />
+                    <ellipse cx="105" cy="75" rx="88" ry="18" fill="none" stroke="#ffbe61" strokeWidth="2" />
+                  </svg>
+                  <i className="subscription-pad" />
+                  <i className="subscription-gpt" />
+                  <i className="subscription-claude" />
+                  <i className="subscription-spotify" />
+                  <i className="subscription-higgsfield" />
+                  <i className="subscription-playstation" />
+                </span>
               )}
             </span>
             <span className="wpay-card-catalog-benefits">
