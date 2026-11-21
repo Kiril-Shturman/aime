@@ -828,12 +828,11 @@ export default function WalletAuraCards({
     const issue = plan?.issue_fee != null ? `${offerNumber.format(Number(plan.issue_fee))} USDT`
       : goSwapOffer || !fees ? "—" : planPrice(currentKind, activeOffer?.skin);
     const rows: [string, string, string?][] = [
-      ["Выпуск карты", issue],
-      ["Комиссия за пополнение", totalTopup == null ? "—" : `${offerNumber.format(Number(totalTopup))}%`,
-        Number(plan?.service_minimum_fee) > 0 ? `Мин. wPay ${offerNumber.format(Number(plan?.service_minimum_fee))} USDT` : undefined],
       ["Минимум пополнения", minimum, goSwapOffer ? "При первом пополнении" : undefined],
+      ["Комиссия за пополнение", totalTopup == null ? "—" : `${offerNumber.format(Number(totalTopup))}%`],
     ];
     if (premiumOffer) rows.push(["Доставка", "Бесплатно"]);
+    rows.push(["Выпуск карты", issue]);
     return (
       <section aria-label="Условия карты" className="mt-5">
         <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">Условия карты</h3>
