@@ -3,19 +3,31 @@
   <head>
     <meta charset="UTF-8" />
     <script>
-      // Telegram can dispatch native events while the SDK is still loading.
+      // Telegram may send a native callback before its WebApp SDK is ready.
       (() => {
-        if (typeof window.TelegramGameProxy?.receiveEvent === "function") return;
         const pending = [];
-        const proxy = window.TelegramGameProxy ?? {};
-        proxy.receiveEvent = (type, data) => {
+        const earlyReceiver = (type, data) => {
           if (pending.length < 64) pending.push([type, data]);
         };
-        window.TelegramGameProxy = proxy;
-        window.addEventListener("DOMContentLoaded", () => {
+        const ensureReceiver = () => {
+          const proxy = window.TelegramGameProxy || {};
+          if (typeof proxy.receiveEvent === "function") return;
+          const webView = window.Telegram && window.Telegram.WebView;
+          proxy.receiveEvent = webView && typeof webView.receiveEvent === "function"
+            ? webView.receiveEvent.bind(webView)
+            : earlyReceiver;
+          window.TelegramGameProxy = proxy;
+        };
+        ensureReceiver();
+        window.addEventListener("pageshow", ensureReceiver);
+        document.addEventListener("DOMContentLoaded", () => {
+          ensureReceiver();
           const receiver = window.TelegramGameProxy;
-          if (receiver === proxy || typeof receiver?.receiveEvent !== "function") return;
-          for (const [type, data] of pending.splice(0)) receiver.receiveEvent(type, data);
+          if (receiver.receiveEvent === earlyReceiver) return;
+          for (const [type, data] of pending.splice(0)) {
+            try { receiver.receiveEvent(type, data); }
+            catch (error) { console.warn("Telegram callback failed", error); }
+          }
         }, { once: true });
       })();
     </script>
