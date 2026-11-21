@@ -24,8 +24,26 @@ DEFAULT_EVENTS = {
 
 TEMPLATE_DEFAULT = {"title": "{title}", "message": "{message}", "button_text": "Открыть WPay"}
 TEMPLATE_LIMITS = {"title": 200, "message": 3500, "button_text": 64}
-TEMPLATE_TOKEN = re.compile(r"\{(title|message|amount|asset|network_suffix)\}")
-DEPOSIT_TOKENS = {"{amount}", "{asset}", "{network_suffix}"}
+NOTIFICATION_TEXTS = {
+    "deposit": ("Пополнение зачислено", "На баланс{network_suffix} зачислено {amount} {asset}."),
+    "withdrawal.aura": ("Вывод средств", "Статус вывода: {status}.{amount_suffix}"),
+    "withdrawal.goswap": ("Вывод средств", "Статус вывода {amount} {asset}: {status}."),
+    "kyc.pending": ("Верификация обновлена", "Документы приняты, проверка продолжается."),
+    "kyc.verified": ("Верификация пройдена", "Личность подтверждена. Теперь доступны функции, требующие KYC."),
+    "kyc.rejected": ("Верификация обновлена", "Проверка отклонена. Откройте WPay, чтобы посмотреть статус и повторить действие."),
+    "card.status": ("Обновление карты", "Статус карты изменён: {status}."),
+    "card.opened": ("Обновление карты", "Карта выпущена и появилась в WPay."),
+    "card.failed": ("Обновление карты", "Выпустить карту не удалось. Средства будут обработаны по статусу заявки."),
+    "card.cancelled": ("Обновление карты", "Карта закрыта."),
+    "card.delivery": ("Обновление карты", "Статус доставки физической карты: {delivery_status}."),
+    "card.frozen": ("Обновление карты", "Карта заморожена."),
+    "card_operation": ("Операция по карте", "{operation_name}: {amount} USDT. Статус: {status}.{merchant_suffix}"),
+    "card_otp": ("Код 3DS для карты", "{code}\n\nКод действует две минуты с момента получения."),
+    "sbp": ("Покупка через СБП", "Статус покупки через СБП: {status}.{amount_suffix}"),
+    "qr.aura": ("Оплата по QR", "Статус оплаты QR: {status}.{amount_suffix}"),
+    "qr.goswap": ("Оплата по QR", "Статус оплаты: {status}."),
+}
+TEMPLATE_TOKEN = re.compile(r"\{([a-z_]+)\}")
 
 
 def render_template(template, title, message, variables=None):
@@ -34,14 +52,16 @@ def render_template(template, title, message, variables=None):
 
 
 def save_template(ledger, event_type, template, actor):
-    if event_type not in DEFAULT_EVENTS:
+    if event_type not in NOTIFICATION_TEXTS and event_type not in DEFAULT_EVENTS:
         raise ValueError("Неизвестное событие уведомлений")
     if template is None:
         ledger.db.execute("DELETE FROM notification_templates WHERE event_type=?", (event_type,))
         return
     if not isinstance(template, dict) or template.keys() != TEMPLATE_DEFAULT.keys():
         raise ValueError("Некорректный шаблон уведомления")
-    allowed = {"{title}", "{message}"} | (DEPOSIT_TOKENS if event_type == "deposit" else set())
+    allowed = {"{title}", "{message}"} | {token[0] for token in TEMPLATE_TOKEN.finditer(NOTIFICATION_TEXTS.get(event_type, ("", ""))[1])}
+    if event_type == "card_otp" and "{code}" in template["title"]:
+        raise ValueError("Код можно вставить только в текст сообщения")
     for field, limit in TEMPLATE_LIMITS.items():
         value = template[field]
         if not isinstance(value, str) or len(value) > limit or (field != "button_text" and not value.strip()):
@@ -50,8 +70,8 @@ def save_template(ledger, event_type, template, actor):
             raise ValueError("В шаблоне есть неизвестная переменная")
         if field == "button_text" and TEMPLATE_TOKEN.search(value):
             raise ValueError("Текст кнопки задаётся без переменных")
-    if event_type == "card_otp" and template["message"].count("{message}") != 1:
-        raise ValueError("Добавьте {message}, чтобы сохранить код 3DS и инструкцию")
+    if event_type == "card_otp" and sum(template["message"].count(token) for token in ("{message}", "{code}")) != 1:
+        raise ValueError("Добавьте {code} или {message}, чтобы сохранить код 3DS")
     ledger.db.execute(
         "INSERT INTO notification_templates VALUES (?,?,?,?) ON CONFLICT(event_type) "
         "DO UPDATE SET template=excluded.template,updated_at=excluded.updated_at,updated_by=excluded.updated_by",
@@ -96,7 +116,7 @@ def prepare(ledger):
 
 
 def enqueue(ledger, source_key, user_id, event_type, title, message,
-            button_text="Открыть WPay", button_url=None, *, variables=None):
+            button_text="Открыть WPay", button_url=None, *, variables=None, variant=None):
     """Queue in the caller's current transaction; source_key makes retries harmless."""
     if not user_id or not str(user_id).startswith("tg:"):
         return False
@@ -108,7 +128,8 @@ def enqueue(ledger, source_key, user_id, event_type, title, message,
     if setting and not setting[0]:
         return False
     custom = ledger.db.execute(
-        "SELECT template FROM notification_templates WHERE event_type=?", (event_type,)
+        "SELECT template FROM notification_templates WHERE event_type IN (?,?) "
+        "ORDER BY event_type=? DESC LIMIT 1", (event_type, variant, variant)
     ).fetchone()
     otp_body_template = None
     if custom:
@@ -119,7 +140,8 @@ def enqueue(ledger, source_key, user_id, event_type, title, message,
         if event_type == "card_otp":
             # Freeze the template with the queued row without persisting the code.
             otp_body_template = re.sub(r"\{title\}", lambda _: str(original_title), template["message"])
-            message = render_template(otp_body_template, original_title, message)
+            if "{code}" not in otp_body_template:
+                message = render_template(otp_body_template, original_title, message)
         else:
             message = render_template(template["message"], original_title, message, variables)
     stamp = time.time()
@@ -147,7 +169,15 @@ def snapshot(ledger):
         for row in ledger.db.execute("SELECT event_type,template FROM notification_templates")
     }
     for setting in settings:
-        setting["template"] = templates.get(setting["event_type"])
+        event_type = setting["event_type"]
+        setting["template"] = templates.get(event_type)
+        setting["variants"] = [
+            {"key": key, "default": {"title": title, "message": message,
+                                     "button_text": TEMPLATE_DEFAULT["button_text"]},
+             "template": templates.get(key), "inherited": key != event_type and key not in templates and event_type in templates}
+            for key, (title, message) in NOTIFICATION_TEXTS.items()
+            if key.split(".", 1)[0] == event_type
+        ]
     recent = [dict(row) for row in ledger.db.execute(
         "SELECT notification_id,user_id,event_type,title,message,status,attempts,last_error,"
         "created_at,sent_at,updated_at FROM notification_outbox ORDER BY created_at DESC LIMIT 100"
@@ -199,7 +229,10 @@ class NotificationWorker:
                     if code:
                         actual = f"<code>{html.escape(code)}</code>\n\nКод действует две минуты с момента получения."
                         template = row["otp_body_template"]
-                        message = html.escape(template).replace("{message}", actual) if template else actual
+                        if template and "{code}" in template:
+                            message = html.escape(template).replace("{code}", f"<code>{html.escape(code)}</code>")
+                        else:
+                            message = html.escape(template).replace("{message}", actual) if template else actual
                 payload = {
                     "chat_id": int(row["user_id"].removeprefix("tg:")),
                     "text": f"<b>{html.escape(row['title'])}</b>\n\n{message}",

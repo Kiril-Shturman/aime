@@ -1425,6 +1425,27 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         row = ledger.db.execute("SELECT title,message,button_text FROM notification_outbox ORDER BY rowid DESC").fetchone()
         self.assertEqual(tuple(row), ("Зачисление", "15 USDT", "Открыть WPay"))
 
+    async def test_notification_editor_exposes_real_text_and_edits_one_variant(self):
+        from wallet_notifications import enqueue
+
+        endpoint = "/api/wallet/admin-notifications"
+        response = await self.wpay.get(endpoint, headers=self.owner)
+        settings = (await response.json())["settings"]
+        withdrawal = next(row for row in settings if row["event_type"] == "withdrawal")
+        defaults = {item["key"]: item["default"]["message"] for item in withdrawal["variants"]}
+        self.assertEqual(defaults["withdrawal.aura"], "Статус вывода: {status}.{amount_suffix}")
+        template = {"title": "Вывод средств", "message": "Новый статус: {status}.", "button_text": ""}
+        saved = await self.wpay.post(endpoint, headers=self.owner, json={
+            "operation": "template", "event_type": "withdrawal.aura", "template": template,
+        })
+        self.assertEqual(saved.status, 200, await saved.text())
+        ledger = self.app["wpay_ledger"]
+        for provider in ("aura", "goswap"):
+            enqueue(ledger, provider, "tg:123", "withdrawal", "Вывод средств", "Исходный текст",
+                    variant=f"withdrawal.{provider}", variables={"status": "broadcast"})
+        notices = ledger.db.execute("SELECT message FROM notification_outbox ORDER BY rowid").fetchall()
+        self.assertEqual([row[0] for row in notices], ["Новый статус: broadcast.", "Исходный текст"])
+
     async def test_disabled_route_then_complete_mock_deposit(self):
         disabled = await self.wpay.post("/api/wallet/aura-deposit-address", headers=self.owner)
         self.assertEqual(disabled.status, 503)

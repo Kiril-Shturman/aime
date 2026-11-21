@@ -193,8 +193,9 @@ type AuraConsoleData = {
 };
 type BroadcastData = { items: Json[] };
 type NotificationTemplate = { title: string; message: string; button_text: string };
+type NotificationVariant = { key: string; default: NotificationTemplate; template: NotificationTemplate | null; inherited: boolean };
 type NotificationData = {
-  settings: { event_type: string; label: string; enabled: number; template?: NotificationTemplate | null }[];
+  settings: { event_type: string; label: string; enabled: number; template?: NotificationTemplate | null; variants?: NotificationVariant[] }[];
   counts: Record<string, number>;
   recent: Json[];
   eligible_users: number;
@@ -3261,12 +3262,6 @@ const defaultNotificationTemplate: NotificationTemplate = {
   title: "{title}", message: "{message}", button_text: "Открыть WPay",
 };
 
-const depositNotificationTemplate: NotificationTemplate = {
-  ...defaultNotificationTemplate,
-  title: "Пополнение зачислено",
-  message: "На баланс{network_suffix} зачислено {amount} {asset}.",
-};
-
 const notificationExamples: Record<string, [string, string]> = {
   deposit: ["Пополнение зачислено", "На баланс USDT TRC‑20 зачислено 10 USDT."],
   withdrawal: ["Вывод средств", "Статус вывода: completed. Сумма: 5 USDT."],
@@ -3326,14 +3321,20 @@ function Notifications({
       setSending(false);
     }
   }
-  const [editor, setEditor] = useState<{ eventType: string; draft: NotificationTemplate } | null>(null);
+  const [editor, setEditor] = useState<{ eventType: string; variant: string; draft: NotificationTemplate } | null>(null);
+  function editTemplate(setting: NotificationData["settings"][number], variant = setting.variants?.[0]) {
+    setEditor({
+      eventType: setting.event_type, variant: variant?.key ?? setting.event_type,
+      draft: { ...(variant?.template ?? variant?.default ?? setting.template ?? defaultNotificationTemplate) },
+    });
+  }
   async function saveTemplate(template: NotificationTemplate | null) {
     if (!editor || saving) return;
     setSaving("template");
     setNotice("");
     try {
       await walletRequest("admin-notifications", {
-        operation: "template", event_type: editor.eventType, template,
+        operation: "template", event_type: editor.variant, template,
       });
       await reload();
       setEditor(null);
@@ -3412,12 +3413,12 @@ function Notifications({
               className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-black/[.035] p-3 dark:bg-white/[.06]">
               <div>
                 <span className="block text-sm font-medium">{setting.label}</span>
-                <span className="text-xs opacity-55">{setting.template ? "Свой шаблон" : "Стандартный шаблон"}</span>
+                <span className="text-xs opacity-55">{(setting.template || setting.variants?.some((variant) => variant.template)) ? "Свой шаблон" : "Стандартный шаблон"}</span>
               </div>
               <div className="flex items-center gap-3">
                 <button type="button" className="text-sm font-semibold text-blue-600 dark:text-blue-400"
                   disabled={Boolean(saving)} aria-expanded={editor?.eventType === setting.event_type}
-                  onClick={() => setEditor({ eventType: setting.event_type, draft: { ...(setting.template ?? (setting.event_type === "deposit" ? depositNotificationTemplate : defaultNotificationTemplate)) } })}>
+                  onClick={() => editTemplate(setting)}>
                   Редактировать
                 </button>
                 <input type="checkbox" aria-label={`Отправлять уведомления «${setting.label}»`}
@@ -3430,12 +3431,17 @@ function Notifications({
         </div>
         {editor && (() => {
           const [exampleTitle, exampleMessage] = notificationExamples[editor.eventType] ?? ["Уведомление", "Пример сообщения"];
+          const setting = data.settings.find((item) => item.event_type === editor.eventType);
+          const variant = setting?.variants?.find((item) => item.key === editor.variant);
           const variables: Record<string, string> = {
             title: exampleTitle, message: exampleMessage,
             amount: "10", asset: "USDT", network_suffix: " USDT TRC‑20",
+            status: "completed", code: "000000", delivery_status: "shipped",
+            operation_name: "Покупка", merchant_suffix: " Получатель: Магазин.",
+            amount_suffix: editor.eventType === "withdrawal" ? " Сумма: 5 USDT." : " Сумма: 700 RUB.",
           };
           const preview = (value: string) =>
-            value.replace(/\{(title|message|amount|asset|network_suffix)\}/g, (_, token) => variables[token]);
+            value.replace(/\{([a-z_]+)\}/g, (match, token) => variables[token] ?? match);
           const fields = [
             ["title", "Заголовок", 200],
             ["message", "Текст сообщения", 3500],
@@ -3445,14 +3451,23 @@ function Notifications({
             <form className="mt-4 grid gap-4 rounded-2xl border border-[var(--admin-border)] p-4 lg:grid-cols-2"
               onSubmit={(event) => { event.preventDefault(); void saveTemplate(editor.draft); }}>
               <div className="grid gap-3">
-                <h3 className="font-semibold">{data.settings.find((item) => item.event_type === editor.eventType)?.label}</h3>
-                <p className="text-xs opacity-70">
-                  {editor.eventType === "deposit" ? (
-                    <>{"{amount}"} — сумма зачисления, {"{asset}"} — валюта, {"{network_suffix}"} — сеть Aura. Пустое поле кнопки скрывает её.</>
-                  ) : (
-                    <>{"{title}"} вставляет исходный заголовок, {"{message}"} — текст события. Пустое поле кнопки скрывает её.</>
-                  )}
-                </p>
+                <h3 className="font-semibold">{setting?.label}</h3>
+                {setting && (setting.variants?.length ?? 0) > 1 && (
+                  <select aria-label="Вариант уведомления" value={editor.variant} className={input}
+                    onChange={(event) => editTemplate(setting, setting.variants?.find((item) => item.key === event.target.value))}>
+                    {setting.variants?.map((item) => (
+                      <option key={item.key} value={item.key}>{({
+                        "withdrawal.aura": "Aura", "withdrawal.goswap": "GoSwap",
+                        "qr.aura": "Aura", "qr.goswap": "GoSwap",
+                        "kyc.pending": "Проверка продолжается", "kyc.verified": "Верификация пройдена", "kyc.rejected": "Проверка отклонена",
+                        "card.status": "Изменение статуса", "card.opened": "Карта выпущена", "card.failed": "Ошибка выпуска",
+                        "card.cancelled": "Карта закрыта", "card.delivery": "Доставка", "card.frozen": "Карта заморожена",
+                      } as Record<string, string>)[item.key] ?? item.default.title}</option>
+                    ))}
+                  </select>
+                )}
+                {variant?.inherited && <p className="text-xs opacity-70">Сейчас применяется ранее сохранённый общий шаблон. Сохранение создаст отдельный шаблон для этого варианта.</p>}
+                <p className="text-xs opacity-70">Слова в фигурных скобках заменяются данными операции. Пустое поле кнопки скрывает её.</p>
                 {fields.map(([name, label, maxLength]) => {
                   const props = {
                     value: editor.draft[name], maxLength, required: name !== "button_text",

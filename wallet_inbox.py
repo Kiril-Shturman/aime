@@ -269,6 +269,7 @@ async def process(ledger, provider, row, money, ApiError):
                     enqueue_notification(
                         ledger, f"goswap:qr:{payload.get('payment_id')}:{status}",
                         quote[0], "qr", "Оплата по QR", "Статус оплаты: " + status + ".",
+                        variant="qr.goswap", variables={"status": status, "amount_suffix": ""},
                     )
             elif kind.startswith("withdrawal_"):
                 for item in verified:
@@ -284,6 +285,8 @@ async def process(ledger, provider, row, money, ApiError):
                             ledger, f"goswap:withdrawal:{item.get('withdrawal_id')}:{item.get('version')}:{status}",
                             owner[0], "withdrawal", "Вывод средств",
                             f"Статус вывода {amount} {item.get('asset') or 'USDT'}: {status}.",
+                            variant="withdrawal.goswap", variables={"amount": amount, "asset": item.get("asset") or "USDT",
+                                                                  "status": status, "amount_suffix": f" Сумма: {amount} {item.get('asset') or 'USDT'}."},
                         )
             elif kind.startswith("transfer_"):
                 for item in verified:
