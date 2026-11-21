@@ -2378,3 +2378,11 @@
 .dark .wpay-overflow-menu li [class*="text-primary"] {
   color: #fff;
 }
+
+.wpay-overflow-menu {
+  border-radius: 18px !important;
+}
+
+.wpay-overflow-menu > div {
+  border-radius: inherit;
+}
