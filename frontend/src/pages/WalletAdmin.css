@@ -2192,3 +2192,13 @@
 .wpay-admin-switch:checked::before { transform: translateX(15px); }
 .wpay-admin-switch:focus-visible { outline: 2px solid #1475eb; outline-offset: 3px; }
 .wpay-admin-content input.wpay-admin-switch[type="checkbox"]:disabled { opacity: .5; cursor: default; }
+
+.admin-tariff-table { overflow-x: auto; border: 1px solid var(--admin-border); border-radius: 14px; }
+.admin-tariff-table table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.admin-tariff-table :is(th, td) { padding: 12px; text-align: left; vertical-align: top; }
+.admin-tariff-table th { background: var(--admin-surface-muted); color: var(--admin-muted); font-weight: 600; }
+.admin-tariff-table td { border-top: 1px solid var(--admin-border); }
+.admin-tariff-table tr[data-selected="true"] { background: color-mix(in srgb, #1475eb 7%, var(--admin-surface)); }
+.admin-tariff-table small { display: block; margin-top: 4px; color: var(--admin-muted); }
+.admin-tariff-name { color: var(--wpay-admin-action); font-weight: 650; text-align: left; cursor: pointer; }
+.admin-tariff-name:hover { text-decoration: underline; }

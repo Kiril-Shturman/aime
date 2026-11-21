@@ -727,6 +727,7 @@ function Audit({ data }: { data: AuditData }) {
 }
 
 function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<void> }) {
+  const editorRef = useRef<HTMLElement>(null);
   const [selected, setSelected] = useState(data.items[0]?.product || "");
   const current = data.items.find((item) => item.product === selected) || data.items[0];
   const [enabled, setEnabled] = useState(Boolean(current?.enabled));
@@ -765,16 +766,16 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
   }
   async function save() {
     if (!current || saving) return;
-    if (window.prompt(`Введите TARIFF ${current.product}`) !== `TARIFF ${current.product}`) return;
+    if (current.enforced && window.prompt(`Введите TARIFF ${current.product}`) !== `TARIFF ${current.product}`) return;
     setSaving(true);
     setNotice("");
     try {
       await walletRequest("admin-tariffs", {
-        product: current.product, enabled, fixed_fee: fixed,
-        percent_fee: percent, minimum_fee: minimum, note,
+        product: current.product, enabled: current.enforced && enabled, fixed_fee: fixed.trim().replace(",", "."),
+        percent_fee: percent.trim().replace(",", "."), minimum_fee: minimum.trim().replace(",", "."), note,
         confirm: `TARIFF ${current.product}`,
       });
-      setNotice("Новая версия тарифа сохранена");
+      setNotice(current.enforced ? "Новая версия тарифа сохранена" : "Наценка сохранена для настройки тарифа");
       await reload();
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : "Тариф не сохранён");
@@ -795,62 +796,59 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
         {([["cards", "Карты Aura", "Aura"], ["cards", "Карты GoSwap", "GoSwap"], ["deposits", "Пополнения", null], ["other", "Другие операции", null]] as const).map(([category, label, provider]) => (
           <div key={label} className="mt-6 border-t border-[var(--admin-border)] pt-4">
             <h3 className="mb-3 text-base font-semibold">{label}</h3>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {data.items.filter((item) => (item.category ?? (item.card_plan ? "cards" : item.product === "sbp_buy" ? "deposits" : "other")) === category && (!provider || item.provider === provider)).map((item) => (
-            <article key={item.product} className="rounded-2xl border border-[var(--admin-border)]">
-            <button type="button" onClick={() => choose(item.product)}
-              className={`w-full rounded-2xl border border-transparent p-4 text-left ${selected === item.product ? "border-blue-500 bg-blue-500/5" : "border-[var(--admin-border)]"}`}>
-              <b className="block text-sm">{item.label}</b>
-              <small className="mt-1 block opacity-50">
-                {item.enforced ? (item.enabled ? "Включён" : "Выключен") : "Подключение расчёта готовится"}
-              </small>
-              {Boolean(item.card_plan) && (
-                <small className="mt-2 block text-blue-500">
-                  {item.kind === "physical" ? "Физическая" : item.kind === "virtual" ? "Виртуальная" : "Тип карты не указан"}
-                  {Boolean(item.region) && ` · ${text(item.region)}`}
-                  {item.provider === "GoSwap" && item.provider_issue_currency === "USD" && <>
-                    <br />Выпуск {Number(item.provider_issue_fee).toFixed(2)} $ · пополнение {amount(item.provider_recharge_fee)}% сверху
-                  </>}
-                  {item.provider === "Aura" && item.provider_issue_fee != null && <>
-                    <br />Выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
-                    {item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}
-                  </>}
-                </small>
-              )}
-              {Array.isArray(item.conditions) && (
-                <small className="mt-2 block opacity-55">{item.conditions.join(" · ")}</small>
-              )}
-              <span className="mt-3 block text-xs">
-                {item.card_plan
-                  ? `Наценка wPay: выпуск +${amount(item.fixed_fee)} USDT · пополнение +${amount(item.percent_fee)}% (мин. ${amount(item.minimum_fee)} USDT)`
-                  : `${amount(item.fixed_fee)} + ${amount(item.percent_fee)}% · минимум ${amount(item.minimum_fee)}`}
-              </span>
-            </button>
-            {Boolean(item.card_plan) && (
-              <label className="flex items-center justify-between gap-3 border-t border-[var(--admin-border)] px-4 py-3 text-xs font-semibold">
-                {item.provider === "GoSwap" ? "Доступность тарифа" : "Выпуск карты"}
-                <input type="checkbox" role="switch" aria-label={`${item.provider === "GoSwap" ? "Доступность тарифа" : "Выпуск карты"} «${item.label}»`}
-                  className="wpay-admin-switch" checked={item.issue_enabled !== false} disabled={saving}
-                  onChange={(event) => void toggleIssue(item.product, event.target.checked)} />
-              </label>
-            )}
-            </article>
-          ))}
+            <div className="admin-tariff-table">
+              <table aria-label={label}>
+                <thead><tr>
+                  <th>Тариф</th>{provider && <th>Условия провайдера</th>}
+                  <th>Комиссия wPay</th>{provider && <th>Доступность</th>}
+                </tr></thead>
+                <tbody>
+                  {data.items.filter(item => (item.category ?? (item.card_plan ? "cards" : item.product === "sbp_buy" ? "deposits" : "other")) === category && (!provider || item.provider === provider)).map(item => (
+                    <tr key={item.product} data-selected={selected === item.product}>
+                      <td>
+                        <button type="button" className="admin-tariff-name" aria-pressed={selected === item.product} onClick={() => {
+                          choose(item.product);
+                          requestAnimationFrame(() => editorRef.current?.scrollIntoView({ block: "nearest" }));
+                        }}>{item.label}</button>
+                        {provider && <small>{[item.kind === "physical" ? "Физическая" : item.kind === "virtual" ? "Виртуальная" : "", item.region].filter(Boolean).join(" · ")}</small>}
+                      </td>
+                      {provider && <td>
+                        {item.provider_issue_fee != null
+                          ? <>Выпуск {item.provider_issue_currency === "USD" ? `${Number(item.provider_issue_fee).toFixed(2)} $` : `${amount(item.provider_issue_fee)} USDT`}</>
+                          : "—"}
+                        {item.provider_recharge_fee != null && <small>Пополнение {amount(item.provider_recharge_fee)}%{provider === "GoSwap" ? " сверху" : ""}{item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}</small>}
+                        {Array.isArray(item.conditions) && <small>{item.conditions.join(" · ")}</small>}
+                      </td>}
+                      <td>
+                        {item.card_plan ? `Выпуск +${amount(item.fixed_fee)} USDT` : `Фикс. ${amount(item.fixed_fee)} USDT`}
+                        <small>{item.card_plan ? "Пополнение +" : ""}{amount(item.percent_fee)}% · мин. {amount(item.minimum_fee)} USDT</small>
+                        {!item.enforced && <small>Сохранённая настройка</small>}
+                      </td>
+                      {provider && <td>
+                        <input type="checkbox" role="switch" className="wpay-admin-switch"
+                          aria-label={`${provider === "GoSwap" ? "Доступность тарифа" : "Выпуск карты"} «${item.label}»`}
+                          checked={item.issue_enabled !== false} disabled={saving}
+                          onChange={event => void toggleIssue(item.product, event.target.checked)} />
+                      </td>}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         ))}
       </section>
       {current && (
-        <section className={card}>
+        <section ref={editorRef} className={card}>
           <div className="wpay-admin-section-title"><div><span>{current.product}</span><h2>{current.label}</h2></div></div>
-          {!current.enforced && <p className="mb-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-600">Параметры видны для планирования, но включение заблокировано до подключения безопасного расчёта к settlement.</p>}
+          {!current.enforced && <p className="mb-4 rounded-xl bg-amber-500/10 p-3 text-xs text-amber-600">Наценка сохраняется. Списание комиссии станет доступно после подключения операций этого тарифа.</p>}
           <div className="grid gap-3 md:grid-cols-3">
             <label><span className="text-xs font-semibold">{current.card_plan ? "Наценка за выпуск" : "Фиксированная комиссия"}</span><input className={`${input} mt-2`} value={fixed} onChange={(e) => setFixed(e.target.value)} /></label>
             <label><span className="text-xs font-semibold">{current.card_plan ? "Наша комиссия пополнения, %" : "Процент"}</span><input className={`${input} mt-2`} value={percent} onChange={(e) => setPercent(e.target.value)} /></label>
             <label><span className="text-xs font-semibold">{current.card_plan ? "Минимальная наша комиссия пополнения" : "Минимальная комиссия"}</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
           </div>
           <label className="mt-3 block"><span className="text-xs font-semibold">Комментарий к версии</span><input className={`${input} mt-2`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Причина изменения" /></label>
-          <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" role="switch" className="wpay-admin-switch" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять комиссию wPay к новым операциям</label>
+          {current.enforced && <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" role="switch" className="wpay-admin-switch" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Применять комиссию wPay к новым операциям</label>}
           <button type="button" disabled={saving} onClick={() => void save()} className="mt-4 rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{saving ? "Сохраняю…" : "Сохранить новую версию"}</button>
           {notice && <p className="mt-3 text-xs">{notice}</p>}
         </section>
