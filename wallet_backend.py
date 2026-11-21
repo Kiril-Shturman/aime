@@ -1924,6 +1924,9 @@ def install_wallet(app, root, owner_check):
                     )
                 ]
                 balances = goswap_network_balances(ledger, uid, 'USDT')
+                for network in enabled_asset_routes().get('USDT', []):
+                    if deposit_provider('USDT', network) == 'goswap':
+                        balances.setdefault(network, Decimal(0))
                 if items:
                     for item in items:
                         if 'USDT' in item.get('assets', [item.get('asset')]):
