@@ -102,12 +102,13 @@ def set_card_issue_enabled(ledger, product, enabled, actor):
 
 def snapshot(ledger):
     items = []
+    positions = {product: index for index, product in enumerate(CARD_PLANS, start=1)}
     for product, (label, enforced) in PRODUCTS.items():
         item = active(ledger, product)
         item.update(label=label, enforced=enforced)
         if product in CARD_PLANS:
             item.update(CARD_PLANS[product], card_plan=True, provider="Aura", category="cards",
-                        issue_enabled=card_issue_enabled(ledger, product))
+                        issue_enabled=card_issue_enabled(ledger, product), storefront_position=positions[product])
         elif product in GOSWAP_CARD_PLANS:
             item.update(GOSWAP_CARD_PLANS[product], card_plan=True, provider="GoSwap", category="cards",
                         issue_enabled=card_issue_enabled(ledger, product))

@@ -824,6 +824,29 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
         <p className="text-xs opacity-55">
           Комиссия WPay считается отдельно от цены провайдера. Новая версия действует только на новые операции; повторы используют сохранённую версию.
         </p>
+        {section === "cards" && (
+          <div className="mt-5 rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface-muted)] p-4">
+            <h3 className="mb-2 font-semibold">Порядок карт на витрине</h3>
+            <ol className="grid gap-2">
+              {sectionItems.filter(item => typeof item.storefront_position === "number")
+                .sort((a, b) => Number(a.storefront_position) - Number(b.storefront_position))
+                .map(item => (
+                  <li key={item.product} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                    <span className="w-5 text-[var(--admin-muted)]">{String(item.storefront_position)}.</span>
+                    <strong>{item.label}</strong>
+                    <span className="admin-wallet-provider" data-provider="aura">Aura</span>
+                    <small className="ml-auto text-[var(--admin-muted)]">
+                      {item.issue_enabled === false ? "Выпуск выключен"
+                        : !item.version_id ? "Тариф не настроен"
+                        : item.provider_issue_fee == null ? "Цена выпуска недоступна"
+                        : "Выпуск включён в тарифе"}
+                    </small>
+                  </li>
+                ))}
+            </ol>
+            <p className="mt-3 text-xs text-[var(--admin-muted)]">Физические карты отображаются, когда Aura возвращает цену выпуска. Карты GoSwap пока не подключены к витрине.</p>
+          </div>
+        )}
         {section === "cards" && ([["Карты Aura", "Aura"], ["Карты GoSwap", "GoSwap"]] as const).map(([label, provider]) => (
           <div key={label} className="mt-6 border-t border-[var(--admin-border)] pt-4">
             <h3 className="mb-3 text-base font-semibold">{label}</h3>
