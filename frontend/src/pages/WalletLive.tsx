@@ -302,7 +302,8 @@ export function LiveHistory() {
         ? "transfers"
         : type === "withdrawal" || type.startsWith("withdrawal_") || type === "owner_withdrawal"
           ? "withdrawals"
-          : type === "deposit" || type === "ruble_deposit" || type.startsWith("sbp_") || type === "deposit_return"
+          : type === "deposit" || type === "ruble_deposit" || type.startsWith("sbp_") || type === "deposit_return" ||
+            ((type === "admin_adjustment" || type === "adjustment") && Number(x.amount) > 0)
             ? "deposits"
             : null;
     return (filter === "all" || category === filter) &&
