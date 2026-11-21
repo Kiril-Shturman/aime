@@ -2386,3 +2386,33 @@
 .wpay-overflow-menu > div {
   border-radius: inherit;
 }
+
+.wpay-f7-root .wpay-mobile-overflow-sheet.sheet-modal {
+  z-index: 13500;
+  height: auto;
+  max-height: 80dvh;
+  border-radius: 28px 28px 0 0;
+  background: var(--color-ios-light-surface-1, #fff);
+}
+.wpay-f7-root.dark .wpay-mobile-overflow-sheet.sheet-modal {
+  background: var(--color-ios-dark-surface-1, #1c1c1e);
+}
+.wpay-mobile-overflow-sheet .sheet-modal-inner {
+  overflow: auto;
+  padding: 8px 16px max(12px, env(safe-area-inset-bottom));
+}
+.wpay-mobile-overflow-grip {
+  width: 36px;
+  height: 4px;
+  margin: 0 auto 10px;
+  border-radius: 4px;
+  background: currentColor;
+  opacity: .25;
+}
+.wpay-mobile-overflow-sheet .wpay-overflow-menu-inner {
+  height: auto !important;
+  min-height: 48px !important;
+}
+.wpay-mobile-overflow-sheet .wpay-overflow-menu-inner .truncate {
+  white-space: normal;
+}

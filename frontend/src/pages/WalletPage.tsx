@@ -279,6 +279,7 @@ function WalletScreen() {
   const user = getUser();
   const { theme, toggle: toggleTheme } = useTheme();
   const menuButton = useRef<HTMLElement | null>(null);
+  const desktopMenu = useDesktopWalletLayout();
   const pageRef = useRef<HTMLElement | null>(null);
   const [cardActionSlot, setCardActionSlot] = useState<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<WalletTab>("wallet");
@@ -411,13 +412,7 @@ function WalletScreen() {
     },
   });
 
-  const menu = createPortal(
-    <Popover
-      opened={menuOpen}
-      target={menuButton.current}
-      onBackdropClick={() => setMenuOpen(false)}
-      className="wpay-overflow-menu !mt-3 !w-64"
-    >
+  const menuRows = (
       <List nested className="!my-0">
         {menuItems.map((item) => (
           <ListItem
@@ -446,7 +441,30 @@ function WalletScreen() {
           />
         ))}
       </List>
-    </Popover>,
+  );
+  const menu = createPortal(
+    desktopMenu ? (
+      <Popover
+        opened={menuOpen}
+        target={menuButton.current}
+        onBackdropClick={() => setMenuOpen(false)}
+        className="wpay-overflow-menu !mt-3 !w-64"
+      >
+        {menuRows}
+      </Popover>
+    ) : (
+      <F7Sheet
+        opened={menuOpen}
+        onSheetClose={() => setMenuOpen(false)}
+        className="wpay-mobile-overflow-sheet"
+        backdrop
+        closeByBackdropClick
+        swipeToClose
+      >
+        <div className="wpay-mobile-overflow-grip" aria-hidden="true" />
+        {menuRows}
+      </F7Sheet>
+    ),
     document.querySelector(".k-app") ?? document.body,
   );
 
