@@ -1544,7 +1544,10 @@ export default function WalletAuraCards({
             if (goSwapOffer) void issueGoSwap(storefrontPlan);
             else order(currentKind, activeOffer?.skin);
           }}>
-          {busy === "goswap-quote" ? "Загрузка…" : "Оформить карту"}
+          <span className="wpay-card-action-label">
+            <CreditCard size={20} aria-hidden="true" />
+            {busy === "goswap-quote" ? "Загрузка…" : "Оформить карту"}
+          </span>
         </Button>,
         bottomActionSlot,
       )}

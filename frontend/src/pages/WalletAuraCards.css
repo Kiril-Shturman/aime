@@ -1037,3 +1037,14 @@
   padding: 8px 16px max(12px, env(safe-area-inset-bottom));
 }
 .wpay-card-action-slot:not(:empty) + .wpay-bottom-menu { display: none; }
+
+.wpay-card-action-label { display: inline-flex; align-items: center; justify-content: center; gap: 9px; }
+@media (prefers-reduced-motion: no-preference) {
+  .wpay-card-action-slot > .wpay-aura-primary {
+    animation: wpay-card-action-enter 290ms cubic-bezier(.2, .75, .25, 1) both;
+  }
+}
+@keyframes wpay-card-action-enter {
+  from { transform: translateY(calc(100% + env(safe-area-inset-bottom) + 16px)); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
