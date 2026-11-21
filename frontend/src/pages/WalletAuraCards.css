@@ -1249,7 +1249,7 @@
 .wpay-card-catalog-services > .wpay-catalog-app-store { width: 26px; min-height: 26px; padding: 0; }
 .wpay-catalog-app-store svg { width: 12px; height: 12px; flex-basis: 12px; }
 
-.wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art) {
+.wpay-card-catalog .wpay-card-catalog-item {
   row-gap: 9px;
   padding-top: 15px;
   background: none;
@@ -1257,7 +1257,7 @@
   box-shadow: none;
   isolation: isolate;
 }
-.wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art)::before {
+.wpay-card-catalog-item::before {
   content: "";
   position: absolute;
   inset: 16px -1px -1px;
@@ -1265,18 +1265,23 @@
   border: 1px solid #ffffff24;
   border-radius: inherit;
   box-shadow: 0 7px 18px #12233d25;
+  background: radial-gradient(ellipse at 92% 8%, var(--catalog-glow, #64799b99), transparent 72%), #18253c;
+}
+.wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art)::before {
   background: linear-gradient(90deg, #12101de8, #12101d18 76%),
     #16121a url("../assets/card-benefits/subscription-background.jpg") center / cover no-repeat;
 }
-.wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art) > :is(.wpay-card-catalog-services, .wpay-card-catalog-item-heading, .wpay-card-catalog-benefits, .wpay-card-catalog-region) {
+.wpay-card-catalog-item > :is(.wpay-card-catalog-services, .wpay-card-catalog-item-heading, .wpay-card-catalog-benefits, .wpay-card-catalog-region) {
   translate: 0 20px;
 }
-
-.wpay-card-catalog-art:has(.wpay-card-catalog-subscription-art) {
+.wpay-card-catalog-item:not(:has(.wpay-card-catalog-subscription-art)) .wpay-card-catalog-price {
+  margin-top: 26px;
+}
+.wpay-card-catalog-art {
   grid-row: 1 / 5;
   margin-top: -35px;
 }
-.wpay-card-catalog-art:has(.wpay-card-catalog-subscription-art) > .wpay-bank-card.wpay-card-scene {
+.wpay-card-catalog-art > .wpay-bank-card.wpay-card-scene {
   translate: 0 10px;
 }
 .wpay-card-catalog-subscription-art {
