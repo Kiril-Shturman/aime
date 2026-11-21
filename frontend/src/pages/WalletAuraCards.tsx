@@ -1,3 +1,4 @@
+import subscriptionClaude from "../assets/card-benefits/subscription-claude.png";
 import subscriptionArtwork from "../assets/card-benefits/subscription-objects.png";
 import LogoApple from "framework7-icons/react/esm/LogoApple.js";
 import LogoGoogle from "framework7-icons/react/esm/LogoGoogle.js";
@@ -1073,7 +1074,7 @@ export default function WalletAuraCards({
                   </svg>
                   <i className="subscription-pad" />
                   <i className="subscription-gpt" />
-                  <i className="subscription-claude" />
+                  <img className="subscription-claude" src={subscriptionClaude} alt="" />
                   <i className="subscription-spotify" />
                   <i className="subscription-higgsfield" />
                   <i className="subscription-playstation" />

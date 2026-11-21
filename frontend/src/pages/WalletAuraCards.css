@@ -1294,7 +1294,7 @@
   clip-path: polygon(1% 81%, 6% 38%, 14% 14%, 29% 7%, 73% 2%, 91% 10%, 98% 44%, 99% 76%, 90% 90%, 76% 76%, 64% 62%, 37% 66%, 15% 99%, 7% 98%);
 }
 .subscription-gpt { width: 23%; left: 22%; top: 0; background-position: 50% 11%; transform: rotate(-12deg); }
-.subscription-claude { width: 22%; right: 8%; top: 0; background-position: 95% 11%; transform: rotate(13deg); }
+.wpay-subscription-stage .subscription-claude { position: absolute; width: 27%; height: auto; right: 5%; top: -5%; }
 .subscription-spotify { width: 22%; left: 5%; top: 34%; background-position: 5% 91%; transform: rotate(-12deg); }
 .subscription-higgsfield { width: 20%; right: 0; top: 45%; background-position: 50% 91%; transform: rotate(14deg); }
 .subscription-playstation { width: 18%; left: 21%; top: 61%; background-position: 95% 91%; transform: rotate(9deg); }
