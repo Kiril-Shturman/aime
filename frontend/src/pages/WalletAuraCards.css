@@ -1251,7 +1251,7 @@
 
 .wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art) {
   row-gap: 9px;
-  padding-top: 25px;
+  padding-top: 15px;
   background: none;
   border-color: transparent;
   box-shadow: none;
@@ -1274,7 +1274,7 @@
 
 .wpay-card-catalog-art:has(.wpay-card-catalog-subscription-art) {
   grid-row: 1 / 5;
-  margin-top: -45px;
+  margin-top: -35px;
 }
 .wpay-card-catalog-art:has(.wpay-card-catalog-subscription-art) > .wpay-bank-card.wpay-card-scene {
   translate: 0 10px;
