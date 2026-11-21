@@ -1280,7 +1280,7 @@ export default function WalletAuraCards({
               }}
             />
             {offerTerms()}
-            <Button rounded large disabled={!storefrontPlan.available || Boolean(busy)}
+            <Button rounded large data-wpay-primary="" disabled={!storefrontPlan.available || Boolean(busy)}
               onClick={() => void issueGoSwap(storefrontPlan.plan_id)} className="wpay-aura-primary !mt-4 !w-full">
               {busy === "goswap-issue" ? "Загрузка…" : "Оформить карту"}
             </Button>
