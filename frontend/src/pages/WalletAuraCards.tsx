@@ -1079,7 +1079,6 @@ export default function WalletAuraCards({
             </span>
             <span className="wpay-card-catalog-item-heading">
               <span>
-                {kind === "physical" && <small>Физическая карта</small>}
                 <strong>{plan?.label ?? ({ silver: "Для подписок", navy: "Для путешествий", ice: "Премиальная", graphite: "Платина" }[appearance])}</strong>
               </span>
               <ChevronRight size={20} aria-hidden="true" />
@@ -1116,7 +1115,7 @@ export default function WalletAuraCards({
             )}
             <span className="wpay-card-catalog-price">
               <span><b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
-                ? `${offerNumber.format(Number(plan.issue_fee))}$${rapiraMid !== null && (appearance === "silver" || appearance === "navy")
+                ? `${offerNumber.format(Number(plan.issue_fee))}$${rapiraMid !== null
                   ? ` или ${Math.round(Number(plan.issue_fee) * rapiraMid).toLocaleString("ru-RU")}₽` : ""}` : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
               {plan?.total_recharge_pct != null && (
                 <span><b>{rapiraMid === null ? "—" : `$1 = ${(rapiraMid * (1 + Number(plan.total_recharge_pct) / 100))
