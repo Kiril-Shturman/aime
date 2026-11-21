@@ -1129,10 +1129,10 @@
   gap: 8px 12px;
   padding: 16px 14px 12px;
 }
-.wpay-card-catalog-services { grid-area: 1 / 1; gap: 4px; margin-bottom: -4px; }
-.wpay-card-catalog-item-heading { grid-area: 2 / 1; }
+.wpay-card-catalog-services { grid-area: 1 / 1; gap: 4px; margin-bottom: -6px; }
+.wpay-card-catalog-item-heading { grid-area: 2 / 1; margin-bottom: -4px; }
 .wpay-card-catalog-item-heading strong { font-size: clamp(17px, 5vw, 23px); }
-.wpay-card-catalog-benefits { grid-area: 3 / 1; margin-bottom: 3px; }
+.wpay-card-catalog-benefits { grid-area: 3 / 1; margin-bottom: -3px; }
 .wpay-card-catalog-art { grid-area: 1 / 2 / 4 / 3; align-self: start; margin-top: -5px; }
 .wpay-card-catalog-price {
   grid-area: 4 / 1 / 5 / -1;
