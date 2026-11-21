@@ -40,6 +40,7 @@ PRODUCTS = {
     **{key: (value["label"], False) for key, value in GOSWAP_CARD_PLANS.items()},
     "sbp_buy": ("Покупка через СБП", False),
     "qr_pay": ("Оплата по QR", False),
+    "exchange": ("Обмен валют", False),
     "withdrawal": ("Вывод криптовалюты (не с карты)", False),
 }
 

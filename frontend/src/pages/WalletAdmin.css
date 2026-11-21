@@ -2202,3 +2202,9 @@
 .admin-tariff-table small { display: block; margin-top: 4px; color: var(--admin-muted); }
 .admin-tariff-name { color: var(--wpay-admin-action); font-weight: 650; text-align: left; cursor: pointer; }
 .admin-tariff-name:hover { text-decoration: underline; }
+
+.admin-tariff-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; margin-top: 18px; }
+.admin-tariff-sections button { display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: center; padding: 16px; min-height: 98px; border: 1px solid var(--admin-border); border-radius: 14px; background: var(--admin-surface-muted); text-align: left; }
+.admin-tariff-sections button:hover { border-color: var(--wpay-admin-action); }
+.admin-tariff-sections button > svg:first-child { grid-column: 1 / -1; color: var(--wpay-admin-action); }
+.admin-tariff-sections button > svg:last-child { color: var(--admin-muted); }

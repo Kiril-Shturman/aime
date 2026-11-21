@@ -23,6 +23,10 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  ArrowDownLeft,
+  ArrowLeftRight,
+  CreditCard,
+  QrCode,
   Bell,
   Coins,
   ChevronDown,
@@ -726,10 +730,23 @@ function Audit({ data }: { data: AuditData }) {
   );
 }
 
+const tariffSections = [
+  { id: "sbp_buy", label: "Пополнение СБП", icon: ArrowDownLeft },
+  { id: "qr_pay", label: "Оплата QR-кодом", icon: QrCode },
+  { id: "cards", label: "Карты", icon: CreditCard },
+  { id: "exchange", label: "Обмен", icon: ArrowLeftRight },
+  { id: "withdrawal", label: "Вывод крипты", icon: ArrowUpRight },
+] as const;
+
 function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<void> }) {
+  const [section, setSection] = useState<(typeof tariffSections)[number]["id"] | null>(null);
+  const sectionInfo = tariffSections.find(item => item.id === section);
+  const sectionItems = data.items.filter(item => section === "cards" ? item.card_plan : item.product === section);
+  const sectionProducts = new Set(sectionItems.map(item => item.product));
+  const sectionHistory = data.history.filter(item => sectionProducts.has(text(item.product)));
   const editorRef = useRef<HTMLElement>(null);
   const [selected, setSelected] = useState(data.items[0]?.product || "");
-  const current = data.items.find((item) => item.product === selected) || data.items[0];
+  const current = sectionItems.find(item => item.product === selected) || sectionItems[0];
   const [enabled, setEnabled] = useState(Boolean(current?.enabled));
   const [fixed, setFixed] = useState(text(current?.fixed_fee || "0"));
   const [percent, setPercent] = useState(text(current?.percent_fee || "0"));
@@ -783,17 +800,31 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
       setSaving(false);
     }
   }
+  if (!sectionInfo) return (
+    <section className={card}>
+      <div className="wpay-admin-section-title"><h2>Тарифы wPay</h2></div>
+      <div className="admin-tariff-sections">
+        {tariffSections.map(({ id, label, icon: Icon }) => (
+          <button key={id} type="button" onClick={() => {
+            setSection(id);
+            const first = data.items.find(item => id === "cards" ? item.card_plan : item.product === id);
+            if (first) choose(first.product);
+          }}><Icon size={23} /><strong>{label}</strong><ArrowUpRight size={16} /></button>
+        ))}
+      </div>
+    </section>
+  );
   return (
     <div className="space-y-4">
       <section className={card}>
         <div className="wpay-admin-section-title">
-          <div><span>Ценообразование</span><h2>Тарифы WPay</h2></div>
+          <div><button type="button" className="admin-tariff-name" disabled={saving} onClick={() => setSection(null)}><ArrowLeft size={15} className="mr-1 inline" /> Все разделы</button><h2>{sectionInfo.label}</h2></div>
           <i>Комиссии wPay в USDT</i>
         </div>
         <p className="text-xs opacity-55">
           Комиссия WPay считается отдельно от цены провайдера. Новая версия действует только на новые операции; повторы используют сохранённую версию.
         </p>
-        {([["cards", "Карты Aura", "Aura"], ["cards", "Карты GoSwap", "GoSwap"], ["deposits", "Пополнения", null], ["other", "Другие операции", null]] as const).map(([category, label, provider]) => (
+        {section === "cards" && ([["Карты Aura", "Aura"], ["Карты GoSwap", "GoSwap"]] as const).map(([label, provider]) => (
           <div key={label} className="mt-6 border-t border-[var(--admin-border)] pt-4">
             <h3 className="mb-3 text-base font-semibold">{label}</h3>
             <div className="admin-tariff-table">
@@ -803,7 +834,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                   <th>Комиссия wPay</th>{provider && <th>Доступность</th>}
                 </tr></thead>
                 <tbody>
-                  {data.items.filter(item => (item.category ?? (item.card_plan ? "cards" : item.product === "sbp_buy" ? "deposits" : "other")) === category && (!provider || item.provider === provider)).map(item => (
+                  {sectionItems.filter(item => item.provider === provider).map(item => (
                     <tr key={item.product} data-selected={selected === item.product}>
                       <td>
                         <button type="button" className="admin-tariff-name" aria-pressed={selected === item.product} onClick={() => {
@@ -854,8 +885,8 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
         </section>
       )}
       <section className={card}>
-        <div className="wpay-admin-section-title"><div><span>Аудит цен</span><h2>История версий</h2></div><b>{data.history.length}</b></div>
-        <AdminTable rows={data.history} columns={[
+        <div className="wpay-admin-section-title"><div><span>Аудит цен</span><h2>История версий</h2></div><b>{sectionHistory.length}</b></div>
+        <AdminTable rows={sectionHistory} columns={[
           { key: "created_at", label: "Когда", render: date },
           { key: "product", label: "Продукт" }, { key: "enabled", label: "Статус", render: (v) => v ? "Включён" : "Выключен" },
           { key: "fixed_fee", label: "Фикс" }, { key: "percent_fee", label: "%" },
