@@ -1041,7 +1041,6 @@ export default function WalletAuraCards({
   if (catalogEnabled && catalogOffer === null) {
     return (
       <main className="wpay-card-catalog mx-auto w-full max-w-[560px] px-4 pb-6" aria-label="Витрина карт">
-        <h2>Выберите карту</h2>
         {offers.map(({ kind, skin: appearance, plan }, index) => (
           <button key={plan?.plan_id ?? appearance} type="button" className="wpay-card-catalog-item"
             data-skin={appearance} onClick={() => { haptic("light"); onCatalogOffer(index); }}>

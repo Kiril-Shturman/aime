@@ -150,7 +150,7 @@ type CryptoFlow = {
 const tabMeta: Record<WalletTab, { title: string; subtitle: string }> = {
   wallet: { title: "Кошелёк", subtitle: "Все активы" },
   history: { title: "История", subtitle: "Платежи и переводы" },
-  cards: { title: "Карты", subtitle: "Виртуальные и физические" },
+  cards: { title: "Карты", subtitle: "Выберите карту" },
   profile: { title: "Профиль", subtitle: "Настройки аккаунта" },
 };
 
