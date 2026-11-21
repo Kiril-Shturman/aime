@@ -443,28 +443,14 @@ function WalletScreen() {
       </List>
   );
   const menu = createPortal(
-    desktopMenu ? (
-      <Popover
-        opened={menuOpen}
-        target={menuButton.current}
-        onBackdropClick={() => setMenuOpen(false)}
-        className="wpay-overflow-menu !mt-3 !w-64"
-      >
-        {menuRows}
-      </Popover>
-    ) : (
-      <F7Sheet
-        opened={menuOpen}
-        onSheetClose={() => setMenuOpen(false)}
-        className="wpay-mobile-overflow-sheet"
-        backdrop
-        closeByBackdropClick
-        swipeToClose
-      >
-        <div className="wpay-mobile-overflow-grip" aria-hidden="true" />
-        {menuRows}
-      </F7Sheet>
-    ),
+    <Popover
+      opened={menuOpen}
+      target={menuButton.current}
+      onBackdropClick={() => setMenuOpen(false)}
+      className={`wpay-overflow-menu !mt-3 ${desktopMenu ? "!w-64" : "wpay-mobile-overflow-menu"}`}
+    >
+      {menuRows}
+    </Popover>,
     document.querySelector(".k-app") ?? document.body,
   );
 
