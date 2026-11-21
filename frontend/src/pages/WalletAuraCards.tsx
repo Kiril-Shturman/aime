@@ -772,11 +772,13 @@ export default function WalletAuraCards({
   const canUse = selected?.status === "opened";
   const slideLeft = (el: HTMLDivElement, index: number) => {
     const slide = el.children[index] as HTMLElement | undefined;
-    return slide
-      ? slide.getBoundingClientRect().left -
-          el.getBoundingClientRect().left +
-          el.scrollLeft
-      : 0;
+    if (!slide) return 0;
+    const slideBox = slide.getBoundingClientRect();
+    const railBox = el.getBoundingClientRect();
+    const start = slideBox.left - railBox.left + el.scrollLeft;
+    if (desktop || index === 0) return start;
+    const gap = railBox.width - slideBox.width;
+    return Math.max(0, start - (index === el.children.length - 1 ? gap : gap / 2));
   };
   const nearestSlide = (el: HTMLDivElement) => {
     let nearest = 0,
@@ -1064,7 +1066,7 @@ export default function WalletAuraCards({
               <>
                 <div
                   ref={carousel}
-                  className="wpay-aura-carousel wpay-card-peek-carousel"
+                  className={`wpay-aura-carousel wpay-card-peek-carousel${desktop ? "" : " wpay-aura-carousel--centered"}`}
                   onTouchStart={() => {
                     touchingCarousel.current = true;
                     if (settleTimer.current) clearTimeout(settleTimer.current);
@@ -1126,10 +1128,10 @@ export default function WalletAuraCards({
                     settleCarousel();
                   }}
                 >
-                  {cards.map((card) => (
+                  {cards.map((card, index) => (
                     <div
                       key={card.card_id}
-                      className="wpay-aura-carousel-item wpay-owned-card-item"
+                      className={`wpay-aura-carousel-item wpay-owned-card-item${index === activeSlide ? " is-current-card" : ""}`}
                     >
                       <button
                         type="button"
@@ -1264,10 +1266,10 @@ export default function WalletAuraCards({
                       )}
                     </div>
                   ))}
-                  {carouselOffers.map(({ kind, skin: appearance, plan }) => (
+                  {carouselOffers.map(({ kind, skin: appearance, plan }, index) => (
                     <button
                       type="button"
-                      className="wpay-aura-carousel-item"
+                      className={`wpay-aura-carousel-item${cards.length + index === activeSlide ? " is-current-card" : ""}`}
                       key={plan?.plan_id ?? appearance}
                       aria-label={plan ? `${plan.label} · ${plan.provider}` : `Заказать ${kind === "physical" ? "физическую" : "виртуальную"} карту`}
                       onClick={() => { if (plan?.provider !== "GoSwap" && plan?.available !== false) order(kind, appearance); }}

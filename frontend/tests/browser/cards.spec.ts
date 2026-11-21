@@ -782,14 +782,11 @@ test("touch swipes settle cards exactly into place in both directions", async ({
     });
   };
   const aligned = async (index: number) =>
-    rail.evaluate(
-      (el, index) =>
-        Math.abs(
-          el.children[index].getBoundingClientRect().left -
-            el.getBoundingClientRect().left,
-        ),
-      index,
-    );
+    rail.evaluate((el, index) => {
+      const slide = el.children[index].getBoundingClientRect();
+      const rail = el.getBoundingClientRect();
+      return Math.abs(slide.left + slide.width / 2 - rail.left - rail.width / 2);
+    }, index);
   await swipe(-1);
   await expect.poll(() => aligned(2)).toBeLessThan(1.5);
   await expect(
