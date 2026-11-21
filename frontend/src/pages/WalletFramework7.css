@@ -2400,7 +2400,7 @@
 }
 
 .wpay-f7-root .wpay-live-notification {
-  margin-top: var(--tg-content-safe-area-inset-top, 0px);
+  margin-top: calc(max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)) + var(--tg-content-safe-area-inset-top, 0px));
   z-index: 14000;
 }
 .wpay-live-notification .notification-text {
