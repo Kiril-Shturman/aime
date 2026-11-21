@@ -21,6 +21,7 @@ from wallet_aura_errors import CATALOG as ERROR_CATALOG, retry_policy as aura_re
 
 from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
 from wallet_notifications import enqueue as enqueue_notification, prepare as prepare_notifications
+from wallet_tariffs import card_issue_enabled
 from wallet_tariffs import calculate as calculate_tariff, resolve_card_plan, prepare as prepare_tariffs
 
 
@@ -2185,6 +2186,8 @@ class AuraService:
             if price_guard: price_guard(fee, tariff.get("version_id"))
             self.ledger.begin("aura_card_reserve", uid, idempotency_key)
             try:
+                if not card_issue_enabled(self.ledger, plan_id):
+                    raise self.client.error_cls("card_kind_unavailable", "Выпуск по этому тарифу отключён", 412)
                 self.require_card_funds(uid, fee)
                 available, reserved = self.ledger.balance(uid, "USDT")
                 self.ledger.put_balance(uid, "USDT", available - fee, reserved + fee)

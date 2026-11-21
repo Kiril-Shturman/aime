@@ -727,6 +727,21 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
 
+  async function toggleIssue(product: string, enabled: boolean) {
+    if (saving) return;
+    setSaving(true);
+    setNotice("");
+    try {
+      await walletRequest("admin-card-plan-availability", { product, enabled });
+      await reload();
+      setNotice(enabled ? "Выпуск включён" : "Выпуск отключён");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Не удалось изменить доступность выпуска");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function choose(product: string) {
     const item = data.items.find((row) => row.product === product);
     if (!item) return;
@@ -767,17 +782,22 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
         <p className="text-xs opacity-55">
           Комиссия WPay считается отдельно от цены Aura. Новая версия действует только на новые операции; повторы используют сохранённую версию.
         </p>
-        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {data.items.map((item) => (
-            <button type="button" key={item.product} onClick={() => choose(item.product)}
-              className={`rounded-2xl border p-4 text-left ${selected === item.product ? "border-blue-500 bg-blue-500/5" : "border-[var(--admin-border)]"}`}>
+        {([["cards", "Карты"], ["deposits", "Пополнения"], ["other", "Другие операции"]] as const).map(([category, label]) => (
+          <div key={category} className="mt-6">
+            <h3 className="mb-3 text-base font-semibold">{label}</h3>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {data.items.filter((item) => (item.category ?? (item.card_plan ? "cards" : item.product === "sbp_buy" ? "deposits" : "other")) === category).map((item) => (
+            <article key={item.product} className="rounded-2xl border border-[var(--admin-border)]">
+            <button type="button" onClick={() => choose(item.product)}
+              className={`w-full rounded-2xl border border-transparent p-4 text-left ${selected === item.product ? "border-blue-500 bg-blue-500/5" : "border-[var(--admin-border)]"}`}>
               <b className="block text-sm">{item.label}</b>
               <small className="mt-1 block opacity-50">
                 {item.enforced ? (item.enabled ? "Включён" : "Выключен") : "Подключение расчёта готовится"}
               </small>
               {Boolean(item.card_plan) && (
                 <small className="mt-2 block text-blue-500">
-                  Aura: выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
+                  {text(item.provider)} · {item.kind === "physical" ? "Физическая" : "Виртуальная"}<br />
+                  Выпуск {amount(item.provider_issue_fee)} USDT · пополнение {amount(item.provider_recharge_fee)}%
                   {item.provider_minimum ? ` · от ${amount(item.provider_minimum)} USDT` : ""}
                 </small>
               )}
@@ -788,8 +808,19 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                 {amount(item.fixed_fee)} + {amount(item.percent_fee)}% · минимум {amount(item.minimum_fee)}
               </span>
             </button>
+            {Boolean(item.card_plan) && (
+              <label className="flex items-center justify-between gap-3 border-t border-[var(--admin-border)] px-4 py-3 text-xs font-semibold">
+                Выпуск карты
+                <input type="checkbox" role="switch" aria-label={`Выпуск карты «${item.label}»`}
+                  className="h-4 w-4 accent-blue-600" checked={item.issue_enabled !== false} disabled={saving}
+                  onChange={(event) => void toggleIssue(item.product, event.target.checked)} />
+              </label>
+            )}
+            </article>
           ))}
-        </div>
+            </div>
+          </div>
+        ))}
       </section>
       {current && (
         <section className={card}>
@@ -801,7 +832,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
             <label><span className="text-xs font-semibold">{current.card_plan ? "Минимальная наша комиссия пополнения" : "Минимальная комиссия"}</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
           </div>
           <label className="mt-3 block"><span className="text-xs font-semibold">Комментарий к версии</span><input className={`${input} mt-2`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Причина изменения" /></label>
-          <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять к новым операциям</label>
+          <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять комиссию wPay к новым операциям</label>
           <button type="button" disabled={saving} onClick={() => void save()} className="mt-4 rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{saving ? "Сохраняю…" : "Сохранить новую версию"}</button>
           {notice && <p className="mt-3 text-xs">{notice}</p>}
         </section>

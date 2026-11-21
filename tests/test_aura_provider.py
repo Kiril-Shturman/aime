@@ -1446,6 +1446,22 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         notices = ledger.db.execute("SELECT message FROM notification_outbox ORDER BY rowid").fetchall()
         self.assertEqual([row[0] for row in notices], ["Новый статус: broadcast.", "Исходный текст"])
 
+    async def test_admin_can_pause_single_card_plan(self):
+        route = "/api/wallet/admin-card-plan-availability"
+        body = {"product": "card_subscriptions", "enabled": False}
+        response = await self.wpay.post(route, headers=self.owner, json=body)
+        self.assertEqual(response.status, 200, await response.text())
+        denied = await self.wpay.post(route, headers={"X-Telegram-Init-Data": init_data(123)}, json=body)
+        self.assertEqual(denied.status, 403)
+        quote = await self.wpay.post("/api/wallet/card-quote", headers=self.owner,
+                                     json={"operation": "issue", "plan_id": body["product"]})
+        self.assertEqual(quote.status, 412, await quote.text())
+        from wallet_tariffs import card_issue_enabled
+        self.assertTrue(card_issue_enabled(self.app["wpay_ledger"], "card_travel"))
+        resumed = await self.wpay.post(route, headers=self.owner, json={**body, "enabled": True})
+        self.assertEqual(resumed.status, 200)
+        self.assertTrue(card_issue_enabled(self.app["wpay_ledger"], body["product"]))
+
     async def test_disabled_route_then_complete_mock_deposit(self):
         disabled = await self.wpay.post("/api/wallet/aura-deposit-address", headers=self.owner)
         self.assertEqual(disabled.status, 503)
