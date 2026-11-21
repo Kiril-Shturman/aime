@@ -1148,3 +1148,27 @@
 .wpay-card-catalog-price > span { background: transparent; padding: 0; }
 .wpay-card-catalog-price > span + span { border-inline-start: 1px solid #ffffff26; border-radius: 0; }
 .wpay-card-catalog-price b { font-size: 17px; }
+
+.wpay-card-catalog { gap: 22px; }
+.wpay-card-catalog-item, .dark .wpay-card-catalog-item {
+  position: relative;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  padding: 16px 12px 10px;
+  border: 1px solid #ffffff24;
+  box-shadow: 0 7px 18px #12233d25;
+}
+.wpay-card-catalog-item-heading, .wpay-card-catalog-benefits, .wpay-card-catalog-services {
+  margin-inline-start: 4px;
+}
+.wpay-card-catalog-art {
+  position: relative;
+  z-index: 1;
+  margin-top: -26px;
+  filter: drop-shadow(0 6px 8px #07112255);
+}
+.wpay-card-catalog-services img { height: 20px; object-fit: contain; }
+.wpay-card-catalog-price {
+  margin-top: 6px;
+  border-radius: 999px;
+  padding: 11px 8px;
+}
