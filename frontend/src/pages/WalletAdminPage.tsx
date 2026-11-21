@@ -770,15 +770,15 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
     }
   }
 
-  async function selectStorefrontProvider(slot: string, product: string) {
+  async function saveStorefrontPosition(product: string, position: number | null) {
     setSaving(true);
     setNotice("");
     try {
-      await walletRequest("admin-card-storefront", { slot, product });
+      await walletRequest("admin-card-storefront", { product, position });
       await reload();
       setNotice("Настройка витрины сохранена");
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Не удалось сохранить провайдера");
+      setNotice(error instanceof Error ? error.message : "Не удалось сохранить позицию");
     } finally {
       setSaving(false);
     }
@@ -848,17 +848,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                   <li key={item.product} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                     <span className="w-5 text-[var(--admin-muted)]">{String(item.storefront_position)}.</span>
                     <strong>{item.label}</strong>
-                    <span className="admin-wallet-provider" data-provider="aura">Сейчас Aura</span>
-                    {typeof item.storefront_goswap_product === "string" && (
-                      <select aria-label={`Провайдер для «${item.label}»`}
-                        className="admin-storefront-provider"
-                        value={text(item.storefront_selected_product)}
-                        disabled={saving}
-                        onChange={event => void selectStorefrontProvider(item.product, event.target.value)}>
-                        <option value={item.product}>Aura</option>
-                        <option value={item.storefront_goswap_product}>GoSwap · после подключения</option>
-                      </select>
-                    )}
+                    <span className="admin-wallet-provider" data-provider={item.provider === "GoSwap" ? "goswap" : "aura"}>{text(item.provider)}</span>
                     <small className="ml-auto text-[var(--admin-muted)]">
                       {item.issue_enabled === false ? "Выпуск выключен"
                         : !item.version_id ? "Тариф не настроен"
@@ -869,7 +859,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                 ))}
             </ol>
             {notice && <p role="status" className="mt-2 text-xs">{notice}</p>}
-            <p className="mt-3 text-xs text-[var(--admin-muted)]">Физические карты отображаются, когда Aura возвращает цену выпуска. Выбор GoSwap сохраняется для будущего запуска. До подключения выпуска на витрине действует Aura.</p>
+            <p className="mt-3 text-xs text-[var(--admin-muted)]">Порядок настраивается в таблицах ниже. Клиентская витрина пока использует действующий каталог Aura.</p>
           </div>
         )}
         {section === "cards" && ([["Карты Aura", "Aura"], ["Карты GoSwap", "GoSwap"]] as const).map(([label, provider]) => (
@@ -878,12 +868,20 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
             <div className="admin-tariff-table">
               <table aria-label={label}>
                 <thead><tr>
-                  <th>Тариф</th>{provider && <th>Условия провайдера</th>}
+                  <th>№</th><th>Тариф</th>{provider && <th>Условия провайдера</th>}
                   <th>Комиссия wPay</th>{provider && <th>Доступность</th>}
                 </tr></thead>
                 <tbody>
                   {sectionItems.filter(item => item.provider === provider).map(item => (
                     <tr key={item.product} data-selected={selected === item.product}>
+                      <td>
+                        <select className="admin-storefront-provider" aria-label={`Позиция «${item.label}» · ${provider}`}
+                          disabled={saving} value={typeof item.storefront_position === "number" ? String(item.storefront_position) : ""}
+                          onChange={event => void saveStorefrontPosition(item.product, event.target.value ? Number(event.target.value) : null)}>
+                          <option value="">—</option>
+                          {sectionItems.map((_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+                        </select>
+                      </td>
                       <td>
                         <button type="button" className="admin-tariff-name" aria-pressed={selected === item.product} onClick={() => {
                           choose(item.product);
