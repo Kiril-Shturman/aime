@@ -36,7 +36,7 @@
 .admin-ops input[type="number"]::-webkit-inner-spin-button { appearance: none; }
 .admin-ops :is(select, input, button):focus-visible { outline: 2px solid #448aff; outline-offset: 2px; }
 .admin-ops-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 20px 0 13px; }
-.admin-ops-metrics > div { border: 1px solid var(--admin-border); border-radius: 14px; background: var(--admin-surface-muted); padding: 12px; }
+.admin-ops-metrics > button { min-width: 0; text-align: left; color: inherit; cursor: pointer; border: 1px solid var(--admin-border); border-radius: 14px; background: var(--admin-surface-muted); padding: 12px; }
 .admin-ops-metrics span { display: flex; align-items: center; gap: 6px; color: var(--admin-muted); font-size: 12px; }
 .admin-ops-metrics svg { flex: none; }
 .admin-ops-metrics strong { display: block; margin-top: 4px; font-size: clamp(17px, 2vw, 27px); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
@@ -184,3 +184,13 @@
   font-variant-numeric: tabular-nums;
 }
 .admin-ops-tooltip span { display: block; color: #c2d4ed; font-size: 12px; }
+
+.admin-ops-controls label { display: grid; gap: 4px; color: var(--admin-muted); font-size: 12px; }
+.admin-ops-controls input[type="date"] { min-width: 0; color: var(--admin-text); }
+.admin-ops-controls select { align-self: end; }
+.admin-ops-metrics > button[aria-pressed="true"] { border-color: #3983e7; }
+.admin-ops-plot { user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+@media (max-width: 640px) {
+  .admin-ops-metrics { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+  .admin-ops-metrics > button { flex: 0 0 76%; scroll-snap-align: start; }
+}

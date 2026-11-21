@@ -77,19 +77,29 @@ function normalize(row: Row, source: keyof typeof sources) {
 }
 
 function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
-  const [days, setDays] = useState(7);
+  const [period, setPeriod] = useState({ from: "", to: "" });
   const [selected, setSelected] = useState("");
   const gradient = useId();
   const plot = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(360);
   const [highlight, setHighlight] = useState<number | null>(null);
-  const [metric, setMetric] = useState<"volume" | "revenue">("volume");
+  const [metric, setMetric] = useState<"volume" | "revenue" | "count">("volume");
   const assets = [...new Set(daily.map(row => row.asset))].sort();
   const asset = selected || (assets.includes("USDT") ? "USDT" : assets[0] || "USDT");
-  const anchor = Date.parse(asOf ?? daily.at(-1)?.day ?? "") || Date.now();
+  const today = isoDay(new Date(Date.parse(asOf ?? daily.at(-1)?.day ?? "") || Date.now()));
+  const earliest = dateFor(Date.parse(today), -89);
+  const to = period.to || today;
+  const from = period.from || dateFor(Date.parse(to), Math.max(-6, (Date.parse(earliest) - Date.parse(to)) / 86400000));
+  const days = 1 + Math.round((Date.parse(to) - Date.parse(from)) / 86400000);
+  const changeDate = (edge: "from" | "to", date: string) => {
+    if (!date || date < earliest || date > today) return;
+    setHighlight(null);
+    setPeriod(edge === "from" ? { from: date, to: date > to ? date : to }
+      : { from: date < from ? date : from, to: date });
+  };
   const byDay = new Map(daily.filter(row => row.asset === asset).map(row => [row.day, row]));
   const series = Array.from({ length: days }, (_, index) => {
-    const day = dateFor(anchor, index - days + 1);
+    const day = dateFor(Date.parse(from), index);
     const row = byDay.get(day);
     return { day, volume: Number(row?.volume ?? 0), revenue: Number(row?.revenue ?? 0), count: row?.count ?? 0 };
   });
@@ -99,7 +109,13 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
   const ceiling = Math.max(0, ...values);
   const floor = Math.min(0, ...values);
   const range = ceiling - floor || 1;
-  const chartLabel = metric === "volume" ? "Оборот" : "Доход от комиссий";
+  const cards = [
+    { key: "volume", label: "Оборот по журналу", icon: Activity },
+    { key: "revenue", label: "Доход от комиссий", icon: TrendingUp },
+    { key: "count", label: "Выполнено операций", icon: ReceiptText },
+  ] as const;
+  const chartLabel = cards.find(card => card.key === metric)?.label;
+  const unit = metric === "count" ? "" : asset;
   const hasData = total.count !== 0 || values.some(value => value !== 0);
   useEffect(() => {
     const element = plot.current;
@@ -110,7 +126,7 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
   }, [hasData]);
   const axis = new Intl.NumberFormat("ru-RU", { notation: "compact", maximumFractionDigits: 2 });
   const right = width - 52;
-  const x = (index: number) => 8 + index * (right - 8) / (series.length - 1);
+  const x = (index: number) => series.length === 1 ? (8 + right) / 2 : 8 + index * (right - 8) / (series.length - 1);
   const y = (value: number) => 152 - (value - floor) / range * 134;
   const line = series.map((row, index) => {
     if (!index) return `M ${x(0)} ${y(row[metric])}`;
@@ -130,26 +146,25 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
       <header className="admin-ops-header">
         <div><h2 id="ops-chart-title">Оборот и доход</h2><p>Завершённые операции журнала wPay · UTC</p></div>
         <div className="admin-ops-controls">
-          <select aria-label="Показатель графика" value={metric} onChange={e => setMetric(e.target.value === "revenue" ? "revenue" : "volume")}>
-            <option value="volume">Оборот</option><option value="revenue">Доход</option>
-          </select>
-          <select aria-label="Период графика" value={days} onChange={e => setDays(Number(e.target.value))}>
-            <option value="7">7 дней</option><option value="30">30 дней</option><option value="90">90 дней</option>
-          </select>
+          <label>От<input type="date" aria-label="Начало периода графика" min={earliest} max={today} value={from} onChange={event => changeDate("from", event.target.value)} /></label>
+          <label>До<input type="date" aria-label="Конец периода графика" min={earliest} max={today} value={to} onChange={event => changeDate("to", event.target.value)} /></label>
           <select aria-label="Валюта графика" value={asset} onChange={e => setSelected(e.target.value)}>
             {(assets.length ? assets : [asset]).map(code => <option key={code}>{code}</option>)}
           </select>
         </div>
       </header>
-      <div className="admin-ops-metrics">
-        <div><span><Activity size={15} /> Оборот по журналу</span><strong>{fmt.format(total.volume)} <small>{asset}</small></strong></div>
-        <div><span><TrendingUp size={15} /> Доход от комиссий</span><strong>{fmt.format(total.revenue)} <small>{asset}</small></strong></div>
-        <div><span><ReceiptText size={15} /> Выполнено операций</span><strong>{fmt.format(total.count)}</strong></div>
+      <div className="admin-ops-metrics" aria-label="Показатели за период">
+        {cards.map(({ key, label, icon: Icon }) => (
+          <button key={key} type="button" aria-pressed={metric === key} onClick={() => { setMetric(key); setHighlight(null); }}>
+            <span><Icon size={15} /> {label}</span>
+            <strong>{fmt.format(total[key])} {key !== "count" && <small>{asset}</small>}</strong>
+          </button>
+        ))}
       </div>
       {!hasData ? <p className="admin-ops-empty">За этот период завершённых операций нет.</p> : (
         <div className="admin-ops-plot" ref={plot}>
           <div className="admin-ops-chart-caption" aria-live="polite">
-            <strong>{chartLabel} · {asset}</strong>
+            <strong>{chartLabel}{unit && ` · ${unit}`}</strong>
           </div>
           <svg className="admin-ops-chart" viewBox={`0 0 ${width} 180`} role="img" tabIndex={0}
             aria-label={`${chartLabel} по дням, ${asset}. Используйте стрелки для выбора дня`}
@@ -183,12 +198,12 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
             )}
             {point && index !== null && <g><line className="admin-ops-cursor" x1={x(index)} x2={x(index)} y1="14" y2="152" /><circle cx={x(index)} cy={y(point[metric])} r="5" fill="currentColor" stroke="var(--admin-surface)" strokeWidth="2" /></g>}
             <text x="8" y="174">{dayFmt.format(new Date(series[0].day))}</text>
-            <text x={right} y="174" textAnchor="end">{dayFmt.format(new Date(series[series.length - 1].day))}</text>
+            {series.length > 1 && <text x={right} y="174" textAnchor="end">{dayFmt.format(new Date(series[series.length - 1].day))}</text>}
           </svg>
           {point && index !== null && (
             <div className="admin-ops-tooltip" role="status"
               style={{ left: `clamp(76px, ${x(index) / width * 100}%, calc(100% - 76px))` }}>
-              <strong>{fmt.format(point[metric])} {asset}</strong>
+              <strong>{fmt.format(point[metric])} {unit}</strong>
               <span>{dayFmt.format(new Date(point.day))}</span>
             </div>
           )}
