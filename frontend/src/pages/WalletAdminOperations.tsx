@@ -269,7 +269,11 @@ function AdminOperationList({ visible, relatedRows, showRevenue }: {
   const [selected, setSelected] = useState<AdminOperation | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
-    if (selected && !dialogRef.current?.open) dialogRef.current?.showModal();
+    const dialog = dialogRef.current;
+    if (selected && dialog && !dialog.open) {
+      dialog.showModal();
+      dialog.querySelector("h2")?.focus({ preventScroll: true });
+    }
   }, [selected]);
   return (
     <div className="admin-ops-list">
@@ -290,8 +294,8 @@ function AdminOperationList({ visible, relatedRows, showRevenue }: {
       ) : <p className="admin-ops-empty">По этим условиям операций нет.</p>}
       <dialog className="admin-ops-dialog" ref={dialogRef} onClose={() => setSelected(null)} aria-labelledby={titleId}>
         <header>
-          <h2 id={titleId}>Подробности операции</h2>
-          <button type="button" className="admin-ops-reset" aria-label="Закрыть детали операции" onClick={() => dialogRef.current?.close()}><X size={18} /></button>
+          <h2 id={titleId} tabIndex={-1}>Подробности операции</h2>
+          <button type="button" className="admin-ops-close" aria-label="Закрыть детали операции" onClick={() => dialogRef.current?.close()}><X size={18} /></button>
         </header>
         {selected && <OperationRecord key={selected.id} record={selected} related={relatedRows.filter(row => (
           row.id === selected.id || selected.operationKey && row.operationKey === selected.operationKey && row.user === selected.user

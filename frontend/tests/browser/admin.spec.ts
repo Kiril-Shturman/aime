@@ -127,6 +127,9 @@ for (const theme of ["dark", "light"]) {
     const userOperation = page.getByRole("dialog", { name: "Подробности операции" });
     await expect(userOperation.getByText("user-topup-101", { exact: true })).toBeVisible();
     await expect(userOperation.getByText("3 USDT", { exact: true })).toBeVisible();
+    const tab = userOperation.getByRole("button", { name: "Детали", exact: true });
+    await expect(tab).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(tab).toHaveCSS("border-bottom-color", "rgb(22, 116, 233)");
     await page.keyboard.press("Escape");
     await expect(userOperation).toBeHidden();
     await expect(profile.getByRole("button", { name: "Пополнение карты" })).toBeVisible();

@@ -7,7 +7,7 @@ export function RecordMenu<T extends string>({ label, tabs, active, onSelect }: 
 }) {
   return <nav className="admin-record-menu" aria-label={label}>
     {tabs.map(([id, name]) => (
-      <button key={id} type="button" aria-pressed={active === id} onClick={() => onSelect(id)}>{name}</button>
+      <button key={id} type="button" className="admin-record-tab" aria-pressed={active === id} onClick={() => onSelect(id)}>{name}</button>
     ))}
   </nav>;
 }

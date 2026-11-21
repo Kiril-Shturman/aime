@@ -106,31 +106,38 @@
 .admin-ops-open { display: flex; align-items: center; gap: 4px; max-width: 100%; cursor: pointer; text-align: left; }
 .admin-ops-open svg { flex: none; color: var(--admin-muted); }
 .admin-ops-dialog {
-  position: fixed; inset: 0; margin: auto; width: min(96vw, 560px); max-height: 90dvh;
-  padding: 0; overflow: auto; color: var(--admin-text); background: var(--admin-bg);
-  border: 1px solid var(--admin-border); border-radius: 22px;
-}
-.admin-ops-dialog::backdrop { background: #11182780; }
-.admin-ops-dialog > header {
-  display: flex; justify-content: space-between; align-items: center; gap: 12px;
-  position: sticky; top: 0; z-index: 1; padding: 14px 18px;
-  background: var(--admin-surface); border-bottom: 1px solid var(--admin-border);
-}
-.admin-ops-dialog > header h2 { font-size: 17px; font-weight: 650; }
-.admin-ops-plot { margin-top: 16px; }
-.admin-ops-chart-caption { color: var(--admin-muted); font-size: 13px; min-height: 20px; }
-.admin-ops-chart { color: #168d76; }
-.dark .admin-ops-chart { color: #55d2a9; }
-.admin-ops-table th:first-child { width: 32%; }
-.admin-ops-dialog {
+  --operation-gutter: clamp(16px, 4vw, 26px);
+  position: fixed;
   inset: 0 0 0 auto;
   margin: 0;
   width: min(100%, 500px);
   height: 100dvh;
   max-width: none;
   max-height: none;
-  border-radius: 20px 0 0 20px;
+  padding: 0;
+  overflow: hidden;
+  color: var(--admin-text);
+  background: var(--admin-surface);
+  border: 0;
+  border-inline-start: 1px solid var(--admin-border);
 }
-@media (max-width: 570px) {
-  .admin-ops-dialog { border-radius: 0; }
+.admin-ops-dialog[open] { display: grid; grid-template-rows: auto minmax(0, 1fr); }
+.admin-ops-dialog::backdrop { background: #11182755; }
+.admin-ops-dialog > header {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 18px var(--operation-gutter) 6px;
 }
+.admin-ops-dialog > header h2 { font-size: 21px; font-weight: 650; letter-spacing: -.025em; }
+.admin-ops-dialog > header h2:focus { outline: none; }
+.admin-ops-close {
+  display: grid; place-items: center; flex: none; width: 36px; height: 36px;
+  border: 0; border-radius: 8px; color: var(--admin-muted); background: transparent; cursor: pointer;
+}
+.admin-ops-close:hover { background: var(--admin-surface-muted); }
+.admin-ops-record { min-width: 0; overflow: auto; padding: 0 var(--operation-gutter) 26px; }
+.admin-ops-record > .admin-record-menu { position: sticky; top: 0; z-index: 1; background: var(--admin-surface); margin-bottom: 8px; }
+.admin-ops-plot { margin-top: 16px; }
+.admin-ops-chart-caption { color: var(--admin-muted); font-size: 13px; min-height: 20px; }
+.admin-ops-chart { color: #168d76; }
+.dark .admin-ops-chart { color: #55d2a9; }
+.admin-ops-table th:first-child { width: 32%; }
