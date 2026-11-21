@@ -1046,7 +1046,7 @@ export default function WalletAuraCards({
             <span className="wpay-card-catalog-services">
               {plan?.conditions?.includes("Apple Pay") && <span aria-label="Apple Pay"><LogoApple aria-hidden="true" />Pay</span>}
               {plan?.conditions?.includes("Google Pay") && <span aria-label="Google Pay"><LogoGoogle aria-hidden="true" />Pay</span>}
-              {appearance === "silver" && (
+              {(appearance === "silver" || appearance === "navy") && (
                 <span className="wpay-catalog-app-store" role="img" aria-label="App Store">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" aria-hidden="true">
                     <path d="m7 18 8-13M10 5l6.8 11.2M5 14h13.8M17.8 18l.8 1.3" />
@@ -1056,7 +1056,7 @@ export default function WalletAuraCards({
             </span>
             <span className="wpay-card-catalog-item-heading">
               <span>
-                <small>{kind === "physical" ? "Физическая карта" : "Виртуальная карта"}{plan?.region ? ` · ${plan.region}` : ""}</small>
+                {kind === "physical" && <small>Физическая карта</small>}
                 <strong>{plan?.label ?? ({ silver: "Для подписок", navy: "Для путешествий", ice: "Премиальная", graphite: "Платина" }[appearance])}</strong>
               </span>
               <ChevronRight size={20} aria-hidden="true" />
