@@ -16,7 +16,6 @@ const kinds = {
   card_topup:{title:'Пополнение карты',icon:CircleDollarSign}, card_issue:{title:'Выпуск карты',icon:CreditCard}, refund:{title:'Возврат средств',icon:RotateCcw}, referral:{title:'Реферальное начисление',icon:Gift},
 }
 const statuses = {completed:{label:'Выполнено',icon:Check},processing:{label:'В обработке',icon:Clock},failed:{label:'Не выполнено',icon:X},refunded:{label:'Возвращено',icon:RotateCcw}}
-const incoming = (kind:Kind)=>['deposit','ruble_deposit','refund','referral'].includes(kind)
 const number = (value:string)=>Number(value).toLocaleString('en-US',{maximumFractionDigits:8})
 function transactionKind(type: string): Kind {
   if (type.startsWith('withdrawal_') || type === 'withdrawal') return 'withdrawal'
@@ -109,14 +108,14 @@ export function TransactionDetails({item,onClose}:{item:TransactionView|null;onC
 export function TransactionDetailContent({model}:{model:TransactionView}) {
   const [copied,setCopied]=useState(false),[copyError,setCopyError]=useState(false)
   const meta=kinds[model.kind], Icon=meta.icon, state=statuses[model.status], StateIcon=state.icon
-  const positive=Number(model.amount)>0 || (model.demo && incoming(model.kind))
+  const positive=Number(model.amount)>0
   const amount=Number(model.amount)
   const date=new Date(model.date)
   async function copy(){try{await navigator.clipboard.writeText(model.id);setCopied(true);setCopyError(false)}catch{setCopyError(true)}}
   return (
       <div className="mx-auto w-full max-w-[560px] px-4 pb-10 pt-5 text-black dark:text-white">
         {model.demo&&<p className="mb-6 text-center text-[13px] font-medium text-black/45 dark:text-white/45">Пример операции · средства не перемещаются</p>}
-        <div className="text-center"><span className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full text-white shadow-sm ${positive?'bg-gradient-to-b from-emerald-300 to-emerald-500 dark:from-emerald-400 dark:to-emerald-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={36} strokeWidth={1.8}/></span>
+        <div className="text-center"><span className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full text-white shadow-sm ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={36} strokeWidth={1.8}/></span>
           <h1 className="mt-5 text-[21px] font-semibold tracking-tight">{meta.title}</h1>
           <p className="mt-2 break-words text-[40px] font-semibold leading-tight tracking-tight tabular-nums sm:text-[46px]">{amount!==0?(positive?'+':'−'):''}{number(String(Math.abs(amount)))} <span className="text-[23px] text-black/40 dark:text-white/40">{model.asset}</span></p>
           <span role="status" className={`mt-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[14px] font-medium ${model.status==='failed'?'bg-red-500/10 text-red-600 dark:bg-red-400/15 dark:text-red-400':model.status==='processing'?'bg-orange-500/10 text-orange-600 dark:bg-orange-400/15 dark:text-orange-400':'bg-green-500/10 text-green-600 dark:bg-green-400/15 dark:text-green-400'}`}><StateIcon size={15}/>{state.label}</span>
