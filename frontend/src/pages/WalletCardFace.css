@@ -243,15 +243,23 @@
 
 .wpay-card-scene.wpay-card-design--usa .wpay-card-face {
   color: #fff;
-  background:
-    linear-gradient(135deg, #122b54 32%, transparent 75%),
-    repeating-linear-gradient(155deg, #a82542 0 10%, #e8edf5 10% 13%, #18345e 13% 23%);
+  background: linear-gradient(145deg, #233e7a, #0c1733 55%, #192854);
+  border: 1px solid #a6c9ff80;
+  box-shadow: inset 0 1px 6px #dfeaff66, 0 5px 16px #216dff55;
+}
+.wpay-card-usa-flag {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: .8;
 }
 .wpay-card-usa-stars {
   position: absolute;
-  left: 9%;
-  top: 13%;
-  font-size: clamp(9px, 2.4vw, 18px);
-  letter-spacing: .14em;
-  color: #fff;
+  left: 7%;
+  top: 6%;
+  font-size: clamp(8px, 2vw, 16px);
+  line-height: 1;
+  letter-spacing: .12em;
+  color: #b8ceff55;
 }

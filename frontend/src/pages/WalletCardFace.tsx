@@ -35,7 +35,15 @@ export default function WalletCardFace({
       className={`wpay-bank-card wpay-aura-artwork wpay-card-scene wpay-card-skin--${skin}${usa ? " wpay-card-design--usa" : ""}`}
     >
       <span className="wpay-card-face">
-        {usa && <span className="wpay-card-usa-stars" aria-hidden="true">★ ★ ★</span>}
+        {usa && (
+          <svg className="wpay-card-usa-flag" viewBox="0 0 500 315" preserveAspectRatio="none" aria-hidden="true">
+            <path fill="#244786" d="M0 224C180 236 229 154 350 171c69 10 106 26 150 58v86H0z" />
+            <path fill="#a31e40" d="M0 249c168 12 230-75 350-57 68 10 111 30 150 66v57H0z" />
+            <path fill="#e3e9fa" d="M0 278c168 12 230-75 350-57 68 10 111 31 150 66v28H0z" />
+            <path fill="#a31e40" d="M0 303c168 12 230-75 350-57 68 10 111 31 150 69H0z" />
+          </svg>
+        )}
+        {usa && <span className="wpay-card-usa-stars" aria-hidden="true">★ ★ ★<br />★ ★ ★ ★<br />★ ★ ★</span>}
         <svg
           className="wpay-card-face-waves"
           viewBox="0 0 500 315"

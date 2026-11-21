@@ -1337,5 +1337,7 @@
 .wpay-subscription-stage .subscription-claude { position: absolute; width: 34%; height: auto; right: 7%; top: -8%; }
 
 .wpay-card-catalog-item[data-region="США"]::before {
-  background: radial-gradient(ellipse at 95% 55%, #90233d, transparent 72%), #142848;
+  background: radial-gradient(ellipse at 94% 92%, #9b234c88, transparent 45%),
+    radial-gradient(ellipse at 95% 36%, #2466c988, transparent 60%), #111c35;
+  border-color: #87b8ff70;
 }
