@@ -1271,6 +1271,20 @@
   background: linear-gradient(90deg, #00396f70, #00caff33 72%, transparent),
     #078ed0 url("../assets/card-benefits/travel-background.png") center / 104% 116% no-repeat;
 }
+.wpay-card-catalog-item[data-skin="navy"]::after {
+  content: "";
+  position: absolute;
+  top: 27%;
+  right: 3%;
+  width: 47%;
+  height: 30%;
+  z-index: -1;
+  border-top: 1px dashed #e2faff80;
+  border-right: 1px dashed #e2faff80;
+  border-radius: 50%;
+  transform: rotate(-22deg);
+  pointer-events: none;
+}
 .wpay-card-catalog-item[data-skin="silver"]:has(.wpay-card-catalog-subscription-art)::before {
   background: linear-gradient(90deg, #12101de8, #12101d18 76%),
     #16121a url("../assets/card-benefits/subscription-background.jpg") center / cover no-repeat;
