@@ -2573,9 +2573,10 @@ function AdminUserDrawer({
                       {detail.wallets.map(wallet => {
                         const key = JSON.stringify([wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address]);
                         const expanded = expandedWallet === key;
-                        const title = `${currencyLabel(wallet.asset)} · ${networkLabel(wallet.network, wallet.asset)} · ${walletProviderNames[wallet.provider]}`;
+                        const title = currencyLabel(wallet.asset);
+                        const description = `${networkLabel(wallet.network, wallet.asset)} · ${walletProviderNames[wallet.provider]}`;
                         return <div key={key}>
-                          <button type="button" className="admin-wallet-toggle" aria-expanded={expanded} title={title}
+                          <button type="button" className="admin-wallet-toggle" aria-expanded={expanded} title={`${title} · ${description}`}
                             onClick={() => {
                               setWalletAction(null);
                               setAuraWithdrawEnv(null);
@@ -2584,7 +2585,7 @@ function AdminUserDrawer({
                             {cryptoAssetsByTicker[wallet.asset] ? (
                               <WalletAssetAvatar {...cryptoAssetsByTicker[wallet.asset]} network={wallet.asset === "USDT" ? wallet.network : undefined} />
                             ) : <WalletNetworkIcon network={wallet.network} />}
-                            <strong>{title}</strong>
+                            <span className="admin-wallet-label"><strong>{title}</strong><small>{description}</small></span>
                             <span className="admin-wallet-amount">{wallet.available === null ? "—" : `${wallet.available} ${wallet.asset}`}</span>
                             <ChevronDown size={15} aria-hidden="true" />
                           </button>

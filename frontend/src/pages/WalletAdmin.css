@@ -2118,11 +2118,14 @@
 .admin-wallet-list { margin-top: 8px; }
 .admin-wallet-list > div + div { border-top: 1px solid var(--admin-border); }
 .admin-wallet-toggle {
-  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  display: grid; grid-template-columns: 42px minmax(0, 1fr) auto auto;
   align-items: center; gap: 8px; width: 100%; min-height: 58px;
   padding: 6px 2px; text-align: left; background: transparent; cursor: pointer;
 }
-.admin-wallet-toggle strong, .admin-wallet-amount { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.admin-wallet-label { display: grid; gap: 2px; min-width: 0; }
+.admin-wallet-label small { color: var(--admin-muted); font-size: 11px; }
+.admin-wallet-label :is(strong, small), .admin-wallet-amount { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.admin-wallet-label strong, .admin-wallet-amount { font-size: 13px; }
 .admin-wallet-amount { max-width: 125px; font-variant-numeric: tabular-nums; }
 .admin-wallet-toggle > svg:last-child { color: var(--admin-muted); transition: transform 150ms ease; }
 .admin-wallet-toggle[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
