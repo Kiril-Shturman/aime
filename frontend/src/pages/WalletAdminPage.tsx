@@ -192,8 +192,9 @@ type AuraConsoleData = {
   methods: AuraMethod[];
 };
 type BroadcastData = { items: Json[] };
+type NotificationTemplate = { title: string; message: string; button_text: string };
 type NotificationData = {
-  settings: { event_type: string; label: string; enabled: number }[];
+  settings: { event_type: string; label: string; enabled: number; template?: NotificationTemplate | null }[];
   counts: Record<string, number>;
   recent: Json[];
   eligible_users: number;
@@ -3256,6 +3257,21 @@ function GoSwap({ data }: { data: GoSwapData }) {
   );
 }
 
+const defaultNotificationTemplate: NotificationTemplate = {
+  title: "{title}", message: "{message}", button_text: "Открыть WPay",
+};
+
+const notificationExamples: Record<string, [string, string]> = {
+  deposit: ["Пополнение зачислено", "На баланс USDT TRC‑20 зачислено 10 USDT."],
+  withdrawal: ["Вывод средств", "Статус вывода: completed. Сумма: 5 USDT."],
+  kyc: ["Верификация", "Личность подтверждена."],
+  card: ["Обновление карты", "Карта выпущена и появилась в WPay."],
+  card_operation: ["Операция по карте", "Оплата картой · 5 USDT."],
+  card_otp: ["Код 3DS для карты", "000000\n\nКод действует две минуты с момента получения."],
+  sbp: ["Покупка через СБП", "Оплата через СБП подтверждена."],
+  qr: ["Оплата по QR", "Статус оплаты: completed."],
+};
+
 function Notifications({
   data,
   reload,
@@ -3302,6 +3318,24 @@ function Notifications({
       setNotice(reason instanceof Error ? reason.message : "Ошибка отправки");
     } finally {
       setSending(false);
+    }
+  }
+  const [editor, setEditor] = useState<{ eventType: string; draft: NotificationTemplate } | null>(null);
+  async function saveTemplate(template: NotificationTemplate | null) {
+    if (!editor || saving) return;
+    setSaving("template");
+    setNotice("");
+    try {
+      await walletRequest("admin-notifications", {
+        operation: "template", event_type: editor.eventType, template,
+      });
+      await reload();
+      setEditor(null);
+      setNotice(template ? "Шаблон сохранён" : "Стандартный шаблон восстановлен");
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Ошибка сохранения шаблона");
+    } finally {
+      setSaving("");
     }
   }
   async function toggle(eventType: string, enabled: boolean) {
@@ -3368,23 +3402,77 @@ function Notifications({
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           {data.settings.map((setting) => (
-            <label
-              key={setting.event_type}
-              className="flex items-center justify-between rounded-2xl bg-black/[.035] p-3 dark:bg-white/[.06]"
-            >
-              <span className="text-sm font-medium">{setting.label}</span>
-              <input
-                type="checkbox"
-                checked={Boolean(setting.enabled)}
-                disabled={saving === setting.event_type}
-                onChange={(event) =>
-                  void toggle(setting.event_type, event.target.checked)
-                }
-                className="h-5 w-5 accent-blue-500"
-              />
-            </label>
+            <div key={setting.event_type}
+              className="flex flex-wrap items-center justify-between gap-2 rounded-2xl bg-black/[.035] p-3 dark:bg-white/[.06]">
+              <div>
+                <span className="block text-sm font-medium">{setting.label}</span>
+                <span className="text-xs opacity-55">{setting.template ? "Свой шаблон" : "Стандартный шаблон"}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button type="button" className="text-sm font-semibold text-blue-600 dark:text-blue-400"
+                  disabled={Boolean(saving)} aria-expanded={editor?.eventType === setting.event_type}
+                  onClick={() => setEditor({ eventType: setting.event_type, draft: { ...(setting.template ?? defaultNotificationTemplate) } })}>
+                  Редактировать
+                </button>
+                <input type="checkbox" aria-label={`Отправлять уведомления «${setting.label}»`}
+                  checked={Boolean(setting.enabled)} disabled={Boolean(saving)}
+                  onChange={(event) => void toggle(setting.event_type, event.target.checked)}
+                  className="h-5 w-5 accent-blue-500" />
+              </div>
+            </div>
           ))}
         </div>
+        {editor && (() => {
+          const [exampleTitle, exampleMessage] = notificationExamples[editor.eventType] ?? ["Уведомление", "Пример сообщения"];
+          const preview = (value: string) =>
+            value.replace(/\{(title|message)\}/g, (_, token) => token === "title" ? exampleTitle : exampleMessage);
+          const fields = [
+            ["title", "Заголовок", 200],
+            ["message", "Текст сообщения", 3500],
+            ["button_text", "Текст кнопки", 64],
+          ] as const;
+          return (
+            <form className="mt-4 grid gap-4 rounded-2xl border border-[var(--admin-border)] p-4 lg:grid-cols-2"
+              onSubmit={(event) => { event.preventDefault(); void saveTemplate(editor.draft); }}>
+              <div className="grid gap-3">
+                <h3 className="font-semibold">{data.settings.find((item) => item.event_type === editor.eventType)?.label}</h3>
+                <p className="text-xs opacity-70">
+                  {"{title}"} вставляет исходный заголовок, {"{message}"} — текст события. Пустое поле кнопки скрывает её.
+                </p>
+                {fields.map(([name, label, maxLength]) => {
+                  const props = {
+                    value: editor.draft[name], maxLength, required: name !== "button_text",
+                    className: `${input} w-full`,
+                    onChange: (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+                      const value = event.target.value;
+                      setEditor((current) => current && { ...current, draft: { ...current.draft, [name]: value } });
+                    },
+                  };
+                  return <label key={name} className="grid min-w-0 gap-1 text-xs font-medium">
+                    {label}
+                    {name === "message" ? <textarea {...props} rows={4} /> : <input {...props} />}
+                  </label>;
+                })}
+                <div className="flex flex-wrap items-center gap-3">
+                  <button type="submit" disabled={Boolean(saving)} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white">Сохранить</button>
+                  <button type="button" disabled={Boolean(saving)} className="text-sm text-blue-600 dark:text-blue-400"
+                    onClick={() => void saveTemplate(null)}>Вернуть стандартный</button>
+                  <button type="button" disabled={Boolean(saving)} className="text-sm opacity-70"
+                    onClick={() => setEditor(null)}>Закрыть</button>
+                </div>
+              </div>
+              <div className="min-w-0 self-start rounded-2xl bg-black/[.035] p-4 dark:bg-white/[.06]">
+                <h4 className="mb-3 text-xs font-medium opacity-60">Предпросмотр в Telegram</h4>
+                <div className="break-words rounded-xl bg-[var(--admin-surface)] p-3">
+                  <p className="whitespace-pre-wrap font-semibold">{preview(editor.draft.title).slice(0, 200)}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm">{preview(editor.draft.message).slice(0, 3500)}</p>
+                  {editor.draft.button_text && <div className="mt-3 rounded-lg bg-blue-500/10 p-2 text-center text-sm text-blue-600 dark:text-blue-400">{editor.draft.button_text}</div>}
+                </div>
+              </div>
+            </form>
+          );
+        })()}
+        {notice && <p role="status" className="mt-3 text-sm">{notice}</p>}
       </section>
       <section className={card}>
         <div className="wpay-admin-section-title">

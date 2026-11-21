@@ -3,6 +3,7 @@
 import asyncio
 import html
 import json
+import re
 import time
 import uuid
 
@@ -21,6 +22,41 @@ DEFAULT_EVENTS = {
 }
 
 
+TEMPLATE_DEFAULT = {"title": "{title}", "message": "{message}", "button_text": "Открыть WPay"}
+TEMPLATE_LIMITS = {"title": 200, "message": 3500, "button_text": 64}
+TEMPLATE_TOKEN = re.compile(r"\{(title|message)\}")
+
+
+def render_template(template, title, message):
+    values = {"title": str(title), "message": str(message)}
+    return TEMPLATE_TOKEN.sub(lambda token: values[token[1]], template)
+
+
+def save_template(ledger, event_type, template, actor):
+    if event_type not in DEFAULT_EVENTS:
+        raise ValueError("Неизвестное событие уведомлений")
+    if template is None:
+        ledger.db.execute("DELETE FROM notification_templates WHERE event_type=?", (event_type,))
+        return
+    if not isinstance(template, dict) or template.keys() != TEMPLATE_DEFAULT.keys():
+        raise ValueError("Некорректный шаблон уведомления")
+    for field, limit in TEMPLATE_LIMITS.items():
+        value = template[field]
+        if not isinstance(value, str) or len(value) > limit or (field != "button_text" and not value.strip()):
+            raise ValueError("Проверьте текст и длину полей шаблона")
+        if any(token not in {"{title}", "{message}"} for token in re.findall(r"\{[^{}]+\}", value)):
+            raise ValueError("В шаблоне есть неизвестная переменная")
+        if field == "button_text" and TEMPLATE_TOKEN.search(value):
+            raise ValueError("Текст кнопки задаётся без переменных")
+    if event_type == "card_otp" and template["message"].count("{message}") != 1:
+        raise ValueError("Добавьте {message}, чтобы сохранить код 3DS и инструкцию")
+    ledger.db.execute(
+        "INSERT INTO notification_templates VALUES (?,?,?,?) ON CONFLICT(event_type) "
+        "DO UPDATE SET template=excluded.template,updated_at=excluded.updated_at,updated_by=excluded.updated_by",
+        (event_type, json.dumps(template, ensure_ascii=False), time.time(), actor),
+    )
+
+
 def prepare(ledger):
     ledger.db.executescript(
         """
@@ -37,12 +73,18 @@ def prepare(ledger):
           next_attempt_at REAL NOT NULL DEFAULT 0, last_error TEXT,
           created_at REAL NOT NULL, sent_at REAL, updated_at REAL NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS notification_templates (
+          event_type TEXT PRIMARY KEY, template TEXT NOT NULL,
+          updated_at REAL NOT NULL, updated_by TEXT NOT NULL
+        );
         CREATE INDEX IF NOT EXISTS notification_outbox_pending
           ON notification_outbox(status,next_attempt_at,created_at);
         CREATE INDEX IF NOT EXISTS notification_outbox_user
           ON notification_outbox(user_id,created_at);
         """
     )
+    if "otp_body_template" not in {row[1] for row in ledger.db.execute("PRAGMA table_info(notification_outbox)")}:
+        ledger.db.execute("ALTER TABLE notification_outbox ADD COLUMN otp_body_template TEXT")
     stamp = time.time()
     ledger.db.executemany(
         "INSERT OR IGNORE INTO notification_settings VALUES (?,?,?,?,?)",
@@ -63,15 +105,30 @@ def enqueue(ledger, source_key, user_id, event_type, title, message,
     ).fetchone()
     if setting and not setting[0]:
         return False
+    custom = ledger.db.execute(
+        "SELECT template FROM notification_templates WHERE event_type=?", (event_type,)
+    ).fetchone()
+    otp_body_template = None
+    if custom:
+        template = json.loads(custom[0])
+        original_title = title
+        title = render_template(template["title"], title, message)
+        button_text = template["button_text"]
+        if event_type == "card_otp":
+            # Freeze the template with the queued row without persisting the code.
+            otp_body_template = re.sub(r"\{title\}", lambda _: str(original_title), template["message"])
+            message = render_template(otp_body_template, original_title, message)
+        else:
+            message = render_template(template["message"], original_title, message)
     stamp = time.time()
     cursor = ledger.db.execute(
         "INSERT OR IGNORE INTO notification_outbox "
         "(notification_id,source_key,user_id,event_type,title,message,button_text,button_url,"
-        "status,attempts,next_attempt_at,created_at,updated_at) "
-        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "status,attempts,next_attempt_at,created_at,updated_at,otp_body_template) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         ("notice-" + uuid.uuid4().hex, str(source_key)[:300], str(user_id), event_type,
          str(title)[:200], str(message)[:3500], str(button_text)[:64] if button_text else None,
-         str(button_url)[:2048] if button_url else None, "queued", 0, 0, stamp, stamp),
+         str(button_url)[:2048] if button_url else None, "queued", 0, 0, stamp, stamp, otp_body_template),
     )
     return cursor.rowcount > 0
 
@@ -83,6 +140,12 @@ def snapshot(ledger):
     settings = [dict(row) for row in ledger.db.execute(
         "SELECT event_type,label,enabled,updated_at,updated_by FROM notification_settings ORDER BY rowid"
     )]
+    templates = {
+        row[0]: json.loads(row[1])
+        for row in ledger.db.execute("SELECT event_type,template FROM notification_templates")
+    }
+    for setting in settings:
+        setting["template"] = templates.get(setting["event_type"])
     recent = [dict(row) for row in ledger.db.execute(
         "SELECT notification_id,user_id,event_type,title,message,status,attempts,last_error,"
         "created_at,sent_at,updated_at FROM notification_outbox ORDER BY created_at DESC LIMIT 100"
@@ -132,7 +195,9 @@ class NotificationWorker:
                     except Exception:
                         code = None
                     if code:
-                        message = f"<code>{html.escape(code)}</code>\n\nКод действует две минуты с момента получения."
+                        actual = f"<code>{html.escape(code)}</code>\n\nКод действует две минуты с момента получения."
+                        template = row["otp_body_template"]
+                        message = html.escape(template).replace("{message}", actual) if template else actual
                 payload = {
                     "chat_id": int(row["user_id"].removeprefix("tg:")),
                     "text": f"<b>{html.escape(row['title'])}</b>\n\n{message}",

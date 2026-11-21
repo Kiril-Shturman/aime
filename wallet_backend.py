@@ -40,7 +40,7 @@ from wallet_finance_worker import prepare as prepare_finance_worker, Worker as F
 from wallet_finance import finance_route, require_coverage, require_goswap_user_funds
 from wallet_notifications import (
     prepare as prepare_notifications, snapshot as notification_snapshot,
-    NotificationWorker,
+    NotificationWorker, save_template as save_notification_template,
 )
 from wallet_referrals import capture as capture_referral, ensure_code as ensure_referral_code, prepare as prepare_referrals, summary as referral_summary
 from wallet_operations import goswap_network_balances, prepare_operations, operations_route, save_address
@@ -1602,6 +1602,10 @@ def install_wallet(app, root, owner_check):
                 'UPDATE notification_settings SET enabled=?,updated_at=?,updated_by=? WHERE event_type=?',
                 [(int(value), stamp, uid, key) for key, value in values.items()],
             )
+        elif operation == 'template':
+            if 'template' not in body:
+                raise ValueError('Шаблон уведомления не передан')
+            save_notification_template(ledger, str(body.get('event_type') or ''), body['template'], uid)
         elif operation == 'retry':
             notification_id = str(body.get('notification_id') or '')
             cursor = ledger.db.execute(
@@ -1622,6 +1626,7 @@ def install_wallet(app, root, owner_check):
             uid, 'notifications.' + operation,
             detail={
                 'notification_id': str(body.get('notification_id') or '') or None,
+                'event_type': body.get('event_type') if operation == 'template' else None,
                 'setting_names': sorted((body.get('settings') or {}).keys()),
             },
         )

@@ -1401,6 +1401,29 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.env.stop()
         self.tmp.cleanup()
 
+    async def test_notification_templates_are_admin_only_and_render_new_outbox_rows(self):
+        from wallet_notifications import enqueue
+
+        endpoint = "/api/wallet/admin-notifications"
+        template = {"title": "wPay · {title}", "message": "{message}\nСпасибо!", "button_text": ""}
+        request = {"operation": "template", "event_type": "deposit", "template": template}
+        denied = await self.wpay.post(endpoint, headers={"X-Telegram-Init-Data": init_data(123)}, json=request)
+        self.assertEqual(denied.status, 403)
+        response = await self.wpay.post(endpoint, headers=self.owner, json=request)
+        self.assertEqual(response.status, 200, await response.text())
+        settings = (await response.json())["settings"]
+        self.assertEqual(next(row for row in settings if row["event_type"] == "deposit")["template"], template)
+        ledger = self.app["wpay_ledger"]
+        enqueue(ledger, "deposit:test-template", "tg:123", "deposit", "Зачисление", "10 USDT")
+        row = ledger.db.execute("SELECT title,message,button_text FROM notification_outbox").fetchone()
+        self.assertEqual(tuple(row), ("wPay · Зачисление", "10 USDT\nСпасибо!", None))
+        request["template"] = None
+        reset = await self.wpay.post(endpoint, headers=self.owner, json=request)
+        self.assertEqual(reset.status, 200)
+        enqueue(ledger, "deposit:test-default", "tg:123", "deposit", "Зачисление", "15 USDT")
+        row = ledger.db.execute("SELECT title,message,button_text FROM notification_outbox ORDER BY rowid DESC").fetchone()
+        self.assertEqual(tuple(row), ("Зачисление", "15 USDT", "Открыть WPay"))
+
     async def test_disabled_route_then_complete_mock_deposit(self):
         disabled = await self.wpay.post("/api/wallet/aura-deposit-address", headers=self.owner)
         self.assertEqual(disabled.status, 503)
