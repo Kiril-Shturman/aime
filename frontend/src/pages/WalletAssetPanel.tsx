@@ -228,6 +228,9 @@ export default function WalletAssetPanel({
       : null;
   const reserved =
     wallet.data.balances.find((item) => item.asset === code)?.reserved ?? "0";
+  const ownWallet = (wallet.assetRoutes[code] ?? []).some((network) =>
+    wallet.depositProviders[code]?.[network] === "wpay");
+  const showWithdraw = code === "USDT" || ownWallet;
   return (
     <main className="wpay-asset-layout mx-auto w-full max-w-[560px] bg-[#efeff4] pb-0 dark:bg-black">
       <Card
@@ -633,9 +636,9 @@ export default function WalletAssetPanel({
         document.querySelector(".wpay-f7-root") ?? document.body,
       )}
       <div
-        className={`wpay-asset-actions ${code === "USDT" ? "wpay-asset-actions--two" : "wpay-asset-actions--pair"} pointer-events-none sticky bottom-0 z-10 grid grid-cols-[1fr_1fr_48px] gap-2 bg-transparent px-4 pt-3 dark:bg-transparent [&>button]:pointer-events-auto [&>span]:pointer-events-auto`}
+        className={`wpay-asset-actions ${showWithdraw ? "wpay-asset-actions--two" : "wpay-asset-actions--pair"} pointer-events-none sticky bottom-0 z-10 grid grid-cols-[1fr_1fr_48px] gap-2 bg-transparent px-4 pt-3 dark:bg-transparent [&>button]:pointer-events-auto [&>span]:pointer-events-auto`}
       >
-        {code === "USDT" ? (
+        {showWithdraw ? (
           <>
             <Button
               data-wpay-primary=""

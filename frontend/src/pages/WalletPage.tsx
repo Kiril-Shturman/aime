@@ -923,6 +923,13 @@ function AssetPushView({
           color={displayAsset.color}
           iconColor={displayAsset.iconColor}
           onDeposit={(network) => {
+            const routes = live.depositRoutes[displayAsset.code] ?? [];
+            const primary = routes[0];
+            if (!network && displayAsset.code !== "USDT" && routes.length === 1 &&
+              live.depositProviders[displayAsset.code]?.[primary] === "wpay") {
+              openFlow("deposit", displayAsset.code, primary);
+              return;
+            }
             if (!network) {
               setAllDepositNetworks(displayAsset.code === "USDT");
               setDepositChoice(true);
@@ -2141,7 +2148,7 @@ function WithdrawalMethodsView({
   const goBack = () => {
     if (method) setMethod(null);
     else if (network) setNetwork(undefined);
-    else if (asset) setAsset(undefined);
+    else if (asset && asset !== initialAsset) setAsset(undefined);
     else onClose();
   };
   const title = method ? withdrawalTitles[method]
