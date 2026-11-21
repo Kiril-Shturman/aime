@@ -170,6 +170,7 @@ export default function WalletCardFace({
                   ? skin === "ice"
                     ? "Премиальная"
                     : "Платина"
+                  : usa ? "США"
                   : skin === "navy"
                     ? "Для путешествий"
                     : "Для подписок"

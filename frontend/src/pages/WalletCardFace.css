@@ -253,3 +253,15 @@
   color: #fff;
   opacity: 1;
 }
+.wpay-card-design--usa .wpay-card-face-status,
+.wpay-card-design--usa .wpay-card-face-bottom > span:first-child {
+  padding: 4px 8px;
+  border-radius: 7px;
+  background: #050e22e8;
+}
+.wpay-card-design--usa .wpay-card-face-number {
+  font-weight: 700;
+}
+.wpay-card-design--usa .wpay-card-face-kind {
+  opacity: 1;
+}
