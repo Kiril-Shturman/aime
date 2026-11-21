@@ -1277,6 +1277,9 @@
   grid-row: 1 / 5;
   margin-top: -45px;
 }
+.wpay-card-catalog-art:has(.wpay-card-catalog-subscription-art) > .wpay-bank-card.wpay-card-scene {
+  translate: 0 10px;
+}
 .wpay-card-catalog-subscription-art {
   position: relative;
   display: block;
