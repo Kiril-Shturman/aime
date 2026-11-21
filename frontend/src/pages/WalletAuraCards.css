@@ -1352,7 +1352,7 @@
 }
 .wpay-usa-stage .wpay-usa-scene-flag {
   position: absolute;
-  top: calc(-39% - 40px);
+  top: calc(-39% - 30px);
   left: 15%;
   width: 79%;
   z-index: 1;
@@ -1371,10 +1371,15 @@
   z-index: 4;
 }
 
-.wpay-card-catalog-services > .wpay-card-catalog-usa-badge {
-  white-space: nowrap;
+.wpay-card-catalog-service-unavailable {
+  position: relative;
+  opacity: .65;
 }
-.wpay-card-catalog-services > .wpay-card-catalog-usa-badge svg {
-  border-radius: 50%;
-  flex: none;
+.wpay-card-catalog-service-unavailable::after {
+  content: "";
+  position: absolute;
+  inset-inline: 4px;
+  top: 50%;
+  border-top: 1px solid currentColor;
+  transform: rotate(-17deg);
 }
