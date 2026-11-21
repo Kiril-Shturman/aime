@@ -421,7 +421,9 @@ export function LiveHistory() {
                             <span
                               className={`block text-[16px] font-medium leading-6 tabular-nums ${income ? "text-green-600 dark:text-green-400" : "text-black dark:text-white"}`}
                             >
-                              {cardIssue
+                              {item.type === "exchange_internal"
+                                ? cryptoAmount(String(item.detail.amount ?? "0"))
+                                : cardIssue
                                 ? `${income ? "+" : ""}${usd(Number(item.amount))}`
                                 : `${income ? "+" : ""}${cryptoAmount(item.amount)}`}
                             </span>

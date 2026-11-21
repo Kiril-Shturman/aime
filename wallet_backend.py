@@ -6,7 +6,7 @@ balance. All money arithmetic uses Decimal and SQLite write transactions.
 """
 from wallet_exchange_routes import (
     prepare as prepare_exchange_rules, rules as exchange_rules,
-    save_rule as save_exchange_rule, resolve as resolve_exchange_route,
+    save_rule as save_exchange_rule, resolve as resolve_exchange_route, internal_exchange,
 )
 import asyncio
 from wallet_fixedfloat_orders import Orders
@@ -1804,6 +1804,11 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            if action == 'exchange-internal' and request.method == 'POST':
+                return web.json_response(internal_exchange(
+                    ledger, uid, await request.json(), request.headers.get('Idempotency-Key', ''),
+                    asset_enabled, deposit_provider, ApiError,
+                ), headers={'Cache-Control': 'no-store'})
             if action == 'exchange-route' and request.method == 'GET':
                 return web.json_response(
                     resolve_exchange_route(ledger, request.query, asset_enabled, deposit_provider),
@@ -1818,8 +1823,8 @@ def install_wallet(app, root, owner_check):
                         'SELECT body FROM wallet_addresses WHERE user_id=? ORDER BY network', (uid,),
                     )
                 ]
+                balances = goswap_network_balances(ledger, uid, 'USDT')
                 if items:
-                    balances = goswap_network_balances(ledger, uid, 'USDT')
                     for item in items:
                         if 'USDT' in item.get('assets', [item.get('asset')]):
                             item['provider_available'] = str(balances.get(item['network'], 0))
@@ -1839,7 +1844,9 @@ def install_wallet(app, root, owner_check):
                         items.append({'provider': 'aura', 'asset': 'USDT', 'network': 'TRON',
                                       'address': row['address'], 'chain': row['network'],
                                       'provider_available': position['available'] if position else '0'})
-                response = web.json_response({'items': items})
+                response = web.json_response({'items': items, 'goswap_usdt_balances': {
+                    network: str(value) for network, value in balances.items()
+                }})
                 response.headers['Cache-Control'] = 'no-store'
                 return response
             export_response = await key_export_route(request, action, uid, custody)

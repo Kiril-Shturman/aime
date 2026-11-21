@@ -3023,7 +3023,7 @@ function Crypto({
       </section>
       <section className={card}>
         <div className="wpay-admin-section-title"><h2>Правила обмена</h2></div>
-        <p className="mb-3 text-sm opacity-60">Правило выбирает маршрут на экране обмена. Исполнение этих маршрутов пока недоступно.</p>
+        <p className="mb-3 text-sm opacity-60">Внутренний обмен GoSwap работает 1:1. Для DEX и FixedFloat правила пока выбирают маршрут без списания.</p>
         {(data.exchange_rules ?? []).map((rule) => (
           <label key={rule.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--admin-border)] py-3 last:border-0">
             <span className="text-sm font-medium">{rule.label}</span>

@@ -70,7 +70,23 @@ def goswap_network_balances(ledger, uid, asset):
             if event_id.startswith('aura:'):
                 continue
             delta = Decimal(raw)
-            if delta > 0 and kind in {'deposit', 'admin_adjustment'}:
+            if kind == 'exchange_internal':
+                detail = json.loads(raw_detail)
+                left = Decimal(detail['amount'])
+                reordered = deque()
+                for lot in reversed(lots):
+                    if left and lot[0] == detail['from_network'] and lot[1] > 0:
+                        moved = min(left, lot[1])
+                        lot[1] -= moved
+                        target = [detail['to_network'], moved, lot[2]]
+                        reordered.appendleft(target)
+                        by_id[lot[2]].append(target)
+                        left -= moved
+                    reordered.appendleft(lot)
+                if left:
+                    raise ValueError('Cannot replay GoSwap network reallocation')
+                lots = reordered
+            elif delta > 0 and kind in {'deposit', 'admin_adjustment'}:
                 detail = json.loads(raw_detail)
                 if not (kind == 'deposit' and event_id.startswith('deposit:')
                         or kind == 'admin_adjustment' and detail.get('source') == 'goswap'):
@@ -78,18 +94,20 @@ def goswap_network_balances(ledger, uid, asset):
                 network = detail.get('network')
                 if network not in {'BSC', 'ETH', 'SOL', 'TON', 'TRON'}:
                     continue
-                lot = [network, delta]
-                by_id[event_id.removeprefix('deposit:')] = lot
+                origin = event_id.removeprefix('deposit:')
+                lot = [network, delta, origin]
+                by_id.setdefault(origin, []).append(lot)
                 lots.append(lot)
             elif delta < 0:
                 remaining = -delta
                 if kind == 'deposit_return':
                     detail = json.loads(raw_detail).get('details') or {}
-                    lot = by_id.get(str(detail.get('deposit_id')))
-                    if lot:
+                    for lot in by_id.get(str(detail.get('deposit_id')), ()):
                         debit = min(lot[1], remaining)
                         lot[1] -= debit
                         remaining -= debit
+                        if not remaining:
+                            break
                 while remaining and lots:
                     lot = lots[0]
                     debit = min(lot[1], remaining)
@@ -107,7 +125,7 @@ def goswap_network_balances(ledger, uid, asset):
         )
         remaining = max(Decimal(0), available - backed_elsewhere)
         balances = {}
-        for network, amount in reversed(lots):
+        for network, amount, _ in reversed(lots):
             allocated = min(amount, remaining)
             balances[network] = balances.get(network, Decimal(0)) + allocated
             remaining -= allocated

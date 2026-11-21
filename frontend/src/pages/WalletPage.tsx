@@ -13,7 +13,7 @@ import SunMax from "framework7-icons/react/esm/SunMax.js";
 import MoonStars from "framework7-icons/react/esm/MoonStars.js";
 import { WalletNavbar, WalletBackLink, PushViewShell } from "./WalletNavigation";
 import { usePullToRefresh, PullRefreshIndicator } from "./WalletScroll";
-import { walletRequest } from "../lib/wallet-api";
+import { walletRequest, walletIdempotentRequest } from "../lib/wallet-api";
 import { assetIconStyle, type Asset } from "../wallet/appearance";
 import { CurrencyRow, CurrencySkeletonRow } from "./WalletCurrencyRow";
 import WalletCryptoDeposit from "./WalletCryptoDeposit";
@@ -1441,15 +1441,15 @@ function CryptoFlowPushView({
     if (flow?.kind !== "exchange" || !usdtAvailable) return;
     const controller = new AbortController();
     setUsdtNetworkBalances({});
-    void walletRequest<{ items: { network: string; provider_available?: string; balance_asset?: string; asset?: string }[] }>(
+    void walletRequest<{ items: { network: string; provider?: string; provider_available?: string; balance_asset?: string; asset?: string }[]; goswap_usdt_balances?: Record<string, string> }>(
       "addresses", undefined, controller.signal,
-    ).then(({ items }) => {
+    ).then(({ items, goswap_usdt_balances }) => {
       if (controller.signal.aborted) return;
-      setUsdtNetworkBalances(Object.fromEntries(
-        items.filter((item) => (item.balance_asset ?? item.asset) === "USDT" &&
+      setUsdtNetworkBalances({ ...Object.fromEntries(Object.entries(goswap_usdt_balances ?? {}).map(([network, value]) => [network, Number(value)])), ...Object.fromEntries(
+        items.filter((item) => (item.provider !== "goswap" || !goswap_usdt_balances) && (item.balance_asset ?? item.asset) === "USDT" &&
           item.provider_available != null && Number.isFinite(Number(item.provider_available)))
           .map((item) => [item.network, Number(item.provider_available)]),
-      ));
+      ) });
     }).catch(() => {});
     return () => controller.abort();
   }, [flow?.kind, usdtAvailable]);
@@ -1544,6 +1544,41 @@ function CryptoFlowPushView({
         : "FixedFloat пока не даёт расчёт для этой суммы или пары" });
     } catch (error) {
       if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, text: error instanceof Error ? error.message : "Не удалось рассчитать обмен" });
+    }
+  }
+  const [internalBusy, setInternalBusy] = useState(false);
+  const exchangeIntent = useRef<{ fingerprint: string; key: string } | null>(null);
+  const submittingExchange = useRef(false);
+  async function submitInternalExchange() {
+    if (submittingExchange.current || exchangeMethod !== "internal") return;
+    const normalized = amount.replace(",", ".");
+    if (!sourceNetwork || !destinationNetwork || !/^\d{1,12}(?:\.\d{1,6})?$/.test(normalized)) return;
+    if (!window.confirm(`Переместить ${normalized} USDT между выбранными сетями GoSwap?`)) return;
+    if (exchangeIntent.current?.fingerprint !== quoteKey) {
+      exchangeIntent.current = { fingerprint: quoteKey, key: crypto.randomUUID() };
+    }
+    submittingExchange.current = true;
+    setInternalBusy(true);
+    try {
+      const result = await walletIdempotentRequest<{ received: string; balances: Record<string, string> }>(
+        "exchange-internal", {
+          from_asset: fromAsset.code, from_network: sourceNetwork,
+          to_asset: toAsset.code, to_network: destinationNetwork, amount: normalized,
+        }, exchangeIntent.current.key,
+      );
+      setUsdtNetworkBalances((previous) => ({
+        ...previous, [sourceNetwork]: Number(result.balances[sourceNetwork] ?? 0),
+        [destinationNetwork]: Number(result.balances[destinationNetwork] ?? 0),
+      }));
+      exchangeIntent.current = null;
+      setAmount((current) => current === amount ? "" : current);
+      showNotice(`Перемещено ${result.received} USDT`);
+      void live.refresh();
+    } catch (error) {
+      showNotice(error instanceof Error ? error.message : "Не удалось выполнить обмен");
+    } finally {
+      submittingExchange.current = false;
+      setInternalBusy(false);
     }
   }
   const parsedAmount = Number(amount.replace(",", ".")) || 0;
@@ -1743,9 +1778,13 @@ function CryptoFlowPushView({
           {canQuote && providerQuote?.key === quoteKey && (
             <p role="status" className="mt-3 text-center text-sm">{providerQuote.text}</p>
           )}
-          <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">
-            Исполнение обмена пока недоступно
-          </p>
+          {exchangeMethod === "internal" ? (
+            <Button data-wpay-primary="" rounded large className="!w-full"
+              disabled={internalBusy || parsedAmount <= 0 || parsedAmount > (networkBalance("from") ?? 0)}
+              onClick={() => void submitInternalExchange()}>
+              {internalBusy ? "Перемещаем…" : "Переместить USDT 1:1"}
+            </Button>
+          ) : <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">Исполнение обмена пока недоступно</p>}
           <p className="mt-3 text-center text-[12px] text-black/35 dark:text-white/35">
             Расчёт справочный. Обмен пока недоступен.
           </p>

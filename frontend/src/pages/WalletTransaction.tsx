@@ -70,6 +70,11 @@ export function transactionFromApi(item:WalletTransaction):TransactionView {
     const network = transactionNetwork(item)
     if (network) rows.splice(1, 0, ['Сеть', network])
   }
+  if (item.type === 'exchange_internal') {
+    rows.push(['Из сети', networkLabel(String(d.from_network ?? ''), item.asset)])
+    rows.push(['В сеть', networkLabel(String(d.to_network ?? ''), item.asset)])
+    rows.push(['Перемещено', `${d.amount} ${item.asset}`])
+  }
   if (kind === 'withdrawal') {
     if (d.amount != null) rows.push(['Получатель получил', `${d.amount} ${item.asset}`])
     if (d.recipient && !d.address) rows.push(['Адрес получателя', String(d.recipient)])
