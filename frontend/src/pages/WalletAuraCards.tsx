@@ -1104,7 +1104,7 @@ export default function WalletAuraCards({
                 : appearance === "ice" ? "Физическая карта с бесплатной доставкой"
                 : "Физическая карта с доставкой"}
             </span>
-            {plan?.region === "Сингапур" && (
+            {appearance !== "navy" && plan?.region === "Сингапур" && (
               <span className="wpay-card-catalog-region">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path fill="#fff" d="M0 0h24v24H0z" /><path fill="#ef3340" d="M0 0h24v12H0z" />
