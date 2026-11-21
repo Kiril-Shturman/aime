@@ -244,12 +244,13 @@ class FixedFloat:
             or mode not in {"float", "fixed"}
         ):
             raise ValueError("Invalid exchange direction")
-        if (
-            not isinstance(amount, str)
-            or not re.fullmatch(r"(?:0|[1-9]\d{0,8})(?:\.\d{1,8})?" if bitcoin else r"(?:0|[1-9]\d{0,8})(?:\.\d{1,6})?", amount)
-            or Decimal(amount) <= 0
-        ):
-            raise ValueError("Invalid amount")
+        precision = 8 if bitcoin else 6
+        if not isinstance(amount, str) or not re.fullmatch(
+            rf"(?:[0-9]{{1,9}}(?:[.,][0-9]{{0,{precision}}})?|[.,][0-9]{{1,{precision}}})",
+            amount.strip(),
+        ) or Decimal(amount.strip().replace(",", ".")) <= 0:
+            raise self.error("INVALID_AMOUNT", f"Введите сумму больше нуля, до {precision} знаков после запятой", 400)
+        amount = format(Decimal(amount.strip().replace(",", ".")).normalize(), "f")
         networks = {row["network"]: row for row in await self.networks()}
         summary = {
             "provider": "fixedfloat",
@@ -293,8 +294,6 @@ class FixedFloat:
         for row, expected in ((sending, expected_source), (receiving, expected_target)):
             if (row.get("code"), row.get("network"), row.get("coin")) != expected:
                 raise ValueError("Mismatched quote asset/network")
-        if Decimal(str(sending["amount"])) != Decimal(amount):
-            raise ValueError("Provider changed sending amount")
         errors = result.get("errors")
         if not isinstance(errors, list) or not all(
             isinstance(error, str) for error in errors
@@ -319,6 +318,8 @@ class FixedFloat:
                     for error in errors
                 ],
             }
+        if Decimal(str(sending["amount"])) != Decimal(amount):
+            raise ValueError("Provider changed sending amount")
         payout = Decimal(str(receiving["amount"]))
         if not payout.is_finite() or payout <= 0:
             raise ValueError("Invalid payout")

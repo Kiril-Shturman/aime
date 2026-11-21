@@ -165,9 +165,13 @@ class FixedFloatTests(unittest.IsolatedAsyncioTestCase):
             self.body(to_network="http://attacker"),
             self.body(spend_id="client-id"),
         ]:
-            with self.assertRaises(ValueError):
+            with self.assertRaises((ValueError, ApiError)):
                 await self.adapter.quote(body)
         self.assertEqual(self.calls, [])
+
+    async def test_quote_normalizes_decimal_input(self):
+        result = await self.adapter.quote(self.body(amount="0100,0"))
+        self.assertEqual(result["from_amount"], "100")
 
     async def test_no_money_method_is_exposed(self):
         for method in ["create", "order", "emergency"]:
