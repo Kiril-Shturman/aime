@@ -12,9 +12,11 @@ import "./WalletSubscriptionFeatures.css";
 export default function WalletSubscriptionFeatures({
   variant = "subscriptions",
   skin = "silver",
+  goswap,
 }: {
   variant?: "subscriptions" | "travel" | "premium";
   skin?: CardSkin;
+  goswap?: { issue?: string | null; topup?: string; conditions?: string[] };
 }) {
   const tiles = [
     {
@@ -101,6 +103,12 @@ export default function WalletSubscriptionFeatures({
     travelTiles[4],
     tiles[5],
   ];
+  const visibleTiles = goswap ? [
+    { ...tiles[4], title: "Виртуальная карта", description: "Долларовая карта GoSwap для онлайн-покупок." },
+    ...(goswap.issue ? [{ ...tiles[2], title: "Выпуск карты", description: `${goswap.issue} USDT по тарифу GoSwap.` }] : []),
+    ...(goswap.topup ? [{ ...tiles[0], title: "Пополнение карты", description: `Комиссия GoSwap — ${goswap.topup}% сверху.` }] : []),
+    ...(goswap.conditions?.length ? [{ ...tiles[5], title: goswap.conditions.join(" и "), description: "Поддержка оплаты телефоном." }] : []),
+  ] : variant === "premium" ? premiumTiles : variant === "travel" ? travelTiles : tiles;
   return (
     <section
       className={`wpay-card-benefits wpay-card-benefits--${variant === "premium" ? "physical" : "virtual"}`}
@@ -112,12 +120,7 @@ export default function WalletSubscriptionFeatures({
             : "Возможности карты для подписок"
       }
     >
-      {(variant === "premium"
-        ? premiumTiles
-        : variant === "travel"
-          ? travelTiles
-          : tiles
-      ).map((tile) => (
+      {visibleTiles.map((tile) => (
         <article
           key={tile.key}
           className={`wpay-card-benefit wpay-card-benefit--${tile.key}`}
@@ -149,7 +152,7 @@ export default function WalletSubscriptionFeatures({
                 <Truck size={28} />
               </span>
             )}
-            {tile.key === "topup" && (
+            {tile.key === "topup" && !goswap && (
               <span className="wpay-card-benefit-sbp">
                 <img src="/brands/sbp-symbol.svg" alt="" />
               </span>

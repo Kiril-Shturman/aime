@@ -1189,11 +1189,14 @@ export default function WalletAuraCards({
           <section className="px-4 pt-2">
             <h2 className="text-[21px] font-semibold">{storefrontPlan.label}</h2>
             <p className="mt-1 text-sm opacity-60">GoSwap{storefrontPlan.region && ` · ${storefrontPlan.region}`}</p>
-            <div className="wpay-aura-info mt-4">
-              {storefrontPlan.provider_issue_fee && infoRow("Выпуск", `${storefrontPlan.provider_issue_fee} USDT`)}
-              {storefrontPlan.provider_recharge_fee && infoRow("Пополнение", `${storefrontPlan.provider_recharge_fee}% сверху`)}
-              {storefrontPlan.conditions?.length ? infoRow("Поддержка оплаты", storefrontPlan.conditions.join(" · ")) : null}
-            </div>
+            <WalletSubscriptionFeatures
+              skin={storefrontPlan.skin}
+              goswap={{
+                issue: storefrontPlan.provider_issue_fee,
+                topup: storefrontPlan.provider_recharge_fee,
+                conditions: storefrontPlan.conditions,
+              }}
+            />
             <Button rounded large disabled className="wpay-aura-primary !mt-4 !w-full">Выпуск пока недоступен</Button>
           </section>
         ) : showOffer ? (
