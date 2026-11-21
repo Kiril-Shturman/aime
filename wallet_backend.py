@@ -30,7 +30,7 @@ import sqlite3
 import time
 import uuid
 from collections import defaultdict, deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation, localcontext
 from urllib.parse import parse_qsl, quote, urlsplit
 
@@ -1450,6 +1450,35 @@ def install_wallet(app, root, owner_check):
         result = {'events': decoded_rows('SELECT rowid,* FROM wallet_events ORDER BY rowid DESC LIMIT 500')}
         for table, key in [('wallet_quotes', 'quotes'), ('wallet_invoices', 'invoices'), ('wallet_transfers', 'transfers'), ('wallet_withdrawal_intents', 'withdrawals')]:
             result[key] = decoded_rows(f'SELECT rowid,* FROM {table} ORDER BY rowid DESC LIMIT 500') if table in tables() else []
+        cutoff = (datetime.now(timezone.utc).date() - timedelta(days=89)).isoformat()
+        daily = defaultdict(lambda: {'volume': Decimal(0), 'revenue': Decimal(0), 'count': 0})
+        for row in ledger.db.execute(
+            "SELECT date(created_at) AS day,asset,amount,type,detail FROM wallet_events "
+            "WHERE created_at>=? AND date(created_at) IS NOT NULL", (cutoff,),
+        ):
+            detail = json.loads(row['detail'])
+            status = detail.get('status')
+            kind = row['type']
+            if kind == 'card_issue_refund' and status == 'completed':
+                daily[row['day'], row['asset']]['revenue'] -= Decimal(detail.get('service_fee') or '0')
+                continue
+            if status not in (None, 'completed', 'confirmed', 'opened') or kind not in {
+                'deposit', 'ruble_deposit', 'sbp_completed', 'card_issue', 'card_topup', 'card_payment',
+                'withdrawal_completed', 'qr_completed', 'exchange_completed', 'exchange_internal',
+                'transfer_completed',
+            }:
+                continue
+            bucket = daily[row['day'], row['asset']]
+            amount = detail.get('amount', row['amount']) if kind == 'exchange_internal' else row['amount']
+            bucket['volume'] += abs(Decimal(amount))
+            bucket['count'] += 1
+            if kind in {'card_issue', 'card_topup'} and status == 'completed':
+                bucket['revenue'] += Decimal(detail.get('service_fee') or '0')
+        result['daily'] = [
+            {'day': day, 'asset': asset, 'volume': str(bucket['volume']),
+             'revenue': str(bucket['revenue']), 'count': bucket['count']}
+            for (day, asset), bucket in sorted(daily.items())
+        ]
         return result
 
     def admin_crypto():
@@ -2187,7 +2216,7 @@ def install_wallet(app, root, owner_check):
             if action == 'admin-database' and request.method == 'GET':
                 return web.json_response(admin_database(request))
             if action == 'admin-payments' and request.method == 'GET':
-                return web.json_response(admin_payments())
+                return web.json_response(admin_payments(), headers={'Cache-Control': 'private, no-store'})
             if action == 'admin-crypto' and request.method == 'GET':
                 return web.json_response(admin_crypto())
             if action == 'admin-exchange-rule' and request.method == 'POST':

@@ -1,3 +1,4 @@
+import { AdminOperations, type AdminOperationsData } from "./WalletAdminOperations";
 import { currencyLabel, networkLabel, networkStandards } from "../wallet/catalog";
 import { cryptoAssetsByTicker } from "../wallet/cryptoAssets";
 import WalletAssetAvatar from "./WalletAssetAvatar";
@@ -138,10 +139,6 @@ type DatabaseData = {
   offset: number;
   count: number;
 };
-type PaymentsData = Record<
-  "events" | "quotes" | "invoices" | "transfers" | "withdrawals",
-  Json[]
->;
 type CryptoData = {
   addresses: Json[];
   deposits: Json[];
@@ -336,7 +333,7 @@ export default function WalletAdminPage() {
         setPayloadTab(tab);
       }
       if (tab === "payments") {
-        setPayload(await walletRequest<PaymentsData>("admin-payments"));
+        setPayload(await walletRequest<AdminOperationsData>("admin-payments"));
         setPayloadTab(tab);
       }
       if (tab === "crypto") {
@@ -649,7 +646,7 @@ function TabContent({
         reload={reload}
       />
     );
-  if (tab === "payments") return <Payments data={payload as PaymentsData} />;
+  if (tab === "payments") return <AdminOperations data={payload as AdminOperationsData} />;
   if (tab === "crypto")
     return <Crypto data={payload as CryptoData} reload={reload} />;
   if (tab === "cards")
@@ -2827,66 +2824,6 @@ function AdminUserDrawer({
           ) : null}
         </div>
       </aside>
-    </div>
-  );
-}
-
-function Payments({ data }: { data: PaymentsData }) {
-  const [kind, setKind] = useState<keyof PaymentsData>("events");
-  const rows = data[kind];
-  const columns: AdminColumn[] = [
-    { key: "rowid", label: "ID" },
-    { key: "user_id", label: "Пользователь" },
-    {
-      key: "type",
-      label: "Тип",
-      render: (value, row) => text(value || row.status || row.state || kind),
-    },
-    { key: "asset", label: "Актив" },
-    { key: "amount", label: "Сумма", render: amount },
-    {
-      key: "status",
-      label: "Статус",
-      render: (value, row) => text(value || row.state),
-    },
-    { key: "created_at", label: "Дата", render: date },
-  ];
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {(Object.keys(data) as (keyof PaymentsData)[]).map((key) => (
-          <button
-            key={key}
-            onClick={() => setKind(key)}
-            className={`whitespace-nowrap rounded-lg border border-[var(--admin-border)] px-4 py-2 text-xs font-semibold ${kind === key ? "border-blue-500 bg-blue-500 text-white" : "bg-[var(--admin-surface)] text-[var(--admin-muted)]"}`}
-          >
-            {key} · {data[key].length}
-          </button>
-        ))}
-      </div>
-      {rows.length ? (
-        <>
-          <div className="wpay-admin-desktop-only">
-            <AdminTable rows={rows} columns={columns} />
-          </div>
-          <div className="wpay-admin-mobile-only space-y-3">
-            {rows.map((row, index) => (
-              <article key={index} className={card}>
-                <Row
-                  title={text(row.type || row.status || row.state || kind)}
-                  subtitle={`${text(row.user_id)} · ${date(row.created_at)}`}
-                  right={`${amount(row.amount)} ${text(row.asset)}`}
-                />
-                {details(row)}
-              </article>
-            ))}
-          </div>
-        </>
-      ) : (
-        <section className={card}>
-          <Empty />
-        </section>
-      )}
     </div>
   );
 }

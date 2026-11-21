@@ -63,7 +63,11 @@ async function setup(page: Page, theme = "dark") {
       };
     if (action === "admin-payments")
       data = {
-        events: [],
+        events: [
+          { event_id: "topup-101", user_id: "tg:123", asset: "USDT", amount: "-18.225002", type: "card_topup", created_at: new Date().toISOString(), detail: { status: "completed" } },
+          { event_id: "qr-102", user_id: "tg:456", asset: "USDT", amount: "0", type: "qr_failed", created_at: new Date().toISOString(), detail: { status: "failed" } },
+        ],
+        daily: [{ day: new Date().toISOString().slice(0, 10), asset: "USDT", volume: "18.225002", revenue: "3", count: 1 }],
         quotes: [],
         invoices: [],
         transfers: [],
@@ -109,6 +113,14 @@ for (const theme of ["dark", "light"]) {
     await expect(
       page.getByRole("heading", { name: "Операции", exact: true }),
     ).toBeVisible();
+    await expect(page.getByRole("img", { name: "Оборот по дням, USDT" })).toBeVisible();
+    await page.getByLabel("Показатель графика").selectOption("revenue");
+    await expect(page.getByRole("img", { name: "Доход от комиссий карт по дням, USDT" })).toBeVisible();
+    await page.getByRole("textbox", { name: "Поиск" }).fill("topup-101");
+    await expect(page.getByRole("table").getByText("Пополнение карты", { exact: true })).toBeVisible();
+    await expect(page.getByRole("table").getByText("Ошибка оплаты по QR", { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: "Сбросить" }).click();
+    await expect(page.getByRole("table").getByText("Ошибка оплаты по QR", { exact: true })).toBeVisible();
     expect(posts).toHaveLength(0);
   });
   test(`${theme}: admin menu and content fit narrow screen`, async ({

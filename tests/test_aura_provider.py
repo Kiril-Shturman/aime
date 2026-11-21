@@ -1507,6 +1507,28 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             {"aura:test:card_operation:legacy": ("card_topup", "15"), "local-topup": ("card_topup", "-16")},
         )
 
+    async def test_admin_operations_aggregates_completed_volume_and_card_fees_by_asset(self):
+        db = self.app["wpay_ledger"].db
+        stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+        for event_id, asset, amount, kind, status, fee in (
+            ("card", "USDT", "-18.225002", "card_topup", "completed", "3"),
+            ("pending", "USDT", "-20", "card_topup", "processing", "4"),
+            ("refund", "USDT", "10", "card_issue_refund", "completed", "1"),
+            ("btc", "BTC", "0.1", "deposit", "completed", "0"),
+        ):
+            db.execute("INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)", (
+                event_id, "tg:123", asset, amount, kind, stamp,
+                json.dumps({"status": status, "service_fee": fee}),
+            ))
+        response = await self.wpay.get("/api/wallet/admin-payments", headers=self.owner)
+        self.assertEqual(response.status, 200, await response.text())
+        payload = await response.json()
+        self.assertEqual(len(payload["events"]), 4)
+        self.assertEqual(
+            {row["asset"]: (row["volume"], row["revenue"], row["count"]) for row in payload["daily"]},
+            {"USDT": ("18.225002", "2", 1), "BTC": ("0.1", "0", 1)},
+        )
+
     async def test_admin_can_pause_single_card_plan(self):
         route = "/api/wallet/admin-card-plan-availability"
         body = {"product": "card_subscriptions", "enabled": False}
