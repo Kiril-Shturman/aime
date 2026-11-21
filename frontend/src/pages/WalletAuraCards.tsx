@@ -1054,14 +1054,13 @@ export default function WalletAuraCards({
                 : appearance === "navy" ? "Бронирования и покупки в поездках"
                 : appearance === "ice" ? "Физическая карта с бесплатной доставкой"
                 : "Физическая карта с доставкой"}
-              {plan?.total_recharge_pct != null && (
-                <small>Пополнение · {offerNumber.format(Number(plan.total_recharge_pct))}%</small>
-              )}
             </span>
             <span className="wpay-card-catalog-price">
-              <span>Выпуск</span>
-              <b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
-                ? `${offerNumber.format(Number(plan.issue_fee))} USDT` : planPrice(kind, appearance)}</b>
+              <span><b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
+                ? `${offerNumber.format(Number(plan.issue_fee))} USDT` : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
+              {plan?.total_recharge_pct != null && (
+                <span><b>{offerNumber.format(Number(plan.total_recharge_pct))}%</b><small>Пополнение</small></span>
+              )}
             </span>
           </button>
         ))}

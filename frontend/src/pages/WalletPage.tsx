@@ -486,13 +486,7 @@ function WalletScreen() {
         subtitle={supportSelected ? undefined : tabMeta[activeTab].subtitle}
         left={
           activeTab === "cards" && cardCatalogOffer !== null ? (
-            <button type="button" aria-label="Назад к выбору карты"
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/5 text-primary dark:bg-white/10"
-              onClick={() => { haptic("light"); setCardCatalogOffer(null); pageRef.current?.scrollTo({ top: 0 }); }}>
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
+            <WalletBackLink onClick={() => { haptic("light"); setCardCatalogOffer(null); pageRef.current?.scrollTo({ top: 0 }); }} />
           ) : <button
             type="button"
             onClick={() => selectTab("profile")}

@@ -902,7 +902,7 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   const catalog = page.getByRole("main", { name: "Витрина карт" });
   await expect(catalog).toBeVisible();
   await catalog.getByRole("button", { name: /Для подписок/ }).click();
-  await page.getByRole("button", { name: "Назад к выбору карты" }).click();
+  await page.getByRole("button", { name: "Назад" }).click();
   await expect(catalog).toBeVisible();
   await catalog.getByRole("button", { name: /Для подписок/ }).click();
   await page.getByRole("button", { name: "Оформить карту" }).click();
