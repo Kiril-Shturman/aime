@@ -260,10 +260,11 @@ export function AdminOperations({ data }: { data: AdminOperationsData }) {
 
 type AdminOperation = ReturnType<typeof normalize>;
 
-function AdminOperationList({ visible, relatedRows, showRevenue }: {
+function AdminOperationList({ visible, relatedRows, showRevenue, compact = false }: {
   visible: AdminOperation[];
   relatedRows: AdminOperation[];
   showRevenue: boolean;
+  compact?: boolean;
 }) {
   const titleId = useId();
   const [selected, setSelected] = useState<AdminOperation | null>(null);
@@ -277,7 +278,26 @@ function AdminOperationList({ visible, relatedRows, showRevenue }: {
   }, [selected]);
   return (
     <div className="admin-ops-list">
-      {visible.length ? (
+      {visible.length && compact ? (
+        <ul className="admin-ops-compact-list">
+          {visible.map(row => (
+            <li key={row.id}>
+              <button type="button" className="admin-ops-open admin-ops-compact-row admin-ops-operation"
+                onClick={() => setSelected(row)} title={row.title}>
+                <TransactionAvatar kind={row.model.kind} positive={(row.amount ?? 0) > 0} compact />
+                <span className="admin-ops-compact-title">
+                  <strong>{row.title}</strong>
+                  <small>{row.day ? new Date(row.stamp).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short", timeZone: "UTC" }) : "—"}{row.status && ` · ${statuses[row.status] ?? row.status}`}</small>
+                </span>
+                <span className="admin-ops-compact-amount">
+                  {row.amount === null ? "—" : `${row.amount > 0 ? "+" : ""}${fmt.format(row.amount)} ${row.asset}`}
+                </span>
+                <ChevronRight size={15} aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : visible.length ? (
         <div className="admin-ops-table">
           <table><thead><tr><th>Операция</th><th>Пользователь / ID</th><th>Статус</th><th>Сумма</th>{showRevenue && <th>Доход wPay</th>}</tr></thead>
             <tbody>{visible.map(row => (
@@ -306,6 +326,33 @@ function AdminOperationList({ visible, relatedRows, showRevenue }: {
 }
 
 export function AdminUserOperationHistory({ events }: { events: Row[] }) {
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState("");
+  const [status, setStatus] = useState("");
   const rows = events.map(row => normalize(row, "events"));
-  return <AdminOperationList visible={rows} relatedRows={rows} showRevenue />;
+  const kinds = new Map(rows.map(row => [row.model.kind, row.title]));
+  const states = [...new Set(rows.map(row => row.status).filter(Boolean))];
+  const needle = query.trim().toLowerCase();
+  const visible = rows.filter(row =>
+    (!kind || row.model.kind === kind) &&
+    (!status || row.status === status) &&
+    (!needle || [row.title, row.id, row.reference, row.asset, row.amount].join(" ").toLowerCase().includes(needle)),
+  );
+  return <>
+    <div className="admin-ops-compact-tools">
+      <label className="admin-ops-search">
+        <Search size={16} aria-hidden="true" />
+        <input type="search" aria-label="Поиск операций пользователя" placeholder="Название, ID или хеш" value={query} onChange={e => setQuery(e.target.value)} />
+      </label>
+      <select aria-label="Тип операции" value={kind} onChange={e => setKind(e.target.value)}>
+        <option value="">Все типы</option>
+        {[...kinds].map(([code, title]) => <option key={code} value={code}>{title}</option>)}
+      </select>
+      <select aria-label="Статус операции" value={status} onChange={e => setStatus(e.target.value)}>
+        <option value="">Все статусы</option>
+        {states.map(code => <option key={code} value={code}>{statuses[code] ?? code}</option>)}
+      </select>
+    </div>
+    <AdminOperationList visible={visible} relatedRows={rows} showRevenue compact />
+  </>;
 }
