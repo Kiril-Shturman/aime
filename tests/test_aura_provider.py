@@ -1401,6 +1401,30 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.env.stop()
         self.tmp.cleanup()
 
+    async def test_aura_address_history_is_scoped_to_address_owner(self):
+        db = self.app["wpay_ledger"].db
+        db.execute(
+            "INSERT INTO aura_deposit_addresses VALUES "
+            "('address-1','tg:123','customer','test','TRC20','TDeposit',NULL,1,'{}',0,0)"
+        )
+        for deposit, address, status in (
+            ("credited", "address-1", "confirmed"),
+            ("pending", "address-1", "pending"),
+            ("elsewhere", "address-2", "confirmed"),
+        ):
+            db.execute(
+                "INSERT INTO aura_deposits VALUES "
+                "(?,'tg:123','customer',?,'test',?,'USDT','TRC20','2','0','2','tx',NULL,NULL,'{}',0,0)",
+                (deposit, address, status),
+            )
+        endpoint = "/api/wallet/aura-address-history?address=TDeposit"
+        response = await self.wpay.get(endpoint, headers={"X-Telegram-Init-Data": init_data(123)})
+        self.assertEqual(response.status, 200, await response.text())
+        items = (await response.json())["items"]
+        self.assertEqual([item["event_id"] for item in items], ["deposit:aura:test:credited"])
+        other = await self.wpay.get(endpoint, headers={"X-Telegram-Init-Data": init_data(456)})
+        self.assertEqual(other.status, 404)
+
     async def test_notification_templates_are_admin_only_and_render_new_outbox_rows(self):
         from wallet_notifications import enqueue
 

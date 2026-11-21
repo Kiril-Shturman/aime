@@ -10,9 +10,10 @@ import { Copy, Check } from "lucide-react";
 import { haptic } from "../lib/telegram";
 import WalletNetworkIcon from "./WalletNetworkIcon";
 import { cryptoAmount, usd, useLiveWallet } from "./WalletLive";
-import { walletRequest } from "../lib/wallet-api";
+import { walletRequest, type WalletTransaction } from "../lib/wallet-api";
 import {
   TransactionListRow,
+  transactionFromApi,
   TransactionDetails,
   type TransactionView,
 } from "./WalletTransaction";
@@ -67,15 +68,26 @@ export default function WalletAddressDetails({
   const [deposits, setDeposits] = useState<
     { id: string; amount: string; created_at?: string; status?: string }[]
   >([]);
+  const [auraDeposits, setAuraDeposits] = useState<WalletTransaction[]>([]);
+  const isAura = entry.provider === "aura";
+  const auraEnvironment = entry.chain === "nile" ? "test" : "live";
   useEffect(() => {
     let active = true;
     setError("");
     setDeposits([]);
+    setAuraDeposits([]);
     setCopied(false);
     setCopyError("");
     setLoading(false);
     if (entry.demo || entry.custody) return;
     setLoading(true);
+    if (isAura) {
+      walletRequest<{ items: WalletTransaction[] }>(`aura-address-history?${new URLSearchParams({ address: entry.address })}`)
+        .then(({ items }) => { if (active) setAuraDeposits(items); })
+        .catch(() => { if (active) setError("Не удалось загрузить поступления Aura"); })
+        .finally(() => { if (active) setLoading(false); });
+      return () => { active = false; };
+    }
     walletRequest<{
       items?: {
         deposit_id?: string;
@@ -114,7 +126,7 @@ export default function WalletAddressDetails({
     return () => {
       active = false;
     };
-  }, [entry, code]);
+  }, [entry, code, isAura]);
 
   async function copyAddress() {
     try {
@@ -169,7 +181,12 @@ export default function WalletAddressDetails({
         ],
         demo: true,
       }))
-    : deposits.map((row) => ({
+    : isAura
+      ? [...auraDeposits, ...wallet.data.transactions.filter((item) =>
+          item.asset === code && item.type.startsWith("withdrawal_") &&
+          item.event_id.startsWith(`aura:${auraEnvironment}:withdrawal:`),
+        )].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).map(transactionFromApi)
+      : deposits.map((row) => ({
         id: row.id,
         kind: "deposit",
         status:

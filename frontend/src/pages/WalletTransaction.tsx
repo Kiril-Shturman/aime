@@ -34,7 +34,7 @@ export function transactionNetwork(item: WalletTransaction): string {
   if (/^(deposit:)?aura:test:/.test(item.event_id)) return networkLabel("NILE", item.asset)
   const network = String(item.detail.network ?? '').trim()
   if (network) return networkLabel(network, item.asset)
-  return /^(deposit:)?aura:mainnet:/.test(item.event_id) ? networkLabel("TRON", item.asset) : ''
+  return /^(deposit:)?aura:(?:live|mainnet):/.test(item.event_id) ? networkLabel("TRON", item.asset) : ''
 }
 
 export function transactionListPresentation(item: WalletTransaction) {

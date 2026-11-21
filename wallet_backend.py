@@ -2821,6 +2821,26 @@ def install_wallet(app, root, owner_check):
                 require_asset_enabled('USDT', 'TRON')
                 result = await aura_service.get_or_create_deposit_address(uid, client_ref)
                 return web.json_response(result)
+            if action == 'aura-address-history' and request.method == 'GET':
+                address = request.query.get('address', '')
+                owner = ledger.db.execute(
+                    'SELECT address_id FROM aura_deposit_addresses WHERE user_id=? AND environment=? AND address=?',
+                    (uid, aura_environment, address),
+                ).fetchone()
+                if not owner:
+                    raise ApiError('NOT_FOUND', 'Адрес не найден', 404)
+                items = [{
+                    'event_id': f"deposit:aura:{aura_environment}:{row['deposit_id']}",
+                    'asset': row['asset'], 'type': 'deposit', 'amount': row['net'],
+                    'created_at': json.loads(row['body']).get('confirmed_at') or
+                        time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(row['created_at'])),
+                    'detail': {'address': address, 'network': 'TRON', 'tx_hash': row['transaction_hash']},
+                } for row in ledger.db.execute(
+                    "SELECT deposit_id,asset,net,body,created_at,transaction_hash FROM aura_deposits "
+                    "WHERE user_id=? AND environment=? AND address_id=? AND status='confirmed' "
+                    "ORDER BY created_at DESC LIMIT 100", (uid, aura_environment, owner['address_id']),
+                )]
+                return web.json_response({'items': items}, headers={'Cache-Control': 'no-store'})
             if action == 'aura-deposit-address' and request.method == 'GET':
                 if not aura_enabled or not aura_client.configured:
                     raise ApiError('NOT_CONFIGURED', 'Aura is not configured', 503)
