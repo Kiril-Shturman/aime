@@ -1125,6 +1125,14 @@ export default function WalletAuraCards({
                   }}
                   onScroll={(event) => {
                     if (event.target !== event.currentTarget) return;
+                    const rail = event.currentTarget;
+                    if (!desktop) {
+                      Array.from(rail.children).forEach((child, index) => {
+                        const distance = Math.abs(rail.scrollLeft - slideLeft(rail, index));
+                        const progress = Math.min(1, distance / (rail.clientWidth * 0.5));
+                        (child as HTMLElement).style.setProperty("--wpay-card-scale-y", String(1 - 0.12 * progress));
+                      });
+                    }
                     settleCarousel();
                   }}
                 >

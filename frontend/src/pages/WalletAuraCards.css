@@ -1056,13 +1056,12 @@
 .wpay-aura-carousel--centered:has(> :nth-child(2))::after { content: none; }
 .wpay-aura-carousel--centered > .wpay-aura-carousel-item {
   scroll-snap-align: center;
-  transform: scaleY(.88);
-  transition: transform 220ms ease-out;
+  transform: scaleY(var(--wpay-card-scale-y, .88));
 }
 .wpay-aura-carousel--centered > :first-child { flex-basis: calc(100% - 22px); scroll-snap-align: start; }
 .wpay-aura-carousel--centered > :last-child { flex-basis: calc(100% - 22px); scroll-snap-align: end; }
 .wpay-aura-carousel--centered > :only-child { flex-basis: 100%; scroll-snap-align: start; }
-.wpay-aura-carousel--centered > .is-current-card { transform: none; }
+.wpay-aura-carousel--centered > .is-current-card { transform: scaleY(var(--wpay-card-scale-y, 1)); }
 @media (prefers-reduced-motion: reduce) {
   .wpay-aura-carousel--centered > .wpay-aura-carousel-item { transition: none; }
 }
