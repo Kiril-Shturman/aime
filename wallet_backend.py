@@ -993,8 +993,45 @@ def install_wallet(app, root, owner_check):
             'SELECT status,verified,terminal,reason,provider_updated_at,created_at,updated_at '
             'FROM aura_kyc_cases WHERE user_id=?', (user_id,),
         ).fetchone()
+        balances = decoded_rows(
+            'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=? ORDER BY asset', (user_id,),
+        )
+        wallets = await user_wallet_inventory(
+            ledger, app['wpay_chain'], user_id,
+            {network: deposit_provider('USDT', network) for network in enabled_asset_routes().get('USDT', [])},
+            aura_environment,
+        )
+        onchain_totals = defaultdict(Decimal)
+        for wallet in wallets:
+            if wallet['provider'] == 'wpay' and wallet['environment'] == 'mainnet' and wallet['available'] is not None:
+                onchain_totals[wallet['asset']] += Decimal(wallet['available'])
+        card_totals, income_totals = defaultdict(Decimal), defaultdict(Decimal)
+        missing_card_balances = 0
+        for row in ledger.db.execute(
+            "SELECT body FROM aura_cards WHERE user_id=? AND environment=? AND status='opened'",
+            (user_id, aura_environment),
+        ):
+            card = json.loads(row['body'])
+            currency, balance = card.get('currency'), card.get('balance')
+            if currency and balance is not None:
+                card_totals[currency] += Decimal(str(balance))
+            else:
+                missing_card_balances += 1
+        for row in ledger.db.execute('SELECT asset,type,detail FROM wallet_events WHERE user_id=?', (user_id,)):
+            revenue = operation_revenue(row['type'], json.loads(row['detail']))
+            if revenue is not None and revenue != 0:
+                income_totals[row['asset']] += revenue
+        def totals_by_asset(totals):
+            return [{'asset': asset, 'amount': format(value, 'f')} for asset, value in sorted(totals.items())]
         return {
             'account': dict(account),
+            'balance_summary': {
+                'wallet': [{'asset': row['asset'], 'amount': row['available']} for row in balances],
+                'onchain': totals_by_asset(onchain_totals),
+                'cards': totals_by_asset(card_totals),
+                'income': totals_by_asset(income_totals),
+                'missing_card_balances': missing_card_balances,
+            },
             'contacts': {
                 'email': contact['email'] if contact else None,
                 'phone': contact['phone'] if contact else None,
@@ -1011,15 +1048,8 @@ def install_wallet(app, root, owner_check):
                 ),
             },
             'credit_assets': enabled_asset_routes(),
-            'wallets': await user_wallet_inventory(
-                ledger, app['wpay_chain'], user_id,
-                {network: deposit_provider('USDT', network) for network in enabled_asset_routes().get('USDT', [])},
-                aura_environment,
-            ),
-            'balances': decoded_rows(
-                'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=? ORDER BY asset',
-                (user_id,),
-            ),
+            'wallets': wallets,
+            'balances': balances,
             'addresses': decoded_rows(
                 'SELECT network,body FROM wallet_addresses WHERE user_id=? LIMIT 50',
                 (user_id,),

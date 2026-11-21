@@ -121,7 +121,9 @@ const kycFieldLabels: Record<string, string> = {
   registration_house: "Дом", registration_index: "Индекс", registration_state: "Регион",
   registration_street: "Улица", registration_street_en: "Улица латиницей",
 };
+type UserTotal = { asset: string; amount: string };
 type AdminUserDetail = {
+  balance_summary?: { wallet: UserTotal[]; onchain: UserTotal[]; cards: UserTotal[]; income: UserTotal[]; missing_card_balances: number };
   account: Json;
   contacts: { email: string | null; phone: string | null; updated_at: unknown };
   aura: { customer: Json | null; kyc: Json | null; identity?: { fields: Record<string, string>; submitted_at: number } | null; cards: Json[] };
@@ -2216,6 +2218,7 @@ function AdminUserDrawer({
     ["wallets", "Кошельки"],
     ["cards", "Карты"],
     ["history", "История"],
+    ["referrals", "Рефералы"],
     ["logs", "Логи"],
   ] as const;
   const [auraWithdrawEnv, setAuraWithdrawEnv] = useState<string | null>(null);
@@ -2543,40 +2546,14 @@ function AdminUserDrawer({
                     </div>
                   </div>
                   {customer ? (
-                    <div className="wpay-admin-user-facts">
-                      <button
-                        type="button"
-                        onClick={() => copy(customer.customer_id)}
-                      >
-                        <small>Customer ID · нажмите для копирования</small>
-                        <b>{text(customer.customer_id)}</b>
-                      </button>
-                      <div>
-                        <small>Среда</small>
-                        <b>{text(customer.environment)}</b>
-                      </div>
-                      <div>
-                        <small>Состояние клиента</small>
-                        <b>{text(customer.state)}</b>
-                      </div>
-                      <div>
-                        <small>Статус KYC</small>
-                        <b>{text(kyc?.status || "not_started")}</b>
-                      </div>
-                      <div>
-                        <small>Обновлено Aura</small>
-                        <b>
-                          {date(
-                            kyc?.provider_updated_at ||
-                              customer.provider_updated_at,
-                          )}
-                        </b>
-                      </div>
-                      <div>
-                        <small>Причина</small>
-                        <b>{text(kyc?.reason)}</b>
-                      </div>
-                    </div>
+                    <dl className="admin-record-fields">
+                      <RecordValue label="Customer ID" value={text(customer.customer_id)} copyable />
+                      <RecordValue label="Среда" value={text(customer.environment)} />
+                      <RecordValue label="Состояние клиента" value={text(customer.state)} />
+                      <RecordValue label="Статус KYC" value={text(kyc?.status || "not_started")} />
+                      <RecordValue label="Обновлено Aura" value={date(kyc?.provider_updated_at || customer.provider_updated_at)} />
+                      <RecordValue label="Причина" value={text(kyc?.reason)} />
+                    </dl>
                   ) : (
                     <p className="wpay-admin-user-empty">
                       Пользователь ещё не создавал профиль в Aura.
@@ -2617,6 +2594,12 @@ function AdminUserDrawer({
                             <button type="button" title="Скопировать адрес" onClick={() => copy(wallet.address)}
                               className="wpay-admin-wallet-address mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
                           ) : <p className="mt-2 text-xs opacity-60">Адрес ещё не выдан</p>}
+                          {wallet.provider === "goswap" && wallet.address && (
+                            <div className="mt-3 flex flex-wrap items-center gap-2">
+                              <button type="button" disabled>Вывести</button>
+                              <span className="text-xs opacity-60">Вывод из карточки пользователя отключён</span>
+                            </div>
+                          )}
                           {wallet.provider === "aura" && wallet.managed && wallet.environment && (
                             <>
                               <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -2686,6 +2669,26 @@ function AdminUserDrawer({
               {section === "balances" && (
                 <section className="wpay-admin-user-section">
                   <h3>Балансы</h3>
+                  {detail.balance_summary && <div className="admin-record-balance-summary">
+                    {([
+                      ["На кошельке", "Доступно по учёту wPay", detail.balance_summary.wallet],
+                      ["На картах", detail.balance_summary.missing_card_balances
+                        ? `Без данных по картам: ${detail.balance_summary.missing_card_balances}`
+                        : "По последним данным Aura", detail.balance_summary.cards],
+                      ["Доход wPay", "Учтённые комиссии за всё время", detail.balance_summary.income],
+                    ] as const).map(([label, hint, totals]) => (
+                      <div key={label}>
+                        <h4>{label}</h4>
+                        {totals.length ? totals.map(total => <strong key={total.asset}>{total.amount} {total.asset}</strong>) : <strong>—</strong>}
+                        <small>{hint}</small>
+                        {label === "На кошельке" && detail.balance_summary?.onchain?.length ? <>
+                          <small>Собственные кошельки · mainnet</small>
+                          {detail.balance_summary.onchain.map(total => <strong key={total.asset}>{total.amount} {total.asset}</strong>)}
+                        </> : null}
+                      </div>
+                    ))}
+                  </div>}
+
                   {detail.balances.length ? (
                     detail.balances.map((balance, index) => (
                       <Row
@@ -2790,29 +2793,16 @@ function AdminUserDrawer({
                 </section>
               )}
 
-              {section === "profile" && (
+              {section === "referrals" && (
                 <section className="wpay-admin-user-section">
-                  <h3>Уведомления и рефералы</h3>
-                  <div className="wpay-admin-user-facts">
-                    <div>
-                      <small>Уведомлений</small>
-                      <b>{detail.notifications.length}</b>
-                    </div>
-                    <div>
-                      <small>Приглашено</small>
-                      <b>{detail.referrals.invited.length}</b>
-                    </div>
-                    <div>
-                      <small>Пригласил</small>
-                      <b>
-                        {text(detail.referrals.referred_by?.referrer_user_id)}
-                      </b>
-                    </div>
-                    <div>
-                      <small>Адресов</small>
-                      <b>{detail.addresses.length}</b>
-                    </div>
-                  </div>
+                  <h3>Рефералы</h3>
+                  <dl className="admin-record-fields">
+                    <RecordValue label="Пригласил" value={text(detail.referrals.referred_by?.referrer_user_id)} copyable />
+                    <RecordValue label="Приглашено" value={String(detail.referrals.invited.length)} />
+                    {detail.referrals.invited.map(item => (
+                      <RecordValue key={text(item.referred_user_id)} label={`Приглашён · ${date(item.created_at)}`} value={text(item.referred_user_id)} copyable />
+                    ))}
+                  </dl>
                 </section>
               )}
 

@@ -29,3 +29,11 @@
 .admin-record-avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .admin-record-profile-heading .wpay-admin-user-badges { margin: 8px 0 0; }
 .admin-record-field .admin-record-copy { color: var(--admin-muted); background: transparent; }
+.admin-record-balance-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 8px; margin: 14px 0; }
+.admin-record-balance-summary > div { min-width: 0; padding: 12px; border: 1px solid var(--admin-border); border-radius: 12px; background: var(--admin-surface-muted); }
+.admin-record-balance-summary h4 { margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.admin-record-balance-summary strong { display: block; overflow-wrap: anywhere; font-size: 16px; font-variant-numeric: tabular-nums; }
+.admin-record-balance-summary small { display: block; margin-top: 6px; font-size: 11px; color: var(--admin-muted); }
+.wpay-admin-user-drawer.admin-record-profile { grid-template-columns: minmax(0, 1fr); }
+.admin-record-profile-menu, .admin-record-profile .wpay-admin-drawer-scroll { min-width: 0; }
+.admin-record-field dd span { min-width: 0; }

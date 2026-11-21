@@ -1517,6 +1517,22 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             "INSERT INTO wallet_profile_contacts VALUES ('tg:123','test','ivan@example.com','+79991234567',?)",
             (time.time(),),
         )
+        ledger.put_balance("tg:123", "USDT", Decimal("25"), Decimal("2"))
+        for event_id, amount, kind, fee, uid in (
+            ("setup-issue", "-15", "card_issue", "3", "tg:123"),
+            ("setup-refund", "10", "card_issue_refund", "1", "tg:123"),
+            ("foreign", "-15", "card_issue", "12", "tg:456"),
+        ):
+            ledger.db.execute("INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)", (
+                event_id, uid, "USDT", amount, kind, "2026-11-21T00:00:00Z",
+                json.dumps({"status": "completed", "service_fee": fee}),
+            ))
+        for env, balance in (("test", "11.25"), ("live", "50")):
+            ledger.db.execute(
+                "INSERT INTO aura_cards(card_id,user_id,customer_id,environment,status,body,created_at,updated_at)"
+                " VALUES (?,'tg:123','customer',?,'opened',?,0,0)",
+                (env, env, json.dumps({"currency": "USDT", "balance": balance})),
+            )
         endpoint = "/api/wallet/admin-user?user_id=tg:123"
         denied = await self.wpay.get(endpoint, headers={"X-Telegram-Init-Data": init_data(123)})
         self.assertEqual(denied.status, 403)
@@ -1526,6 +1542,10 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(profile["contacts"]["email"], "ivan@example.com")
         self.assertEqual(profile["contacts"]["phone"], "+79991234567")
         self.assertIn("no-store", result.headers["Cache-Control"])
+        totals = profile["balance_summary"]
+        self.assertEqual(totals["wallet"], [{"asset": "USDT", "amount": "25"}])
+        self.assertEqual(totals["cards"], [{"asset": "USDT", "amount": "11.25"}])
+        self.assertEqual(totals["income"], [{"asset": "USDT", "amount": "2"}])
 
     async def test_admin_operation_logs_match_signed_provider_event_without_returning_payload(self):
         db = self.app["wpay_ledger"].db
