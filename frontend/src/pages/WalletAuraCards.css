@@ -1371,9 +1371,10 @@
   z-index: 4;
 }
 
-.wpay-card-catalog-service-unavailable {
+.wpay-card-catalog-services > .wpay-card-catalog-service-unavailable {
   position: relative;
-  opacity: .65;
+  color: #ff7884;
+  border-color: #ff6676;
 }
 .wpay-card-catalog-service-unavailable::after {
   content: "";
