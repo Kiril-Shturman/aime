@@ -10,6 +10,7 @@ import { Button, Card, List, ListItem } from "konsta/react";
 import {
   f7,
   Popup,
+  Sheet,
   Page,
   Navbar,
   NavRight,
@@ -25,6 +26,7 @@ import {
   ShieldCheck,
   MessageSquareLock,
   ChevronRight,
+  ChevronDown,
   History,
   Eye,
   EyeOff,
@@ -523,16 +525,33 @@ export default function WalletAuraCards({
       },
       "Заявка на карту отправлена",
     );
-  const issueGoSwap = (planId: string) => mutate<GoSwapIssue | null>("goswap-issue", async () => {
-    const quote = await walletRequest<GoSwapIssue>("goswap-card-quote", { plan_id: planId });
-    if (quote.state !== "quoted") return quote;
-    const confirmed = await new Promise<boolean>(resolve => {
-      f7.dialog.confirm(`Выпуск «${quote.label}» · ${offerNumber.format(Number(quote.total))} USDT`, "Оформить карту GoSwap", () => resolve(true), () => resolve(false));
-    });
-    return confirmed ? walletRequest<GoSwapIssue>("goswap-card-issue", { intent_id: quote.intent_id }) : null;
-  }, result => !result ? "" : result.state === "completed" ? "Карта GoSwap выпущена"
-    : result.state === "failed" ? "Выпуск не состоялся. Резерв возвращён"
-    : "Выпуск GoSwap в обработке");
+  const [goSwapOrder, setGoSwapOrder] = useState<{ plan: StorefrontPlan; quote: GoSwapIssue } | null>(null);
+  const [goSwapSheetExpanded, setGoSwapSheetExpanded] = useState(false);
+  const goSwapHandleStart = useRef<number | null>(null);
+  const expandGoSwapSheet = () => {
+    f7.sheet.get(".wpay-goswap-order-sheet")?.stepOpen();
+    setGoSwapSheetExpanded(true);
+  };
+  const issueGoSwap = (plan: StorefrontPlan) => mutate("goswap-quote", async () => {
+    const quote = await walletRequest<GoSwapIssue>("goswap-card-quote", { plan_id: plan.plan_id });
+    if (quote.state === "quoted") {
+      setGoSwapSheetExpanded(false);
+      setGoSwapOrder({ plan, quote });
+    }
+    return quote;
+  }, quote => quote.state === "quoted" ? "" : "Выпуск GoSwap в обработке");
+  const payGoSwapOrder = () => {
+    if (!goSwapOrder) return;
+    void mutate("goswap-issue", async () => {
+      try {
+        return await walletRequest<GoSwapIssue>("goswap-card-issue", { intent_id: goSwapOrder.quote.intent_id });
+      } finally {
+        setGoSwapOrder(null);
+      }
+    }, result => result.state === "completed" ? "Карта GoSwap выпущена"
+      : result.state === "failed" ? "Выпуск не состоялся. Резерв возвращён"
+      : "Выпуск GoSwap в обработке");
+  };
   const control = (
     action: string,
     body: Record<string, string>,
@@ -835,24 +854,25 @@ export default function WalletAuraCards({
       <strong>{value}</strong>
     </div>
   );
-  const offerTerms = () => {
+  const offerTerms = (offer = storefrontPlan) => {
     const auraPlan = fees?.plans?.find(plan => plan.kind === currentKind && plan.skin === activeOffer?.skin);
-    const plan = goSwapOffer ? storefrontPlan : auraPlan;
-    const providerTopup = goSwapOffer ? storefrontPlan.provider_recharge_fee
+    const goswap = offer?.provider === "GoSwap" ? offer : null;
+    const plan = goswap ?? auraPlan;
+    const providerTopup = goswap ? goswap.provider_recharge_fee
       : currentKind === "physical" ? fees?.physical_recharge_fee_pct : fees?.recharge_fee_pct;
     const serviceTopup = plan?.service_recharge_pct ?? "0";
-    const totalTopup = goSwapOffer ? storefrontPlan.total_recharge_pct
+    const totalTopup = goswap ? goswap.total_recharge_pct
       : providerTopup == null || providerTopup === "" ? undefined
         : Number(providerTopup) + Number(serviceTopup);
-    const minimum = goSwapOffer ? "От 10 USD"
+    const minimum = goswap ? "От 10 USD"
       : fees?.minimum_recharge_amount ? `От ${offerNumber.format(Number(fees.minimum_recharge_amount))} USDT` : "—";
     const issue = plan?.issue_fee != null ? `${offerNumber.format(Number(plan.issue_fee))} USDT`
-      : goSwapOffer || !fees ? "—" : planPrice(currentKind, activeOffer?.skin);
+      : goswap || !fees ? "—" : planPrice(currentKind, activeOffer?.skin);
     const rows: [string, string, string?][] = [
-      ["Минимум пополнения", minimum, goSwapOffer ? "При первом пополнении" : undefined],
+      ["Минимум пополнения", minimum, goswap ? "При первом пополнении" : undefined],
       ["Комиссия за пополнение", totalTopup == null ? "—" : `${offerNumber.format(Number(totalTopup))}%`],
     ];
-    if (premiumOffer) rows.push(["Доставка", "Бесплатно"]);
+    if (!goswap && premiumOffer) rows.push(["Доставка", "Бесплатно"]);
     rows.push(["Выпуск карты", issue]);
     return (
       <section aria-label="Условия карты" className="mt-5">
@@ -1281,8 +1301,8 @@ export default function WalletAuraCards({
             />
             {offerTerms()}
             <Button rounded large data-wpay-primary="" disabled={!storefrontPlan.available || Boolean(busy)}
-              onClick={() => void issueGoSwap(storefrontPlan.plan_id)} className="wpay-aura-primary !mt-4 !w-full">
-              {busy === "goswap-issue" ? "Загрузка…" : "Оформить карту"}
+              onClick={() => void issueGoSwap(storefrontPlan)} className="wpay-aura-primary !mt-4 !w-full">
+              {busy === "goswap-quote" ? "Загрузка…" : "Оформить карту"}
             </Button>
             {!storefrontPlan.available && <p className="mt-2 text-center text-sm opacity-60">Выпуск по этому тарифу пока недоступен.</p>}
           </section>
@@ -1421,7 +1441,7 @@ export default function WalletAuraCards({
                 }[appearance];
                 return (
                   <button key={storefront?.plan_id ?? appearance} type="button" disabled={Boolean(busy) || (storefront ? !storefront.available : plan?.available === false || plan?.issue_fee === null || (!plan && !(kind === "physical" ? fees.open_physical_card_fee : fees.open_virtual_card_fee)))}
-                    onClick={() => storefront?.provider === "GoSwap" ? void issueGoSwap(storefront.plan_id) : order(kind, appearance)}>
+                    onClick={() => storefront?.provider === "GoSwap" ? void issueGoSwap(storefront) : order(kind, appearance)}>
                     <span><strong>{label}</strong><small>{storefront ? `${storefront.provider} · ${storefront.provider === "GoSwap" ? storefront.available ? `${offerNumber.format(Number(storefront.issue_fee))} USDT` : "Выпуск пока недоступен" : planPrice(kind, appearance)}` : planPrice(kind, appearance)}</small></span>
                     <ChevronRight size={18} aria-hidden="true" />
                   </button>
@@ -1460,6 +1480,47 @@ export default function WalletAuraCards({
           )}
         </section>}
       </aside>
+      <Sheet
+        opened={goSwapOrder !== null}
+        className="wpay-goswap-order-sheet"
+        swipeToStep
+        swipeHandler=".wpay-goswap-sheet-handle"
+        backdrop
+        closeByBackdropClick
+        closeOnEscape
+        onSheetOpened={sheet => {
+          sheet?.setSwipeStep();
+          sheet?.stepClose();
+        }}
+        onSheetStepOpen={() => setGoSwapSheetExpanded(true)}
+        onSheetStepClose={() => setGoSwapSheetExpanded(false)}
+        onSheetClosed={() => setGoSwapOrder(null)}
+      >
+        {goSwapOrder && (
+          <div className="wpay-goswap-sheet-scroll">
+            <div className="sheet-modal-swipe-step wpay-goswap-order-summary">
+              <button type="button" className="wpay-goswap-sheet-handle" aria-label="Раскрыть условия карты"
+                aria-expanded={goSwapSheetExpanded} onClick={expandGoSwapSheet}
+                onTouchStart={event => { goSwapHandleStart.current = goSwapSheetExpanded ? null : event.touches[0]?.clientY ?? null; }}
+                onTouchCancel={() => { goSwapHandleStart.current = null; }}
+                onTouchEnd={event => {
+                  const start = goSwapHandleStart.current;
+                  goSwapHandleStart.current = null;
+                  if (start !== null && (event.changedTouches[0]?.clientY ?? start) - start > 30) expandGoSwapSheet();
+                }}><span /></button>
+              <div className="wpay-goswap-order-art"><LiveCardArtwork kind="virtual" skin={goSwapOrder.plan.skin} /></div>
+              <p className="mt-3 text-center text-sm opacity-60">{goSwapOrder.quote.label}</p>
+              <p className="text-center text-3xl font-semibold tabular-nums">{offerNumber.format(Number(goSwapOrder.quote.total))} USDT</p>
+              <Button rounded large data-wpay-primary="" className="wpay-aura-primary !mt-4 !w-full"
+                disabled={Boolean(busy)} onClick={payGoSwapOrder}>
+                {busy === "goswap-issue" ? "Оплачиваем…" : "Оплатить"}
+              </Button>
+              <button type="button" className="wpay-goswap-order-expand" onClick={expandGoSwapSheet}>Условия карты <ChevronDown size={15} /></button>
+            </div>
+            <div className="wpay-goswap-order-terms">{offerTerms({ ...goSwapOrder.plan, issue_fee: goSwapOrder.quote.total })}</div>
+          </div>
+        )}
+      </Sheet>
       <Popup
         push
         opened={panel !== null}

@@ -958,3 +958,17 @@
   padding-right: 36px;
   font-size: clamp(16px, 5vw, 26px);
 }
+
+.wpay-f7-root .wpay-goswap-order-sheet.sheet-modal {
+  z-index: 13500;
+  --f7-sheet-height: min(88dvh, 690px);
+  --f7-sheet-border-radius: 26px;
+}
+.wpay-goswap-sheet-scroll { height: 100%; overflow: auto; overscroll-behavior: contain; }
+.wpay-goswap-order-summary, .wpay-goswap-order-terms { width: min(100%, 440px); margin-inline: auto; padding-inline: 16px; }
+.wpay-goswap-order-summary { padding-bottom: 10px; }
+.wpay-goswap-sheet-handle { display: grid; width: 100%; height: 26px; place-items: center; touch-action: none; }
+.wpay-goswap-sheet-handle span { width: 36px; height: 4px; border-radius: 10px; background: currentColor; opacity: .24; }
+.wpay-goswap-order-art { width: min(68%, 235px); margin-inline: auto; }
+.wpay-goswap-order-expand { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; margin-top: 8px; padding: 6px; color: var(--f7-theme-color); }
+.wpay-goswap-order-terms { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }

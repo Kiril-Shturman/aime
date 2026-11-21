@@ -879,3 +879,42 @@ test("card topup appears as positive dollar credit",async({page})=>{
   await expect(page.getByText("+$15.00",{exact:true})).toBeVisible();
   await expect(page.getByText("Пополнение",{exact:true})).toBeVisible();
 });
+
+test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", async ({ page }) => {
+  await setup(page, "light");
+  await page.route("**/api/wallet/aura-cards", route => route.fulfill({ json: { data: [] } }));
+  await page.route("**/api/wallet/aura-card-fees", route => route.fulfill({ json: {
+    currency: "USDT", open_virtual_card_fee: "2",
+    storefront: [{ plan_id: "goswap_card_sg_1", label: "Для подписок", kind: "virtual", skin: "silver",
+      issue_fee: "10", available: true, provider: "GoSwap", total_recharge_pct: "2.8" }],
+  } }));
+  await page.route("**/api/wallet/goswap-card-quote", route => route.fulfill({ json: {
+    intent_id: "goswap-intent", label: "Для подписок", state: "quoted", total: "10",
+  } }));
+  let payments = 0;
+  await page.route("**/api/wallet/goswap-card-issue", route => {
+    payments++;
+    expect(route.request().postDataJSON()).toEqual({ intent_id: "goswap-intent" });
+    return route.fulfill({ json: { state: "completed" } });
+  });
+  await page.reload();
+  await page.getByRole("link", { name: "Карты", exact: true }).click();
+  await page.getByRole("button", { name: "Оформить карту" }).click();
+  const sheet = page.locator(".wpay-goswap-order-sheet");
+  await expect(sheet).toHaveClass(/modal-in-swipe-step/);
+  await expect(sheet.locator(".wpay-goswap-order-art")).toBeVisible();
+  await expect(sheet.locator(".wpay-goswap-order-summary").getByText("10 USDT", { exact: true })).toBeVisible();
+  expect(payments).toBe(0);
+  const handle = sheet.getByRole("button", { name: "Раскрыть условия карты" });
+  await handle.evaluate(element => {
+    const touchAt = (clientY: number) => new Touch({ identifier: 1, target: element, clientY });
+    element.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, touches: [touchAt(100)] }));
+    element.dispatchEvent(new TouchEvent("touchend", { bubbles: true, changedTouches: [touchAt(155)] }));
+  });
+  await expect(handle).toHaveAttribute("aria-expanded", "true");
+  await expect(sheet).not.toHaveClass(/modal-in-swipe-step/);
+  await expect(sheet.getByText("Минимум пополнения", { exact: true })).toBeInViewport();
+  await sheet.getByRole("button", { name: "Оплатить", exact: true }).click();
+  await expect(sheet).toBeHidden();
+  expect(payments).toBe(1);
+});
