@@ -294,16 +294,22 @@ export function LiveHistory() {
     update();
     return () => media.removeEventListener("change", update);
   }, []);
-  const items = wallet.data.transactions.filter(
-    (x) =>
-      (filter === "all" ||
-        (filter === "income"
-          ? Number(x.amount) > 0
-          : Number(x.amount) < 0 || x.type === "qr_failed")) &&
+  const items = wallet.data.transactions.filter((x) => {
+    const type = x.type;
+    const category = type.startsWith("qr_") || type.startsWith("card_payment")
+      ? "payments"
+      : type.startsWith("transfer") || type.startsWith("exchange") || type === "card_topup"
+        ? "transfers"
+        : type === "withdrawal" || type.startsWith("withdrawal_") || type === "owner_withdrawal"
+          ? "withdrawals"
+          : type === "deposit" || type === "ruble_deposit" || type.startsWith("sbp_") || type === "deposit_return"
+            ? "deposits"
+            : null;
+    return (filter === "all" || category === filter) &&
       `${x.asset} ${x.type} ${x.detail.merchant_name ?? ""} ${transactionListPresentation(x).title} ${transactionListPresentation(x).network} ${transactionListPresentation(x).currency} ${x.detail.plan ?? ""}`
         .toLowerCase()
-        .includes(query.toLowerCase()),
-  );
+        .includes(query.trim().toLowerCase());
+  });
   const groups = new Map<string, typeof items>();
   for (const item of [...items].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
@@ -320,7 +326,7 @@ export function LiveHistory() {
     <>
     <main className="mx-auto w-full max-w-[560px] pb-6 pt-5">
       <div className="px-4">
-        {(filter === "all" || filter === "expense") && (
+        {filter !== "invoices" && (
           <label className="flex h-12 w-full items-center gap-2.5 rounded-[22px] bg-black/5 px-4 focus-within:ring-2 focus-within:ring-primary dark:bg-white/10">
             <Search
               size={20}
@@ -343,11 +349,11 @@ export function LiveHistory() {
         >
           {[
             ["all", "Все"],
-            ["expense", "Платежи"],
-            ["invoices", "Счета"],
+            ["payments", "Платежи"],
             ["transfers", "Переводы"],
             ["withdrawals", "Выводы"],
             ["deposits", "Пополнения"],
+            ["invoices", "Счета на оплату"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -361,13 +367,11 @@ export function LiveHistory() {
           ))}
         </div>
       </div>
-      {["invoices", "transfers", "withdrawals", "deposits"].includes(filter) ? (
-        <WalletOperations
-          key={filter}
-          initialTab={
-            filter as "invoices" | "transfers" | "withdrawals" | "deposits"
-          }
-        />
+      {filter === "invoices" ? (
+        <>
+          <p className="mx-4 mt-4 text-sm opacity-60">Счета на оплату, которые вы выставили другим людям.</p>
+          <WalletOperations initialTab="invoices" />
+        </>
       ) : (
         <>
           {[...groups].map(([date, transactions]) => (
@@ -456,7 +460,7 @@ export function LiveHistory() {
               </p>
             </div>
           )}
-          <TransactionExamples onSelect={setSelectedTransaction} />
+          {filter === "all" && <TransactionExamples onSelect={setSelectedTransaction} />}
           <div className="mt-5 px-4">
             <Button
               data-wpay-primary=""

@@ -22,9 +22,10 @@ function transactionKind(type: string): Kind {
   if (type.startsWith('qr_')) return 'qr'
   if (type.startsWith('transfer')) return 'transfer'
   if (type === 'exchange' || type.startsWith('exchange_')) return 'exchange'
+  if (type.startsWith('sbp_')) return 'ruble_deposit'
   if (type === 'ruble_deposit' || type === 'referral' || type === 'check') return type
   if (type === 'admin_adjustment' || type === 'adjustment') return 'adjustment'
-  if (type === 'card_issue_refund' || type === 'deposit_return') return 'refund'
+  if (type === 'card_issue_refund' || type === 'card_payment_refund' || type === 'deposit_return') return 'refund'
   if (type === 'deposit' || type === 'card_issue' || type === 'card_topup' || type === 'card_payment') return type
   return 'other'
 }
@@ -41,6 +42,7 @@ export function transactionListPresentation(item: WalletTransaction) {
   const title = item.type === 'qr_failed' ? 'Платёж не прошёл'
     : item.type === 'qr_refunded' ? 'Возврат QR'
     : kind === 'qr' ? String(item.detail.merchant_name || 'Оплата QR')
+    : item.type === 'card_payment_refund' ? 'Возврат покупки по карте'
     : item.type === 'card_issue_refund' ? 'Возврат за выпуск карты'
     : item.type === 'deposit_return' ? 'Возврат пополнения'
     : item.type === 'withdrawal_failed' ? 'Вывод не выполнен'
@@ -54,8 +56,9 @@ export function transactionFromApi(item:WalletTransaction):TransactionView {
   const d=item.detail
   const kind = transactionKind(item.type)
   const status: Status = item.type === 'withdrawal_failed' || item.type === 'qr_failed' ||
+    (kind === 'card_payment' && ['declined', 'failed'].includes(String(d.status))) ||
     (item.type === 'card_topup' && d.status === 'failed') ? 'failed'
-    : item.type === 'qr_refunded' ? 'refunded'
+    : item.type === 'qr_refunded' || item.type === 'card_payment_refund' ? 'refunded'
     : item.type === 'qr_processing' || (['card_issue','card_topup'].includes(item.type) && d.status === 'processing')
       || (kind === 'withdrawal' && ['processing', 'broadcast'].includes(String(d.status))) ? 'processing'
     : 'completed'

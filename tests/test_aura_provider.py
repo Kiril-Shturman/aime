@@ -1446,6 +1446,21 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         notices = ledger.db.execute("SELECT message FROM notification_outbox ORDER BY rowid").fetchall()
         self.assertEqual([row[0] for row in notices], ["Новый статус: broadcast.", "Исходный текст"])
 
+    async def test_overview_includes_only_owners_card_purchases(self):
+        ledger = self.app["wpay_ledger"]
+        for owner in ("tg:123", "tg:456"):
+            ledger.db.execute(
+                "INSERT INTO aura_card_operations(operation_id,card_id,user_id,environment,operation_type,"
+                "status,asset,amount,original_currency,original_amount,body,created_at,updated_at) "
+                "VALUES (?,?,?,'test','purchase','completed','USDT','8','USD','7.99','{}',?,?)",
+                (owner + "-purchase", "card-one", owner, time.time(), time.time()),
+            )
+        response = await self.wpay.get("/api/wallet/overview", headers={"X-Telegram-Init-Data": init_data(123)})
+        self.assertEqual(response.status, 200, await response.text())
+        items = (await response.json())["transactions"]
+        self.assertEqual([(row["type"], row["amount"], row["asset"]) for row in items],
+                         [("card_payment", "-7.99", "USD")])
+
     async def test_admin_can_pause_single_card_plan(self):
         route = "/api/wallet/admin-card-plan-availability"
         body = {"product": "card_subscriptions", "enabled": False}

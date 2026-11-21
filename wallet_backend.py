@@ -1403,6 +1403,35 @@ def install_wallet(app, root, owner_check):
         totals = {name: ledger.db.execute(f'SELECT COUNT(*) FROM "{name}"').fetchone()[0] for name in allowed}
         return {'tables': totals, 'table': selected, 'columns': ['rowid', *columns], 'items': decoded_rows(query, params), 'offset': offset, 'count': count}
 
+    def user_history(uid):
+        items = [dict(row) for row in ledger.db.execute(
+            'SELECT event_id,asset,amount,type,created_at,detail FROM wallet_events '
+            'WHERE user_id=? ORDER BY rowid DESC LIMIT 100', (uid,),
+        )]
+        for item in items:
+            item['detail'] = json.loads(item['detail'])
+        for row in ledger.db.execute(
+            "SELECT operation_id,operation_type,status,asset,amount,merchant,original_amount,"
+            "original_currency,provider_created_at,created_at FROM aura_card_operations "
+            "WHERE user_id=? AND environment=? AND operation_type IN ('purchase','refund','reversal') "
+            "ORDER BY created_at DESC LIMIT 100", (uid, aura_environment),
+        ):
+            amount = row['original_amount'] if row['original_currency'] and row['original_amount'] is not None else row['amount']
+            asset = (row['original_currency'] if row['original_amount'] is not None else None) or row['asset']
+            if amount is None or not asset:
+                continue
+            value = Decimal(amount).copy_abs()
+            if row['operation_type'] == 'purchase':
+                value = value.copy_negate()
+            items.append({
+                'event_id': f"aura:{aura_environment}:card_operation:{row['operation_id']}",
+                'asset': asset, 'amount': str(value),
+                'type': 'card_payment' if row['operation_type'] == 'purchase' else 'card_payment_refund',
+                'created_at': row['provider_created_at'] or time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(row['created_at'])),
+                'detail': {'merchant_name': row['merchant'], 'status': row['status']},
+            })
+        return sorted(items, key=lambda item: item['created_at'] or '', reverse=True)[:100]
+
     def admin_payments():
         result = {'events': decoded_rows('SELECT rowid,* FROM wallet_events ORDER BY rowid DESC LIMIT 500')}
         for table, key in [('wallet_quotes', 'quotes'), ('wallet_invoices', 'invoices'), ('wallet_transfers', 'transfers'), ('wallet_withdrawal_intents', 'withdrawals')]:
@@ -2890,12 +2919,7 @@ def install_wallet(app, root, owner_check):
                     'SELECT asset,available,reserved FROM wallet_balances WHERE user_id=?',
                     (uid,),
                 ) if asset_enabled(row['asset'])]
-                items = [dict(row) for row in ledger.db.execute(
-                    'SELECT event_id,asset,amount,type,created_at,detail FROM wallet_events '
-                    'WHERE user_id=? ORDER BY rowid DESC LIMIT 100', (uid,),
-                )]
-                for item in items:
-                    item['detail'] = json.loads(item['detail'])
+                items = user_history(uid)
                 return web.json_response({
                     'balances': balances, 'rates': [], 'transactions': items,
                     'debts': [dict(row) for row in ledger.db.execute(
@@ -2973,9 +2997,7 @@ def install_wallet(app, root, owner_check):
                 await reconcile_withdrawals(ledger, provider, money, ApiError, uid)
                 rates = await provider.call('getExchangeRates')
                 balances = [dict(r) for r in ledger.db.execute('SELECT asset,available,reserved FROM wallet_balances WHERE user_id=?', (uid,)) if asset_enabled(r['asset'])]
-                items = [dict(r) for r in ledger.db.execute('SELECT event_id,asset,amount,type,created_at,detail FROM wallet_events WHERE user_id=? ORDER BY rowid DESC LIMIT 100', (uid,))]
-                for item in items:
-                    item['detail'] = json.loads(item['detail'])
+                items = user_history(uid)
                 rates = [rate for rate in rates if asset_enabled(rate.get('source')) or asset_enabled(rate.get('target'))]
                 return web.json_response({'balances': balances, 'rates': rates, 'transactions': items, 'debts': [dict(row) for row in ledger.db.execute('SELECT asset,amount FROM wallet_debts WHERE user_id=?', (uid,))]})
             if action == 'provider' and request.method == 'GET':
