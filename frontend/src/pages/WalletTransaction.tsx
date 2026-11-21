@@ -1,7 +1,7 @@
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { List, ListItem } from 'konsta/react'
 import { Popup, Page, Navbar, NavRight, Link } from 'framework7-react'
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, QrCode, CreditCard, Gift, Ticket, Copy, Check, Clock, X, RotateCcw, SlidersHorizontal, ReceiptText } from 'lucide-react'
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, QrCode, CreditCard, Gift, Ticket, Copy, Check, Clock, X, RotateCcw, SlidersHorizontal, ReceiptText, ShoppingBag, CircleDollarSign } from 'lucide-react'
 import type { WalletTransaction } from '../lib/wallet-api'
 import { currencyLabel, networkLabel } from '../wallet/catalog'
 
@@ -11,9 +11,9 @@ export interface TransactionView { id:string; kind:Kind; status:Status; amount:s
 const kinds = {
   deposit: {title:'Пополнение криптовалютой',icon:ArrowDownLeft}, ruble_deposit:{title:'Пополнение рублями',icon:ArrowDownLeft},
   withdrawal:{title:'Вывод криптовалюты',icon:ArrowUpRight}, transfer:{title:'Перевод пользователю',icon:ArrowUpRight}, check:{title:'Крипточек',icon:Ticket},
-  exchange:{title:'Обмен валют',icon:ArrowLeftRight}, qr:{title:'Оплата по QR-коду',icon:QrCode}, card_payment:{title:'Покупка картой',icon:CreditCard},
+  exchange:{title:'Обмен валют',icon:ArrowLeftRight}, qr:{title:'Оплата по QR-коду',icon:QrCode}, card_payment:{title:'Покупка картой',icon:ShoppingBag},
   adjustment:{title:'Корректировка баланса',icon:SlidersHorizontal}, other:{title:'Операция',icon:ReceiptText},
-  card_topup:{title:'Пополнение карты',icon:CreditCard}, card_issue:{title:'Выпуск карты',icon:CreditCard}, refund:{title:'Возврат средств',icon:RotateCcw}, referral:{title:'Реферальное начисление',icon:Gift},
+  card_topup:{title:'Пополнение карты',icon:CircleDollarSign}, card_issue:{title:'Выпуск карты',icon:CreditCard}, refund:{title:'Возврат средств',icon:RotateCcw}, referral:{title:'Реферальное начисление',icon:Gift},
 }
 const statuses = {completed:{label:'Выполнено',icon:Check},processing:{label:'В обработке',icon:Clock},failed:{label:'Не выполнено',icon:X},refunded:{label:'Возвращено',icon:RotateCcw}}
 const incoming = (kind:Kind)=>['deposit','ruble_deposit','refund','referral'].includes(kind)
@@ -131,23 +131,17 @@ export function TransactionDetailContent({model}:{model:TransactionView}) {
   )
 }
 export function TransactionExamples({ onSelect }: { onSelect: (item: TransactionView) => void }) {
-  const [expanded, setExpanded] = useState<1 | 2 | null>(null)
+  const [expanded, setExpanded] = useState(false)
   return (
     <section className="mx-4 mt-7">
-      <div className="grid grid-cols-2 gap-2">
-        {([1, 2] as const).map((style) => (
-          <button key={style} type="button" aria-expanded={expanded === style}
-            onClick={() => setExpanded((current) => current === style ? null : style)}
-            className="flex min-h-14 items-center justify-between gap-2 rounded-[22px] bg-white px-3 text-left text-sm font-medium text-blue-600 dark:bg-[#1c1c1e] dark:text-blue-400">
-            {style === 1 ? 'Примеры операций' : 'Пример операций 2'}
-            <span aria-hidden="true">{expanded === style ? '−' : '+'}</span>
-          </button>
-        ))}
-      </div>
+      <button type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}
+        className="flex min-h-14 w-full items-center justify-between rounded-[22px] bg-white px-4 text-left text-[16px] font-medium text-blue-600 dark:bg-[#1c1c1e] dark:text-blue-400">
+        Примеры операций <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+      </button>
       {expanded && <>
         <p className="px-2 py-3 text-[13px] text-black/45 dark:text-white/45">Демонстрационные операции</p>
         <List strong inset dividers className="!mx-0 !mt-0 overflow-hidden !rounded-[32px] [&>ul]:!rounded-[32px]">
-          {examples.map((item) => <TransactionListRow key={item.id} item={item} onSelect={onSelect} cutout={expanded === 2} />)}
+          {examples.map((item) => <TransactionListRow key={item.id} item={item} onSelect={onSelect} />)}
         </List>
         <div className="mt-3 flex gap-2">
           {(['processing', 'failed', 'refunded'] as const).map((status) => (
@@ -163,21 +157,7 @@ export function TransactionExamples({ onSelect }: { onSelect: (item: Transaction
   )
 }
 
-function CutoutIcon({ kind }: { kind: Kind }) {
-  const id = useId()
-  const Icon = kinds[kind].icon
-  return (
-    <svg width="29" height="29" viewBox="0 0 30 30" aria-hidden="true">
-      <mask id={id} maskUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
-        <circle cx="15" cy="15" r="14" fill="white" />
-        <Icon x={7} y={7} size={16} color="black" strokeWidth={3.4} />
-      </mask>
-      <circle cx="15" cy="15" r="14" fill="white" mask={`url(#${id})`} />
-    </svg>
-  )
-}
-
-export function TransactionListRow({item,onSelect,cutout=false}:{item:TransactionView;onSelect:(item:TransactionView)=>void;cutout?:boolean}) {
+export function TransactionListRow({item,onSelect}:{item:TransactionView;onSelect:(item:TransactionView)=>void}) {
  const Icon=kinds[item.kind].icon,positive=Number(item.amount)>0
  const crypto = item.kind === 'deposit' || item.kind === 'withdrawal'
  const network = item.rows.find(([label]) => label === 'Сеть')?.[1]
@@ -185,5 +165,5 @@ export function TransactionListRow({item,onSelect,cutout=false}:{item:Transactio
  const currency = item.asset === 'USD' ? '$' : ''
  const unit = item.asset === 'RUB' ? ' ₽' : item.asset === 'USD' ? '' : ' ' + item.asset
  const amount = `${positive ? '+' : Number(item.amount) < 0 ? '−' : ''}${currency}${number(String(Math.abs(Number(item.amount))))}${unit}`
- return <ListItem link chevron={false} onClick={()=>onSelect(item)} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}>{cutout ? <CutoutIcon kind={item.kind} /> : <Icon size={22}/>}</span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{kinds[item.kind].title}</span><span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">{context}{item.demo?' · Демо':''}</span></span><span className={`shrink-0 text-right text-[16px] font-medium tabular-nums ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{amount}</span></span>}/>
+ return <ListItem link chevron={false} onClick={()=>onSelect(item)} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={22}/></span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{kinds[item.kind].title}</span><span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">{context}{item.demo?' · Демо':''}</span></span><span className={`shrink-0 text-right text-[16px] font-medium tabular-nums ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{amount}</span></span>}/>
 }
