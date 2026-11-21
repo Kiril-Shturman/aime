@@ -1066,7 +1066,7 @@
   .wpay-aura-carousel--centered > .wpay-aura-carousel-item { transition: none; }
 }
 
-.wpay-card-catalog { display: grid; gap: 14px; padding-top: 16px; }
+.wpay-card-catalog { display: grid; gap: 46px; padding-top: 24px; }
 .wpay-card-catalog h2 { font-size: 25px; font-weight: 700; }
 .wpay-card-catalog-item {
   display: grid;
@@ -1151,7 +1151,6 @@
 .wpay-card-catalog-price > span + span { border-inline-start: 1px solid #ffffff26; border-radius: 0; }
 .wpay-card-catalog-price b { font-size: 17px; }
 
-.wpay-card-catalog { gap: 38px; }
 .wpay-card-catalog-item, .dark .wpay-card-catalog-item {
   position: relative;
   grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
