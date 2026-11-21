@@ -1119,8 +1119,8 @@ export default function WalletAuraCards({
                 ? `${offerNumber.format(Number(plan.issue_fee))}$${rapiraMid !== null && (appearance === "silver" || appearance === "navy")
                   ? ` или ${Math.round(Number(plan.issue_fee) * rapiraMid).toLocaleString("ru-RU")}₽` : ""}` : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
               {plan?.total_recharge_pct != null && (
-                <span><b>{rapiraMid === null ? "—" : (rapiraMid * (1 + Number(plan.total_recharge_pct) / 100))
-                  .toLocaleString("ru-RU", { style: "currency", currency: "RUB" })}</b><small>Ориентир за 1 USDT</small></span>
+                <span><b>{rapiraMid === null ? "—" : `$1 = ${(rapiraMid * (1 + Number(plan.total_recharge_pct) / 100))
+                  .toLocaleString("ru-RU", { style: "currency", currency: "RUB" })}`}</b><small>Курс обмена</small></span>
               )}
             </span>
           </button>
