@@ -1267,3 +1267,12 @@
   border-color: #ffc39955;
   background: linear-gradient(120deg, #291c2aab, #9b3b1b91);
 }
+
+.wpay-card-catalog-subscription-art {
+  width: 140%;
+  max-width: none;
+  margin: -24% 0 -9% -34%;
+  filter: none;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 47%, #000d 63%, transparent 77%);
+  mask-image: radial-gradient(ellipse at center, #000 47%, #000d 63%, transparent 77%);
+}
