@@ -653,7 +653,7 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
         status = await self.service.get_kyc(uid, ref)
         self.assertFalse(status["verified"])
 
-    async def test_imported_identity_is_validated_and_never_persisted(self):
+    async def test_imported_identity_is_validated_and_encrypted_at_rest(self):
         uid = "tg:identity-import"
         ref = self.ledger.account(uid)
         customer_id = await self.service.ensure_customer(
@@ -665,6 +665,9 @@ class AuraMockContractTests(unittest.IsolatedAsyncioTestCase):
             "passport_issue_date": "2010-06-01", "inn": "123456789012",
         })
         self.assertTrue(state["verified"])
+        from wallet_aura import saved_kyc_identity
+        self.assertEqual(saved_kyc_identity(self.ledger, uid, "test")["fields"]["passport"], "4510123456")
+        self.assertIsNone(saved_kyc_identity(self.ledger, uid, "live"))
         persisted = "\n".join(self.ledger.db.iterdump())
         self.assertNotIn("4510123456", persisted)
         self.assertNotIn("123456789012", persisted)
@@ -1506,6 +1509,23 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             {row["event_id"]: (row["type"], row["amount"]) for row in items},
             {"aura:test:card_operation:legacy": ("card_topup", "15"), "local-topup": ("card_topup", "-16")},
         )
+
+    async def test_admin_user_receives_full_saved_contacts(self):
+        ledger = self.app["wpay_ledger"]
+        ledger.account("tg:123")
+        ledger.db.execute(
+            "INSERT INTO wallet_profile_contacts VALUES ('tg:123','test','ivan@example.com','+79991234567',?)",
+            (time.time(),),
+        )
+        endpoint = "/api/wallet/admin-user?user_id=tg:123"
+        denied = await self.wpay.get(endpoint, headers={"X-Telegram-Init-Data": init_data(123)})
+        self.assertEqual(denied.status, 403)
+        result = await self.wpay.get(endpoint, headers=self.owner)
+        self.assertEqual(result.status, 200, await result.text())
+        profile = await result.json()
+        self.assertEqual(profile["contacts"]["email"], "ivan@example.com")
+        self.assertEqual(profile["contacts"]["phone"], "+79991234567")
+        self.assertIn("no-store", result.headers["Cache-Control"])
 
     async def test_admin_operation_logs_match_signed_provider_event_without_returning_payload(self):
         db = self.app["wpay_ledger"].db

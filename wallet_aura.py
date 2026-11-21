@@ -9,6 +9,9 @@ import hashlib
 import hmac
 import json
 import logging
+import os
+from pathlib import Path
+import tempfile
 import re
 import socket
 import time
@@ -20,6 +23,7 @@ from urllib.parse import quote, urlsplit
 from wallet_aura_errors import CATALOG as ERROR_CATALOG, retry_policy as aura_retry_policy
 
 from aiohttp import ClientSession, ClientTimeout, TCPConnector, web
+from nacl.secret import Aead
 from wallet_notifications import enqueue as enqueue_notification, prepare as prepare_notifications
 from wallet_tariffs import card_issue_enabled
 from wallet_tariffs import calculate as calculate_tariff, resolve_card_plan, prepare as prepare_tariffs
@@ -91,6 +95,11 @@ def prepare(ledger):
         created_at REAL NOT NULL, updated_at REAL NOT NULL,
         PRIMARY KEY(provider,environment,entity_type,local_id),
         UNIQUE(provider,environment,entity_type,remote_id)
+      );
+      CREATE TABLE IF NOT EXISTS aura_kyc_identities (
+        user_id TEXT NOT NULL, environment TEXT NOT NULL,
+        ciphertext BLOB NOT NULL, submitted_at REAL NOT NULL,
+        PRIMARY KEY(user_id,environment)
       );
       CREATE TABLE IF NOT EXISTS wallet_profile_contacts (
         user_id TEXT NOT NULL, environment TEXT NOT NULL,
@@ -556,6 +565,35 @@ def _deposit_address_result(payload, *, expected_address_id=None,
         "currency": "USDT", "customer_id": customer_id, "id": address_id,
         "is_default": payload["is_default"], "label": label, "network": network,
     }
+
+
+def _identity_cipher(ledger, *, create=False):
+    database = ledger.db.execute('PRAGMA database_list').fetchone()[2]
+    if not database:
+        raise RuntimeError('KYC storage requires a persistent database')
+    key_path = Path(database + '.kyc-key')
+    if not key_path.exists() and create:
+        with tempfile.NamedTemporaryFile(dir=key_path.parent, prefix='.kyc-key-') as temporary:
+            temporary.write(os.urandom(Aead.KEY_SIZE))
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            try:
+                os.link(temporary.name, key_path)
+            except FileExistsError:
+                pass
+    return Aead(key_path.read_bytes())
+
+
+def saved_kyc_identity(ledger, uid, environment):
+    row = ledger.db.execute(
+        'SELECT ciphertext, submitted_at FROM aura_kyc_identities WHERE user_id=? AND environment=?',
+        (uid, environment),
+    ).fetchone()
+    if not row:
+        return None
+    aad = json.dumps([uid, environment]).encode()
+    identity = json.loads(_identity_cipher(ledger).decrypt(bytes(row['ciphertext']), aad))
+    return {'fields': identity, 'submitted_at': row['submitted_at']}
 
 
 def _identity_request_body(payload):
@@ -1853,8 +1891,28 @@ class AuraService:
         ).fetchone()
         if not row or row["customer_id"] != customer_id:
             raise ValueError("Unknown Aura customer identity owner")
-        result = await self.client.submit_customer_identity(customer_id, identity)
+        identity = _identity_request_body(identity)
+        aad = json.dumps([uid, self.environment]).encode()
+        ciphertext = bytes(_identity_cipher(self.ledger, create=True).encrypt(
+            json.dumps(identity, ensure_ascii=False).encode(), aad,
+        ))
+        accepted_at = time.time()
+        try:
+            result = await self.client.submit_customer_identity(customer_id, identity)
+        except self.client.error_cls as error:
+            if error.name == 'kyc_rejected':
+                self._save_identity(uid, ciphertext, accepted_at)
+            raise
+        self._save_identity(uid, ciphertext, accepted_at)
         return self._store_kyc(uid, customer_id, result)
+
+    def _save_identity(self, uid, ciphertext, submitted_at):
+        self.ledger.db.execute(
+            'INSERT INTO aura_kyc_identities VALUES (?,?,?,?) '
+            'ON CONFLICT(user_id,environment) DO UPDATE SET ciphertext=excluded.ciphertext,'
+            'submitted_at=excluded.submitted_at WHERE excluded.submitted_at>=aura_kyc_identities.submitted_at',
+            (uid, self.environment, ciphertext, submitted_at),
+        )
 
     def _store_sbp_api_order(self, uid, item):
         customer = self.ledger.db.execute(

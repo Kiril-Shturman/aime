@@ -112,10 +112,19 @@ const walletBalanceLabels = {
   network: "Остаток по учёту wPay",
 };
 
+const kycFieldLabels: Record<string, string> = {
+  first_name: "Имя", last_name: "Фамилия", patronymic: "Отчество", birth_date: "Дата рождения",
+  passport: "Серия и номер паспорта", passport_issue_date: "Дата выдачи паспорта",
+  country_of_passport_issue: "Страна выдачи паспорта", inn: "ИНН",
+  registration_apartment: "Квартира", registration_building: "Корпус", registration_city: "Город",
+  registration_city_en: "Город латиницей", registration_country: "Страна регистрации",
+  registration_house: "Дом", registration_index: "Индекс", registration_state: "Регион",
+  registration_street: "Улица", registration_street_en: "Улица латиницей",
+};
 type AdminUserDetail = {
   account: Json;
   contacts: { email: string | null; phone: string | null; updated_at: unknown };
-  aura: { customer: Json | null; kyc: Json | null; cards: Json[] };
+  aura: { customer: Json | null; kyc: Json | null; identity?: { fields: Record<string, string>; submitted_at: number } | null; cards: Json[] };
   balances: Json[];
   wallets?: AdminWallet[];
   credit_assets?: Record<string, string[]>;
@@ -2202,6 +2211,7 @@ function AdminUserDrawer({
 }) {
   const tabs = [
     ["profile", "Профиль"],
+    ["verification", "Верификация"],
     ["balances", "Балансы"],
     ["wallets", "Кошельки"],
     ["cards", "Карты"],
@@ -2384,15 +2394,27 @@ function AdminUserDrawer({
         aria-label={`Карточка пользователя ${name}`}
       >
         <header className="wpay-admin-drawer-header">
-          <div>
-            <small>Карточка пользователя</small>
-            <h2>{name}</h2>
-            <span>
-              {account?.telegram_username
-                ? `@${text(account.telegram_username)} · `
-                : ""}
-              {userId}
-            </span>
+          <div className="admin-record-profile-heading">
+            <div className="admin-record-avatar" aria-hidden="true">
+              {name.trim().slice(0, 1).toUpperCase()}
+              {typeof account?.photo_url === "string" && account.photo_url && <img key={String(account.photo_url)} src={String(account.photo_url)}
+                alt="" referrerPolicy="no-referrer" onError={event => { event.currentTarget.hidden = true; }} />}
+            </div>
+            <div className="admin-record-profile-title">
+              <small>Карточка пользователя</small>
+              <h2>{name}</h2>
+              <span>{account?.telegram_username ? `@${text(account.telegram_username)} · ` : ""}{userId}</span>
+              {detail && <div className="wpay-admin-user-badges">
+                <span className={customer ? "is-good" : ""}>
+                  Aura {customer ? "подключён" : "нет клиента"}
+                </span>
+                <span className={kyc?.verified ? "is-good" : ""}>
+                  KYC:{" "}
+                  {kyc?.verified ? "verified" : text(kyc?.status || "не начат")}
+                </span>
+                <span>Карт: {detail.aura.cards.length}</span>
+              </div>}
+            </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Закрыть">
             <X size={20} />
@@ -2416,16 +2438,7 @@ function AdminUserDrawer({
           ) : detail ? (
             <>
               {actionNotice && <p role="status" className="wpay-admin-operator-notice mb-3">{actionNotice}</p>}
-              <div className="wpay-admin-user-badges">
-                <span className={customer ? "is-good" : ""}>
-                  Aura: {customer ? "подключён" : "нет клиента"}
-                </span>
-                <span className={kyc?.verified ? "is-good" : ""}>
-                  KYC:{" "}
-                  {kyc?.verified ? "verified" : text(kyc?.status || "не начат")}
-                </span>
-                <span>Карты: {detail.aura.cards.length}</span>
-              </div>
+
 
               {section === "profile" && (
                 <section className="wpay-admin-user-section wpay-admin-operator-actions">
@@ -2485,6 +2498,11 @@ function AdminUserDrawer({
                   <dl className="admin-record-fields">
                     <RecordValue label="ID пользователя" value={userId} copyable />
                     <RecordValue label="Telegram ID" value={text(account?.telegram_id)} copyable />
+                    <RecordValue label="Имя в Telegram" value={text(account?.first_name)} copyable />
+                    <RecordValue label="Фамилия в Telegram" value={text(account?.last_name)} copyable />
+                    <RecordValue label="Имя пользователя Telegram" value={account?.telegram_username ? `@${text(account.telegram_username)}` : undefined} copyable />
+                    <RecordValue label="Язык Telegram" value={text(account?.language_code)} />
+                    <RecordValue label="Telegram Premium" value={account?.is_premium == null ? undefined : account.is_premium ? "Да" : "Нет"} />
                     <RecordValue label="Aura · Customer ID" value={text(customer?.customer_id)} copyable />
                     <RecordValue label="GoSwap · client_ref" value={text(account?.client_ref)} copyable />
                     <RecordValue label="Роль" value={text(account?.role)} />
@@ -2495,6 +2513,26 @@ function AdminUserDrawer({
                   </dl>
                 </section>
               )}
+
+              {section === "verification" && (
+                <section className="wpay-admin-user-section">
+                  <h3>Данные верификации</h3>
+                  <dl className="admin-record-fields">
+                    <RecordValue label="Статус KYC" value={text(kyc?.status)} />
+                    <RecordValue label="Причина" value={text(kyc?.reason)} />
+                    <RecordValue label="Email" value={text(detail.contacts.email)} copyable />
+                    <RecordValue label="Телефон" value={text(detail.contacts.phone)} copyable />
+                    {detail.aura.identity && <>
+                      <RecordValue label="Дата отправки" value={date(detail.aura.identity.submitted_at)} />
+                      {Object.entries(detail.aura.identity.fields).map(([field, value]) => (
+                        <RecordValue key={field} label={kycFieldLabels[field] ?? field} value={value} copyable />
+                      ))}
+                    </>}
+                  </dl>
+                  {!detail.aura.identity && <p className="admin-record-empty">В профиле нет сохранённых паспортных данных.</p>}
+                </section>
+              )}
+
 
               {section === "profile" && (
                 <section className="wpay-admin-user-section">

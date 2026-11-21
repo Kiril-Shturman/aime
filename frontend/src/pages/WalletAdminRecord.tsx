@@ -22,7 +22,7 @@ export function RecordValue({ label, value, copyable = false }: {
     <dd>
       <span>{value || "—"}</span>
       {copyable && value && value !== "—" && (
-        <button type="button" aria-label={`Скопировать ${label}`} onClick={async () => {
+        <button type="button" className="admin-record-copy" aria-label={`Скопировать ${label}`} onClick={async () => {
           try { await navigator.clipboard.writeText(value); setState("copied"); }
           catch { setState("failed"); }
         }}><Icon size={17} /></button>

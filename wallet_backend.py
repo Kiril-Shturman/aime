@@ -52,6 +52,7 @@ from wallet_operations import goswap_network_balances, prepare_operations, opera
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
 from wallet_tariffs import set_card_issue_enabled
 from wallet_tariffs import prepare as prepare_tariffs, snapshot as tariff_snapshot, create_version as create_tariff_version
+from wallet_aura import saved_kyc_identity
 from wallet_aura import (
     AuraClient, AuraService, prepare as prepare_aura,
     receive_webhook as receive_aura_webhook, process_inbox as process_aura_inbox,
@@ -973,19 +974,6 @@ def install_wallet(app, root, owner_check):
             row['balances'] = by_user.get(row['user_id'], [])
         return {'items': rows, 'total': ledger.db.execute("SELECT COUNT(*) FROM wallet_accounts WHERE user_id LIKE 'tg:%'").fetchone()[0]}
 
-    def masked_email(value):
-        if not value or '@' not in str(value):
-            return None
-        local, domain = str(value).split('@', 1)
-        return (local[:2] if len(local) > 1 else local[:1]) + '***@' + domain
-
-    def masked_phone(value):
-        digits = ''.join(character for character in str(value or '') if character.isdigit())
-        if len(digits) < 4:
-            return None
-        prefix = '+' + digits[0] if str(value).strip().startswith('+') else digits[0]
-        return f'{prefix} *** ***-**-{digits[-2:]}'
-
     async def admin_user(request):
         user_id = str(request.query.get('user_id') or '')
         if not user_id.startswith('tg:') or not user_id[3:].isdigit():
@@ -1008,13 +996,14 @@ def install_wallet(app, root, owner_check):
         return {
             'account': dict(account),
             'contacts': {
-                'email': masked_email(contact['email']) if contact else None,
-                'phone': masked_phone(contact['phone']) if contact else None,
+                'email': contact['email'] if contact else None,
+                'phone': contact['phone'] if contact else None,
                 'updated_at': contact['updated_at'] if contact else None,
             },
             'aura': {
                 'customer': dict(customer) if customer else None,
                 'kyc': dict(kyc) if kyc else None,
+                'identity': saved_kyc_identity(ledger, user_id, aura_environment),
                 'cards': decoded_rows(
                     'SELECT card_id,kind,status,frozen,masked_pan,delivery_status,tracking,'
                     'provider_updated_at,created_at,updated_at FROM aura_cards WHERE user_id=? '
