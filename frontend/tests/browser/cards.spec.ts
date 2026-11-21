@@ -647,7 +647,7 @@ test("CVV stays hidden until eye is pressed and resets after hiding card", async
   await expect(back.getByText("123", { exact: true })).toHaveCount(0);
 });
 
-test("pulling cards moves the description with the carousel and keeps menu fixed", async ({
+test("pulling cards moves the description with the carousel and keeps the offer action fixed", async ({
   page,
 }) => {
   await setup(page, "dark", false, true);
@@ -657,10 +657,10 @@ test("pulling cards moves the description with the carousel and keeps menu fixed
     name: "Для подписок",
     exact: true,
   });
-  const menu = page.locator(".wpay-bottom-menu");
+  const action = page.getByRole("button", { name: "Оформить карту", exact: true });
   const before = await carousel.boundingBox(),
     titleBefore = await title.boundingBox(),
-    menuBefore = await menu.boundingBox();
+    actionBefore = await action.boundingBox();
   const client = await page.context().newCDPSession(page);
   await client.send("Emulation.setTouchEmulationEnabled", { enabled: true });
   const x = before!.x + before!.width / 2,
@@ -677,11 +677,11 @@ test("pulling cards moves the description with the carousel and keeps menu fixed
       });
     const after = await carousel.boundingBox(),
       titleAfter = await title.boundingBox(),
-      menuAfter = await menu.boundingBox();
+      actionAfter = await action.boundingBox();
     const shift = after!.y - before!.y;
     expect(shift).toBeGreaterThan(8);
     expect(titleAfter!.y - titleBefore!.y).toBeCloseTo(shift, 0);
-    expect(menuAfter!.y).toBeCloseTo(menuBefore!.y, 0);
+    expect(actionAfter!.y).toBeCloseTo(actionBefore!.y, 0);
     expect(await carousel.evaluate((el) => el.scrollTop)).toBe(0);
   } finally {
     await client.send("Input.dispatchTouchEvent", {
