@@ -892,7 +892,7 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
       issue_fee: "10", available: true, provider: "GoSwap", total_recharge_pct: "2.8" }],
   } }));
   await page.route("**/api/wallet/goswap-card-quote", route => route.fulfill({ json: {
-    intent_id: "goswap-intent", label: "Для подписок", state: "quoted", total: "10",
+    intent_id: "goswap-intent", label: "Для подписок", state: "quoted", total: "10", wallet_available: "42",
   } }));
   let payments = 0;
   await page.route("**/api/wallet/goswap-card-issue", route => {
@@ -909,11 +909,13 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   await expect(sheet.locator(".wpay-goswap-order-summary").getByText("10 USDT", { exact: true })).toBeVisible();
   await expect(sheet.getByText("Итого:", { exact: true })).toBeVisible();
   await expect(sheet.getByRole("radio", { name: "С кошелька" })).toBeChecked();
+  await expect(sheet.getByText("Баланс: 42 USDT")).toBeVisible();
   const activeCheck = sheet.locator("input:checked ~ .wpay-goswap-payment-check");
   await expect(activeCheck).toBeVisible();
   await expect(sheet.locator(".wpay-goswap-payment-check:visible")).toHaveCount(1);
   await expect(sheet.locator(".wpay-goswap-order-terms")).toBeHidden();
   await sheet.getByRole("radio", { name: "Через СБП" }).check();
+  await expect(sheet.getByText("Баланс: 42 USDT")).toBeHidden();
   await expect(sheet.getByRole("button", { name: "Пополнить через СБП" })).toBeVisible();
   await expect(sheet.locator(".wpay-goswap-payment-check:visible")).toHaveCount(1);
   await sheet.getByRole("radio", { name: "С кошелька" }).check();

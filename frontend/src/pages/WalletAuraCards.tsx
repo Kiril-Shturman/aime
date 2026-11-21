@@ -130,6 +130,7 @@ type StorefrontPlan = {
   total_recharge_pct?: string;
 };
 type GoSwapIssue = {
+  wallet_available?: string;
   intent_id: string;
   label: string;
   total: string;
@@ -1563,6 +1564,11 @@ export default function WalletAuraCards({
               <p className="mt-3 text-center text-sm opacity-60">{goSwapOrder.quote.label}</p>
               <fieldset className="wpay-goswap-payment">
                 <legend>Способ оплаты</legend>
+                {goSwapOrder.quote.wallet_available != null && (
+                  <p className={`wpay-goswap-wallet-available${goSwapPayment === "sbp" ? " invisible" : ""}`}>
+                    Баланс: {offerNumber.format(Number(goSwapOrder.quote.wallet_available))} USDT
+                  </p>
+                )}
                 <label>
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "wallet"}
                     onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("wallet")} />

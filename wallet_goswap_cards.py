@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from decimal import Decimal, localcontext
 from aiohttp import web
-from wallet_finance import require_coverage, require_goswap_user_funds
+from wallet_finance import aura_available, require_coverage, require_goswap_user_funds
 from wallet_tariffs import GOSWAP_CARD_PLANS, active, card_issue_enabled, storefront_positions
 from wallet_withdrawals import debt
 
@@ -69,6 +69,7 @@ class GoSwapCards:
         with localcontext() as ctx:
             ctx.prec = 80
             total = fee + service_fee
+            available = max(Decimal(0), self.ledger.balance(uid, ASSET)[0] - aura_available(self.ledger, uid, ASSET))
         now = time.time()
         intent = uuid.uuid4().hex
         self.db.execute("DELETE FROM wallet_goswap_card_issues WHERE user_id=? AND state='quoted' AND expires_at<?", (uid, now))
@@ -79,7 +80,7 @@ class GoSwapCards:
             intent_id,user_id,plan,product,client_ref,spend_id,provider_fee,service_fee,held,state,expires_at,updated_at
             ) VALUES (?,?,?,?,?,?,?,?,?,'quoted',?,?)""",
             (intent, uid, plan, product, client_ref, "wpay-card-" + intent, str(fee), str(service_fee), str(total), now + 120, now))
-        return self.public(self.get(uid, intent))
+        return self.public(self.get(uid, intent)) | {"wallet_available": str(available)}
 
     def get(self, uid, intent):
         row = self.db.execute("SELECT * FROM wallet_goswap_card_issues WHERE user_id=? AND intent_id=?", (uid, intent)).fetchone()

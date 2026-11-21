@@ -987,6 +987,7 @@
 }
 .wpay-goswap-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .wpay-goswap-payment legend { margin-bottom: 6px; font-size: 13px; opacity: .7; }
+.wpay-goswap-wallet-available { grid-column: 1 / -1; margin: 0; text-align: right; font-size: 13px; font-variant-numeric: tabular-nums; }
 .wpay-goswap-payment label { position: relative; display: flex; min-height: 72px; flex-direction: column; justify-content: center; align-items: flex-start; gap: 5px; padding: 10px 12px; overflow: hidden; border: 0; border-radius: 22px; background: var(--wpay-payment-tile-bg); font-size: 13px; cursor: pointer; }
 .wpay-goswap-payment label:has(input:checked) { background: var(--wpay-payment-tile-selected-bg); box-shadow: inset 0 0 0 2px var(--wpay-payment-tile-accent); }
 .wpay-goswap-payment label:has(input:focus-visible) { outline: 2px solid var(--f7-theme-color); outline-offset: 2px; }
