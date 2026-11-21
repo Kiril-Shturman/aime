@@ -2262,6 +2262,30 @@ if __name__ == "__main__":
 
 
 class AuraUserWithdrawalTests(unittest.IsolatedAsyncioTestCase):
+    async def test_frozen_aura_withdrawal_rejects_new_intents_before_call(self):
+        from types import SimpleNamespace
+        from wallet_aura import _position_adjust, user_withdrawal
+
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Ledger(tmp + "/wallet")
+            prepare_inbox(ledger)
+            prepare(ledger)
+            uid = "tg:123"
+            ledger.account(uid)
+            ledger.put_balance(uid, "USDT", Decimal("10"), Decimal("0"))
+            _position_adjust(ledger, "test", uid, "USDT", Decimal("10"), Decimal("0"))
+            ledger.db.execute("INSERT INTO aura_user_withdrawal_freezes VALUES (?,?,?)", (uid, "test", time.time()))
+            client = SimpleNamespace(error_cls=ApiError, create_withdrawal=AsyncMock())
+            for actor in (None, "tg:321"):
+                with self.assertRaises(ApiError) as error:
+                    await user_withdrawal(ledger, client, "test", uid,
+                                          {"address": "T" + "A" * 33, "amount": "3", "fee": "2"},
+                                          "11111111-1111-4111-8111-111111111111", Decimal("2"), actor=actor)
+                self.assertEqual(error.exception.name, "WALLET_FROZEN")
+            client.create_withdrawal.assert_not_awaited()
+            self.assertEqual(ledger.balance(uid, "USDT"), (Decimal("10"), Decimal("0")))
+            ledger.db.close()
+
     async def test_timeout_reuses_reservation_and_terminal_result_settles_once(self):
         from types import SimpleNamespace
         from wallet_aura import _position_adjust, store_withdrawal_snapshot, user_withdrawal

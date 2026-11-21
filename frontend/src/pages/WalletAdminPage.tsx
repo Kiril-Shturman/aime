@@ -1,3 +1,4 @@
+import { AuraWithdrawalForm } from "./WalletAuraWithdrawal";
 import WalletKeyExport from "./WalletKeyExport";
 import WalletCustodyWithdrawal from "./WalletCustodyWithdrawal";
 import Aurora from "../components/reactbits/Aurora";
@@ -92,6 +93,8 @@ type AdminWallet = {
   balance_scope: "onchain" | "provider" | "network" | "secondary_onchain";
   hidden?: boolean;
   wallet_id?: string;
+  managed?: boolean;
+  withdrawal_frozen?: boolean;
   state?: "frozen" | "archived" | null;
 };
 const walletProviderNames = { wpay: "wPay", aura: "Aura", goswap: "GoSwap" };
@@ -2028,6 +2031,7 @@ function AdminUserDrawer({
     ["cards", "Карты"],
     ["history", "История"],
   ] as const;
+  const [auraWithdrawEnv, setAuraWithdrawEnv] = useState<string | null>(null);
   const [walletAction, setWalletAction] = useState<{ walletId: string; asset: string; action: "withdraw" | "export" } | null>(null);
   const [section, setSection] = useState<(typeof tabs)[number][0]>("profile");
   const [balanceNetwork, setBalanceNetwork] = useState("");
@@ -2120,6 +2124,25 @@ function AdminUserDrawer({
   const creditNetworks = (detail?.credit_assets?.USDT ?? []).filter((network) =>
     ["TRON", "BSC", "ETH", "TON", "SOL"].includes(network),
   );
+  async function toggleAuraWithdrawal(wallet: AdminWallet) {
+    if (!wallet.environment || actionWorking) return;
+    const frozen = !wallet.withdrawal_frozen;
+    if (!window.confirm(frozen ? "Заморозить новые выводы из Aura?" : "Разрешить новые выводы из Aura?")) return;
+    setActionWorking("aura_withdrawal_freeze");
+    setActionNotice("");
+    setAuraWithdrawEnv(null);
+    try {
+      const query = new URLSearchParams({ user_id: userId, environment: wallet.environment });
+      await walletRequest(`admin-aura-withdrawal-freeze?${query}`, { frozen });
+      setActionNotice(frozen ? "Новые выводы из Aura заморожены" : "Выводы из Aura разблокированы");
+      onRetry();
+    } catch (reason) {
+      setActionNotice(reason instanceof Error ? reason.message : "Не удалось изменить статус вывода");
+    } finally {
+      setActionWorking("");
+    }
+  }
+
   async function adjustBalance() {
     const normalizedAmount = balanceAmount.trim().replace(",", ".");
     const network = balanceAsset === "USDT" ? balanceNetwork : "";
@@ -2213,7 +2236,7 @@ function AdminUserDrawer({
             <>
               <nav aria-label="Разделы карточки пользователя" className="sticky top-0 z-10 mb-3 flex gap-2 overflow-x-auto rounded-2xl bg-[var(--admin-surface)] p-2">
                 {tabs.map(([id, label]) => (
-                  <button key={id} type="button" aria-pressed={section === id} onClick={() => { setWalletAction(null); setSection(id); }}
+                  <button key={id} type="button" aria-pressed={section === id} onClick={() => { setWalletAction(null); setAuraWithdrawEnv(null); setSection(id); }}
                     className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${section === id ? "bg-blue-500/15 text-blue-600 dark:text-blue-300" : "text-[var(--admin-muted)]"}`}>
                     {label}
                   </button>
@@ -2401,6 +2424,28 @@ function AdminUserDrawer({
                             <button type="button" title="Скопировать адрес" onClick={() => copy(wallet.address)}
                               className="mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
                           ) : <p className="mt-2 text-xs opacity-60">Адрес ещё не выдан</p>}
+                          {wallet.provider === "aura" && wallet.managed && wallet.environment && (
+                            <>
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                {!wallet.withdrawal_frozen && <button type="button"
+                                  className="rounded-lg bg-blue-500/10 px-3 py-2 text-xs"
+                                  onClick={() => { setWalletAction(null); setAuraWithdrawEnv(wallet.environment); }}>
+                                  Вывести
+                                </button>}
+                                <button type="button" className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs"
+                                  disabled={Boolean(actionWorking)} onClick={() => void toggleAuraWithdrawal(wallet)}>
+                                  {wallet.withdrawal_frozen ? "Разморозить вывод" : "Заморозить вывод"}
+                                </button>
+                              </div>
+                              {auraWithdrawEnv === wallet.environment && (
+                                <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-2">
+                                  <button type="button" className="ml-auto block px-3 py-2 text-sm"
+                                    onClick={() => setAuraWithdrawEnv(null)}>Закрыть действие</button>
+                                  <AuraWithdrawalForm adminScope={{ userId, environment: wallet.environment }} />
+                                </div>
+                              )}
+                            </>
+                          )}
                           {wallet.wallet_id && (
                             <div className="mt-3 flex flex-wrap items-center gap-2">
                               {wallet.state && <span className="rounded-lg bg-amber-500/15 px-2 py-1 text-xs">

@@ -8,12 +8,21 @@ type WithdrawalOptions = {
   available: string;
   fee: string;
   environment: string;
+  frozen?: boolean;
   pending: Pending | null;
 };
-const action = "aura-user-withdrawal";
-
 export default function WalletAuraWithdrawal() {
   const wallet = useLiveWallet();
+  return <AuraWithdrawalForm onSubmitted={() => void wallet.refresh()} />;
+}
+
+export function AuraWithdrawalForm({ adminScope, onSubmitted }: {
+  adminScope?: { userId: string; environment: string };
+  onSubmitted?: () => void;
+}) {
+  const action = adminScope
+    ? "admin-aura-user-withdrawal?" + new URLSearchParams({ user_id: adminScope.userId, environment: adminScope.environment })
+    : "aura-user-withdrawal";
   const [options, setOptions] = useState<WithdrawalOptions>();
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -28,7 +37,7 @@ export default function WalletAuraWithdrawal() {
       .then((value) => { if (!controller.signal.aborted) setOptions(value); })
       .catch((reason: Error) => { if (!controller.signal.aborted) setError(reason.message); });
     return () => controller.abort();
-  }, []);
+  }, [action]);
 
   const pending = options?.pending;
   const fee = pending?.fee ?? options?.fee;
@@ -36,7 +45,7 @@ export default function WalletAuraWithdrawal() {
   const sum = pending?.amount ?? amount.trim().replace(",", ".");
   const valid = /^T[1-9A-HJ-NP-Za-km-z]{33}$/.test(recipient) && /^\d{1,12}(?:\.\d{1,6})?$/.test(sum) && Number(sum) > 0;
   const total = Number(sum) + Number(fee);
-  const canPay = Boolean(options && (pending || (valid && total <= Number(options.available) + 1e-12)));
+  const canPay = Boolean(options && (pending || (!options.frozen && valid && total <= Number(options.available) + 1e-12)));
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -52,7 +61,7 @@ export default function WalletAuraWithdrawal() {
         action, { address: recipient, amount: sum, fee }, pending?.key ?? request.current.key,
       );
       setStatus(result.status);
-      void wallet.refresh();
+      onSubmitted?.();
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось проверить вывод");
       try {
@@ -67,6 +76,7 @@ export default function WalletAuraWithdrawal() {
 
   return (
     <form onSubmit={submit} className="mx-auto flex max-w-[560px] flex-col gap-4 px-4 py-6">
+      {adminScope && <p className="text-sm opacity-60">Вывод из остатка Aura пользователя {adminScope.userId}.</p>}
       {options && (
         <p className="text-sm opacity-65">
           {options.environment === "test" ? "Тестовая сеть TRON Nile. " : "Сеть TRON TRC‑20. "}
@@ -91,6 +101,7 @@ export default function WalletAuraWithdrawal() {
         </dl>
       )}
       {options && !pending && Number(options.available) <= Number(fee) && <p>Доступного остатка не хватает на комиссию.</p>}
+      {options?.frozen && !pending && <p role="status">Новые выводы из Aura заморожены.</p>}
       {error && <p role="alert" className="text-red-500">{error}</p>}
       {status && <p role="status">{{ processing: "Вывод принят и проверяется", broadcast: "Перевод отправлен в сеть", completed: "Вывод подтверждён", failed: "Вывод отклонён, резерв возвращён" }[status] ?? "Заявка сохранена"}</p>}
       {!status && <Button type="submit" rounded data-wpay-primary="" disabled={!canPay || busy}>{busy ? "Проверяем…" : pending ? "Проверить заявку" : "Вывести USDT"}</Button>}

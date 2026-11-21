@@ -29,10 +29,11 @@ async def user_wallet_inventory(ledger, chain, user_id, usdt_routes, aura_enviro
 
     shown_aura = set()
     for address in ledger.db.execute("""
-        SELECT a.address,a.environment,a.network,p.available,p.reserved
+        SELECT a.address,a.environment,a.network,p.available,p.reserved,f.user_id IS NOT NULL AS withdrawal_frozen
         FROM aura_deposit_addresses a
         LEFT JOIN wallet_provider_positions p ON p.user_id=a.user_id
           AND p.provider='aura' AND p.environment=a.environment AND p.asset='USDT'
+        LEFT JOIN aura_user_withdrawal_freezes f ON f.user_id=a.user_id AND f.environment=a.environment
         WHERE a.user_id=?
         ORDER BY a.environment,a.is_default DESC,a.created_at,a.address_id
     """, (user_id,)):
@@ -43,7 +44,8 @@ async def user_wallet_inventory(ledger, chain, user_id, usdt_routes, aura_enviro
             "network": "TRON", "chain": address["network"], "address": address["address"],
             "available": (address["available"] or "0") if first else None,
             "reserved": (address["reserved"] or "0") if first else None,
-            "balance_scope": "provider",
+            "balance_scope": "provider", "withdrawal_frozen": bool(address["withdrawal_frozen"]),
+            "managed": first and address["environment"] == aura_environment,
         })
 
     own = list(ledger.db.execute("""
@@ -85,11 +87,22 @@ async def user_wallet_inventory(ledger, chain, user_id, usdt_routes, aura_enviro
     for network, provider in usdt_routes.items():
         if (provider, network) in present:
             continue
+        position = None
+        if provider == "aura":
+            position = ledger.db.execute("""
+                SELECT p.available,p.reserved,f.user_id IS NOT NULL AS withdrawal_frozen
+                FROM wallet_provider_positions p LEFT JOIN aura_user_withdrawal_freezes f
+                  ON f.user_id=p.user_id AND f.environment=p.environment
+                WHERE p.user_id=? AND p.environment=? AND p.provider='aura' AND p.asset='USDT'
+            """, (user_id, aura_environment)).fetchone()
         rows.append({
             "provider": provider, "network": network, "asset": "USDT", "address": None,
             "environment": aura_environment if provider == "aura" else None,
-            "available": None, "reserved": None,
+            "available": position["available"] if position else None,
+            "reserved": position["reserved"] if position else None,
             "balance_scope": "onchain" if provider == "wpay" else "provider" if provider == "aura" else "network",
+            "managed": position is not None,
+            "withdrawal_frozen": bool(position["withdrawal_frozen"]) if position else False,
         })
     return rows
 

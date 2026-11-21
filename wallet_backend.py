@@ -51,7 +51,7 @@ from wallet_aura import (
     receive_webhook as receive_aura_webhook, process_inbox as process_aura_inbox,
     reconcile as reconcile_aura, run_worker as run_aura_worker,
     reconcile_pending as reconcile_aura_pending, store_withdrawal_snapshot,
-    user_withdrawal as aura_user_withdrawal,
+    user_withdrawal as aura_user_withdrawal, withdrawal_frozen as aura_withdrawal_frozen,
 )
 
 BASE_URL = 'https://goswap.site/api/'
@@ -1053,6 +1053,38 @@ def install_wallet(app, root, owner_check):
             },
         }
 
+    async def aura_withdrawal_response(request, uid, actor=None):
+        require_asset_enabled('USDT', 'TRON')
+        if deposit_provider('USDT', 'TRON') != 'aura' or not aura_enabled or not aura_client.configured:
+            raise ApiError('NOT_CONFIGURED', 'Вывод через Aura недоступен', 503)
+        fee = money(os.environ.get('AURA_WITHDRAWAL_FEE_USDT', '2'), positive=False)
+        if fee < 0:
+            raise ApiError('NOT_CONFIGURED', 'Комиссия Aura не настроена', 503)
+        if request.method == 'POST':
+            return web.json_response(await aura_user_withdrawal(
+                ledger, aura_client, aura_environment, uid, await request.json(),
+                request.headers.get('Idempotency-Key', ''), fee, actor=actor, audit=record_admin_action,
+            ))
+        position = ledger.db.execute(
+            "SELECT available FROM wallet_provider_positions WHERE provider='aura' "
+            "AND environment=? AND user_id=? AND asset='USDT'", (aura_environment, uid),
+        ).fetchone()
+        pending = ledger.db.execute(
+            "SELECT request_body FROM wallet_provider_entities WHERE provider='aura' "
+            "AND environment=? AND entity_type='withdrawal' AND user_id=? "
+            "AND remote_id IS NULL AND status='reserved' AND json_extract(request_body,'$.operator') IS ? LIMIT 1",
+            (aura_environment, uid, actor),
+        ).fetchone()
+        available, _ = ledger.balance(uid, 'USDT')
+        response = web.json_response({
+            'available': str(min(available, Decimal(position[0])) if position else 0),
+            'fee': str(fee), 'environment': aura_environment,
+            'frozen': aura_withdrawal_frozen(ledger, aura_environment, uid),
+            'pending': json.loads(pending[0]) if pending else None,
+        })
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
     async def admin_user_action(request, admin_id):
         body = await request.json()
         if not isinstance(body, dict) or set(body) - {'user_id', 'operation', 'text', 'confirm'}:
@@ -1749,34 +1781,7 @@ def install_wallet(app, root, owner_check):
                 start_param=request.get('wpay_start_param'),
             )
             if action == 'aura-user-withdrawal' and request.method in {'GET', 'POST'}:
-                require_asset_enabled('USDT', 'TRON')
-                if deposit_provider('USDT', 'TRON') != 'aura' or not aura_enabled or not aura_client.configured:
-                    raise ApiError('NOT_CONFIGURED', 'Вывод через Aura недоступен', 503)
-                fee = money(os.environ.get('AURA_WITHDRAWAL_FEE_USDT', '2'), positive=False)
-                if fee < 0:
-                    raise ApiError('NOT_CONFIGURED', 'Комиссия Aura не настроена', 503)
-                if request.method == 'POST':
-                    return web.json_response(await aura_user_withdrawal(
-                        ledger, aura_client, aura_environment, uid, await request.json(),
-                        request.headers.get('Idempotency-Key', ''), fee,
-                    ))
-                position = ledger.db.execute(
-                    "SELECT available FROM wallet_provider_positions WHERE provider='aura' "
-                    "AND environment=? AND user_id=? AND asset='USDT'", (aura_environment, uid),
-                ).fetchone()
-                pending = ledger.db.execute(
-                    "SELECT request_body FROM wallet_provider_entities WHERE provider='aura' "
-                    "AND environment=? AND entity_type='withdrawal' AND user_id=? "
-                    "AND remote_id IS NULL AND status='reserved' LIMIT 1", (aura_environment, uid),
-                ).fetchone()
-                available, _ = ledger.balance(uid, 'USDT')
-                response = web.json_response({
-                    'available': str(min(available, Decimal(position[0])) if position else 0),
-                    'fee': str(fee), 'environment': aura_environment,
-                    'pending': json.loads(pending[0]) if pending else None,
-                })
-                response.headers['Cache-Control'] = 'no-store'
-                return response
+                return await aura_withdrawal_response(request, uid)
             if action == 'addresses' and request.method == 'GET':
                 items = [
                     {**json.loads(row['body']), 'provider': 'goswap'}
@@ -1879,6 +1884,45 @@ def install_wallet(app, root, owner_check):
                     request, action.removeprefix('admin-'), target, require_asset_enabled,
                     actor=uid, wallet_id=wallet_id, audit=record_admin_action,
                 )
+            if action in {'admin-aura-user-withdrawal', 'admin-aura-withdrawal-freeze'}:
+                target = request.query.get('user_id', '')
+                env = request.query.get('environment', '')
+                if not re.fullmatch(r'tg:[0-9]+', target) or env != aura_environment:
+                    raise ApiError('NOT_FOUND', 'Баланс Aura в этом окружении недоступен', 404)
+                if not ledger.db.execute(
+                    "SELECT 1 FROM wallet_provider_positions WHERE provider='aura' AND user_id=? AND environment=? AND asset='USDT' "
+                    "UNION SELECT 1 FROM aura_deposit_addresses WHERE user_id=? AND environment=? LIMIT 1",
+                    (target, env, target, env),
+                ).fetchone():
+                    raise ApiError('NOT_FOUND', 'Кошелёк Aura не найден', 404)
+                if action == 'admin-aura-user-withdrawal' and request.method in {'GET', 'POST'}:
+                    if request.method == 'POST':
+                        fresh_wallet_auth(request, uid, ApiError)
+                    return await aura_withdrawal_response(request, target, actor=uid)
+                if action == 'admin-aura-withdrawal-freeze' and request.method == 'POST':
+                    body = await request.json()
+                    if not isinstance(body, dict) or set(body) != {'frozen'} or type(body['frozen']) is not bool:
+                        raise ValueError('Укажите статус заморозки')
+                    ledger.begin('admin_aura_withdrawal_freeze', uid, target)
+                    try:
+                        if body['frozen']:
+                            ledger.db.execute(
+                                'INSERT OR REPLACE INTO aura_user_withdrawal_freezes VALUES (?,?,?)',
+                                (target, env, time.time()),
+                            )
+                        else:
+                            ledger.db.execute(
+                                'DELETE FROM aura_user_withdrawal_freezes WHERE user_id=? AND environment=?',
+                                (target, env),
+                            )
+                        record_admin_action(uid, 'wallet.aura_withdrawal_freeze', target,
+                                            detail={'frozen': body['frozen'], 'environment': env})
+                        ledger.commit()
+                    except Exception:
+                        ledger.rollback()
+                        raise
+                    return web.json_response({'frozen': body['frozen']})
+                raise ApiError('METHOD_NOT_ALLOWED', 'Неверный метод', 405)
             if action == 'admin-wallet-control' and request.method == 'POST':
                 body = await request.json()
                 if not isinstance(body, dict) or set(body) != {'user_id', 'wallet_id', 'operation'}:

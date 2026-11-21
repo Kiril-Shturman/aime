@@ -74,6 +74,10 @@ def prepare(ledger):
     prepare_notifications(ledger)
     ledger.db.executescript(
         """
+      CREATE TABLE IF NOT EXISTS aura_user_withdrawal_freezes (
+        user_id TEXT NOT NULL, environment TEXT NOT NULL, updated_at REAL NOT NULL,
+        PRIMARY KEY(user_id,environment)
+      );
       CREATE TABLE IF NOT EXISTS wallet_provider_routes (
         product TEXT NOT NULL, asset TEXT NOT NULL, network TEXT NOT NULL,
         environment TEXT NOT NULL, provider TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0,
@@ -3350,7 +3354,14 @@ def _store_qr_payment(ledger, environment, kind, data):
         )
 
 
-async def user_withdrawal(ledger, client, environment, uid, body, key, fee):
+def withdrawal_frozen(ledger, environment, uid):
+    return ledger.db.execute(
+        "SELECT 1 FROM aura_user_withdrawal_freezes WHERE user_id=? AND environment=?",
+        (uid, environment),
+    ).fetchone() is not None
+
+
+async def user_withdrawal(ledger, client, environment, uid, body, key, fee, *, actor=None, audit=None):
     error_cls = client.error_cls
     if not isinstance(body, dict) or set(body) != {"address", "amount", "fee"}:
         raise ValueError("Invalid withdrawal request")
@@ -3363,12 +3374,15 @@ async def user_withdrawal(ledger, client, environment, uid, body, key, fee):
     amount = _decimal(raw)
     if not re.fullmatch(r"[a-f0-9-]{36}", key):
         raise ValueError("Invalid withdrawal request ID")
-    local_id = "wpay-withdraw-" + hashlib.sha256(f"{environment}:{uid}:{key}".encode()).hexdigest()
+    identity = f"{environment}:{uid}:{key}" if actor is None else f"{environment}:{uid}:operator:{actor}:{key}"
+    local_id = "wpay-withdraw-" + hashlib.sha256(identity.encode()).hexdigest()
     params = (environment, local_id)
     query = ("FROM wallet_provider_entities WHERE provider='aura' AND environment=? "
              "AND entity_type='withdrawal' AND local_id=?")
     request_body = {"address": address, "amount": format(amount.normalize(), "f"), "fee": str(fee), "key": key}
-    ledger.begin("aura_withdrawal_reserve", uid, local_id)
+    if actor:
+        request_body["operator"] = actor
+    ledger.begin("aura_withdrawal_reserve", actor or uid, local_id)
     try:
         intent = ledger.db.execute("SELECT * " + query, params).fetchone()
         if intent:
@@ -3387,6 +3401,8 @@ async def user_withdrawal(ledger, client, environment, uid, body, key, fee):
                     return json.loads(snapshot["body"])
             request_body = stored
         else:
+            if withdrawal_frozen(ledger, environment, uid):
+                raise error_cls("WALLET_FROZEN", "Вывод из Aura заморожен", 403)
             if _decimal(body["fee"], allow_zero=True) != fee:
                 raise error_cls("fee_changed", "Комиссия изменилась. Обновите форму", 409)
             pending = ledger.db.execute(
@@ -3415,6 +3431,9 @@ async def user_withdrawal(ledger, client, environment, uid, body, key, fee):
                 ("aura", environment, "withdrawal", local_id, None, uid, "reserved", local_id,
                  json.dumps(request_body), None, stamp, stamp),
             )
+            if actor and audit:
+                audit(actor, "wallet.aura_withdrawal_requested", uid,
+                      detail={"job_id": local_id, "amount": str(amount), "environment": environment})
         ledger.commit()
     except Exception:
         ledger.rollback()
