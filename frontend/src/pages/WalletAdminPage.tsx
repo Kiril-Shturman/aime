@@ -2574,9 +2574,10 @@ function AdminUserDrawer({
                         const key = JSON.stringify([wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address]);
                         const expanded = expandedWallet === key;
                         const title = currencyLabel(wallet.asset);
-                        const description = `${networkLabel(wallet.network, wallet.asset)} · ${walletProviderNames[wallet.provider]}`;
+                        const description = networkLabel(wallet.network, wallet.asset);
+                        const provider = walletProviderNames[wallet.provider];
                         return <div key={key}>
-                          <button type="button" className="admin-wallet-toggle" aria-expanded={expanded} title={`${title} · ${description}`}
+                          <button type="button" className="admin-wallet-toggle" aria-expanded={expanded} title={`${title} · ${description} · ${provider}`}
                             onClick={() => {
                               setWalletAction(null);
                               setAuraWithdrawEnv(null);
@@ -2585,7 +2586,13 @@ function AdminUserDrawer({
                             {cryptoAssetsByTicker[wallet.asset] ? (
                               <WalletAssetAvatar {...cryptoAssetsByTicker[wallet.asset]} network={wallet.asset === "USDT" ? wallet.network : undefined} />
                             ) : <WalletNetworkIcon network={wallet.network} />}
-                            <span className="admin-wallet-label"><strong>{title}</strong><small>{description}</small></span>
+                            <span className="admin-wallet-label">
+                              <span className="admin-wallet-title">
+                                <strong>{title}</strong>
+                                <span className="admin-wallet-provider" data-provider={wallet.provider}>{provider}</span>
+                              </span>
+                              <small>{description}</small>
+                            </span>
                             <span className="admin-wallet-amount">{wallet.available === null ? "—" : `${wallet.available} ${wallet.asset}`}</span>
                             <ChevronDown size={15} aria-hidden="true" />
                           </button>
