@@ -1251,6 +1251,7 @@
 .wpay-catalog-app-store svg { width: 12px; height: 12px; flex-basis: 12px; }
 
 .wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art) {
+  row-gap: 6px;
   background: none;
   border-color: transparent;
   box-shadow: none;
