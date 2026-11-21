@@ -2349,3 +2349,23 @@
   -webkit-user-select: none;
   user-select: none;
 }
+
+.wpay-overflow-menu li:not(:last-child) .wpay-overflow-menu-inner::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0 12px;
+  bottom: 0;
+  height: 1px;
+  background: rgb(0 0 0 / 8%);
+  transform: scaleY(.5);
+  pointer-events: none;
+}
+
+.dark .wpay-overflow-menu li:not(:last-child) .wpay-overflow-menu-inner::before {
+  background: rgb(255 255 255 / 15%);
+}
+
+.wpay-overflow-menu li svg {
+  max-width: 18px;
+  max-height: 18px;
+}

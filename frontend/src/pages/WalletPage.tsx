@@ -415,7 +415,7 @@ function WalletScreen() {
       opened={menuOpen}
       target={menuButton.current}
       onBackdropClick={() => setMenuOpen(false)}
-      className="!mt-3 !w-72"
+      className="wpay-overflow-menu !mt-3 !w-64"
     >
       <List nested className="!my-0">
         {menuItems.map((item) => (
@@ -424,21 +424,21 @@ function WalletScreen() {
             link
             onClick={() => runMenuAction(item.action)}
             chevron={false}
-            contentClassName="!h-13"
-            innerClassName="!min-w-0 !h-13 !py-0 after:!opacity-30"
+            contentClassName="!h-11"
+            innerClassName="wpay-overflow-menu-inner !min-w-0 !h-11 !py-0 after:!hidden"
             media={
-              <span className="flex h-6 w-6 items-center justify-center text-[21px] text-primary">
+              <span className="flex h-5 w-5 items-center justify-center text-[18px] text-primary">
                 {item.icon}
               </span>
             }
             innerChildren={
               <span className="flex h-full min-w-0 items-center justify-between gap-3">
-                <span className="truncate text-[16px] font-medium text-black dark:text-white">
+                <span className="truncate text-[15px] font-medium text-black dark:text-white">
                   {item.title}
                 </span>
                 <ChevronRight
                   aria-hidden="true"
-                  className="shrink-0 text-[18px] text-black/30 dark:text-white/30"
+                  className="shrink-0 text-[14px] text-black/30 dark:text-white/30"
                 />
               </span>
             }
