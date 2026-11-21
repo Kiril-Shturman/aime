@@ -2141,6 +2141,13 @@
 .admin-wallet-toggle > svg:last-child { color: var(--admin-muted); transition: transform 150ms ease; }
 .admin-wallet-toggle[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
 .admin-wallet-toggle .wpay-currency-icon { width: 34px; height: 34px; }
+.admin-wallet-toggle > .wpay-address-avatar { width: 34px; height: 34px; }
+.admin-wallet-toggle .wpay-address-network-badge {
+  right: -2px; bottom: -2px; width: 17px; height: 17px;
+  border-radius: 5px; border-color: var(--admin-surface); background: var(--admin-surface);
+}
+.admin-wallet-toggle .wpay-address-network-badge .wpay-network-icon { width: 13px; height: 13px; border-radius: 3px; }
+.admin-wallet-toggle .wpay-address-network-badge svg { width: 10px; height: 10px; }
 .admin-wallet-toggle > .wpay-address-avatar .wpay-currency-icon > .wpay-network-icon { background: transparent; color: white; }
 .admin-wallet-actions { padding: 3px 2px 14px 44px; overflow-wrap: anywhere; }
 .wpay-admin-user-card-item {
