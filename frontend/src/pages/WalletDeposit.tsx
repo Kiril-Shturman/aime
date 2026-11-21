@@ -1,6 +1,6 @@
 import WalletCryptoDeposit from "./WalletCryptoDeposit";
 import WalletSbpDeposit from "./WalletSbpDeposit";
-import { networkNames } from "../wallet/catalog";
+import { networkNames, networkStandards } from "../wallet/catalog";
 import WalletNetworkIcon from "./WalletNetworkIcon";
 import WalletSheetClose from "./WalletSheetClose";
 import {
@@ -630,10 +630,10 @@ export default function WalletDeposit({
                         <span className="flex h-full w-full min-w-0 items-center justify-between gap-4">
                           <span className="min-w-0">
                             <span className="block truncate text-[17px] font-semibold text-black dark:text-white">
-                              {code === "TRON" ? "Tron" : networkNames[code]}
+                              {networkNames[code] ?? code}
                             </span>
                             <span className="mt-0.5 block text-[13px] text-black/45 dark:text-white/45">
-                              {code}
+                              {networkStandards[code] ?? code}
                               {wallet.depositModes[asset]?.[code] === "exact"
                                 ? " · Точная сумма"
                                 : ""}

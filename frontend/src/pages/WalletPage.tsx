@@ -81,14 +81,7 @@ import {
   TabbarLink,
   ToolbarPane,
 } from "konsta/react";
-import {
-  SiBitcoin,
-  SiBnbchain,
-  SiEthereum,
-  SiSolana,
-  SiTether,
-  SiTon,
-} from "@icons-pack/react-simple-icons";
+import { cryptoAssets as assets } from "../wallet/cryptoAssets";
 import ArrowRightArrowLeft from "framework7-icons/react/esm/ArrowRightArrowLeft.js";
 import ArrowDownCircleFill from "framework7-icons/react/esm/ArrowDownCircleFill.js";
 import ArrowUpCircleFill from "framework7-icons/react/esm/ArrowUpCircleFill.js";
@@ -221,84 +214,6 @@ const sbpDepositAsset: Asset = {
   color: "#ffffff",
   icon: <img src="/brands/sbp-symbol.svg" alt="СБП" width="28" height="32" />,
 };
-const assets: Asset[] = [
-  {
-    code: "USDT",
-    name: "Tether",
-    rate: "",
-    color: "#26A17B",
-    iconColor: "#fff",
-    icon: <SiTether size={25} />,
-  },
-  {
-    code: "TRX",
-    name: "TRON",
-    rate: "",
-    color: "#ef0027",
-    iconColor: "#fff",
-    icon: (
-      <svg
-        viewBox="0 0 32 32"
-        width="25"
-        height="25"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinejoin="round"
-      >
-        <path d="M4 4 28 9 14 29 4 4Z M4 4 17 12 28 9 M17 12 14 29 M17 12 23 8" />
-      </svg>
-    ),
-  },
-  {
-    code: "BNB",
-    name: "BNB",
-    rate: "",
-    color: "#F3BA2F",
-    iconColor: "#fff",
-    icon: <SiBnbchain size={25} />,
-  },
-  {
-    code: "ETH",
-    name: "Ethereum",
-    rate: "",
-    color: "#627EEA",
-    iconColor: "#fff",
-    icon: <SiEthereum size={25} />,
-  },
-  {
-    code: "GRAM",
-    name: "Gram",
-    rate: "",
-    color: "#0098EA",
-    iconColor: "#fff",
-    icon: <SiTon size={25} />,
-  },
-  {
-    code: "SOL",
-    name: "Solana",
-    rate: "",
-    color: "#111",
-    iconColor: "#14F195",
-    icon: <SiSolana size={25} />,
-  },
-  {
-    code: "BTC",
-    name: "Bitcoin",
-    rate: "",
-    color: "#F7931A",
-    iconColor: "#fff",
-    icon: <SiBitcoin size={25} />,
-  },
-  {
-    code: "XAUT",
-    name: "GOLD (XAUT)",
-    rate: "",
-    color: "#c89b43",
-    iconColor: "#fff",
-    icon: <SiTether size={25} />,
-  },
-];
 
 export default function WalletPage() {
   useEffect(installWalletButtonHaptics, []);

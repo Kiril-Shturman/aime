@@ -2,14 +2,13 @@ import WalletExchangeOrder from "./WalletExchangeOrder";
 import { useEffect, useRef, useState } from "react";
 import { Preloader } from "framework7-react";
 import { Button, Card } from "konsta/react";
-import { SiTether } from "@icons-pack/react-simple-icons";
+import { networkLabel } from "../wallet/catalog";
+import { cryptoAssetsByTicker } from "../wallet/cryptoAssets";
 import { ArrowDownUp } from "lucide-react";
 import { walletRequest } from "../lib/wallet-api";
 
 type Network = {
   network: string;
-  name: string;
-  standard: string;
   can_send: boolean;
   can_receive: boolean;
 };
@@ -168,7 +167,7 @@ export default function WalletNetworkExchange({
       >
         <div className="flex items-center gap-3 px-2 py-2">
           <span className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-b from-[#6ac6aa] to-[#26a17b] text-white">
-            <SiTether size={25} />
+            {cryptoAssetsByTicker.USDT.icon}
           </span>
           <div>
             <h2 className="text-[19px] font-semibold text-black dark:text-white">
@@ -211,15 +210,11 @@ export default function WalletNetworkExchange({
                   status?.networks ?? [
                     {
                       network: "TRON",
-                      name: "Tron",
-                      standard: "TRC20",
                       can_send: true,
                       can_receive: true,
                     },
                     {
                       network: "BSC",
-                      name: "BNB Smart Chain",
-                      standard: "BEP20",
                       can_send: true,
                       can_receive: true,
                     },
@@ -233,7 +228,7 @@ export default function WalletNetworkExchange({
                       value={network.network}
                       disabled={!available}
                     >
-                      {network.name} · {network.standard}
+                      {networkLabel(network.network, "USDT")}
                       {available ? "" : " · Недоступно"}
                     </option>
                   );

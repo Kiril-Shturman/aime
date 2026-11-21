@@ -1,3 +1,4 @@
+import { networkNames as names } from "../wallet/catalog";
 import type { WalletAddressSelection } from "./WalletAddressDetails";
 import { useEffect, useState, type ReactNode } from "react";
 import { Preloader } from "framework7-react";
@@ -15,14 +16,6 @@ const networks: Record<string, string[]> = {
   TRX: ["TRON"],
   USDT: ["BSC", "ETH", "TON", "SOL", "TRON"],
   XAUT: ["ETH"],
-};
-const names: Record<string, string> = {
-  BTC: "Bitcoin",
-  ETH: "Ethereum",
-  BSC: "BNB Smart Chain",
-  TON: "TON",
-  SOL: "Solana",
-  TRON: "TRON",
 };
 type Owned = {
   id: string;

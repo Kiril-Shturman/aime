@@ -2,6 +2,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   addressesForAsset,
+  currencyLabel,
+  networkLabel,
   isRecipientAddress,
   depositNetworks,
   assetNetworks,
@@ -63,4 +65,12 @@ test("legacy deposit support also excludes assets with no receiving API", () => 
     }),
     { ETH: ["ETH"] },
   );
+});
+
+
+test("wallet catalog has consistent currency names and chain labels", () => {
+  assert.equal(currencyLabel("USDT"), "Tether (USDT)");
+  assert.equal(networkLabel("BSC", "USDT"), networkLabel("BEP-20", "USDT"));
+  assert.equal(networkLabel("ETH", "ETH"), "Ethereum");
+  assert.equal(networkLabel("NILE", "USDT"), "TRON Nile · TRC‑20");
 });

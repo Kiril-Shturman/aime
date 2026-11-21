@@ -3,6 +3,7 @@ import WalletAssetAvatar from "./WalletAssetAvatar";
 import {
   permanentAddressNetworks as addressNetworks,
   addressesForAsset,
+  networkLabel, networkNames, networkStandards,
   type WalletAddress,
 } from "../wallet/catalog";
 import { previewBalances, portfolioExamples } from "../wallet/demo";
@@ -22,29 +23,6 @@ import WalletCreateAddress from "./WalletCreateAddress";
 import "./WalletAssetPanel.css";
 import type { WalletAddressSelection } from "./WalletAddressDetails";
 import { Plus, Copy, Check } from "lucide-react";
-
-const networkLabels: Record<string, string> = {
-  ETH: "Ethereum · ERC-20",
-  BSC: "BNB Smart Chain · BEP-20",
-  TON: "TON",
-  SOL: "Solana · SPL",
-};
-const networkNames: Record<string, string> = {
-  ETH: "Ethereum",
-  BSC: "BNB Smart Chain",
-  TON: "TON",
-  SOL: "Solana",
-  TRON: "Tron",
-  BTC: "Bitcoin",
-};
-const networkStandards: Record<string, string> = {
-  ETH: "ERC20",
-  BSC: "BEP20",
-  TON: "TON",
-  SOL: "SPL",
-  TRON: "TRC20",
-  BTC: "BTC",
-};
 
 const descriptions: Record<string, { title: string; text: string }> = {
   USDT: {
@@ -578,7 +556,7 @@ export default function WalletAssetPanel({
                 </h2>
                 <p className="mt-1 text-[14px] text-black/45 dark:text-white/45">
                   {selectedAddress
-                    ? networkLabels[selectedAddress.network]
+                    ? networkLabel(selectedAddress.network, code)
                     : "Выберите сети · $2 за адрес"}
                 </p>
               </div>
@@ -608,7 +586,7 @@ export default function WalletAssetPanel({
                 </p>
                 <p className="my-4 text-[13px] leading-5 text-black/45 dark:text-white/45">
                   Отправляйте только {code} в сети{" "}
-                  {networkLabels[selectedAddress.network]}. Другая сеть может
+                  {networkLabel(selectedAddress.network, code)}. Другая сеть может
                   привести к потере средств.
                 </p>
                 <Button

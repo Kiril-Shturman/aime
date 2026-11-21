@@ -1,4 +1,4 @@
-import { SiTether } from "@icons-pack/react-simple-icons";
+import { cryptoAssetsByTicker } from "../wallet/cryptoAssets";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "konsta/react";
 import { Check, Clock3, ShieldCheck } from "lucide-react";
@@ -433,7 +433,7 @@ export default function WalletSbpDeposit() {
               {!quote && (
                 <div className="mt-4 flex items-center gap-3 rounded-[24px] bg-white px-5 py-4 dark:bg-[#252b36]">
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gradient-to-b from-emerald-400 to-[#26a17b] text-white">
-                    <SiTether size={25} />
+                    {cryptoAssetsByTicker.USDT.icon}
                   </span>
                   <span>
                     <span className="block text-[13px] text-black/45 dark:text-white/45">

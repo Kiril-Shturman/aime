@@ -1,4 +1,5 @@
-import { SiTether } from "@icons-pack/react-simple-icons";
+import { currencyLabel, networkLabel, networkStandards } from "../wallet/catalog";
+import { cryptoAssetsByTicker } from "../wallet/cryptoAssets";
 import WalletAssetAvatar from "./WalletAssetAvatar";
 import WalletNetworkIcon from "./WalletNetworkIcon";
 import "./WalletAssetPanel.css";
@@ -2551,14 +2552,10 @@ function AdminUserDrawer({
                         <div key={[wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address].join(":")}
                           className="rounded-xl border border-[var(--admin-border)] p-3">
                           <div className="wpay-admin-wallet-heading">
-                            {wallet.asset === "USDT" ? (
-                              <WalletAssetAvatar icon={<SiTether />} color="#26a17b" network={wallet.network} />
-                            ) : (
-                              <WalletAssetAvatar icon={<WalletNetworkIcon network={wallet.network} />} color={
-                                ({ BTC: "#f7931a", ETH: "#627eea", BSC: "#e5ad17", TON: "#0098ea", SOL: "#6c52cc", TRON: "#eb3348" } as Record<string, string>)[wallet.network] ?? "#67778d"
-                              } />
-                            )}
-                          <Row title={`${wallet.asset}${wallet.asset === "USDT" ? ` · ${({ TRON: "TRC‑20", BSC: "BEP‑20", ETH: "ERC‑20" } as Record<string, string>)[wallet.network] ?? wallet.network}` : ""} · ${walletProviderNames[wallet.provider]}`}
+                            {cryptoAssetsByTicker[wallet.asset] ? (
+                              <WalletAssetAvatar {...cryptoAssetsByTicker[wallet.asset]} network={wallet.asset === "USDT" ? wallet.network : undefined} />
+                            ) : <WalletNetworkIcon network={wallet.network} />}
+                          <Row title={`${currencyLabel(wallet.asset)} · ${networkLabel(wallet.network, wallet.asset)} · ${walletProviderNames[wallet.provider]}`}
                             subtitle={[
                               wallet.chain === "nile" ? "TRON Nile · тестовая сеть" : wallet.environment,
                               wallet.provider === "aura" && wallet.address && wallet.available === null
@@ -2692,7 +2689,7 @@ function AdminUserDrawer({
                       <select aria-label="Сеть USDT" value={balanceNetwork} onChange={(event) => setBalanceNetwork(event.target.value)}>
                         <option value="">Выберите сеть USDT</option>
                         {creditNetworks.map((net) => <option key={net} value={net}>{
-                          `${({ TRON: "TRC‑20", BSC: "BEP‑20", ETH: "ERC‑20" } as Record<string, string>)[net] ?? net} · ${net === "TRON" ? "Aura" : "GoSwap"}`
+                          `${networkStandards[net] ?? net} · ${net === "TRON" ? "Aura" : "GoSwap"}`
                         }</option>)}
                       </select>
                     )}
@@ -2958,16 +2955,19 @@ function Crypto({
                 </button>
                 <details>
                   <summary className="cursor-pointer rounded-xl px-4 py-3 pr-20 text-sm font-semibold">
-                    {asset}
+                    <span className="inline-flex items-center gap-3 align-middle">
+                      {cryptoAssetsByTicker[asset] && <WalletAssetAvatar {...cryptoAssetsByTicker[asset]} />}
+                      <span>{currencyLabel(asset)}</span>
+                    </span>
                   </summary>
                   <div className="divide-y divide-[var(--admin-border)] border-t border-[var(--admin-border)] px-4">
                     {routes.map((route) => {
                       const key = `${asset}:${route.network}`;
-                      const network = route.network === "TRON" && asset === "USDT" ? "TRC-20" : route.network;
+                      const network = networkLabel(route.network, asset);
                       const options = route.providers ?? [];
                       return (
                         <div key={key} className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 py-3 text-sm">
-                          <span className="font-medium">{network}</span>
+                          <span className="flex items-center gap-2 font-medium"><WalletNetworkIcon network={route.network} />{network}</span>
                           <label className="flex items-center gap-2 text-xs">
                             <input
                               type="checkbox"

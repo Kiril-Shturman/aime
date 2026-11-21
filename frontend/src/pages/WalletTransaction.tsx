@@ -3,7 +3,7 @@ import { List, ListItem } from 'konsta/react'
 import { Popup, Page, Navbar, NavRight, Link } from 'framework7-react'
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, QrCode, CreditCard, Gift, Ticket, Copy, Check, Clock, X, RotateCcw, SlidersHorizontal, ReceiptText } from 'lucide-react'
 import type { WalletTransaction } from '../lib/wallet-api'
-import { currencyNames } from '../wallet/catalog'
+import { currencyLabel, networkLabel } from '../wallet/catalog'
 
 type Kind = 'deposit'|'ruble_deposit'|'withdrawal'|'transfer'|'check'|'exchange'|'qr'|'card_payment'|'card_topup'|'card_issue'|'refund'|'referral'|'adjustment'|'other'
 type Status = 'completed'|'processing'|'failed'|'refunded'
@@ -30,23 +30,11 @@ function transactionKind(type: string): Kind {
   return 'other'
 }
 
-function currencyLabel(asset: string): string {
-  const ticker = asset.toUpperCase()
-  const name = currencyNames[ticker]
-  return name ? `${name} (${ticker})` : asset
-}
-
 export function transactionNetwork(item: WalletTransaction): string {
-  if (/^(deposit:)?aura:test:/.test(item.event_id)) return 'TRON Nile · TRC‑20'
+  if (/^(deposit:)?aura:test:/.test(item.event_id)) return networkLabel("NILE", item.asset)
   const network = String(item.detail.network ?? '').trim()
-  const labels: Record<string, string> = {
-    BSC: 'BNB Smart Chain · BEP‑20', BEP20: 'BNB Smart Chain · BEP‑20',
-    ETH: 'Ethereum', ERC20: 'Ethereum · ERC‑20',
-    TRON: 'TRON · TRC‑20', TRC20: 'TRON · TRC‑20', NILE: 'TRON Nile · TRC‑20',
-    TON: 'TON', SOL: 'Solana', BTC: 'Bitcoin',
-  }
-  if (network === 'ETH' && item.asset === 'USDT') return labels.ERC20
-  return labels[network.toUpperCase()] ?? (network || (/^(deposit:)?aura:mainnet:/.test(item.event_id) ? labels.TRON : ''))
+  if (network) return networkLabel(network, item.asset)
+  return /^(deposit:)?aura:mainnet:/.test(item.event_id) ? networkLabel("TRON", item.asset) : ''
 }
 
 export function transactionListPresentation(item: WalletTransaction) {
@@ -91,9 +79,9 @@ export function transactionFromApi(item:WalletTransaction):TransactionView {
   return {id:item.event_id,kind,status,amount:status==='failed'?'0':item.amount,asset:item.asset,date:item.created_at,rows}
 }
 const examples:TransactionView[] = [
-  ['deposit','150','USDT',[['Валюта','Tether (USDT)'],['Сеть','TRON · TRC‑20'],['Зачислено','150 USDT']]],
+  ['deposit','150','USDT',[['Валюта',currencyLabel('USDT')],['Сеть',networkLabel('TRON', 'USDT')],['Зачислено','150 USDT']]],
   ['ruble_deposit','10000','RUB',[['Способ','СБП'],['Банк','Банк отправителя']]],
-  ['withdrawal','-51','USDT',[['Валюта','Tether (USDT)'],['Сеть','BNB Smart Chain · BEP‑20'],['Получатель получил','50 USDT'],['Комиссия сети','1 USDT'],['Всего списано','51 USDT']]],
+  ['withdrawal','-51','USDT',[['Валюта',currencyLabel('USDT')],['Сеть',networkLabel('BSC', 'USDT')],['Получатель получил','50 USDT'],['Комиссия сети','1 USDT'],['Всего списано','51 USDT']]],
   ['transfer','-25','USDT',[['Получатель','@username'],['Комментарий','За ужин']]],
   ['check','-10','USDT',[['Получатель','Предъявитель чека'],['Состояние чека','Активирован']]],
   ['exchange','-100','USDT',[['Получено','0.0011 BTC'],['Курс','1 BTC = 90 909,09 USDT'],['Комиссия','Включена в курс']]],

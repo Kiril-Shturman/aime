@@ -1,5 +1,5 @@
 import { WalletTransfer } from "./WalletUserFinance";
-import { SiTether } from "@icons-pack/react-simple-icons";
+import { cryptoAssetsByTicker } from "../wallet/cryptoAssets";
 import type { Asset } from "../wallet/appearance";
 import { CurrencyRow, CurrencySkeletonRow } from "./WalletCurrencyRow";
 import { haptic } from "../lib/telegram";
@@ -116,7 +116,7 @@ export function WithdrawalMethods({
                     "linear-gradient(180deg,color-mix(in srgb,#26a17b 62%,white),#26a17b)",
                 }}
               >
-                <SiTether size={25} />
+                {cryptoAssetsByTicker.USDT.icon}
               </span>
             }
             innerChildren={
