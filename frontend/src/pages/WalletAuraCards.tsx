@@ -1116,7 +1116,8 @@ export default function WalletAuraCards({
             )}
             <span className="wpay-card-catalog-price">
               <span><b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
-                ? (Number(plan.issue_fee) === 10 ? "10$ или 850₽" : `${offerNumber.format(Number(plan.issue_fee))}$`) : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
+                ? `${offerNumber.format(Number(plan.issue_fee))}$${rapiraMid !== null && (appearance === "silver" || appearance === "navy")
+                  ? ` или ${Math.round(Number(plan.issue_fee) * rapiraMid).toLocaleString("ru-RU")}₽` : ""}` : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
               {plan?.total_recharge_pct != null && (
                 <span><b>{rapiraMid === null ? "—" : (rapiraMid * (1 + Number(plan.total_recharge_pct) / 100))
                   .toLocaleString("ru-RU", { style: "currency", currency: "RUB" })}</b><small>Ориентир за 1 USDT</small></span>
