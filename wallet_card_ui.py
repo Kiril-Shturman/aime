@@ -68,8 +68,16 @@ class CardUI:
             })
         aura_plans = {plan['plan_id']: plan for plan in plans}
         storefront = []
+        goswap_cards = getattr(self, 'goswap_cards', None)
+        goswap_prices = {}
+        positions = storefront_positions(self.ledger)
+        if goswap_cards and any(product in GOSWAP_CARD_PLANS and position is not None for product, position in positions.items()):
+            try:
+                goswap_prices = await goswap_cards.catalogue()
+            except (goswap_cards.error, ValueError, TypeError):
+                pass
         goswap_skins = {'goswap_card_sg_1': 'silver', 'goswap_card_sg_2': 'navy', 'goswap_card_us': 'silver'}
-        ordered = sorted((position, product) for product, position in storefront_positions(self.ledger).items() if position is not None)
+        ordered = sorted((position, product) for product, position in positions.items() if position is not None)
         for position, product in ordered:
             if product in aura_plans:
                 plan = aura_plans[product]
@@ -79,12 +87,13 @@ class CardUI:
             elif product in GOSWAP_CARD_PLANS:
                 terms = GOSWAP_CARD_PLANS[product]
                 tariff = active_tariff(self.ledger, product)
-                issue = Decimal(terms['provider_issue_fee']) + Decimal(tariff['fixed_fee'])
+                provider_issue = goswap_prices.get(goswap_cards.product(product)) if goswap_cards else None
+                issue = (provider_issue if provider_issue is not None else Decimal(terms['provider_issue_fee'])) + Decimal(tariff['fixed_fee'])
                 recharge = Decimal(terms['provider_recharge_fee']) + Decimal(tariff['percent_fee'])
                 storefront.append({
                     **terms, 'skin': goswap_skins[product],
                     'plan_id': product, 'provider': 'GoSwap', 'position': position,
-                    'available': False, 'issue_fee': format(issue, 'f'),
+                    'available': provider_issue is not None and card_issue_enabled(self.ledger, product), 'issue_fee': format(issue, 'f'),
                     'service_issue_fee': tariff['fixed_fee'],
                     'service_recharge_pct': tariff['percent_fee'],
                     'service_minimum_fee': tariff['minimum_fee'],

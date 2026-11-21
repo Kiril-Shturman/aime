@@ -12,6 +12,7 @@ from wallet_dex import PAIR as DEX_PAIR, quote_bnb
 import asyncio
 from wallet_fixedfloat_orders import Orders
 from wallet_card_ui import CardUI
+from wallet_goswap_cards import GoSwapCards
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
 from wallet_key_export import prepare as prepare_key_export, route as key_export_route, fresh as fresh_wallet_auth
 from wallet_exchange_funding import Funding
@@ -771,6 +772,8 @@ def install_wallet(app, root, owner_check):
     )
     aura_service = AuraService(ledger, aura_client, aura_environment)
     card_ui = CardUI(ledger, aura_service, enabled=aura_enabled)
+    goswap_cards = GoSwapCards(ledger, provider, money, ApiError)
+    card_ui.goswap_cards = goswap_cards if token else None
     app["wpay_card_ui"] = card_ui
     app['wpay_provider'] = provider
     app['wpay_aura_provider'] = aura_client
@@ -2095,6 +2098,9 @@ def install_wallet(app, root, owner_check):
             exchange_response = await exchange_route(request, action, uid, exchange)
             if exchange_response is not None:
                 return exchange_response
+            goswap_card_response = await goswap_cards.route(request, action, uid, client_ref)
+            if goswap_card_response is not None:
+                return goswap_card_response
             card_response = await card_ui.route(request, action, uid, client_ref)
             if card_response is not None:
                 return card_response
@@ -3254,6 +3260,10 @@ def install_wallet(app, root, owner_check):
             task.cancel()
         if app['wpay_broadcast_tasks']:
             await asyncio.gather(*app['wpay_broadcast_tasks'], return_exceptions=True)
+        goswap_cards_task = app.get('wpay_goswap_cards_task')
+        if goswap_cards_task:
+            goswap_cards_task.cancel()
+            await asyncio.gather(goswap_cards_task, return_exceptions=True)
         await provider.close()
         await app['wpay_chain'].close()
         await exchange.close()
@@ -3269,6 +3279,7 @@ def install_wallet(app, root, owner_check):
             )
         if token and os.environ.get('WPAY_FINANCE_WORKER','1')!='0':
             app['wpay_finance_task']=asyncio.create_task(FinanceWorker(ledger,provider,money,ApiError).run())
+            app['wpay_goswap_cards_task'] = asyncio.create_task(goswap_cards.run())
         if bot_token:
             task = asyncio.create_task(sync_telegram_users(only_missing=True))
             app['wpay_broadcast_tasks'].add(task)

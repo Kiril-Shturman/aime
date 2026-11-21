@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 import hmac
 import json
@@ -334,6 +335,53 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(confirmed.status, 200)
         self.assertEqual((await confirmed.json())['result']['status'], 'processing')
         self.assertEqual(self.provider.calls[-1], ('createWithdrawal', params, True))
+
+    async def test_client_goswap_issue_reserves_once_and_recovers_timeout(self):
+        from wallet_tariffs import set_card_issue_enabled, set_storefront_position
+
+        uid = 'tg:123'
+        plan = 'goswap_card_sg_1'
+        set_storefront_position(self.ledger, plan, 1, 'admin')
+        set_card_issue_enabled(self.ledger, plan, True, 'admin')
+        self.ledger.put_balance(uid, 'USDT', Decimal('10'), Decimal('0'))
+        original = self.provider.call
+        calls = []
+        completed = {}
+
+        async def provider_call(method, data=None, post=False):
+            if method == 'getMe':
+                return {'can_issue_cards': True, 'card_topup_limit_usd': '2000',
+                        'card_products': [{'product': 'sg', 'status': 'available', 'issue': '7.00'}]}
+            if method == 'createCard':
+                calls.append(data)
+                completed.update(kind='issue', spend_id=data['spend_id'], status='completed',
+                                 total='7.00', card_id=12, op_id='issue-12')
+                raise ApiError('PROVIDER_TIMEOUT', 'timeout', 504)
+            if method == 'getCardOps':
+                return {'items': [completed]}
+            return await original(method, data, post)
+
+        self.provider.call = provider_call
+        owner = {'X-Telegram-Init-Data': init_data(123)}
+        other = {'X-Telegram-Init-Data': init_data(124)}
+        response = await self.client.post('/api/wallet/goswap-card-quote', headers=owner, json={'plan_id': plan})
+        self.assertEqual(response.status, 200, await response.text())
+        intent = (await response.json())['intent_id']
+        body = {'intent_id': intent}
+        denied = await self.client.post('/api/wallet/goswap-card-issue', headers=other, json=body)
+        self.assertEqual(denied.status, 404)
+        responses = await asyncio.gather(*(self.client.post('/api/wallet/goswap-card-issue', headers=owner, json=body) for _ in range(2)))
+        self.assertEqual([response.status for response in responses], [200, 200])
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.ledger.balance(uid, 'USDT'), (Decimal(3), Decimal(7)))
+        self.ledger.db.execute("UPDATE wallet_goswap_card_issues SET updated_at=0")
+        result = await self.client.post('/api/wallet/goswap-card-issue', headers=owner, json=body)
+        self.assertEqual((await result.json())['state'], 'completed')
+        self.assertEqual(self.ledger.balance(uid, 'USDT'), (Decimal(3), Decimal(0)))
+        again = await self.client.post('/api/wallet/goswap-card-issue', headers=owner, json=body)
+        self.assertEqual((await again.json())['state'], 'completed')
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(self.ledger.db.execute("SELECT COUNT(*) FROM wallet_events WHERE type='card_issue'").fetchone()[0], 1)
 
     async def test_admin_goswap_card_methods_require_confirmation_for_operations(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}

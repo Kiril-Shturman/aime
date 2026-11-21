@@ -62,6 +62,10 @@ def goswap_obligations(ledger, asset):
                     f"SELECT json_extract(body,'$.amount') FROM {table} "
                     f"WHERE state IN {states} AND json_extract(body,'$.asset')=?", (asset,),
                 )), D(0))
+        if asset == "USDT" and has_table(ledger, "wallet_goswap_card_issues"):
+            total += sum((D(row[0]) for row in ledger.db.execute(
+                "SELECT held FROM wallet_goswap_card_issues WHERE state IN ('submitted','processing')"
+            )), D(0))
         return total
 
 
@@ -118,6 +122,12 @@ async def coverage(ledger, provider, ApiError):
                 item = json.loads(row["body"])
                 asset = item["asset"]
                 inflight[asset] = inflight.get(asset, D(0)) + D(item["amount"])
+        if "wallet_goswap_card_issues" in tables:
+            inflight["USDT"] = inflight.get("USDT", D(0)) + sum(
+                (D(row[0]) for row in ledger.db.execute(
+                    "SELECT provider_fee FROM wallet_goswap_card_issues WHERE state='processing'"
+                )), D(0),
+            )
         rows = []
         ledger.begin(
             "coverage", "system", "Compare organization assets with client obligations"

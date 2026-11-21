@@ -89,6 +89,13 @@ type StorefrontPlan = {
   service_minimum_fee?: string;
   total_recharge_pct?: string;
 };
+type GoSwapIssue = {
+  intent_id: string;
+  label: string;
+  total: string;
+  state: "quoted" | "submitted" | "processing" | "completed" | "failed";
+  last4?: string | null;
+};
 type CardQuote = {
   spendable?: string;
   funding_error?: string | null;
@@ -250,15 +257,18 @@ export default function WalletAuraCards({
     return () => document.removeEventListener("visibilitychange", hide);
   }, []);
 
+  const [goswapIssues, setGoswapIssues] = useState<GoSwapIssue[]>([]);
   const loadCards = useCallback(async () => {
     setError("");
     try {
-      const [cardResponse, feeResponse] = await Promise.allSettled([
+      const [cardResponse, feeResponse, goswapResponse] = await Promise.allSettled([
         walletRequest<{ data: AuraCard[]; refresh_warning?: string }>(
           "aura-cards",
         ),
         walletRequest<CardFees>("aura-card-fees"),
+        walletRequest<{ items: GoSwapIssue[] }>("goswap-card-issues"),
       ]);
+      if (goswapResponse.status === "fulfilled") setGoswapIssues(goswapResponse.value.items ?? []);
       if (cardResponse.status === "rejected") throw cardResponse.reason;
       const availableCards: AuraCard[] = cardResponse.value.data;
       setCards(availableCards);
@@ -435,13 +445,13 @@ export default function WalletAuraCards({
       showNotice("Не удалось скопировать реквизиты");
     }
   };
-  const mutate = async (
+  const mutate = async <T,> (
     name: string,
-    task: () => Promise<unknown>,
-    success: string | ((result: unknown) => string),
+    task: () => Promise<T>,
+    success: string | ((result: T) => string),
   ) => {
     if (busyRef.current) return;
-    if (selected?.demo && name !== "issue") {
+    if (selected?.demo && name !== "issue" && name !== "goswap-issue") {
       if (name === "aura-card-freeze" || name === "aura-card-unfreeze") {
         setCards((items) =>
           items.map((card) =>
@@ -463,7 +473,8 @@ export default function WalletAuraCards({
     try {
       const result = await task();
       await Promise.all([loadCards(), wallet.refresh()]);
-      showNotice(typeof success === "function" ? success(result) : success);
+      const message = typeof success === "function" ? success(result) : success;
+      if (message) showNotice(message);
     } catch (requestError) {
       setError(errorText(requestError));
       if (
@@ -512,6 +523,16 @@ export default function WalletAuraCards({
       },
       "Заявка на карту отправлена",
     );
+  const issueGoSwap = (planId: string) => mutate<GoSwapIssue | null>("goswap-issue", async () => {
+    const quote = await walletRequest<GoSwapIssue>("goswap-card-quote", { plan_id: planId });
+    if (quote.state !== "quoted") return quote;
+    const confirmed = await new Promise<boolean>(resolve => {
+      f7.dialog.confirm(`Выпуск «${quote.label}» · ${offerNumber.format(Number(quote.total))} USDT`, "Оформить карту GoSwap", () => resolve(true), () => resolve(false));
+    });
+    return confirmed ? walletRequest<GoSwapIssue>("goswap-card-issue", { intent_id: quote.intent_id }) : null;
+  }, result => !result ? "" : result.state === "completed" ? "Карта GoSwap выпущена"
+    : result.state === "failed" ? "Выпуск не состоялся. Резерв возвращён"
+    : "Выпуск GoSwap в обработке");
   const control = (
     action: string,
     body: Record<string, string>,
@@ -879,6 +900,20 @@ export default function WalletAuraCards({
         className="wpay-aura-cards mx-auto w-full max-w-[560px] pb-6"
         aria-label="Мои карты"
       >
+        {goswapIssues.length > 0 && (
+          <section className="mx-4 mt-3" aria-label="Карты GoSwap">
+            <h2 className="mb-2 text-base font-semibold">Карты GoSwap</h2>
+            <Card className="!m-0 !rounded-[26px]" contentWrapPadding="px-4 py-0">
+              {goswapIssues.map(item => (
+                <div className="flex min-h-14 items-center justify-between gap-3 border-b border-black/10 py-2 last:border-0 dark:border-white/10" key={item.intent_id}>
+                  <span>{item.label}{item.last4 && ` · •••• ${item.last4}`}</span>
+                  <small className="text-right opacity-60">{item.state === "completed" ? "Выпущена · ждёт пополнения"
+                    : item.state === "failed" ? "Выпуск отклонён" : "Выпуск в обработке"}</small>
+                </div>
+              ))}
+            </Card>
+          </section>
+        )}
         {error && !panel && (
           <div role="alert" className="wpay-aura-error mx-4 mt-3">
             {error}
@@ -1245,8 +1280,11 @@ export default function WalletAuraCards({
               }}
             />
             {offerTerms()}
-            <Button rounded large disabled className="wpay-aura-primary !mt-4 !w-full">Оформить карту</Button>
-            <p className="mt-2 text-center text-sm opacity-60">Выпуск и оплата GoSwap в мини-аппе пока не подключены.</p>
+            <Button rounded large disabled={!storefrontPlan.available || Boolean(busy)}
+              onClick={() => void issueGoSwap(storefrontPlan.plan_id)} className="wpay-aura-primary !mt-4 !w-full">
+              {busy === "goswap-issue" ? "Загрузка…" : "Оформить карту"}
+            </Button>
+            {!storefrontPlan.available && <p className="mt-2 text-center text-sm opacity-60">Выпуск по этому тарифу пока недоступен.</p>}
           </section>
         ) : showOffer ? (
           <section className="px-4 pt-2">
@@ -1382,9 +1420,9 @@ export default function WalletAuraCards({
                   ice: "Премиальная", graphite: "Платина",
                 }[appearance];
                 return (
-                  <button key={storefront?.plan_id ?? appearance} type="button" disabled={Boolean(busy) || storefront?.available === false || plan?.available === false || plan?.issue_fee === null || (!plan && !(kind === "physical" ? fees.open_physical_card_fee : fees.open_virtual_card_fee))}
-                    onClick={() => order(kind, appearance)}>
-                    <span><strong>{label}</strong><small>{storefront ? `${storefront.provider} · ${storefront.provider === "GoSwap" ? "Выпуск пока недоступен" : planPrice(kind, appearance)}` : planPrice(kind, appearance)}</small></span>
+                  <button key={storefront?.plan_id ?? appearance} type="button" disabled={Boolean(busy) || (storefront ? !storefront.available : plan?.available === false || plan?.issue_fee === null || (!plan && !(kind === "physical" ? fees.open_physical_card_fee : fees.open_virtual_card_fee)))}
+                    onClick={() => storefront?.provider === "GoSwap" ? void issueGoSwap(storefront.plan_id) : order(kind, appearance)}>
+                    <span><strong>{label}</strong><small>{storefront ? `${storefront.provider} · ${storefront.provider === "GoSwap" ? storefront.available ? `${offerNumber.format(Number(storefront.issue_fee))} USDT` : "Выпуск пока недоступен" : planPrice(kind, appearance)}` : planPrice(kind, appearance)}</small></span>
                     <ChevronRight size={18} aria-hidden="true" />
                   </button>
                 );
