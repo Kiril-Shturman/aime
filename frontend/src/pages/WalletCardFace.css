@@ -243,7 +243,8 @@
 
 .wpay-card-scene.wpay-card-design--usa .wpay-card-face {
   color: #fff;
-  background: #07132f url("../assets/card-benefits/usa-card-flag.jpg") center / 100% 100% no-repeat;
+  background: linear-gradient(180deg, #07132f30 0%, #07132f44 48%, #07132fa6 100%),
+    #07132f url("../assets/card-benefits/usa-card-flag.jpg") center / 100% 100% no-repeat;
   border: 1px solid #ffffff24;
   box-shadow: 0 4px 12px #07132f45;
 }
