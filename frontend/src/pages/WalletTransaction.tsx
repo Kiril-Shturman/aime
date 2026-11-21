@@ -3,6 +3,7 @@ import { List, ListItem } from 'konsta/react'
 import { Popup, Page, Navbar, NavRight, Link } from 'framework7-react'
 import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, QrCode, CreditCard, Gift, Ticket, Copy, Check, Clock, X, RotateCcw, SlidersHorizontal, ReceiptText } from 'lucide-react'
 import type { WalletTransaction } from '../lib/wallet-api'
+import { currencyNames } from '../wallet/catalog'
 
 type Kind = 'deposit'|'ruble_deposit'|'withdrawal'|'transfer'|'check'|'exchange'|'qr'|'card_payment'|'card_topup'|'card_issue'|'refund'|'referral'|'adjustment'|'other'
 type Status = 'completed'|'processing'|'failed'|'refunded'
@@ -29,6 +30,12 @@ function transactionKind(type: string): Kind {
   return 'other'
 }
 
+function currencyLabel(asset: string): string {
+  const ticker = asset.toUpperCase()
+  const name = currencyNames[ticker]
+  return name ? `${name} (${ticker})` : asset
+}
+
 export function transactionNetwork(item: WalletTransaction): string {
   if (/^(deposit:)?aura:test:/.test(item.event_id)) return 'TRON Nile · TRC‑20'
   const network = String(item.detail.network ?? '').trim()
@@ -52,7 +59,8 @@ export function transactionListPresentation(item: WalletTransaction) {
     : item.type === 'withdrawal_failed' ? 'Вывод не выполнен'
     : kind === 'deposit' ? 'Пополнение'
     : kinds[kind].title
-  return { title, icon: kinds[kind].icon, network: kind === 'deposit' || kind === 'withdrawal' ? transactionNetwork(item) : '' }
+  const crypto = kind === 'deposit' || kind === 'withdrawal'
+  return { title, icon: kinds[kind].icon, network: crypto ? transactionNetwork(item) : '', currency: crypto ? currencyLabel(item.asset) : item.asset }
 }
 
 export function transactionFromApi(item:WalletTransaction):TransactionView {
@@ -70,7 +78,7 @@ export function transactionFromApi(item:WalletTransaction):TransactionView {
   }
   for (const [label,key] of [['Карта','card'],['На карту, USDT','card_credit'],['Номер операции','operation_id'],['Тариф','plan'],['Комиссия провайдера, USDT','provider_fee'],['Комиссия wPay, USDT','service_fee'],['Основание','reason']] as const) { if(d[key]!==undefined&&d[key]!==null&&d[key]!=='') rows.push([label,String(d[key])]) }
   if (kind === 'deposit' || kind === 'withdrawal') {
-    rows.unshift(['Валюта', item.asset])
+    rows.unshift(['Валюта', currencyLabel(item.asset)])
     const network = transactionNetwork(item)
     if (network) rows.splice(1, 0, ['Сеть', network])
   }
@@ -140,7 +148,7 @@ export function TransactionListRow({item,onSelect}:{item:TransactionView;onSelec
  const Icon=kinds[item.kind].icon,positive=Number(item.amount)>0
  const crypto = item.kind === 'deposit' || item.kind === 'withdrawal'
  const network = item.rows.find(([label]) => label === 'Сеть')?.[1]
- const context = crypto ? [item.asset, network].filter(Boolean).join(' · ') : item.rows.find(([label])=>['Магазин','Получатель','Сеть','Способ','Карта','Получено','Период'].includes(label))?.[1]??'WPay'
+ const context = crypto ? [currencyLabel(item.asset), network].filter(Boolean).join(' · ') : item.rows.find(([label])=>['Магазин','Получатель','Сеть','Способ','Карта','Получено','Период'].includes(label))?.[1]??'WPay'
  const currency = item.asset === 'USD' ? '$' : ''
  const unit = item.asset === 'RUB' ? ' ₽' : item.asset === 'USD' ? '' : ' ' + item.asset
  const amount = `${positive ? '+' : Number(item.amount) < 0 ? '−' : ''}${currency}${number(String(Math.abs(Number(item.amount))))}${unit}`
