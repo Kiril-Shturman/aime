@@ -8,7 +8,7 @@ import PlusCircleFill from "framework7-icons/react/esm/PlusCircleFill.js";
 import EyeFill from "framework7-icons/react/esm/EyeFill.js";
 import Snow from "framework7-icons/react/esm/Snow.js";
 import Ellipsis from "framework7-icons/react/esm/Ellipsis.js";
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { Button, Card, List, ListItem } from "konsta/react";
 import {
   f7,
@@ -254,10 +254,14 @@ export default function WalletAuraCards({
   showNotice,
   onSbpTopUp,
   bottomActionSlot,
+  catalogOffer,
+  onCatalogOffer,
 }: {
   showNotice: (text: string) => void;
   onSbpTopUp?: () => void;
   bottomActionSlot: HTMLDivElement | null;
+  catalogOffer: number | null;
+  onCatalogOffer: (index: number | null) => void;
 }) {
   const wallet = useLiveWallet();
   const [cards, setCards] = useState<AuraCard[]>([]);
@@ -749,6 +753,8 @@ export default function WalletAuraCards({
   const offers = fees?.storefront?.map(plan => ({ kind: plan.kind, skin: plan.skin, plan }))
     ?? legacyOffers.map(offer => ({ ...offer, plan: undefined }));
   const carouselOffers = desktop ? [] : offers;
+  const catalogEnabled = !desktop && !loading && cards.length === 0 && !goswapIssues.some(item => item.state === "completed") && offers.length > 0;
+  const catalogSwipe = useRef<{ x: number; y: number } | null>(null);
   const activeOffer = carouselOffers[activeSlide - cards.length];
   useEffect(() => {
     if (desktop && activeSlide >= cards.length && activeSlide !== 0) {
@@ -780,6 +786,17 @@ export default function WalletAuraCards({
     const gap = railBox.width - slideBox.width;
     return Math.max(0, start - (index === el.children.length - 1 ? gap : gap / 2));
   };
+  useLayoutEffect(() => {
+    const rail = carousel.current;
+    if (!catalogEnabled || catalogOffer === null || !rail) return;
+    const index = Math.min(catalogOffer, rail.children.length - 1);
+    if (index < 0) return;
+    setActiveSlide(index);
+    rail.scrollTo({ left: slideLeft(rail, index), behavior: "instant" });
+    // Only align when entering the carousel; swipes keep their own position.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogEnabled, catalogOffer]);
+
   const nearestSlide = (el: HTMLDivElement) => {
     let nearest = 0,
       distance = Infinity;
@@ -1017,6 +1034,25 @@ export default function WalletAuraCards({
       status, date: op.provider_created_at, rows,
     };
   };
+  if (catalogEnabled && catalogOffer === null) {
+    return (
+      <main className="wpay-card-catalog mx-auto w-full max-w-[560px] px-4 pb-6" aria-label="Витрина карт">
+        <h2>Выберите карту</h2>
+        {offers.map(({ kind, skin: appearance, plan }, index) => (
+          <button key={plan?.plan_id ?? appearance} type="button" className="wpay-card-catalog-item"
+            onClick={() => { haptic("light"); onCatalogOffer(index); }}>
+            <span>
+              <small>{kind === "physical" ? "Физическая карта" : "Виртуальная карта"}{plan?.region ? ` · ${plan.region}` : ""}</small>
+              <strong>{plan?.label ?? ({ silver: "Для подписок", navy: "Для путешествий", ice: "Премиальная", graphite: "Платина" }[appearance])}</strong>
+              <span>{plan?.available === false ? "Выпуск пока недоступен" : plan?.issue_fee != null
+                ? `Выпуск · ${offerNumber.format(Number(plan.issue_fee))} USDT` : planPrice(kind, appearance)}</span>
+            </span>
+            <div className="wpay-card-catalog-art" aria-hidden="true"><LiveCardArtwork kind={kind} skin={appearance} /></div>
+          </button>
+        ))}
+      </main>
+    );
+  }
   return (
     <>
       <main
@@ -1067,15 +1103,26 @@ export default function WalletAuraCards({
                 <div
                   ref={carousel}
                   className={`wpay-aura-carousel wpay-card-peek-carousel${desktop ? "" : " wpay-aura-carousel--centered"}`}
-                  onTouchStart={() => {
+                  onTouchStart={event => {
+                    const touch = event.touches[0];
+                    catalogSwipe.current = catalogEnabled && event.currentTarget.scrollLeft <= 2 && touch ? { x: touch.clientX, y: touch.clientY } : null;
                     touchingCarousel.current = true;
                     if (settleTimer.current) clearTimeout(settleTimer.current);
                   }}
-                  onTouchEnd={() => {
+                  onTouchEnd={event => {
                     touchingCarousel.current = false;
+                    const start = catalogSwipe.current;
+                    catalogSwipe.current = null;
+                    const touch = event.changedTouches[0];
+                    if (start && touch && touch.clientX - start.x > 55
+                      && touch.clientX - start.x > Math.abs(touch.clientY - start.y)) {
+                      onCatalogOffer(null);
+                      return;
+                    }
                     settleCarousel();
                   }}
                   onTouchCancel={() => {
+                    catalogSwipe.current = null;
                     touchingCarousel.current = false;
                     settleCarousel();
                   }}
@@ -1290,6 +1337,7 @@ export default function WalletAuraCards({
                   className="wpay-aura-card-dots"
                   aria-label="Переключить карту"
                 >
+                  {catalogEnabled && <button type="button" aria-label="Витрина карт" onClick={() => onCatalogOffer(null)}><span /></button>}
                   {Array.from(
                     { length: cards.length + carouselOffers.length },
                     (_, index) => (

@@ -899,6 +899,12 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   });
   await page.reload();
   await page.getByRole("link", { name: "Карты", exact: true }).click();
+  const catalog = page.getByRole("main", { name: "Витрина карт" });
+  await expect(catalog).toBeVisible();
+  await catalog.getByRole("button", { name: /Для подписок/ }).click();
+  await page.getByRole("button", { name: "Назад к выбору карты" }).click();
+  await expect(catalog).toBeVisible();
+  await catalog.getByRole("button", { name: /Для подписок/ }).click();
   await page.getByRole("button", { name: "Оформить карту" }).click();
   const sheet = page.locator(".wpay-goswap-order-sheet");
   await expect(sheet).toHaveClass(/wpay-goswap-order-sheet--collapsed/);

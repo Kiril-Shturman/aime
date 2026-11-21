@@ -1065,3 +1065,26 @@
 @media (prefers-reduced-motion: reduce) {
   .wpay-aura-carousel--centered > .wpay-aura-carousel-item { transition: none; }
 }
+
+.wpay-card-catalog { display: grid; gap: 14px; padding-top: 16px; }
+.wpay-card-catalog h2 { font-size: 25px; font-weight: 700; }
+.wpay-card-catalog-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 40%);
+  align-items: center;
+  gap: 10px;
+  min-height: 122px;
+  padding: 14px;
+  text-align: left;
+  border-radius: 24px;
+  background: var(--color-ios-light-surface-1, #fff);
+}
+.dark .wpay-card-catalog-item { background: var(--color-ios-dark-surface-1, #1c1c1e); }
+.wpay-card-catalog-item > span { display: grid; gap: 5px; }
+.wpay-card-catalog-item strong { font-size: 18px; line-height: 1.16; }
+.wpay-card-catalog-item small { opacity: .64; }
+.wpay-card-catalog-item > span > span { color: var(--f7-theme-color); font-size: 13px; }
+.wpay-card-catalog-art { pointer-events: none; }
+.wpay-card-catalog-art .wpay-bank-card.wpay-card-scene { min-height: 0; width: 100%; height: auto; }
+.wpay-card-catalog-art .wpay-card-face-status,
+.wpay-card-catalog-art .wpay-card-face-bottom { display: none; }

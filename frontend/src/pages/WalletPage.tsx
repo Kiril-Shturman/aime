@@ -283,6 +283,7 @@ function WalletScreen() {
   const menuButton = useRef<HTMLElement | null>(null);
   const desktopMenu = useDesktopWalletLayout();
   const pageRef = useRef<HTMLElement | null>(null);
+  const [cardCatalogOffer, setCardCatalogOffer] = useState<number | null>(null);
   const [cardActionSlot, setCardActionSlot] = useState<HTMLDivElement | null>(null);
   const [activeTab, setActiveTab] = useState<WalletTab>("wallet");
   useLayoutEffect(() => {
@@ -371,6 +372,7 @@ function WalletScreen() {
   const supportSelected = homeProfilePage === "support";
 
   function selectTab(tab: WalletTab) {
+    if (tab !== "cards") setCardCatalogOffer(null);
     haptic("light");
     setSelectedAssetCode(null);
     setHomeProfilePage(null);
@@ -483,7 +485,15 @@ function WalletScreen() {
         title={supportSelected ? "Поддержка" : tabMeta[activeTab].title}
         subtitle={supportSelected ? undefined : tabMeta[activeTab].subtitle}
         left={
-          <button
+          activeTab === "cards" && cardCatalogOffer !== null ? (
+            <button type="button" aria-label="Назад к выбору карты"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-black/5 text-primary dark:bg-white/10"
+              onClick={() => { haptic("light"); setCardCatalogOffer(null); pageRef.current?.scrollTo({ top: 0 }); }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          ) : <button
             type="button"
             onClick={() => selectTab("profile")}
             aria-label="Профиль"
@@ -713,6 +723,11 @@ function WalletScreen() {
               ) : (
                 <WalletAuraCards
                   bottomActionSlot={cardActionSlot}
+                  catalogOffer={cardCatalogOffer}
+                  onCatalogOffer={index => {
+                    setCardCatalogOffer(index);
+                    pageRef.current?.scrollTo({ top: 0, behavior: "instant" });
+                  }}
                   showNotice={showNotice}
                   onSbpTopUp={live.capabilities.sbp_buy
                     ? () => setCryptoFlow({ kind: "deposit", assetCode: "RUB" })
