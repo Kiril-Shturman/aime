@@ -181,6 +181,26 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         return payload
 
+    async def test_miniapp_notifications_only_deliver_new_notices_for_the_user(self):
+        from wallet_notifications import enqueue
+
+        route = '/api/wallet/miniapp-notifications'
+        headers = {'X-Telegram-Init-Data': init_data(123)}
+        enqueue(self.ledger, 'before-open', 'tg:123', 'deposit', 'Old', 'Old notice')
+        initial = await self.client.get(route, headers=headers)
+        snapshot = await initial.json()
+        self.assertEqual(snapshot['items'], [])
+        enqueue(self.ledger, 'another-user', 'tg:124', 'deposit', 'Other', 'Other user')
+        enqueue(self.ledger, 'otp', 'tg:123', 'card_otp', 'OTP', 'OTP')
+        enqueue(self.ledger, 'visible', 'tg:123', 'deposit', 'Received', 'New notice')
+        fresh = await self.client.get(route, params={'after': snapshot['after']}, headers=headers)
+        feed = await fresh.json()
+        self.assertEqual([item['title'] for item in feed['items']], ['Received'])
+        repeat = await self.client.get(route, params={'after': feed['after']}, headers=headers)
+        self.assertEqual((await repeat.json())['items'], [])
+        anonymous = await self.client.get(route)
+        self.assertEqual(anonymous.status, 401)
+
     async def test_anonymous_and_member_cannot_read_or_spend(self):
         for headers in [{}, {'X-Board-Key': 'member'}, {'X-Telegram-Init-Data': init_data() + '&hash=forged'}]:
             response = await self.client.get('/api/wallet/overview', headers=headers)

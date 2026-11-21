@@ -53,6 +53,7 @@ import Framework7React, {
   Page as F7Page,
 } from "framework7-react";
 import "./WalletFramework7.css";
+import { useWalletNotifications } from "./WalletNotifications";
 import "framework7/components/popup/css";
 import "framework7/components/sheet/css";
 import "./WalletExchange.css";
@@ -272,6 +273,7 @@ export default function WalletPage() {
 
 function WalletScreen() {
   const live = useLiveWallet();
+  useWalletNotifications(!live.demo && Boolean(getUser()));
   const enabledAssets = assets.filter(
     (asset) => (live.assetRoutes[asset.code] ?? []).length > 0,
   );

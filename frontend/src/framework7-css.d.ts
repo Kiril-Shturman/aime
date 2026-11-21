@@ -8,3 +8,5 @@ declare module "framework7/components/preloader/css";
 
 declare module "framework7/components/messagebar/css";
 declare module "framework7/components/messages/css";
+
+declare module "framework7/components/notification/css";

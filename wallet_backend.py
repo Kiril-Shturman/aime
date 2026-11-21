@@ -1973,6 +1973,25 @@ def install_wallet(app, root, owner_check):
                     request, ledger, aura_secret, ApiError, aura_partner_id
                 )
             uid = identity(request)
+            if action == 'miniapp-notifications' and request.method == 'GET':
+                cursor = request.query.get('after')
+                if cursor is None:
+                    after = ledger.db.execute('SELECT COALESCE(MAX(rowid),0) FROM notification_outbox WHERE user_id=?', (uid,)).fetchone()[0]
+                    items = []
+                else:
+                    if not re.fullmatch(r'[0-9]{1,18}', cursor):
+                        raise ValueError('Некорректный курсор уведомлений')
+                    after = int(cursor)
+                    items = decoded_rows("""
+                        SELECT n.rowid AS cursor,n.title,n.message
+                        FROM notification_outbox n
+                        JOIN notification_settings s ON s.event_type=n.event_type AND s.enabled=1
+                        WHERE n.user_id=? AND n.rowid>? AND n.event_type!='card_otp'
+                        ORDER BY n.rowid LIMIT 20
+                    """, (uid, after))
+                    if items:
+                        after = items[-1]['cursor']
+                return web.json_response({'after': str(after), 'items': items}, headers={'Cache-Control': 'no-store'})
             admin = is_admin(uid)
             client_ref = ledger.account(
                 uid,

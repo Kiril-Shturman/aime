@@ -2398,3 +2398,14 @@
   white-space: normal;
   font-size: 16px;
 }
+
+.wpay-f7-root .wpay-live-notification {
+  margin-top: var(--tg-content-safe-area-inset-top, 0px);
+  z-index: 14000;
+}
+.wpay-live-notification .notification-text {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  max-height: 30dvh;
+  overflow: auto;
+}
