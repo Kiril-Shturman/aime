@@ -919,11 +919,7 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   await sheet.getByRole("radio", { name: "С кошелька" }).check();
   expect(payments).toBe(0);
   const handle = sheet.getByRole("button", { name: "Раскрыть условия карты" });
-  await handle.evaluate(element => {
-    const touchAt = (clientY: number) => new Touch({ identifier: 1, target: element, clientY });
-    element.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, touches: [touchAt(100)] }));
-    element.dispatchEvent(new TouchEvent("touchend", { bubbles: true, changedTouches: [touchAt(155)] }));
-  });
+  await handle.click();
   await expect(handle).toHaveAttribute("aria-expanded", "true");
   await expect(sheet).not.toHaveClass(/wpay-goswap-order-sheet--collapsed/);
   await expect(sheet.getByText("Минимум пополнения", { exact: true })).toBeInViewport();

@@ -62,6 +62,7 @@ function resetCheckoutCard(event: PointerEvent<HTMLDivElement>) {
 }
 
 function ripplePaymentTile(event: MouseEvent<HTMLInputElement>) {
+  haptic("light");
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const tile = event.currentTarget.parentElement;
   if (!tile) return;
@@ -577,8 +578,8 @@ export default function WalletAuraCards({
   }, [goSwapOrder]);
   const [goSwapPayment, setGoSwapPayment] = useState<"wallet" | "sbp">("wallet");
   const [goSwapSheetExpanded, setGoSwapSheetExpanded] = useState(false);
-  const goSwapHandleStart = useRef<number | null>(null);
   const expandGoSwapSheet = () => {
+    haptic("light");
     f7.sheet.get(".wpay-goswap-order-sheet")?.stepOpen();
     setGoSwapSheetExpanded(true);
   };
@@ -1536,6 +1537,7 @@ export default function WalletAuraCards({
         opened={goSwapSheetOpened && goSwapOrder !== null}
         className={`wpay-goswap-order-sheet${goSwapSheetExpanded ? "" : " wpay-goswap-order-sheet--collapsed"}`}
         swipeToStep
+        swipeToClose
         swipeHandler=".wpay-goswap-sheet-handle"
         backdrop
         closeByBackdropClick
@@ -1553,14 +1555,7 @@ export default function WalletAuraCards({
           <div className="wpay-goswap-sheet-scroll">
             <div className="sheet-modal-swipe-step wpay-goswap-order-summary">
               <button type="button" className="wpay-goswap-sheet-handle" aria-label="Раскрыть условия карты"
-                aria-expanded={goSwapSheetExpanded} onClick={expandGoSwapSheet}
-                onTouchStart={event => { goSwapHandleStart.current = goSwapSheetExpanded ? null : event.touches[0]?.clientY ?? null; }}
-                onTouchCancel={() => { goSwapHandleStart.current = null; }}
-                onTouchEnd={event => {
-                  const start = goSwapHandleStart.current;
-                  goSwapHandleStart.current = null;
-                  if (start !== null && (event.changedTouches[0]?.clientY ?? start) - start > 30) expandGoSwapSheet();
-                }}><span /></button>
+                aria-expanded={goSwapSheetExpanded} onClick={expandGoSwapSheet}><span /></button>
               <div className="wpay-goswap-order-art" onPointerDown={tiltCheckoutCard} onPointerMove={tiltCheckoutCard}
                 onPointerLeave={resetCheckoutCard} onPointerUp={resetCheckoutCard} onPointerCancel={resetCheckoutCard}>
                 <LiveCardArtwork kind="virtual" skin={goSwapOrder.plan.skin} />
@@ -1592,7 +1587,12 @@ export default function WalletAuraCards({
               <Button rounded large data-wpay-primary="" className={`wpay-aura-primary !mt-3 !w-full${goSwapSheetReady && !busy && (goSwapPayment === "wallet" || onSbpTopUp) ? " wpay-goswap-pay-shine" : ""}`}
                 disabled={!goSwapSheetReady || Boolean(busy) || (goSwapPayment === "sbp" && !onSbpTopUp)}
                 aria-busy={!goSwapSheetReady || Boolean(busy)}
-                onClick={goSwapPayment === "wallet" ? payGoSwapOrder : () => {
+                onClick={() => {
+                  haptic("light");
+                  if (goSwapPayment === "wallet") {
+                    payGoSwapOrder();
+                    return;
+                  }
                   setGoSwapOrder(null);
                   onSbpTopUp?.();
                 }}>

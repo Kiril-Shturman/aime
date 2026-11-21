@@ -982,8 +982,8 @@
   --wpay-payment-tile-accent: var(--f7-theme-color, #007aff);
 }
 .dark .wpay-goswap-payment {
-  --wpay-payment-tile-bg: var(--color-ios-dark-surface-1, #1c1c1e);
-  --wpay-payment-tile-selected-bg: #25364c;
+  --wpay-payment-tile-bg: #363943;
+  --wpay-payment-tile-selected-bg: #2c435e;
 }
 .wpay-goswap-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .wpay-goswap-payment legend { margin-bottom: 6px; font-size: 13px; opacity: .7; }
@@ -999,6 +999,7 @@
 .wpay-goswap-order-total { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 14px; font-size: 17px; font-weight: 700; }
 .wpay-goswap-order-total strong { font-weight: inherit; font-variant-numeric: tabular-nums; }
 .wpay-goswap-order-expand { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; margin-top: 8px; padding: 6px; color: var(--f7-list-item-after-text-color, #8e8e93); }
+.dark .wpay-goswap-order-expand { color: #c0c3cc; }
 .wpay-goswap-order-terms { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
 
 .wpay-goswap-pay-shine {
