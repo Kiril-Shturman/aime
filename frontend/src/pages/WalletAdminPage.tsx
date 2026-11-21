@@ -744,7 +744,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
     try {
       await walletRequest("admin-card-plan-availability", { product, enabled });
       await reload();
-      setNotice(enabled ? "Выпуск включён" : "Выпуск отключён");
+      setNotice(enabled ? "Доступность включена" : "Доступность отключена");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Не удалось изменить доступность выпуска");
     } finally {
@@ -826,11 +826,11 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                   : `${amount(item.fixed_fee)} + ${amount(item.percent_fee)}% · минимум ${amount(item.minimum_fee)}`}
               </span>
             </button>
-            {item.provider === "Aura" && Boolean(item.card_plan) && (
+            {Boolean(item.card_plan) && (
               <label className="flex items-center justify-between gap-3 border-t border-[var(--admin-border)] px-4 py-3 text-xs font-semibold">
-                Выпуск карты
-                <input type="checkbox" role="switch" aria-label={`Выпуск карты «${item.label}»`}
-                  className="h-4 w-4 accent-blue-600" checked={item.issue_enabled !== false} disabled={saving}
+                {item.provider === "GoSwap" ? "Доступность тарифа" : "Выпуск карты"}
+                <input type="checkbox" role="switch" aria-label={`${item.provider === "GoSwap" ? "Доступность тарифа" : "Выпуск карты"} «${item.label}»`}
+                  className="wpay-admin-switch" checked={item.issue_enabled !== false} disabled={saving}
                   onChange={(event) => void toggleIssue(item.product, event.target.checked)} />
               </label>
             )}
@@ -850,7 +850,7 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
             <label><span className="text-xs font-semibold">{current.card_plan ? "Минимальная наша комиссия пополнения" : "Минимальная комиссия"}</span><input className={`${input} mt-2`} value={minimum} onChange={(e) => setMinimum(e.target.value)} /></label>
           </div>
           <label className="mt-3 block"><span className="text-xs font-semibold">Комментарий к версии</span><input className={`${input} mt-2`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Причина изменения" /></label>
-          <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять комиссию wPay к новым операциям</label>
+          <label className="mt-4 flex items-center gap-2 text-sm"><input type="checkbox" role="switch" className="wpay-admin-switch" checked={enabled} disabled={!current.enforced} onChange={(e) => setEnabled(e.target.checked)} /> Применять комиссию wPay к новым операциям</label>
           <button type="button" disabled={saving} onClick={() => void save()} className="mt-4 rounded-xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white disabled:opacity-40">{saving ? "Сохраняю…" : "Сохранить новую версию"}</button>
           {notice && <p className="mt-3 text-xs">{notice}</p>}
         </section>
@@ -2971,7 +2971,7 @@ function Crypto({
                           <span className="flex items-center gap-2 font-medium"><WalletNetworkIcon network={route.network} />{network}</span>
                           <label className="flex items-center gap-2 text-xs">
                             <input
-                              type="checkbox"
+                              type="checkbox" role="switch" className="wpay-admin-switch"
                               checked={Boolean(route.enabled)}
                               disabled={Boolean(workingRoute)}
                               onChange={(event) => void updateAssets({ asset, network: route.network, enabled: event.target.checked }, key)}
@@ -3435,10 +3435,10 @@ function Notifications({
                   onClick={() => editTemplate(setting)}>
                   Редактировать
                 </button>
-                <input type="checkbox" aria-label={`Отправлять уведомления «${setting.label}»`}
+                <input type="checkbox" role="switch" aria-label={`Отправлять уведомления «${setting.label}»`}
                   checked={Boolean(setting.enabled)} disabled={Boolean(saving)}
                   onChange={(event) => void toggle(setting.event_type, event.target.checked)}
-                  className="h-5 w-5 accent-blue-500" />
+                  className="wpay-admin-switch" />
               </div>
             </div>
           ))}

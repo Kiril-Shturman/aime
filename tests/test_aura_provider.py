@@ -1595,6 +1595,19 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             {"USDT": ("18.225002", "2", 1), "BTC": ("0.1", "0", 1)},
         )
 
+    async def test_admin_can_toggle_goswap_card_availability_independently(self):
+        from wallet_tariffs import snapshot
+
+        product = "goswap_card_sg_1"
+        route = "/api/wallet/admin-card-plan-availability"
+        for enabled in (True, False):
+            response = await self.wpay.post(route, headers=self.owner, json={"product": product, "enabled": enabled})
+            self.assertEqual(response.status, 200, await response.text())
+            items = {item["product"]: item for item in snapshot(self.app["wpay_ledger"])["items"]}
+            self.assertEqual(items[product]["issue_enabled"], enabled)
+            self.assertFalse(items["goswap_card_sg_2"]["issue_enabled"])
+            self.assertTrue(items["card_subscriptions"]["issue_enabled"])
+
     async def test_admin_can_pause_single_card_plan(self):
         route = "/api/wallet/admin-card-plan-availability"
         body = {"product": "card_subscriptions", "enabled": False}

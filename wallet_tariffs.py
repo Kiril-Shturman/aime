@@ -86,11 +86,11 @@ def card_issue_enabled(ledger, product):
     row = ledger.db.execute(
         "SELECT enabled FROM wallet_card_plan_availability WHERE product=?", (product,),
     ).fetchone()
-    return row is None or bool(row[0])
+    return product in CARD_PLANS if row is None else bool(row[0])
 
 
 def set_card_issue_enabled(ledger, product, enabled, actor):
-    if not isinstance(product, str) or product not in CARD_PLANS or type(enabled) is not bool:
+    if not isinstance(product, str) or product not in (CARD_PLANS.keys() | GOSWAP_CARD_PLANS.keys()) or type(enabled) is not bool:
         raise ValueError("Некорректная настройка выпуска карты")
     ledger.db.execute(
         "INSERT INTO wallet_card_plan_availability VALUES (?,?,?,?) ON CONFLICT(product) "
@@ -108,7 +108,8 @@ def snapshot(ledger):
             item.update(CARD_PLANS[product], card_plan=True, provider="Aura", category="cards",
                         issue_enabled=card_issue_enabled(ledger, product))
         elif product in GOSWAP_CARD_PLANS:
-            item.update(GOSWAP_CARD_PLANS[product], card_plan=True, provider="GoSwap", category="cards")
+            item.update(GOSWAP_CARD_PLANS[product], card_plan=True, provider="GoSwap", category="cards",
+                        issue_enabled=card_issue_enabled(ledger, product))
         else:
             item.update(category="deposits" if product == "sbp_buy" else "other")
         items.append(item)
