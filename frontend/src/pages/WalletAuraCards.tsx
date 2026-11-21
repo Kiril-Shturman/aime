@@ -1048,8 +1048,8 @@ export default function WalletAuraCards({
               {plan?.conditions?.includes("Google Pay") && <span aria-label="Google Pay"><LogoGoogle aria-hidden="true" />Pay</span>}
               {(appearance === "silver" || appearance === "navy") && (
                 <span className="wpay-catalog-app-store" role="img" aria-label="App Store">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" aria-hidden="true">
-                    <path d="m7 18 8-13M10 5l6.8 11.2M5 14h13.8M17.8 18l.8 1.3" />
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+                    <path d="m6.5 19 8.2-14.2M9.3 4.8l3.1 5.4m2.1 3.7 3 5.1M4 15h8.8m3.5 0H20" />
                   </svg>
                 </span>
               )}
@@ -1080,7 +1080,7 @@ export default function WalletAuraCards({
             )}
             <span className="wpay-card-catalog-price">
               <span><b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
-                ? `${offerNumber.format(Number(plan.issue_fee))} USDT` : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
+                ? `${offerNumber.format(Number(plan.issue_fee))}$` : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
               {plan?.total_recharge_pct != null && (
                 <span><b>{offerNumber.format(Number(plan.total_recharge_pct))}%</b><small>Пополнение</small></span>
               )}

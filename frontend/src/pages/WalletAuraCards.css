@@ -1216,3 +1216,8 @@
 .wpay-card-catalog-price { border-radius: 999px; margin-inline: -8px; margin-bottom: 4px; }
 .wpay-card-catalog-services > .wpay-catalog-app-store { width: 31px; min-height: 31px; }
 .wpay-catalog-app-store svg { width: 18px; height: 18px; }
+
+.wpay-card-catalog-services > span { box-sizing: border-box; height: 31px; min-height: 31px; padding-inline: 7px; font-size: 12px; }
+.wpay-card-catalog-services > span:not(.wpay-catalog-app-store) svg { width: 16px; height: 16px; }
+.wpay-card-catalog-services > .wpay-catalog-app-store { padding: 0; border-radius: 50%; border-color: #a9d5ff66; box-shadow: inset 0 1px 2px #ffffff38; }
+.wpay-card-catalog-price { margin-inline: -4px; margin-bottom: 8px; }
