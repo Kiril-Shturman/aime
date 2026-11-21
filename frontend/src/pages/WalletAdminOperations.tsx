@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import {
   Activity, ChevronRight, ReceiptText, Search, SlidersHorizontal, TrendingUp, X,
 } from "lucide-react";
@@ -55,6 +55,10 @@ function normalize(row: Row, source: keyof typeof sources) {
     event_id: id, type, asset, amount: s(rawAmount ?? "0"), created_at: createdAt, detail,
   });
   model.title = title;
+  const revenue = row.revenue == null ? null : Number(row.revenue);
+  if (source === "events") {
+    model.rows.push(["Доход wPay", revenue == null ? "Нет данных о комиссии" : `${fmt.format(revenue)} ${asset}`]);
+  }
   if (user) model.rows.unshift(["Пользователь", user]);
   if (status) {
     model.rows.unshift(["Статус в журнале", statuses[status] ?? status]);
@@ -63,7 +67,7 @@ function normalize(row: Row, source: keyof typeof sources) {
     else if (status === "refunded") model.status = "refunded";
   }
   return {
-    id, user, type, title, status, model, asset, amount, stamp,
+    id, user, type, title, status, model, asset, amount, stamp, revenue,
     day: createdAt.slice(0, 10),
     reference: [detail.merchant_name, detail.network, detail.operation_id, detail.payment_id, detail.order_id, detail.tx_hash, detail.transaction_hash, row.withdrawal_id].map(s).filter(Boolean).join(" · "),
   };
@@ -72,6 +76,8 @@ function normalize(row: Row, source: keyof typeof sources) {
 function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
   const [days, setDays] = useState(7);
   const [selected, setSelected] = useState("");
+  const gradient = useId();
+  const [highlight, setHighlight] = useState<number | null>(null);
   const [metric, setMetric] = useState<"volume" | "revenue">("volume");
   const assets = [...new Set(daily.map(row => row.asset))].sort();
   const asset = selected || (assets.includes("USDT") ? "USDT" : assets[0] || "USDT");
@@ -88,10 +94,11 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
   const ceiling = Math.max(0, ...values);
   const floor = Math.min(0, ...values);
   const range = ceiling - floor || 1;
-  const chartLabel = metric === "volume" ? "Оборот" : "Доход от комиссий карт";
-  const x = (index: number) => 62 + index * (808 / (series.length - 1));
-  const y = (value: number) => 175 - (value - floor) / range * 150;
+  const chartLabel = metric === "volume" ? "Оборот" : "Доход от комиссий";
+  const x = (index: number) => 4 + index * (892 / (series.length - 1));
+  const y = (value: number) => 175 - (value - floor) / range * 147;
   const line = series.map((row, index) => `${x(index)},${y(row[metric])}`).join(" ");
+  const point = highlight === null ? null : series[highlight];
   return (
     <section className="admin-ops-panel" aria-labelledby="ops-chart-title">
       <header className="admin-ops-header">
@@ -110,24 +117,34 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
       </header>
       <div className="admin-ops-metrics">
         <div><span><Activity size={15} /> Оборот по журналу</span><strong>{fmt.format(total.volume)} <small>{asset}</small></strong></div>
-        <div><span><TrendingUp size={15} /> Доход от комиссий карт</span><strong>{fmt.format(total.revenue)} <small>{asset}</small></strong></div>
+        <div><span><TrendingUp size={15} /> Доход от комиссий</span><strong>{fmt.format(total.revenue)} <small>{asset}</small></strong></div>
         <div><span><ReceiptText size={15} /> Выполнено операций</span><strong>{fmt.format(total.count)}</strong></div>
       </div>
       {total.count === 0 && values.every(value => value === 0) ? <p className="admin-ops-empty">За этот период завершённых операций нет.</p> : (
-        <svg className="admin-ops-chart" preserveAspectRatio="none" viewBox="0 0 900 205" role="img" aria-label={`${chartLabel} по дням, ${asset}`}>
-          <defs><linearGradient id="admin-ops-volume" x2="0" y2="1"><stop stopColor="#208675" stopOpacity=".27" /><stop offset="1" stopColor="#208675" stopOpacity="0" /></linearGradient></defs>
-          {[0, 1, 2, 3, 4].map(step => {
-            const value = floor + range * step / 4;
-            return <g key={step}><line x1="62" x2="870" y1={y(value)} y2={y(value)} /><text x="55" y={y(value) + 4} textAnchor="end">{Intl.NumberFormat("ru", { notation: "compact", maximumFractionDigits: 2 }).format(value)}</text></g>;
-          })}
-          <polygon points={`62,${y(0)} ${line} 870,${y(0)}`} fill="url(#admin-ops-volume)" />
-          <polyline points={line} fill="none" stroke="#208675" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-          {series.map((row, index) => (index % Math.ceil(days / 7) === 0 || index === series.length - 1) && (
-            <g key={row.day}><circle cx={x(index)} cy={y(row[metric])} r="4" fill="var(--admin-surface)" stroke="#208675" strokeWidth="2"><title>{row.day} · оборот {fmt.format(row.volume)} {asset} · комиссии {fmt.format(row.revenue)} {asset}</title></circle><text x={x(index)} y="197" textAnchor="middle">{dayFmt.format(new Date(row.day))}</text></g>
-          ))}
-        </svg>
+        <div className="admin-ops-plot">
+          <div className="admin-ops-chart-caption">
+            {point ? `${dayFmt.format(new Date(point.day))} · ${fmt.format(point[metric])} ${asset}` : `${chartLabel} по дням`}
+          </div>
+          <svg className="admin-ops-chart" preserveAspectRatio="none" viewBox="0 0 900 205" role="img" aria-label={`${chartLabel} по дням, ${asset}`}
+            onPointerMove={event => {
+              const bounds = event.currentTarget.getBoundingClientRect();
+              const index = Math.round((event.clientX - bounds.left) / bounds.width * (series.length - 1));
+              setHighlight(Math.min(series.length - 1, Math.max(0, index)));
+            }} onPointerLeave={() => setHighlight(null)}>
+            <defs><linearGradient id={gradient} x2="0" y2="1"><stop stopColor="currentColor" stopOpacity=".16" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs>
+            {[0, 1, 2, 3].map(step => {
+              const value = floor + range * step / 3;
+              return <g key={step}><line x1="4" x2="896" y1={y(value)} y2={y(value)} /><text x="895" y={y(value) - 5} textAnchor="end">{fmt.format(value)}</text></g>;
+            })}
+            <polygon points={`4,${y(0)} ${line} 896,${y(0)}`} fill={`url(#${gradient})`} />
+            <polyline points={line} fill="none" stroke="currentColor" strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+            {point && highlight !== null && <g><line x1={x(highlight)} x2={x(highlight)} y1="25" y2="175" /><circle cx={x(highlight)} cy={y(point[metric])} r="4" fill="currentColor" /></g>}
+            <text x="4" y="198">{dayFmt.format(new Date(series[0].day))}</text>
+            <text x="896" y="198" textAnchor="end">{dayFmt.format(new Date(series[series.length - 1].day))}</text>
+          </svg>
+        </div>
       )}
-      <p className="admin-ops-note">Оборот — сумма абсолютных значений операций. Доход — комиссии wPay за выпуск и пополнение карт за вычетом возвратов выпуска, без учёта прочих доходов и расходов.</p>
+      <p className="admin-ops-note">Оборот — сумма абсолютных значений операций. Доход — комиссии wPay, записанные в журнале, за вычетом возвратов. Данные по прочим расходам сюда не входят.</p>
     </section>
   );
 }
@@ -192,13 +209,14 @@ export function AdminOperations({ data }: { data: AdminOperationsData }) {
         </div>
         {filtered.length ? (
           <div className="admin-ops-table">
-            <table><thead><tr><th>Операция</th><th>Пользователь / ID</th><th>Статус</th><th>Сумма</th></tr></thead>
+            <table><thead><tr><th>Операция</th><th>Пользователь / ID</th><th>Статус</th><th>Сумма</th>{source === "events" && <th>Доход wPay</th>}</tr></thead>
               <tbody>{filtered.slice(0, limit).map(row => (
                 <tr key={row.id} onClick={() => setSelected(row.model)}>
                   <td><div className="admin-ops-operation"><TransactionAvatar kind={row.model.kind} positive={(row.amount ?? 0) > 0} compact /><div><button type="button" className="admin-ops-open" onClick={event => { event.stopPropagation(); setSelected(row.model); }}><strong>{row.title}</strong><ChevronRight size={14} /></button><small title={row.reference || undefined}>{row.day ? new Date(row.stamp).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short", timeZone: "UTC" }) : "—"}{row.reference && ` · ${row.reference}`}</small></div></div></td>
                   <td><strong>{row.user || "—"}</strong><small title={row.id}>{row.id || "—"}</small></td>
                   <td>{row.status ? <span className="admin-ops-status" data-state={row.status}>{statuses[row.status] ?? row.status}</span> : "—"}</td>
                   <td className="admin-ops-amount">{row.amount !== null && Number.isFinite(row.amount) ? `${row.amount > 0 ? "+" : ""}${fmt.format(row.amount)} ${row.asset}` : "—"}</td>
+                  {source === "events" && <td className="admin-ops-amount">{row.revenue == null ? "—" : `${fmt.format(row.revenue)} ${row.asset}`}</td>}
                 </tr>
               ))}</tbody>
             </table>

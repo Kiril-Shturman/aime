@@ -1514,7 +1514,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             ("card", "USDT", "-18.225002", "card_topup", "completed", "3"),
             ("pending", "USDT", "-20", "card_topup", "processing", "4"),
             ("refund", "USDT", "10", "card_issue_refund", "completed", "1"),
-            ("btc", "BTC", "0.1", "deposit", "completed", "0"),
+            ("btc", "BTC", "0.1", "deposit", "completed", None),
         ):
             db.execute("INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)", (
                 event_id, "tg:123", asset, amount, kind, stamp,
@@ -1523,7 +1523,10 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         response = await self.wpay.get("/api/wallet/admin-payments", headers=self.owner)
         self.assertEqual(response.status, 200, await response.text())
         payload = await response.json()
-        self.assertEqual(len(payload["events"]), 4)
+        self.assertEqual(
+            {row["event_id"]: row["revenue"] for row in payload["events"]},
+            {"card": "3", "pending": None, "refund": "-1", "btc": None},
+        )
         self.assertEqual(
             {row["asset"]: (row["volume"], row["revenue"], row["count"]) for row in payload["daily"]},
             {"USDT": ("18.225002", "2", 1), "BTC": ("0.1", "0", 1)},

@@ -114,3 +114,22 @@
   background: var(--admin-surface); border-bottom: 1px solid var(--admin-border);
 }
 .admin-ops-dialog > header h2 { font-size: 17px; font-weight: 650; }
+.admin-ops-plot { margin-top: 16px; }
+.admin-ops-chart-caption { color: var(--admin-muted); font-size: 13px; min-height: 20px; }
+.admin-ops-chart { color: #168d76; }
+.dark .admin-ops-chart { color: #55d2a9; }
+.admin-ops-table th:first-child { width: 32%; }
+.admin-ops-dialog {
+  inset: 0 0 0 auto;
+  margin: 0;
+  width: min(100%, 500px);
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  border-radius: 20px 0 0 20px;
+}
+@media (max-width: 570px) {
+  .admin-ops-dialog { border-radius: 0; }
+  .admin-ops-table td:nth-child(5) { grid-column: 1 / -1; padding-bottom: 10px; }
+  .admin-ops-table td:nth-child(5)::before { content: "Доход wPay · "; color: var(--admin-muted); font-weight: 400; }
+}

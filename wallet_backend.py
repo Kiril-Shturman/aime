@@ -1446,10 +1446,25 @@ def install_wallet(app, root, owner_check):
             })
         return sorted(items, key=lambda item: item['created_at'] or '', reverse=True)[:100]
 
+    def operation_revenue(kind, detail):
+        status = detail.get('status')
+        if kind in {'admin_adjustment', 'exchange_internal'} or status in {'failed', 'rejected', 'cancelled'}:
+            return Decimal(0)
+        completed = status in {'completed', 'confirmed', 'opened'} or (
+            status is None and kind.endswith('_completed')
+        )
+        if not completed or detail.get('service_fee') is None:
+            return None
+        fee = Decimal(detail['service_fee'])
+        return -fee if kind.endswith('_refund') else fee
+
     def admin_payments():
         result = {'events': decoded_rows('SELECT rowid,* FROM wallet_events ORDER BY rowid DESC LIMIT 500')}
         for table, key in [('wallet_quotes', 'quotes'), ('wallet_invoices', 'invoices'), ('wallet_transfers', 'transfers'), ('wallet_withdrawal_intents', 'withdrawals')]:
             result[key] = decoded_rows(f'SELECT rowid,* FROM {table} ORDER BY rowid DESC LIMIT 500') if table in tables() else []
+        for item in result['events']:
+            revenue = operation_revenue(item['type'], item['detail'])
+            item['revenue'] = str(revenue) if revenue is not None else None
         today = datetime.now(timezone.utc).date()
         cutoff = (today - timedelta(days=89)).isoformat()
         result['as_of'] = today.isoformat()
@@ -1461,9 +1476,9 @@ def install_wallet(app, root, owner_check):
             detail = json.loads(row['detail'])
             status = detail.get('status')
             kind = row['type']
-            if kind == 'card_issue_refund' and status == 'completed':
-                daily[row['day'], row['asset']]['revenue'] -= Decimal(detail.get('service_fee') or '0')
-                continue
+            revenue = operation_revenue(kind, detail)
+            if revenue:
+                daily[row['day'], row['asset']]['revenue'] += revenue
             if status not in (None, 'completed', 'confirmed', 'opened') or kind not in {
                 'deposit', 'ruble_deposit', 'sbp_completed', 'card_issue', 'card_topup', 'card_payment',
                 'withdrawal_completed', 'qr_completed', 'exchange_completed', 'exchange_internal',
@@ -1474,8 +1489,6 @@ def install_wallet(app, root, owner_check):
             amount = detail.get('amount', row['amount']) if kind == 'exchange_internal' else row['amount']
             bucket['volume'] += abs(Decimal(amount))
             bucket['count'] += 1
-            if kind in {'card_issue', 'card_topup'} and status == 'completed':
-                bucket['revenue'] += Decimal(detail.get('service_fee') or '0')
         result['daily'] = [
             {'day': day, 'asset': asset, 'volume': str(bucket['volume']),
              'revenue': str(bucket['revenue']), 'count': bucket['count']}

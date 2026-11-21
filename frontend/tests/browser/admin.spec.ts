@@ -116,7 +116,7 @@ for (const theme of ["dark", "light"]) {
     ).toBeVisible();
     await expect(page.getByRole("img", { name: "Оборот по дням, USDT" })).toBeVisible();
     await page.getByLabel("Показатель графика").selectOption("revenue");
-    await expect(page.getByRole("img", { name: "Доход от комиссий карт по дням, USDT" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "Доход от комиссий по дням, USDT" })).toBeVisible();
     await page.getByRole("textbox", { name: "Поиск" }).fill("topup-101");
     await expect(page.getByRole("table").getByText("Пополнение карты", { exact: true })).toBeVisible();
     await expect(page.getByRole("table").getByText("Ошибка оплаты по QR", { exact: true })).toHaveCount(0);
