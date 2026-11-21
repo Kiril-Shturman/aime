@@ -2397,6 +2397,14 @@ class AuraUserWithdrawalTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ledger.balance(uid, "USDT"), (Decimal("5"), Decimal("5")))
             await user_withdrawal(ledger, client, "test", uid, body, key, Decimal("2"))
             self.assertEqual(create.await_args_list[0], create.await_args_list[1])
+            broadcast = dict(snapshot, status="broadcast", tx_hash="hash")
+            raw, signature = signed({
+                "event": "withdraw.sent", "event_id": "withdraw_sent",
+                "partner_id": MOCK_PARTNER, "data": broadcast,
+            })
+            store_webhook(ledger, raw, signature, {}, SECRET, MOCK_PARTNER)
+            self.assertEqual(process_inbox(ledger, "test"), 1)
+            store_withdrawal_snapshot(ledger, "test", broadcast)
             finished = dict(snapshot, status="completed", tx_hash="hash",
                             completed_at="2026-11-21T00:01:00Z")
             store_withdrawal_snapshot(ledger, "test", finished)
@@ -2405,5 +2413,12 @@ class AuraUserWithdrawalTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(ledger.db.execute(
                 "SELECT available FROM wallet_provider_positions WHERE user_id=?", (uid,),
             ).fetchone()[0], "5")
+            notices = ledger.db.execute(
+                "SELECT message FROM notification_outbox ORDER BY rowid"
+            ).fetchall()
+            self.assertEqual([row[0] for row in notices], [
+                f"Статус вывода: {status}. Сумма: 3 USDT."
+                for status in ("processing", "broadcast", "completed")
+            ])
             ledger.book.verify()
             ledger.db.close()

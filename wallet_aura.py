@@ -3532,20 +3532,16 @@ def _store_withdrawal(ledger, environment, kind, data):
         data.get("withdrawal_id") or data.get("id"), "withdrawal id"
     )
     existing = ledger.db.execute(
-        "SELECT provider_updated_at FROM aura_withdrawals WHERE withdrawal_id=? AND environment=?",
+        "SELECT provider_updated_at,status FROM aura_withdrawals WHERE withdrawal_id=? AND environment=?",
         (withdrawal_id, environment),
     ).fetchone()
     updated = str(data.get("updated_at") or "")
-    if existing and updated and existing[0] and updated <= existing[0]:
+    if existing and updated and existing["provider_updated_at"] and updated <= existing["provider_updated_at"]:
         return
     status = str(data.get("status") or kind.removeprefix("withdraw."))[:100]
-    if existing:
-        prior_status = ledger.db.execute(
-            "SELECT status FROM aura_withdrawals WHERE withdrawal_id=? AND environment=?",
-            (withdrawal_id, environment),
-        ).fetchone()[0]
-        if prior_status in {"completed", "failed"} or (prior_status == "broadcast" and status == "processing"):
-            return
+    prior_status = existing["status"] if existing else None
+    if prior_status in {"completed", "failed"} or (prior_status == "broadcast" and status == "processing"):
+        return
     value = lambda key: (None if data.get(key) is None else str(_decimal(data[key], allow_zero=True)))
     amount, fee = value("amount"), value("fee")
     recipient = data.get("recipient") or data.get("address")
@@ -3577,11 +3573,13 @@ def _store_withdrawal(ledger, environment, kind, data):
     if owner:
         if status in {"completed", "failed"}:
             _finish_user_withdrawal(ledger, environment, owner, status, safe)
+        if prior_status == status:
+            return
         message = "Статус вывода: " + status + "."
         if amount:
             message += " Сумма: " + amount + " USDT."
         enqueue_notification(
-            ledger, f"aura:withdrawal:{withdrawal_id}:{updated or kind}:{status}",
+            ledger, f"aura:withdrawal:{environment}:{withdrawal_id}:{status}",
             owner["user_id"], "withdrawal", "Вывод средств", message,
         )
 
