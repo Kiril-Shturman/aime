@@ -176,18 +176,19 @@ export function AdminOperations({ data }: { data: AdminOperationsData }) {
           ))}
         </div>
         <div className="admin-ops-searchbar">
-          <label className="admin-ops-search"><span>Поиск</span><div><Search size={17} /><input placeholder="ID, пользователь, получатель или хеш" value={filters.query} onChange={e => update("query", e.target.value)} /></div></label>
+          <label className="admin-ops-search"><Search size={17} aria-hidden="true" /><input aria-label="Поиск" placeholder="ID операции, пользователь, получатель или хеш" value={filters.query} onChange={e => update("query", e.target.value)} /></label>
           <button type="button" className="admin-ops-reset" aria-expanded={advanced} aria-controls="admin-ops-filters" onClick={() => setAdvanced(!advanced)}><SlidersHorizontal size={16} /> Фильтры</button>
           <button type="button" className="admin-ops-reset" onClick={reset}>Сбросить</button>
         </div>
         <div className="admin-ops-filters" id="admin-ops-filters" hidden={!advanced}>
-          <label>Тип<select value={filters.type} onChange={e => update("type", e.target.value)}><option value="">Все типы</option>{[...types].map(([key, title]) => <option key={key} value={key}>{title}</option>)}</select></label>
+          <div className="admin-ops-filter-group"><label>Тип<select value={filters.type} onChange={e => update("type", e.target.value)}><option value="">Все типы</option>{[...types].map(([key, title]) => <option key={key} value={key}>{title}</option>)}</select></label>
           <label>Статус<select aria-label="Статус" value={filters.status} onChange={e => update("status", e.target.value)}><option value="">Все статусы</option>{states.map(state => <option key={state} value={state}>{statuses[state] ?? state}</option>)}</select></label>
           <label>Валюта<select value={filters.asset} onChange={e => update("asset", e.target.value)}><option value="">Все валюты</option>{assets.map(code => <option key={code}>{code}</option>)}</select></label>
-          <label>Дата с<input type="date" value={filters.from} onChange={e => update("from", e.target.value)} /></label>
+          </div><div className="admin-ops-filter-group admin-ops-filter-range"><label>Дата с<input type="date" value={filters.from} onChange={e => update("from", e.target.value)} /></label>
           <label>Дата по<input type="date" value={filters.to} onChange={e => update("to", e.target.value)} /></label>
           <label>Сумма от<input type="number" min="0" step="any" value={filters.min} onChange={e => update("min", e.target.value)} /></label>
           <label>Сумма до<input type="number" min="0" step="any" value={filters.max} onChange={e => update("max", e.target.value)} /></label>
+        </div>
         </div>
         {filtered.length ? (
           <div className="admin-ops-table">

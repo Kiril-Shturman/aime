@@ -10,18 +10,30 @@
 .admin-ops-header h2 { margin: 0; font-size: clamp(20px, 2vw, 25px); font-weight: 680; letter-spacing: -.035em; }
 .admin-ops-header p, .admin-ops-note, .admin-ops-count { margin: 5px 0 0; color: var(--admin-muted); font-size: 13px; }
 .admin-ops-controls { display: flex; gap: 8px; flex-wrap: wrap; }
-.admin-ops :is(select, input) {
+.wpay-admin-content .admin-ops :is(select, input:not([type="checkbox"]):not([type="radio"])) {
   min-width: 0;
   width: 100%;
-  min-height: 40px;
-  padding: 0 10px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0 12px;
+  box-shadow: none;
+  appearance: none;
+  -webkit-appearance: none;
   border: 1px solid var(--admin-border);
   border-radius: 9px;
   background: var(--admin-surface);
   color: var(--admin-text);
   font-size: 13px;
 }
-.admin-ops-controls select { width: auto; }
+.wpay-admin-content .admin-ops-controls select { width: auto; }
+.wpay-admin-content .admin-ops select {
+  padding-inline-end: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='m1 1 5 5 5-5' fill='none' stroke='%23778093' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-position: right 12px center;
+  background-repeat: no-repeat;
+}
+.wpay-admin-content .admin-ops input[type="number"] { appearance: textfield; }
+.admin-ops input[type="number"]::-webkit-inner-spin-button { appearance: none; }
 .admin-ops :is(select, input, button):focus-visible { outline: 2px solid #448aff; outline-offset: 2px; }
 .admin-ops-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 20px 0 13px; }
 .admin-ops-metrics > div { border: 1px solid var(--admin-border); border-radius: 14px; background: var(--admin-surface-muted); padding: 12px; }
@@ -35,12 +47,10 @@
 .admin-ops-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
 .admin-ops-tabs button, .admin-ops-reset { background: var(--admin-surface-muted); border: 1px solid var(--admin-border); border-radius: 9px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
 .admin-ops-tabs button[aria-pressed="true"] { background: #0a67dc; border-color: #0a67dc; color: #fff; }
-.admin-ops-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px; }
-.admin-ops-filters label { display: grid; gap: 4px; color: var(--admin-muted); font-size: 12px; }
-.admin-ops-search div { position: relative; }
-.admin-ops-search svg { position: absolute; inset: 12px auto auto 10px; pointer-events: none; }
-.admin-ops-search input { padding-left: 34px; }
-.admin-ops-filters .admin-ops-reset { justify-self: start; }
+.admin-ops-filters { display: grid; gap: 12px; padding: 14px; border: 1px solid var(--admin-border); border-radius: 14px; }
+.admin-ops-filter-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.admin-ops-filter-range { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.admin-ops-filters label { display: grid; gap: 5px; min-width: 0; color: var(--admin-muted); font-size: 12px; }
 .admin-ops-table { margin: 20px 0 10px; overflow-x: auto; }
 .admin-ops-table table { width: 100%; min-width: 590px; table-layout: fixed; border-collapse: collapse; }
 .admin-ops-table th, .admin-ops-table td { padding: 12px 8px; text-align: left; border-bottom: 1px solid var(--admin-border); }
@@ -62,7 +72,7 @@
 .admin-ops-amount { font-weight: 650; font-size: 14px; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .admin-ops-empty { padding: 28px 0; text-align: center; color: var(--admin-muted); }
 @media (max-width: 700px) {
-  .admin-ops-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-ops-filter-range { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-ops-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-ops-chart { min-height: 120px; }
 }
@@ -75,9 +85,16 @@
   .admin-ops-table td:nth-child(2) { grid-column: 1 / -1; padding-left: 52px; }
   .admin-ops-table td:nth-child(3) { padding-left: 52px; padding-bottom: 12px; }
 }
-.admin-ops-searchbar { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
-.admin-ops-searchbar label { flex: 1 1 220px; display: grid; gap: 4px; color: var(--admin-muted); font-size: 12px; }
-.admin-ops-searchbar button { min-height: 40px; display: inline-flex; align-items: center; gap: 6px; }
+.admin-ops-searchbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.admin-ops-search { position: relative; min-width: 0; }
+.admin-ops-search svg { position: absolute; top: 50%; left: 12px; transform: translateY(-50%); color: var(--admin-muted); pointer-events: none; }
+.wpay-admin-content .admin-ops .admin-ops-search input[aria-label] { padding-inline-start: 38px; }
+.admin-ops-searchbar button { height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+@media (max-width: 570px) {
+  .admin-ops-searchbar { grid-template-columns: 1fr 1fr; }
+  .admin-ops-search { grid-column: 1 / -1; }
+  .admin-ops-filter-group:not(.admin-ops-filter-range) { grid-template-columns: 1fr; }
+}
 .admin-ops-filters { margin-top: 12px; }
 .admin-ops-filters[hidden] { display: none; }
 .admin-ops-chart { height: clamp(180px, 20vw, 290px); }
