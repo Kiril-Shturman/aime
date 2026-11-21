@@ -971,11 +971,21 @@
 .wpay-goswap-sheet-handle span { width: 36px; height: 4px; border-radius: 10px; background: currentColor; opacity: .24; }
 .wpay-goswap-order-art { width: min(76%, 270px); margin-inline: auto; }
 .wpay-goswap-order-art .wpay-bank-card.wpay-card-scene { width: 100%; height: auto; min-height: 0; }
+.wpay-goswap-payment {
+  --wpay-payment-tile-bg: #fff;
+  --wpay-payment-tile-border: #c8cdd6;
+  --wpay-payment-tile-selected-bg: #eaf3ff;
+  --wpay-payment-tile-accent: var(--f7-theme-color, #007aff);
+}
+.dark .wpay-goswap-payment {
+  --wpay-payment-tile-bg: #292b31;
+  --wpay-payment-tile-border: #51545f;
+  --wpay-payment-tile-selected-bg: #1d3554;
+}
 .wpay-goswap-payment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
 .wpay-goswap-payment legend { margin-bottom: 6px; font-size: 13px; opacity: .7; }
-.wpay-goswap-payment label { position: relative; display: flex; min-height: 72px; flex-direction: column; justify-content: center; align-items: flex-start; gap: 5px; padding: 10px 12px; border: 1px solid var(--f7-list-border-color); border-radius: 14px; font-size: 13px; cursor: pointer; }
-.wpay-goswap-payment label:has(input:checked),
-.wpay-goswap-payment label:has(input:focus-visible) { border-color: var(--f7-theme-color); }
+.wpay-goswap-payment label { position: relative; display: flex; min-height: 72px; flex-direction: column; justify-content: center; align-items: flex-start; gap: 5px; padding: 10px 12px; border: 1px solid var(--wpay-payment-tile-border); border-radius: 14px; background: var(--wpay-payment-tile-bg); font-size: 13px; cursor: pointer; }
+.wpay-goswap-payment label:has(input:checked) { border-color: var(--wpay-payment-tile-accent); background: var(--wpay-payment-tile-selected-bg); }
 .wpay-goswap-payment label:has(input:focus-visible) { outline: 2px solid var(--f7-theme-color); outline-offset: 2px; }
 .wpay-goswap-payment label:has(input:disabled) { opacity: .5; cursor: default; }
 .wpay-goswap-payment input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
