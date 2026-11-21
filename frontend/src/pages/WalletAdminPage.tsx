@@ -25,6 +25,7 @@ import {
   ArrowLeft,
   Bell,
   Coins,
+  ChevronDown,
   Database,
   Menu,
   Play,
@@ -2222,6 +2223,7 @@ function AdminUserDrawer({
     ["logs", "Логи"],
   ] as const;
   const [auraWithdrawEnv, setAuraWithdrawEnv] = useState<string | null>(null);
+  const [expandedWallet, setExpandedWallet] = useState<string | null>(null);
   const [walletAction, setWalletAction] = useState<{ walletId: string; asset: string; action: "withdraw" | "export" } | null>(null);
   const [section, setSection] = useState<(typeof tabs)[number][0]>("profile");
   const drawerScroll = useRef<HTMLDivElement>(null);
@@ -2426,7 +2428,7 @@ function AdminUserDrawer({
         </header>
         <div className="admin-record-profile-menu">
           <RecordMenu label="Разделы карточки пользователя" tabs={tabs} active={section}
-            onSelect={id => { setWalletAction(null); setAuraWithdrawEnv(null); setSection(id); drawerScroll.current?.scrollTo(0, 0); }} />
+            onSelect={id => { setWalletAction(null); setAuraWithdrawEnv(null); setExpandedWallet(null); setSection(id); drawerScroll.current?.scrollTo(0, 0); }} />
         </div>
         <div className="wpay-admin-drawer-scroll" ref={drawerScroll}>
           {loading ? (
@@ -2567,101 +2569,108 @@ function AdminUserDrawer({
                 <section className="wpay-admin-user-section">
                   <h3>Кошельки и адреса</h3>
                   {detail.wallets?.length ? (
-                    <div className="grid gap-2">
-                      {detail.wallets.map((wallet) => (
-                        <div key={[wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address].join(":")}
-                          className="rounded-xl border border-[var(--admin-border)] p-3">
-                          <div className="wpay-admin-wallet-heading">
+                    <div className="admin-wallet-list">
+                      {detail.wallets.map(wallet => {
+                        const key = JSON.stringify([wallet.provider, wallet.environment, wallet.network, wallet.asset, wallet.address]);
+                        const expanded = expandedWallet === key;
+                        const title = `${currencyLabel(wallet.asset)} · ${networkLabel(wallet.network, wallet.asset)} · ${walletProviderNames[wallet.provider]}`;
+                        return <div key={key}>
+                          <button type="button" className="admin-wallet-toggle" aria-expanded={expanded} title={title}
+                            onClick={() => {
+                              setWalletAction(null);
+                              setAuraWithdrawEnv(null);
+                              setExpandedWallet(expanded ? null : key);
+                            }}>
                             {cryptoAssetsByTicker[wallet.asset] ? (
                               <WalletAssetAvatar {...cryptoAssetsByTicker[wallet.asset]} network={wallet.asset === "USDT" ? wallet.network : undefined} />
                             ) : <WalletNetworkIcon network={wallet.network} />}
-                          <Row title={`${currencyLabel(wallet.asset)} · ${networkLabel(wallet.network, wallet.asset)} · ${walletProviderNames[wallet.provider]}`}
-                            subtitle={[
+                            <strong>{title}</strong>
+                            <span className="admin-wallet-amount">{wallet.available === null ? "—" : `${wallet.available} ${wallet.asset}`}</span>
+                            <ChevronDown size={15} aria-hidden="true" />
+                          </button>
+                          {expanded && <div className="admin-wallet-actions">
+                            <p className="text-xs opacity-60">{[
                               wallet.chain === "nile" ? "TRON Nile · тестовая сеть" : wallet.environment,
                               wallet.provider === "aura" && wallet.address && wallet.available === null
-                                ? "Дополнительный адрес Aura"
+                                ? "Дополнительный адрес Aura · общий остаток выше"
                                 : walletBalanceLabels[wallet.balance_scope],
                               wallet.hidden ? "Скрыт пользователем" : null,
-                            ].filter(Boolean).join(" · ")}
-                            right={wallet.available === null
-                              ? (wallet.address && wallet.provider === "aura" ? "Общий остаток выше" : "Нет данных")
-                              : `${wallet.available} ${wallet.asset}`}
-                          />
-                          </div>
-                          {wallet.reserved && Number(wallet.reserved) > 0 && (
-                            <p className="mt-1 text-xs opacity-60">Резерв {wallet.reserved} {wallet.asset}</p>
-                          )}
-                          {wallet.address ? (
-                            <button type="button" title="Скопировать адрес" onClick={() => copy(wallet.address)}
-                              className="wpay-admin-wallet-address mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
-                          ) : <p className="mt-2 text-xs opacity-60">Адрес ещё не выдан</p>}
-                          {wallet.provider === "goswap" && wallet.address && (
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                              <button type="button" disabled>Вывести</button>
-                              <span className="text-xs opacity-60">Вывод из карточки пользователя отключён</span>
-                            </div>
-                          )}
-                          {wallet.provider === "aura" && wallet.managed && wallet.environment && (
-                            <>
+                            ].filter(Boolean).join(" · ")}</p>
+                            {wallet.reserved && Number(wallet.reserved) > 0 && (
+                              <p className="mt-1 text-xs opacity-60">Резерв {wallet.reserved} {wallet.asset}</p>
+                            )}
+                            {wallet.address ? (
+                              <button type="button" title="Скопировать адрес" onClick={() => copy(wallet.address)}
+                                className="wpay-admin-wallet-address mt-2 max-w-full break-all text-left font-mono text-xs opacity-70">{wallet.address}</button>
+                            ) : <p className="mt-2 text-xs opacity-60">Адрес ещё не выдан</p>}
+                            {wallet.provider === "goswap" && wallet.address && (
                               <div className="mt-3 flex flex-wrap items-center gap-2">
-                                {!wallet.withdrawal_frozen && <button type="button"
-                                  className="rounded-lg bg-blue-500/10 px-3 py-2 text-xs"
-                                  onClick={() => { setWalletAction(null); setAuraWithdrawEnv(wallet.environment); }}>
-                                  Вывести
-                                </button>}
-                                <button type="button" className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs"
-                                  disabled={Boolean(actionWorking)} onClick={() => void toggleAuraWithdrawal(wallet)}>
-                                  {wallet.withdrawal_frozen ? "Разморозить вывод" : "Заморозить вывод"}
-                                </button>
+                                <button type="button" disabled>Вывести</button>
+                                <span className="text-xs opacity-60">Вывод из карточки пользователя отключён</span>
                               </div>
-                              {auraWithdrawEnv === wallet.environment && (
-                                <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-2">
-                                  <button type="button" className="ml-auto block px-3 py-2 text-sm"
-                                    onClick={() => setAuraWithdrawEnv(null)}>Закрыть действие</button>
-                                  <AuraWithdrawalForm adminScope={{ userId, environment: wallet.environment }} />
-                                </div>
-                              )}
-                            </>
-                          )}
-                          {wallet.wallet_id && (
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                              {wallet.state && <span className="rounded-lg bg-amber-500/15 px-2 py-1 text-xs">
-                                {wallet.state === "archived" ? "В архиве" : "Заморожен"}
-                              </span>}
-                              {wallet.state ? (
-                                <button type="button" className="rounded-lg bg-black/5 px-3 py-2 text-xs dark:bg-white/10"
-                                  disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "restore")}>Восстановить</button>
-                              ) : (
-                                <>
-                                  {wallet.environment === "mainnet" && wallet.asset !== "USDT" && (
-                                    <button type="button" className="rounded-lg bg-blue-500/10 px-3 py-2 text-xs"
-                                      onClick={() => setWalletAction({ walletId: wallet.wallet_id!, asset: wallet.asset, action: "withdraw" })}>Вывести</button>
-                                  )}
-                                  <button type="button" className="rounded-lg bg-black/5 px-3 py-2 text-xs dark:bg-white/10"
-                                    onClick={() => setWalletAction({ walletId: wallet.wallet_id!, asset: wallet.asset, action: "export" })}>Экспорт ключа</button>
+                            )}
+                            {wallet.provider === "aura" && wallet.managed && wallet.environment && (
+                              <>
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                  {!wallet.withdrawal_frozen && <button type="button"
+                                    className="rounded-lg bg-blue-500/10 px-3 py-2 text-xs"
+                                    onClick={() => { setWalletAction(null); setAuraWithdrawEnv(wallet.environment); }}>
+                                    Вывести
+                                  </button>}
                                   <button type="button" className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs"
-                                    disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "freeze")}>Заморозить</button>
-                                  <button type="button" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs"
-                                    disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "archive")}>В архив</button>
-                                </>
-                              )}
-                            </div>
-                          )}
-                          {wallet.address && wallet.wallet_id && !wallet.state && walletAction?.walletId === wallet.wallet_id && walletAction.asset === wallet.asset && (
-                            <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-2" key={walletAction.action}>
-                              <button type="button" onClick={() => setWalletAction(null)}
-                                className="ml-auto block rounded-lg px-3 py-2 text-sm">Закрыть действие</button>
-                              {walletAction.action === "export" ? (
-                                <WalletKeyExport walletId={wallet.wallet_id} address={wallet.address}
-                                  network={wallet.network} adminUserId={userId} />
-                              ) : (
-                                <WalletCustodyWithdrawal asset={wallet.asset} network={wallet.network}
-                                  adminScope={{ userId, walletId: wallet.wallet_id }} />
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                                    disabled={Boolean(actionWorking)} onClick={() => void toggleAuraWithdrawal(wallet)}>
+                                    {wallet.withdrawal_frozen ? "Разморозить вывод" : "Заморозить вывод"}
+                                  </button>
+                                </div>
+                                {auraWithdrawEnv === wallet.environment && (
+                                  <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-2">
+                                    <button type="button" className="ml-auto block px-3 py-2 text-sm"
+                                      onClick={() => setAuraWithdrawEnv(null)}>Закрыть действие</button>
+                                    <AuraWithdrawalForm adminScope={{ userId, environment: wallet.environment }} />
+                                  </div>
+                                )}
+                              </>
+                            )}
+                            {wallet.wallet_id && (
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                {wallet.state && <span className="rounded-lg bg-amber-500/15 px-2 py-1 text-xs">
+                                  {wallet.state === "archived" ? "В архиве" : "Заморожен"}
+                                </span>}
+                                {wallet.state ? (
+                                  <button type="button" className="rounded-lg bg-black/5 px-3 py-2 text-xs dark:bg-white/10"
+                                    disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "restore")}>Восстановить</button>
+                                ) : (
+                                  <>
+                                    {wallet.environment === "mainnet" && wallet.asset !== "USDT" && (
+                                      <button type="button" className="rounded-lg bg-blue-500/10 px-3 py-2 text-xs"
+                                        onClick={() => setWalletAction({ walletId: wallet.wallet_id!, asset: wallet.asset, action: "withdraw" })}>Вывести</button>
+                                    )}
+                                    <button type="button" className="rounded-lg bg-black/5 px-3 py-2 text-xs dark:bg-white/10"
+                                      onClick={() => setWalletAction({ walletId: wallet.wallet_id!, asset: wallet.asset, action: "export" })}>Экспорт ключа</button>
+                                    <button type="button" className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs"
+                                      disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "freeze")}>Заморозить</button>
+                                    <button type="button" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs"
+                                      disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "archive")}>В архив</button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                            {wallet.address && wallet.wallet_id && !wallet.state && walletAction?.walletId === wallet.wallet_id && walletAction.asset === wallet.asset && (
+                              <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-2" key={walletAction.action}>
+                                <button type="button" onClick={() => setWalletAction(null)}
+                                  className="ml-auto block rounded-lg px-3 py-2 text-sm">Закрыть действие</button>
+                                {walletAction.action === "export" ? (
+                                  <WalletKeyExport walletId={wallet.wallet_id} address={wallet.address}
+                                    network={wallet.network} adminUserId={userId} />
+                                ) : (
+                                  <WalletCustodyWithdrawal asset={wallet.asset} network={wallet.network}
+                                    adminScope={{ userId, walletId: wallet.wallet_id }} />
+                                )}
+                              </div>
+                            )}
+                          </div>}
+                        </div>;
+                      })}
                     </div>
                   ) : <p className="wpay-admin-user-empty">Кошельков пока нет.</p>}
                 </section>

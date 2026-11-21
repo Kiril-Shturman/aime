@@ -2101,7 +2101,7 @@
 
 .wpay-admin-user-search .wpay-admin-user-action,
 .wpay-admin-user-drawer .wpay-admin-user-action,
-.wpay-admin-user-drawer .wpay-admin-user-section button:not(.wpay-admin-row):not(.wpay-admin-wallet-address):not(.admin-record-copy):not(.admin-ops-open):not(.admin-ops-reset):not(.admin-record-tab):not(.admin-record-link):not(.admin-ops-close) {
+.wpay-admin-user-drawer .wpay-admin-user-section button:not(.wpay-admin-row):not(.wpay-admin-wallet-address):not(.admin-record-copy):not(.admin-ops-open):not(.admin-ops-reset):not(.admin-record-tab):not(.admin-record-link):not(.admin-ops-close):not(.admin-wallet-toggle) {
   border-radius: 10px;
   background: #2563eb;
   color: white;
@@ -2115,16 +2115,20 @@
   opacity: .5;
   cursor: default;
 }
-.wpay-admin-wallet-heading {
-  display: grid;
-  grid-template-columns: 44px minmax(0, 1fr);
-  align-items: center;
-  gap: 16px;
+.admin-wallet-list { margin-top: 8px; }
+.admin-wallet-list > div + div { border-top: 1px solid var(--admin-border); }
+.admin-wallet-toggle {
+  display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto;
+  align-items: center; gap: 8px; width: 100%; min-height: 58px;
+  padding: 6px 2px; text-align: left; background: transparent; cursor: pointer;
 }
-.wpay-admin-wallet-heading > .wpay-address-avatar .wpay-currency-icon > .wpay-network-icon {
-  background: transparent;
-  color: white;
-}
+.admin-wallet-toggle strong, .admin-wallet-amount { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.admin-wallet-amount { max-width: 125px; font-variant-numeric: tabular-nums; }
+.admin-wallet-toggle > svg:last-child { color: var(--admin-muted); transition: transform 150ms ease; }
+.admin-wallet-toggle[aria-expanded="true"] > svg:last-child { transform: rotate(180deg); }
+.admin-wallet-toggle .wpay-currency-icon { width: 34px; height: 34px; }
+.admin-wallet-toggle > .wpay-address-avatar .wpay-currency-icon > .wpay-network-icon { background: transparent; color: white; }
+.admin-wallet-actions { padding: 3px 2px 14px 44px; overflow-wrap: anywhere; }
 .wpay-admin-user-card-item {
   border: 1px solid var(--admin-border);
   border-radius: 14px;

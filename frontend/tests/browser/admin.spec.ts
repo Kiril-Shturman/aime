@@ -58,6 +58,8 @@ async function setup(page: Page, theme = "dark") {
         contacts: { email: null, phone: null },
         aura: { customer: null, kyc: null, cards: [] },
         balances: [], addresses: [], notifications: [], audit: [],
+        wallets: [{ provider: "goswap", network: "BSC", asset: "USDT", address: "0xwallet-example",
+          available: "10", balance_scope: "network" }],
         referrals: { invited: [], referred_by: null },
         events: [{ event_id: "user-topup-101", user_id: "user-1", asset: "USDT", amount: "-18.225002",
           revenue: "3", type: "card_topup", created_at: "2026-11-21T00:00:00Z", detail: { status: "completed" } }],
@@ -121,6 +123,13 @@ for (const theme of ["dark", "light"]) {
     ).toBeVisible();
     await page.locator(".wpay-admin-desktop-only").getByText("Александр", { exact: true }).click();
     const profile = page.getByRole("dialog", { name: "Карточка пользователя Александр" });
+    await profile.getByRole("button", { name: "Кошельки", exact: true }).click();
+    const wallet = profile.getByRole("button", { name: /GoSwap.*10 USDT/ });
+    await expect(wallet).toHaveAttribute("aria-expanded", "false");
+    await wallet.click();
+    await expect(profile.getByRole("button", { name: "Вывести", exact: true })).toBeDisabled();
+    await wallet.click();
+    await expect(profile.getByRole("button", { name: "Вывести", exact: true })).toHaveCount(0);
     await profile.getByRole("button", { name: "История", exact: true }).click();
     const icon = profile.locator(".admin-ops-operation .wpay-currency-icon");
     await expect(icon).toBeVisible();
