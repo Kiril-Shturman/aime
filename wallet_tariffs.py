@@ -27,14 +27,17 @@ CARD_PLANS = {
 }
 GOSWAP_SINGAPORE_TERMS = {
     "kind": "virtual", "region": "Сингапур",
-    "provider_issue_fee": "7.00", "provider_issue_currency": "USD",
+    "provider_issue_fee": "7.00", "provider_issue_currency": "USDT",
     "provider_recharge_fee": "1.3", "conditions": ["Apple Pay", "Google Pay"],
 }
 GOSWAP_STOREFRONT_PLANS = {"card_subscriptions": "goswap_card_sg_1", "card_travel": "goswap_card_sg_2"}
 GOSWAP_CARD_PLANS = {
     "goswap_card_sg_1": {**GOSWAP_SINGAPORE_TERMS, "label": CARD_PLANS["card_subscriptions"]["label"]},
     "goswap_card_sg_2": {**GOSWAP_SINGAPORE_TERMS, "label": CARD_PLANS["card_travel"]["label"]},
-    "goswap_card_us": {"label": "США"},
+    "goswap_card_us": {
+        "label": "США", "kind": "virtual", "region": "США",
+        "provider_issue_fee": "10.50", "provider_issue_currency": "USDT", "provider_recharge_fee": "1.5",
+    },
 }
 PRODUCTS = {
     **{key: (value["label"], True) for key, value in CARD_PLANS.items()},

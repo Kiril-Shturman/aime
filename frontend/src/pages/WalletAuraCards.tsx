@@ -81,6 +81,10 @@ type StorefrontPlan = {
   region?: string;
   provider_issue_fee?: string | null;
   provider_recharge_fee?: string;
+  service_issue_fee?: string;
+  service_recharge_pct?: string;
+  service_minimum_fee?: string;
+  total_recharge_pct?: string;
 };
 type CardQuote = {
   spendable?: string;
@@ -1192,18 +1196,21 @@ export default function WalletAuraCards({
             <WalletSubscriptionFeatures
               skin={storefrontPlan.skin}
               goswap={{
-                issue: storefrontPlan.provider_issue_fee,
-                topup: storefrontPlan.provider_recharge_fee,
+                issue: storefrontPlan.issue_fee,
+                topup: storefrontPlan.total_recharge_pct,
                 conditions: storefrontPlan.conditions,
                 firstTopup: "$10",
                 issuerDetails: storefrontPlan.region === "Сингапур",
               }}
             />
             <h3 className="mt-5 text-base font-semibold">Условия карты</h3>
-            <div className="wpay-aura-info mt-2">
+            <div className="wpay-aura-info wpay-aura-card-terms mt-2">
               {infoRow("Валюта карты", "USD")}
-              {storefrontPlan.provider_issue_fee && infoRow("Выпуск · комиссия GoSwap", `${storefrontPlan.provider_issue_fee} USDT`)}
-              {storefrontPlan.provider_recharge_fee && infoRow("Пополнение · комиссия GoSwap", `${storefrontPlan.provider_recharge_fee}% сверху`)}
+              {storefrontPlan.issue_fee && infoRow("Выпуск карты", `${storefrontPlan.issue_fee} USDT`)}
+              {storefrontPlan.provider_issue_fee && infoRow("Из них GoSwap / wPay", `${storefrontPlan.provider_issue_fee} / ${storefrontPlan.service_issue_fee} USDT`)}
+              {storefrontPlan.total_recharge_pct && infoRow("Пополнение карты", `${storefrontPlan.total_recharge_pct}% сверху`)}
+              {storefrontPlan.provider_recharge_fee && infoRow("Из них GoSwap / wPay", `${storefrontPlan.provider_recharge_fee}% / ${storefrontPlan.service_recharge_pct}%`)}
+              {Number(storefrontPlan.service_minimum_fee) > 0 && infoRow("Минимальная комиссия wPay", `${storefrontPlan.service_minimum_fee} USDT`)}
               {infoRow("Первое пополнение", "От $10 · активирует карту")}
               {storefrontPlan.conditions?.length ? infoRow("Оплата телефоном", storefrontPlan.conditions.join(" · ")) : null}
             </div>

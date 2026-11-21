@@ -7,7 +7,7 @@ from collections import deque
 from decimal import Decimal, localcontext
 from datetime import datetime, timezone
 from aiohttp import web
-from wallet_tariffs import card_issue_enabled, CARD_PLANS, GOSWAP_CARD_PLANS, calculate, resolve_card_plan, storefront_positions, prepare as prepare_tariffs
+from wallet_tariffs import card_issue_enabled, CARD_PLANS, GOSWAP_CARD_PLANS, active as active_tariff, calculate, resolve_card_plan, storefront_positions, prepare as prepare_tariffs
 from wallet_aura import _decimal, _store_card_event, _store_card_operation, _list_data
 
 
@@ -77,10 +77,18 @@ class CardUI:
                     continue
                 storefront.append({**plan, 'provider': 'Aura', 'position': position})
             elif product in GOSWAP_CARD_PLANS:
+                terms = GOSWAP_CARD_PLANS[product]
+                tariff = active_tariff(self.ledger, product)
+                issue = Decimal(terms['provider_issue_fee']) + Decimal(tariff['fixed_fee'])
+                recharge = Decimal(terms['provider_recharge_fee']) + Decimal(tariff['percent_fee'])
                 storefront.append({
-                    **GOSWAP_CARD_PLANS[product], 'kind': 'virtual', 'skin': goswap_skins[product],
+                    **terms, 'skin': goswap_skins[product],
                     'plan_id': product, 'provider': 'GoSwap', 'position': position,
-                    'available': False, 'issue_fee': None,
+                    'available': False, 'issue_fee': format(issue, 'f'),
+                    'service_issue_fee': tariff['fixed_fee'],
+                    'service_recharge_pct': tariff['percent_fee'],
+                    'service_minimum_fee': tariff['minimum_fee'],
+                    'total_recharge_pct': format(recharge.normalize(), 'f'),
                 })
         return {**raw, 'plans': plans, 'storefront': storefront}
 

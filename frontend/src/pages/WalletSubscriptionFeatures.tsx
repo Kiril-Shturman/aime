@@ -105,8 +105,8 @@ export default function WalletSubscriptionFeatures({
   ];
   const visibleTiles = goswap ? [
     { ...tiles[4], title: "Виртуальная карта", description: "Долларовая карта GoSwap для онлайн-покупок." },
-    ...(goswap.issue ? [{ ...tiles[2], title: "Выпуск карты", description: `${goswap.issue} USDT по тарифу GoSwap.` }] : []),
-    ...(goswap.topup ? [{ ...tiles[0], title: "Пополнение карты", description: `Комиссия GoSwap — ${goswap.topup}% сверху.` }] : []),
+    ...(goswap.issue ? [{ ...tiles[2], title: "Выпуск карты", description: `${goswap.issue} USDT с наценкой wPay.` }] : []),
+    ...(goswap.topup ? [{ ...tiles[0], title: "Пополнение карты", description: `GoSwap и wPay — ${goswap.topup}% сверху.` }] : []),
     ...(goswap.conditions?.length ? [{ ...tiles[5], title: goswap.conditions.join(" и "), description: "Поддержка оплаты телефоном." }] : []),
     ...(goswap.firstTopup ? [{ ...tiles[1], title: "Активация карты", description: `Первое пополнение от ${goswap.firstTopup}.` }] : []),
     ...(goswap.issuerDetails ? [{ key: "travel", title: "Реквизиты карты", description: "Открываются на защищённой странице эмитента.", image: travelArtwork }] : []),
