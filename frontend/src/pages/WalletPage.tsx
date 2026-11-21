@@ -966,12 +966,10 @@ function AssetPushView({
                       onClick: () => {
                         haptic("light");
                         if (addressEntry.custody) {
-                          if (action.label === "Пополнить")
-                            setAddressEntry({
-                              ...addressEntry,
-                              show_qr: !addressEntry.show_qr,
-                            });
-                          else if (action.label === "Обменять") {
+                          if (action.label === "Пополнить") {
+                            openFlow("deposit", displayAsset.code, addressEntry.network, addressEntry);
+                            setAddressEntry(null);
+                          } else if (action.label === "Обменять") {
                             setAddressEntry(null);
                             openFlow(
                               "exchange",
