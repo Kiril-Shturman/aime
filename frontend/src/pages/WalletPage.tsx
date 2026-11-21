@@ -3134,6 +3134,7 @@ function ProfileSection({
   initials: string;
   showNotice: NoticeHandler;
 }) {
+  const { theme, set: setTheme } = useTheme();
   useEffect(() => {
     preloadVerificationArtwork();
   }, []);
@@ -3149,7 +3150,7 @@ function ProfileSection({
   return (
     <>
       <main
-        className={`wpay-f7-profile ios mx-auto w-full max-w-[560px] pb-6 transition-[transform,opacity] duration-300 ease-out ${profilePage && !["notifications", "security", "currency", "support"].includes(profilePage) ? "-translate-x-[22%] opacity-60" : "translate-x-0 opacity-100"}`}
+        className={`wpay-f7-profile ios mx-auto w-full max-w-[560px] pb-6 transition-[transform,opacity] duration-300 ease-out ${profilePage && !["notifications", "security", "currency", "support", "chat", "faq"].includes(profilePage) ? "-translate-x-[22%] opacity-60" : "translate-x-0 opacity-100"}`}
       >
         <section className="px-safe-4 pb-6 pt-7 text-center">
           <div className="wpay-currency-icon mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-gradient-to-b from-blue-300 to-blue-600 text-[34px] font-semibold text-white shadow-sm dark:from-blue-400 dark:to-blue-700">
@@ -3206,6 +3207,18 @@ function ProfileSection({
           Настройки и помощь
         </h2>
         <F7List strong inset dividers className="profile-settings-list">
+          <ProfileListItem link title="Чат с поддержкой" onClick={() => setProfilePage("chat")} />
+          <ProfileListItem link title="Частые вопросы" onClick={() => setProfilePage("faq")} />
+          <F7ListItem title="Тёмная тема">
+            <span slot="after">
+              <F7Toggle
+                init={false}
+                checked={theme === "dark"}
+                aria-label="Тёмная тема"
+                onChange={(event) => setTheme(event.target.checked ? "dark" : "light")}
+              />
+            </span>
+          </F7ListItem>
           <ProfileListItem
             link
             title="Основная валюта"
@@ -3217,11 +3230,6 @@ function ProfileSection({
             title="Банковский провайдер"
             subtitle="Не подключён"
             onClick={() => setProfilePage("provider")}
-          />
-          <ProfileListItem
-            link
-            title="Помощь и поддержка"
-            onClick={() => setProfilePage("support")}
           />
         </F7List>
         <F7List strong inset dividers className="profile-legal-list">
@@ -3281,6 +3289,8 @@ const profilePageTitles = {
   currency: "Основная валюта",
   provider: "Банковский провайдер",
   support: "Поддержка",
+  chat: "Чат с поддержкой",
+  faq: "Частые вопросы",
   referral: "Партнерка",
   terms: "Соглашение",
   privacy: "Конфиденциальность",
@@ -3437,7 +3447,7 @@ function ProfileSettingsPushView({
       <ProfileListItem
         link
         title="Частые вопросы"
-        onClick={() => showNotice("Раздел помощи: скоро будет доступен")}
+        onClick={() => setDisplayPage("faq")}
       />
       <ProfileListItem
         link
@@ -3446,7 +3456,7 @@ function ProfileSettingsPushView({
       />
     </F7List>
   );
-  const popupPages = ["notifications", "security", "currency", "support"];
+  const popupPages = ["notifications", "security", "currency", "support", "faq"];
   const backFromProfilePage = () => {
     if (displayPage === "verification" && aura.sessionOpen) aura.closeSession();
     else if (displayPage === "verification" && verificationContacts) setVerificationContacts(false);
@@ -3458,7 +3468,7 @@ function ProfileSettingsPushView({
   return (
     <>
       <PushViewShell
-        open={page !== null && !popupPages.includes(page)}
+        open={page !== null && page !== "chat" && !popupPages.includes(page)}
         title={profilePageTitles[displayPage]}
         subtitle="Настройки профиля"
         scrollContent={displayPage !== "verification"}
@@ -3712,12 +3722,25 @@ function ProfileSettingsPushView({
                 ? currencyContent
                 : displayPage === "support"
                   ? supportContent
-                  : null}
+                  : displayPage === "faq" && (
+                    <div className="mx-4 grid gap-2">
+                      {[
+                        ["Как пополнить кошелёк?", "В кошельке нажмите «Пополнить», выберите валюту и сеть, затем скопируйте адрес."],
+                        ["Где посмотреть статус операции?", "Откройте историю платежей и выберите нужную операцию."],
+                        ["Где пройти верификацию?", "Откройте профиль и выберите «Верификация»."],
+                      ].map(([question, answer]) => (
+                        <details key={question} className="rounded-xl bg-black/5 p-4 dark:bg-white/10">
+                          <summary className="cursor-pointer font-medium">{question}</summary>
+                          <p className="mt-2 text-sm">{answer}</p>
+                        </details>
+                      ))}
+                    </div>
+                  )}
         </main>
       </NotificationSheet>
       <SupportChatPushView
-        open={chatOpen && page !== null}
-        onClose={() => setChatOpen(false)}
+        open={page === "chat" || (chatOpen && page !== null)}
+        onClose={page === "chat" ? onClose : () => setChatOpen(false)}
       />
     </>
   );
