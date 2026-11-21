@@ -1241,3 +1241,9 @@
 .wpay-catalog-app-store svg { position: relative; width: 17px; height: 17px; }
 
 .wpay-catalog-app-store svg { width: 14px; height: 14px; flex: 0 0 14px; }
+
+.wpay-card-catalog-item, .dark .wpay-card-catalog-item { grid-template-columns: minmax(0, 1.06fr) minmax(0, 1fr); }
+.wpay-card-catalog-services > span { height: 26px; min-height: 26px; padding-inline: 6px; font-size: 10px; }
+.wpay-card-catalog-services > span:not(.wpay-catalog-app-store) svg { width: 13px; height: 13px; }
+.wpay-card-catalog-services > .wpay-catalog-app-store { width: 26px; min-height: 26px; padding: 0; }
+.wpay-catalog-app-store svg { width: 12px; height: 12px; flex-basis: 12px; }
