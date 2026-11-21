@@ -1621,24 +1621,25 @@ function CryptoFlowPushView({
       if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, text: error instanceof Error ? error.message : "Не удалось рассчитать обмен" });
     }
   }
-  const canQuoteDex = exchangeMethod === "dex" && fromAsset.code === "BNB" &&
-    sourceNetwork === "BSC" && toAsset.code === "USDT" && destinationNetwork === "BSC" &&
+  const dexLabel = ({ BNB: "PancakeSwap", ETH: "Uniswap", SOL: "Jupiter", GRAM: "STON.fi" } as Record<string, string>)[fromAsset.code];
+  const canQuoteDex = exchangeMethod === "dex" && Boolean(dexLabel) &&
+    Boolean(sourceNetwork) && sourceNetwork === destinationNetwork && toAsset.code === "USDT" &&
     Number(amount.replace(",", ".")) > 0;
   async function quoteDex() {
     quoteRequest.current?.abort();
     const controller = new AbortController();
     quoteRequest.current = controller;
-    setProviderQuote({ key: quoteKey, text: "Запрашиваем котировку PancakeSwap…" });
+    setProviderQuote({ key: quoteKey, text: `Запрашиваем котировку ${dexLabel}…` });
     try {
       const quote = await walletRequest<{ to_amount: string }>("exchange-dex-quote", {
         from_asset: fromAsset.code, from_network: sourceNetwork,
         to_asset: toAsset.code, to_network: destinationNetwork, amount: amount.replace(",", "."),
       }, controller.signal);
       if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, payout: quote.to_amount,
-        text: `PancakeSwap v2 · ${quote.to_amount} USDT. Комиссия сети не включена.` });
+        text: `${dexLabel} · ${quote.to_amount} USDT. Комиссия сети не включена.` });
     } catch (error) {
       if (!controller.signal.aborted) setProviderQuote({ key: quoteKey,
-        text: error instanceof Error ? error.message : "Не удалось получить котировку PancakeSwap" });
+        text: error instanceof Error ? error.message : "Не удалось получить котировку DEX" });
     }
   }
   const currentQuote = providerQuote?.key === quoteKey ? providerQuote : null;
@@ -1868,7 +1869,7 @@ function CryptoFlowPushView({
           )}
           {canQuoteDex && (
             <Button data-wpay-primary="" rounded large className="!w-full" onClick={() => void quoteDex()}>
-              Рассчитать в PancakeSwap
+              Рассчитать · {dexLabel}
             </Button>
           )}
           {(canQuote || canQuoteDex) && currentQuote && (

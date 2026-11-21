@@ -88,7 +88,7 @@ class ChainReader:
         if self.session:
             await self.session.close()
 
-    async def request(self, url, body=None):
+    async def request(self, url, body=None, *, headers=None):
         if self.session is None:
             self.session = ClientSession(
                 timeout=ClientTimeout(total=12),
@@ -96,7 +96,7 @@ class ChainReader:
             )
         async with self.semaphore:
             async with self.session.request(
-                "GET" if body is None else "POST", url, json=body, allow_redirects=False
+                "GET" if body is None else "POST", url, json=body, headers=headers, allow_redirects=False
             ) as r:
                 if r.status != 200:
                     raise ValueError("Chain endpoint unavailable")

@@ -36,3 +36,23 @@ class DexTests(unittest.IsolatedAsyncioTestCase):
         ])
         with self.assertRaises(ValueError):
             swap_calldata(recipient, 0, 1234)
+
+    async def test_quotes_eth_sol_and_gram_for_same_network_usdt(self):
+        from wallet_dex import SOL_USDT, TON_NATIVE, TON_USDT, UNISWAP_ROUTER, WSOL, quote_native, supports_pair
+
+        payload = "0x" + "".join(f"{value:064x}" for value in (32, 2, 10**17, 200_500_000))
+        chain = SimpleNamespace(rpc=AsyncMock(side_effect=["0x1", payload]))
+        self.assertEqual(await quote_native(chain, "ETH", "0.1"), {"provider": "uniswap_v2", "to_amount": "200.5"})
+        self.assertEqual(chain.rpc.await_args.args[2][0]["to"], UNISWAP_ROUTER)
+        chain.request = AsyncMock(side_effect=[
+            {"inputMint": WSOL, "outputMint": SOL_USDT, "inAmount": "1000000000", "outAmount": "105100000"},
+            {"offer_address": TON_NATIVE, "ask_address": TON_USDT, "offer_units": "1000000000", "ask_units": "1500000"},
+            {"offer_address": TON_NATIVE, "ask_address": "wrong token", "offer_units": "1000000000", "ask_units": "1500000"},
+        ])
+        self.assertEqual(await quote_native(chain, "SOL", "1"), {"provider": "jupiter", "to_amount": "105.1"})
+        self.assertEqual(await quote_native(chain, "GRAM", "1"), {"provider": "ston_fi", "to_amount": "1.5"})
+        self.assertIsNone(await quote_native(chain, "GRAM", "1"))
+        for asset, net in (("BNB", "BSC"), ("ETH", "ETH"), ("SOL", "SOL"), ("GRAM", "TON")):
+            pair = {"from_asset": asset, "from_network": net, "to_asset": "USDT", "to_network": net}
+            self.assertTrue(supports_pair(pair))
+            self.assertFalse(supports_pair({**pair, "to_network": "TRON"}))

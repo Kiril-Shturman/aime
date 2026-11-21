@@ -8,7 +8,7 @@ from wallet_exchange_routes import (
     prepare as prepare_exchange_rules, rules as exchange_rules,
     save_rule as save_exchange_rule, resolve as resolve_exchange_route, internal_exchange,
 )
-from wallet_dex import PAIR as DEX_PAIR, quote_bnb
+from wallet_dex import PAIR as DEX_PAIR, quote_native, supports_pair
 import asyncio
 from wallet_fixedfloat_orders import Orders
 from wallet_card_ui import CardUI
@@ -1978,7 +1978,7 @@ def install_wallet(app, root, owner_check):
                         method = resolve_exchange_route(ledger, pair, asset_enabled, deposit_provider)['method']
                         can_send = bool(nets) and exchange.btc_can_send if source == 'BTC' else nets.get(source_network, {}).get('can_send')
                         if (method == 'internal' or
-                            (method == 'dex' and pair == DEX_PAIR) or
+                            (method == 'dex' and supports_pair(pair)) or
                             (method == 'fixedfloat' and target == 'USDT' and can_send and nets.get(network, {}).get('can_receive'))):
                             available.append(f'{target}:{network}')
                 return web.json_response({'available': available}, headers={'Cache-Control': 'no-store'})
@@ -1997,14 +1997,14 @@ def install_wallet(app, root, owner_check):
                 body = await request.json()
                 if not isinstance(body, dict) or set(body) != set(DEX_PAIR) | {'amount'}:
                     raise ValueError('Укажите пару и сумму DEX')
-                if any(body[key] != value for key, value in DEX_PAIR.items()) or resolve_exchange_route(
+                if not all(isinstance(value, str) for value in body.values()) or not supports_pair(body) or resolve_exchange_route(
                     ledger, body, asset_enabled, deposit_provider,
                 )['method'] != 'dex':
                     raise ApiError('EXCHANGE_UNAVAILABLE', 'Котировка DEX для этой пары недоступна', 409)
                 exchange.throttle(uid)
-                quote = await quote_bnb(app['wpay_chain'], body['amount'])
+                quote = await quote_native(app['wpay_chain'], body['from_asset'], body['amount'])
                 if quote is None:
-                    raise ApiError('DEX_UNAVAILABLE', 'PancakeSwap пока не вернул котировку', 503)
+                    raise ApiError('DEX_UNAVAILABLE', 'DEX пока не вернул котировку', 503)
                 return web.json_response(quote, headers={'Cache-Control': 'no-store'})
             if action == 'exchange-route' and request.method == 'GET':
                 route = resolve_exchange_route(ledger, request.query, asset_enabled, deposit_provider)
