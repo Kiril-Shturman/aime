@@ -909,7 +909,7 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   await expect(sheet.locator(".wpay-goswap-order-summary").getByText("10 USDT", { exact: true })).toBeVisible();
   await expect(sheet.getByText("Итого:", { exact: true })).toBeVisible();
   await expect(sheet.getByRole("radio", { name: "С кошелька" })).toBeChecked();
-  const activeCheck = sheet.locator("input:checked + .wpay-goswap-payment-check");
+  const activeCheck = sheet.locator("input:checked ~ .wpay-goswap-payment-check");
   await expect(activeCheck).toBeVisible();
   await sheet.getByRole("radio", { name: "Через СБП" }).check();
   await expect(sheet.getByRole("button", { name: "Пополнить через СБП" })).toBeVisible();

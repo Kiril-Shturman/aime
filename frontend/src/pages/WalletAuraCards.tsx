@@ -1,11 +1,12 @@
 import { TransactionDetails, TransactionListRow, type TransactionView } from "./WalletTransaction";
 import WalletSubscriptionFeatures from "./WalletSubscriptionFeatures";
+import desktopWalletIcon from "../assets/desktop-wallet-icon.svg";
 import WalletCardFace, { type CardSkin } from "./WalletCardFace";
 import PlusCircleFill from "framework7-icons/react/esm/PlusCircleFill.js";
 import EyeFill from "framework7-icons/react/esm/EyeFill.js";
 import Snow from "framework7-icons/react/esm/Snow.js";
 import Ellipsis from "framework7-icons/react/esm/Ellipsis.js";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { Button, Card, List, ListItem } from "konsta/react";
 import {
   f7,
@@ -33,7 +34,6 @@ import {
   EyeOff,
   ArrowUpRight,
   Trash2,
-  Wallet,
 } from "lucide-react";
 import { haptic } from "../lib/telegram";
 import "./WalletAuraCards.css";
@@ -45,6 +45,37 @@ import {
   WalletApiError,
 } from "../lib/wallet-api";
 import { useLiveWallet } from "./WalletLive";
+
+function tiltCheckoutCard(event: PointerEvent<HTMLDivElement>) {
+  const card = event.currentTarget;
+  if (event.pointerType === "touch" && event.buttons === 0) return;
+  const rect = card.getBoundingClientRect();
+  const x = Math.max(-0.5, Math.min(0.5, (event.clientX - rect.left) / rect.width - 0.5));
+  const y = Math.max(-0.5, Math.min(0.5, (event.clientY - rect.top) / rect.height - 0.5));
+  card.style.setProperty("--card-tilt-x", `${-y * 16}deg`);
+  card.style.setProperty("--card-tilt-y", `${x * 20}deg`);
+}
+
+function resetCheckoutCard(event: PointerEvent<HTMLDivElement>) {
+  event.currentTarget.style.removeProperty("--card-tilt-x");
+  event.currentTarget.style.removeProperty("--card-tilt-y");
+}
+
+function ripplePaymentTile(event: MouseEvent<HTMLInputElement>) {
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const tile = event.currentTarget.parentElement;
+  const ripple = tile?.querySelector(".wpay-goswap-payment-ripple");
+  if (!tile || !ripple) return;
+  const { left, top, width, height } = tile.getBoundingClientRect();
+  const size = Math.hypot(width, height) * 2;
+  const x = event.detail ? event.clientX - left : width / 2;
+  const y = event.detail ? event.clientY - top : height / 2;
+  ripple.getAnimations().forEach(animation => animation.cancel());
+  ripple.animate([
+    { transform: `translate(${x}px, ${y}px) scale(0)`, opacity: 0.24 },
+    { transform: `translate(${x}px, ${y}px) scale(${size})`, opacity: 0 },
+  ], { duration: 420, easing: "ease-out" });
+}
 
 const offerNumber = new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 8 });
 const DEMO_CARD_ID = "wpay-ui-demo-card";
@@ -530,6 +561,15 @@ export default function WalletAuraCards({
       "Заявка на карту отправлена",
     );
   const [goSwapOrder, setGoSwapOrder] = useState<{ plan: StorefrontPlan; quote: GoSwapIssue } | null>(null);
+  const [goSwapSheetOpened, setGoSwapSheetOpened] = useState(false);
+  useEffect(() => {
+    if (!goSwapOrder) {
+      setGoSwapSheetOpened(false);
+      return;
+    }
+    const frame = requestAnimationFrame(() => setGoSwapSheetOpened(true));
+    return () => cancelAnimationFrame(frame);
+  }, [goSwapOrder]);
   const [goSwapPayment, setGoSwapPayment] = useState<"wallet" | "sbp">("wallet");
   const [goSwapSheetExpanded, setGoSwapSheetExpanded] = useState(false);
   const goSwapHandleStart = useRef<number | null>(null);
@@ -1487,14 +1527,14 @@ export default function WalletAuraCards({
         </section>}
       </aside>
       <Sheet
-        opened={goSwapOrder !== null}
+        opened={goSwapSheetOpened && goSwapOrder !== null}
         className="wpay-goswap-order-sheet"
         swipeToStep
         swipeHandler=".wpay-goswap-sheet-handle"
         backdrop
         closeByBackdropClick
         closeOnEscape
-        onSheetOpened={sheet => {
+        onSheetOpen={sheet => {
           sheet?.setSwipeStep();
           sheet?.stepClose();
         }}
@@ -1514,20 +1554,25 @@ export default function WalletAuraCards({
                   goSwapHandleStart.current = null;
                   if (start !== null && (event.changedTouches[0]?.clientY ?? start) - start > 30) expandGoSwapSheet();
                 }}><span /></button>
-              <div className="wpay-goswap-order-art"><LiveCardArtwork kind="virtual" skin={goSwapOrder.plan.skin} /></div>
+              <div className="wpay-goswap-order-art" onPointerDown={tiltCheckoutCard} onPointerMove={tiltCheckoutCard}
+                onPointerLeave={resetCheckoutCard} onPointerUp={resetCheckoutCard} onPointerCancel={resetCheckoutCard}>
+                <LiveCardArtwork kind="virtual" skin={goSwapOrder.plan.skin} />
+              </div>
               <p className="mt-3 text-center text-sm opacity-60">{goSwapOrder.quote.label}</p>
               <fieldset className="wpay-goswap-payment">
                 <legend>Способ оплаты</legend>
                 <label>
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "wallet"}
-                    onChange={() => setGoSwapPayment("wallet")} />
+                    onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("wallet")} />
+                  <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
-                  <Wallet size={18} aria-hidden="true" />
+                  <img src={desktopWalletIcon} alt="" width={25} height={25} />
                   <span>С кошелька</span>
                 </label>
                 <label>
                   <input type="radio" name="goswap-card-payment" checked={goSwapPayment === "sbp"}
-                    disabled={!onSbpTopUp} onChange={() => setGoSwapPayment("sbp")} />
+                    disabled={!onSbpTopUp} onClick={ripplePaymentTile} onChange={() => setGoSwapPayment("sbp")} />
+                  <span className="wpay-goswap-payment-ripple" aria-hidden="true" />
                   <span className="wpay-goswap-payment-check" aria-hidden="true"><Check size={12} strokeWidth={3} /></span>
                   <img src="/brands/sbp-symbol.svg" alt="" width={18} height={18} />
                   <span>Через СБП{!onSbpTopUp && <small>Недоступно</small>}</span>
