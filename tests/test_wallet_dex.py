@@ -23,3 +23,16 @@ class DexTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 await quote_bnb(SimpleNamespace(rpc=rpc), value)
         rpc.assert_not_awaited()
+
+    def test_swap_encoding_binds_recipient_minimum_deadline_and_fixed_path(self):
+        from wallet_dex import ERC20, WBNB, swap_calldata
+
+        recipient = "0x" + "ab" * 20
+        data = swap_calldata(recipient, 500, 1234)
+        self.assertEqual(data[:10], "0x7ff36ab5")
+        words = [int(data[i:i+64], 16) for i in range(10, len(data), 64)]
+        self.assertEqual(words, [
+            500, 128, int(recipient, 16), 1234, 2, int(WBNB, 16), int(ERC20["BSC", "USDT"][0], 16),
+        ])
+        with self.assertRaises(ValueError):
+            swap_calldata(recipient, 0, 1234)

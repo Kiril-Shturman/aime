@@ -17,6 +17,7 @@ from tronpy.keys import PrivateKey as TronKey, Signature
 from tronpy.proto import calculate_txid_from_raw_data
 
 from wallet_chain import ERC20, TRON_USDT, units
+from wallet_dex import ROUTER as PANCAKE_ROUTER, swap_calldata
 
 URLS = {'ETH': 'https://ethereum-rpc.publicnode.com',
         'BSC': 'https://bsc-rpc.publicnode.com', 'TRON': 'https://api.trongrid.io', 'SOL': 'https://api.mainnet-beta.solana.com'}
@@ -206,6 +207,39 @@ class Chains:
             'max_fee': units(max_fee, 18), 'fee_currency': 'BNB' if network == 'BSC' else 'ETH',
             'expires_at': int(time.time()) + 90, 'source_address': source,
             'recipient': recipient, 'network': network, 'unsigned': unsigned,
+        }
+
+    def estimate_bnb_swap(self, source, recipient, amount, minimum_usdt, deadline):
+        source = to_checksum_address(source)
+        recipient = to_checksum_address(recipient)
+        now = int(time.time())
+        if not now < deadline <= now + 120:
+            raise PaymentError('QUOTE_EXPIRED')
+        quantity = atomic(amount, 18)
+        minimum = atomic(minimum_usdt, 18)
+        data = swap_calldata(recipient, minimum, deadline)
+        if int(self.rpc('BSC', 'eth_chainId', []), 16) != CHAIN_IDS['BSC']:
+            raise PaymentError('RPC_UNAVAILABLE')
+        native = int(self.rpc('BSC', 'eth_getBalance', [source, 'pending']), 16)
+        gas_price = int(self.rpc('BSC', 'eth_gasPrice', []), 16) * 12 // 10 + 1
+        gas = int(self.rpc('BSC', 'eth_estimateGas', [
+            {'from': source, 'to': PANCAKE_ROUTER, 'value': hex(quantity), 'data': data}, 'pending',
+        ]), 16) * 13 // 10 + 1
+        if not 21000 <= gas <= 500000 or not 0 < gas_price <= 500_000_000_000:
+            raise PaymentError('RPC_UNAVAILABLE')
+        max_fee = gas * gas_price
+        if native < quantity + max_fee:
+            raise PaymentError('NO_GAS')
+        return {
+            'asset': 'BNB', 'amount': amount, 'minimum_usdt': minimum_usdt,
+            'native_balance': units(native, 18), 'max_fee': units(max_fee, 18),
+            'fee_currency': 'BNB', 'expires_at': deadline, 'source_address': source,
+            'recipient': recipient, 'network': 'BSC',
+            'unsigned': {
+                'chainId': CHAIN_IDS['BSC'], 'to': PANCAKE_ROUTER, 'value': quantity, 'data': data,
+                'nonce': int(self.rpc('BSC', 'eth_getTransactionCount', [source, 'pending']), 16),
+                'gas': gas, 'gasPrice': gas_price,
+            },
         }
 
     def estimate_trx(self, source, recipient, amount):
