@@ -1,5 +1,4 @@
 import { Search } from "lucide-react";
-import WalletOperations from "./WalletOperations";
 import {
   TransactionDetails,
   TransactionDetailContent,
@@ -327,7 +326,6 @@ export function LiveHistory() {
     <>
     <main className="mx-auto w-full max-w-[560px] pb-6 pt-5">
       <div className="px-4">
-        {filter !== "invoices" && (
           <label className="flex h-12 w-full items-center gap-2.5 rounded-[22px] bg-black/5 px-4 focus-within:ring-2 focus-within:ring-primary dark:bg-white/10">
             <Search
               size={20}
@@ -343,7 +341,6 @@ export function LiveHistory() {
               className="h-full min-w-0 flex-1 bg-transparent text-[17px] text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"
             />
           </label>
-        )}
         <div
           className="mt-4 flex gap-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden rounded-[22px] bg-black/5 p-1 dark:bg-white/10"
           aria-label="Фильтр операций"
@@ -354,7 +351,6 @@ export function LiveHistory() {
             ["transfers", "Переводы"],
             ["withdrawals", "Выводы"],
             ["deposits", "Пополнения"],
-            ["invoices", "Счета на оплату"],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -368,13 +364,6 @@ export function LiveHistory() {
           ))}
         </div>
       </div>
-      {filter === "invoices" ? (
-        <>
-          <p className="mx-4 mt-4 text-sm opacity-60">Счета на оплату, которые вы выставили другим людям.</p>
-          <WalletOperations initialTab="invoices" />
-        </>
-      ) : (
-        <>
           {[...groups].map(([date, transactions]) => (
             <section key={date} aria-label={date}>
               <h2 className="mb-2 mt-7 px-4 text-[21px] font-semibold tracking-tight text-black dark:text-white">
@@ -474,8 +463,6 @@ export function LiveHistory() {
               {wallet.loading ? "Обновляем…" : "Обновить историю"}
             </Button>
           </div>
-        </>
-      )}
     </main>
     {desktop ? (
       <aside className="wpay-desktop-card wpay-history-details" aria-label="Детали операции">
