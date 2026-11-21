@@ -243,7 +243,7 @@
 
 .wpay-card-scene.wpay-card-design--usa .wpay-card-face {
   color: #fff;
-  background: radial-gradient(ellipse at 13% 6%, #123d8c, transparent 55%), #07132f;
+  background: #07132f url("../assets/card-benefits/usa-card-flag.jpg") center / 100% 100% no-repeat;
   border: 1px solid transparent;
   background-clip: padding-box;
   box-shadow:
@@ -253,20 +253,3 @@
     1px 1px 4px #ff286f;
 }
 .wpay-card-design--usa .wpay-card-face-waves { display: none; }
-.wpay-card-usa-flag {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  filter: saturate(1.4) drop-shadow(0 -2px 4px #226bff);
-}
-.wpay-card-usa-stars {
-  position: absolute;
-  left: 6%;
-  top: 5%;
-  font-size: clamp(10px, 3vw, 22px);
-  line-height: 1.1;
-  letter-spacing: .2em;
-  color: #91b2ff88;
-  mask-image: linear-gradient(135deg, #000 24%, transparent 95%);
-}
