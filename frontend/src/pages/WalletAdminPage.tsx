@@ -9,7 +9,6 @@ import "./WalletAssetPanel.css";
 import { AuraWithdrawalForm } from "./WalletAuraWithdrawal";
 import WalletKeyExport from "./WalletKeyExport";
 import WalletCustodyWithdrawal from "./WalletCustodyWithdrawal";
-import Aurora from "../components/reactbits/Aurora";
 import { WalletFinanceReport } from "./WalletUserFinance";
 import {
   useCallback,
@@ -85,6 +84,8 @@ type AdminOverview = {
   users: number;
   events: number;
   liabilities: Json[];
+  reconciliation?: Json[];
+  commissions?: Json[];
   states: Record<string, Record<string, number>>;
   recent: Json[];
   problems: {
@@ -1678,39 +1679,63 @@ function Overview({
   ] as const;
   return (
     <div className="wpay-admin-dashboard">
-      <section className="wpay-admin-hero">
-        <div className="wpay-admin-hero-aurora" aria-hidden="true">
-          <Aurora
-            colorStops={["#4269ed", "#9a79ff", "#6bc6e9"]}
-            amplitude={0.65}
-            speed={0.25}
-            mouseInteraction={false}
-            dpr={1}
-            opacity={0.65}
-          />
-        </div>
-        <div className="wpay-admin-hero-copy">
-          <span className="wpay-admin-hero-eyebrow">
-            <Activity size={14} /> Центр управления
-          </span>
-          <h2>Всё под контролем.</h2>
-          <p>
-            Пользователи, операции и интеграции.
-            <br />
-            Все данные — в одном пространстве.
-          </p>
-          <div className="wpay-admin-hero-actions">
-            <button type="button" onClick={() => onNavigate("data")}>
-              Пользователи <ArrowUpRight size={16} />
-            </button>
-            <button type="button" onClick={() => onNavigate("payments")}>
-              Все операции <ArrowUpRight size={16} />
-            </button>
+      <div className="wpay-admin-dashboard-grid">
+        <section className={card}>
+          <div className="wpay-admin-section-title">
+            <div>
+              <span>Ликвидность</span>
+              <h2>Баланс GoSwap</h2>
+            </div>
+            <i className="wpay-admin-snapshot">Снимок API</i>
           </div>
-        </div>
-        <span className="wpay-admin-hero-monogram" aria-hidden="true">
-          <img src="/brands/wpay-wordmark-light.svg" alt="" />
-        </span>
+          {data.provider.balance.map((row, index) => (
+            <Row
+              key={index}
+              title={text(row.currency_code || row.asset)}
+              right={amount(row.available)}
+            />
+          ))}
+        </section>
+        <section className={card}>
+          <div className="wpay-admin-section-title">
+            <div>
+              <span>Клиентские средства</span>
+              <h2>Обязательства</h2>
+            </div>
+          </div>
+          {data.liabilities.length ? (
+            data.liabilities.map((row, index) => (
+              <Row
+                key={index}
+                title={text(row.asset)}
+                subtitle={`Доступно ${amount(row.available)} · резерв ${amount(row.reserved)}`}
+                right={amount(row.total)}
+              />
+            ))
+          ) : (
+            <Empty />
+          )}
+        </section>
+      </div>
+      <section className={card}>
+        <div className="wpay-admin-section-title"><div><h2>Сверка по провайдерам</h2></div></div>
+        <p>Сохранённые снимки. Разница показывает состояние покрытия. В неё могут входить резервы и собственные пополнения.</p>
+        {data.reconciliation?.length ? data.reconciliation.map(row => (
+          <Row key={`${row.provider}:${row.environment}:${row.asset}`}
+            title={`${row.provider === "goswap" ? "GoSwap" : row.provider === "aura" ? "Aura" : text(row.provider)} · ${row.environment === "test" ? "Тест" : text(row.environment)} · ${text(row.asset)}`}
+            subtitle={`У провайдера ${amount(row.provider_available)} · обязательства ${amount(row.liabilities)}${row.inflight == null ? "" : ` · в пути ${amount(row.inflight)}`} · ${row.checked_at ? date(Number(row.checked_at)) : "без даты"}`}
+            right={`Разница ${amount(row.difference)}`} />
+        )) : <Empty />}
+      </section>
+      <section className={card}>
+        <div className="wpay-admin-section-title"><div><h2>Доход от комиссий</h2><span>Последние 30 дней · UTC</span></div></div>
+        {data.commissions?.length ? data.commissions.map(row => (
+          <Row key={`${row.provider}:${row.environment}:${row.asset}`}
+            title={`${row.provider === "unassigned" ? "Провайдер не указан" : text(row.provider)} · ${row.environment === "test" ? "Тест" : row.environment === "unknown" ? "Контур не указан" : text(row.environment)}`}
+            right={`${amount(row.amount)} ${text(row.asset)}`} />
+        )) : <Empty />}
+        <p>Это комиссии wPay за вычетом записанных возвратов. Учёт расходов и подтверждённый остаток собственных средств пока недоступны.</p>
+        <button type="button" onClick={() => onNavigate("payments")}>Открыть операции <ArrowUpRight size={16} /></button>
       </section>
       <section className="wpay-admin-metrics" aria-label="Основные показатели">
         {metrics.map(([label, value, Icon]) => (
@@ -1775,44 +1800,6 @@ function Overview({
           ))}
         </div>
       </section>
-      <div className="wpay-admin-dashboard-grid">
-        <section className={card}>
-          <div className="wpay-admin-section-title">
-            <div>
-              <span>Ликвидность</span>
-              <h2>Средства у провайдера</h2>
-            </div>
-            <i className="wpay-admin-snapshot">Снимок API</i>
-          </div>
-          {data.provider.balance.map((row, index) => (
-            <Row
-              key={index}
-              title={text(row.currency_code || row.asset)}
-              right={amount(row.available)}
-            />
-          ))}
-        </section>
-        <section className={card}>
-          <div className="wpay-admin-section-title">
-            <div>
-              <span>Клиентские средства</span>
-              <h2>Обязательства</h2>
-            </div>
-          </div>
-          {data.liabilities.length ? (
-            data.liabilities.map((row, index) => (
-              <Row
-                key={index}
-                title={text(row.asset)}
-                subtitle={`Доступно ${amount(row.available)} · резерв ${amount(row.reserved)}`}
-                right={amount(row.total)}
-              />
-            ))
-          ) : (
-            <Empty />
-          )}
-        </section>
-      </div>
       <section className={card}>
         <div className="wpay-admin-section-title">
           <div>

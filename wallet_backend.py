@@ -899,7 +899,33 @@ def install_wallet(app, root, owner_check):
         app_info, organization_balance, currencies = await asyncio.gather(
             provider.call('getMe'), provider.call('getBalance'), provider.call('getCurrencies')
         )
+        reconciliation = [
+            {**dict(row), 'provider': 'goswap', 'environment': 'live'}
+            for row in ledger.db.execute(
+                'SELECT asset,provider_available,liabilities,inflight,difference,state,checked_at FROM finance_reconciliation ORDER BY asset'
+            )
+        ]
+        if 'wallet_provider_reconciliation' in tables:
+            reconciliation.extend(dict(row) for row in ledger.db.execute(
+                'SELECT provider,environment,asset,provider_available,allocated AS liabilities, '
+                'NULL AS inflight,difference,state,checked_at FROM wallet_provider_reconciliation ORDER BY provider,environment,asset'
+            ))
+        cutoff = (datetime.now(timezone.utc).date() - timedelta(days=29)).isoformat()
+        commissions = defaultdict(Decimal)
+        for row in ledger.db.execute('SELECT event_id,asset,type,detail FROM wallet_events WHERE created_at>=?', (cutoff,)):
+            detail = json.loads(row['detail'])
+            revenue = operation_revenue(row['type'], detail)
+            if revenue is not None and revenue != 0:
+                provider_name = detail.get('provider') or ('aura' if row['event_id'].startswith('aura:') else 'unassigned')
+                environment = detail.get('environment') or ('live' if provider_name == 'goswap' else 'unknown')
+                key = (provider_name, environment, row['asset'])
+                commissions[key] = add(commissions[key], revenue)
         return {
+            'reconciliation': reconciliation,
+            'commissions': [
+                {'provider': name, 'environment': env, 'asset': asset, 'amount': str(value)}
+                for (name, env, asset), value in sorted(commissions.items())
+            ],
             'users': ledger.db.execute("SELECT COUNT(*) FROM wallet_accounts WHERE user_id LIKE 'tg:%'").fetchone()[0],
             'events': ledger.db.execute('SELECT COUNT(*) FROM wallet_events').fetchone()[0],
             'liabilities': [
