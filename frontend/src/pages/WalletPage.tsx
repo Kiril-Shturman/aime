@@ -1,4 +1,4 @@
-import WalletNetworkExchange from "./WalletNetworkExchange";
+import { assetNetworks } from "../wallet/catalog";
 import SupportChatPushView from "./WalletSupportChat";
 import WalletPromos from "./WalletPromos";
 import WalletVerification, {
@@ -1426,9 +1426,9 @@ function CryptoFlowPushView({
   const [displayFlow, setDisplayFlow] = useState<CryptoFlow>({
     kind: "withdraw",
   });
-  const [networkExchange, setNetworkExchange] = useState(true);
+  const [exchangeRoute, setExchangeRoute] = useState<{ pair: string; method: string } | null>(null);
   const [fromCode, setFromCode] = useState("USDT");
-  const [toCode, setToCode] = useState("GRAM");
+  const [toCode, setToCode] = useState("USDT");
   const [amount, setAmount] = useState("");
   const [assetPicker, setAssetPicker] = useState<"from" | "to" | null>(null);
   const [pickerQuery, setPickerQuery] = useState("");
@@ -1441,21 +1441,15 @@ function CryptoFlowPushView({
     if (flow?.kind !== "exchange" || !usdtAvailable) return;
     const controller = new AbortController();
     setUsdtNetworkBalances({});
-    void walletRequest<{ items: { network: string; balance?: { status: string; amount: string | null } }[] }>(
-      "custody-asset-balances?asset=USDT", undefined, controller.signal,
+    void walletRequest<{ items: { network: string; provider_available?: string; balance_asset?: string; asset?: string }[] }>(
+      "addresses", undefined, controller.signal,
     ).then(({ items }) => {
       if (controller.signal.aborted) return;
-      const sums: Record<string, number> = {};
-      const unavailable = new Set<string>();
-      for (const { network, balance } of items) {
-        if (balance?.status !== "ok" || balance.amount === null || !Number.isFinite(Number(balance.amount))) {
-          unavailable.add(network);
-        } else {
-          sums[network] = (sums[network] ?? 0) + Number(balance.amount);
-        }
-      }
-      for (const network of unavailable) delete sums[network];
-      setUsdtNetworkBalances(sums);
+      setUsdtNetworkBalances(Object.fromEntries(
+        items.filter((item) => (item.balance_asset ?? item.asset) === "USDT" &&
+          item.provider_available != null && Number.isFinite(Number(item.provider_available)))
+          .map((item) => [item.network, Number(item.provider_available)]),
+      ));
     }).catch(() => {});
     return () => controller.abort();
   }, [flow?.kind, usdtAvailable]);
@@ -1463,20 +1457,18 @@ function CryptoFlowPushView({
   useEffect(() => {
     if (!flow) return;
     setDisplayFlow(flow);
-    setUsdtNetworks({ from: flow.network ?? "BSC", to: "TRON" });
-    if (flow.kind === "exchange")
-      setNetworkExchange(!flow.assetCode || flow.assetCode === "USDT");
+    const sourceNetwork = flow.network ?? "BSC";
+    setUsdtNetworks({ from: sourceNetwork, to: sourceNetwork === "TRON" ? "BSC" :
+      flow.assetCode && flow.assetCode !== "USDT" && sourceNetwork !== "BTC" ? sourceNetwork : "TRON" });
+
     setAssetPicker(null);
     setPickerQuery("");
     if (flow.assetCode) {
       setFromCode(flow.assetCode);
-      setToCode((previous) =>
-        previous === flow.assetCode
-          ? flow.assetCode === "USDT"
-            ? "GRAM"
-            : "USDT"
-          : previous,
-      );
+      setToCode("USDT");
+    } else {
+      setFromCode("USDT");
+      setToCode("USDT");
     }
   }, [flow]);
 
@@ -1498,13 +1490,62 @@ function CryptoFlowPushView({
     availableAssets.map((item) => [item.code, Number(live.balance(item.code))]),
   );
   const usdtRoutes = live.assetRoutes.USDT ?? [];
-  const networkFor = (side: "from" | "to") =>
-    usdtRoutes.includes(usdtNetworks[side]) ? usdtNetworks[side] : usdtRoutes[0];
+  const networkFor = (side: "from" | "to") => {
+    if (usdtRoutes.includes(usdtNetworks[side])) return usdtNetworks[side];
+    const other = side === "from" ? "to" : "from";
+    return usdtRoutes.find((network) => network !== usdtNetworks[other]) ?? usdtRoutes[0];
+  };
   const networkBalance = (side: "from" | "to") => {
     const network = networkFor(side);
     return network ? usdtNetworkBalances[network] : undefined;
   };
-  const fromBalance = fromAsset.code === "USDT" ? networkBalance("from") : balances[fromAsset.code];
+  const sourceNetwork = fromAsset.code === "USDT" ? networkFor("from") : assetNetworks[fromAsset.code]?.[0];
+  const destinationNetwork = toAsset.code === "USDT" ? networkFor("to") : assetNetworks[toAsset.code]?.[0];
+  const pair = new URLSearchParams({
+    from_asset: fromAsset.code, from_network: sourceNetwork ?? "",
+    to_asset: toAsset.code, to_network: destinationNetwork ?? "",
+  }).toString();
+  useEffect(() => {
+    if (flow?.kind !== "exchange" || !sourceNetwork || !destinationNetwork) return;
+    let controller: AbortController | undefined;
+    const load = () => {
+      controller?.abort();
+      setExchangeRoute(null);
+      const request = new AbortController();
+      controller = request;
+      void walletRequest<{ method: string }>(`exchange-route?${pair}`, undefined, request.signal)
+        .then(({ method }) => { if (!request.signal.aborted) setExchangeRoute({ pair, method }); })
+        .catch(() => { if (!request.signal.aborted) setExchangeRoute({ pair, method: "unavailable" }); });
+    };
+    load();
+    window.addEventListener("focus", load);
+    return () => { controller?.abort(); window.removeEventListener("focus", load); };
+  }, [flow?.kind, pair, sourceNetwork, destinationNetwork]);
+  const exchangeMethod = exchangeRoute?.pair === pair ? exchangeRoute.method : "";
+
+  const [providerQuote, setProviderQuote] = useState<{ key: string; text: string } | null>(null);
+  const quoteRequest = useRef<AbortController | null>(null);
+  const quoteKey = `${pair}&amount=${amount}`;
+  useEffect(() => () => quoteRequest.current?.abort(), [flow?.kind, quoteKey, exchangeMethod]);
+  const canQuote = exchangeMethod === "fixedfloat" && fromAsset.code === "USDT" &&
+    toAsset.code === "USDT" && Number(amount.replace(",", ".")) > 0;
+  async function quoteFixedFloat() {
+    quoteRequest.current?.abort();
+    const controller = new AbortController();
+    quoteRequest.current = controller;
+    setProviderQuote({ key: quoteKey, text: "Рассчитываем…" });
+    try {
+      const quote = await walletRequest<{ available: boolean; to_amount: string | null }>("exchange-quote", {
+        from_network: sourceNetwork, to_network: destinationNetwork,
+        amount: amount.replace(",", "."), rate_type: "float",
+      }, controller.signal);
+      if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, text: quote.available && quote.to_amount
+        ? `Оценка FixedFloat · ${quote.to_amount} USDT`
+        : "FixedFloat пока не даёт расчёт для этой суммы или пары" });
+    } catch (error) {
+      if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, text: error instanceof Error ? error.message : "Не удалось рассчитать обмен" });
+    }
+  }
   const parsedAmount = Number(amount.replace(",", ".")) || 0;
   const exchangeRate =
     (usdRates[fromAsset.code] ?? 0) / (usdRates[toAsset.code] || 1);
@@ -1541,40 +1582,6 @@ function CryptoFlowPushView({
     haptic("light");
   };
 
-  const exchangeTabs = (
-    <div
-      className="mx-auto mt-3 flex w-full max-w-[560px] gap-2 px-4"
-      aria-label="Режим обмена"
-    >
-      <button
-        type="button"
-        aria-pressed={networkExchange}
-        onClick={() => setNetworkExchange(true)}
-        className={`min-h-11 flex-1 rounded-full px-3 text-sm font-medium ${networkExchange ? "bg-primary text-white" : "bg-black/5 dark:bg-white/10"}`}
-      >
-        Между сетями USDT
-      </button>
-      <button
-        type="button"
-        aria-pressed={!networkExchange}
-        onClick={() => setNetworkExchange(false)}
-        className={`min-h-11 flex-1 rounded-full px-3 text-sm font-medium ${!networkExchange ? "bg-primary text-white" : "bg-black/5 dark:bg-white/10"}`}
-      >
-        Другие валюты
-      </button>
-    </div>
-  );
-  if (!isDeposit && !isWithdraw && networkExchange)
-    return (
-      <PushViewShell open={flow !== null} title="Обмен" onClose={onClose}>
-        {exchangeTabs}
-        <WalletNetworkExchange
-          active={flow?.kind === "exchange"}
-          initialNetwork={flow?.network}
-        />
-      </PushViewShell>
-    );
-
   if (isDeposit) {
     return (
       <DepositMethodsView
@@ -1586,11 +1593,11 @@ function CryptoFlowPushView({
   }
 
   if (!isWithdraw) {
-    if (availableAssets.length < 2) {
+    if (availableAssets.length < 2 && usdtRoutes.length < 2) {
       return (
         <PushViewShell open={flow !== null} title="Обмен" onClose={onClose}>
           <p className="mx-4 rounded-2xl bg-black/[.04] p-5 text-center text-sm text-black/45 dark:bg-white/[.06] dark:text-white/45">
-            Для обмена должны быть включены минимум две валюты.
+            Для обмена нужны два доступных актива или две сети USDT.
           </p>
         </PushViewShell>
       );
@@ -1621,7 +1628,6 @@ function CryptoFlowPushView({
         onClose={onClose}
         onRefreshed={() => void live.refresh()}
       >
-        {exchangeTabs}
         <main className="wpay-exchange-desktop relative mx-auto w-full max-w-[560px] px-4 pb-6 pt-3">
           <div className="relative space-y-1">
             {(["from", "to"] as const).map((side) => {
@@ -1718,26 +1724,28 @@ function CryptoFlowPushView({
             className="my-4 text-center text-[13px] text-black/45 dark:text-white/45"
           >
             {hasRate
-              ? `1 ${fromAsset.code} ≈ ${formatCrypto(exchangeRate, 8)} ${toAsset.code}`
+              ? `Оценка по рынку · 1 ${fromAsset.code} ≈ ${formatCrypto(exchangeRate, 8)} ${toAsset.code}`
               : "Курс пока недоступен"}
           </p>
-          <Button
-            data-wpay-primary=""
-            large
-            rounded
-            disabled={
-              !(parsedAmount > 0) ||
-              !hasRate ||
-              !live.ready ||
-              parsedAmount > (fromBalance ?? 0)
-            }
-            onClick={() =>
-              showNotice("Обмен пока недоступен. Средства не списываются.")
-            }
-            className="!mt-5 !h-14 !w-full !rounded-[22px] !text-[17px] !font-semibold"
-          >
-            Продолжить
-          </Button>
+          <p role="status" className="mb-4 text-center text-sm">
+            {exchangeMethod === "internal" ? "Внутренний обмен GoSwap · 1:1"
+              : exchangeMethod === "dex" ? "DEX · обмен в одной сети"
+              : exchangeMethod === "fixedfloat" ? "Маршрут через FixedFloat"
+              : exchangeMethod === "disabled" ? "Для этой пары обмен отключён"
+              : exchangeMethod === "unavailable" ? "Не удалось загрузить маршрут"
+              : "Проверяем маршрут…"}
+          </p>
+          {canQuote && (
+            <Button data-wpay-primary="" rounded large className="!w-full" onClick={() => void quoteFixedFloat()}>
+              Рассчитать в FixedFloat
+            </Button>
+          )}
+          {canQuote && providerQuote?.key === quoteKey && (
+            <p role="status" className="mt-3 text-center text-sm">{providerQuote.text}</p>
+          )}
+          <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">
+            Исполнение обмена пока недоступно
+          </p>
           <p className="mt-3 text-center text-[12px] text-black/35 dark:text-white/35">
             Расчёт справочный. Обмен пока недоступен.
           </p>

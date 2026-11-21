@@ -146,6 +146,7 @@ type CryptoData = {
   addresses: Json[];
   deposits: Json[];
   balances: Json[];
+  exchange_rules?: { id: string; label: string; method: string; methods: string[] }[];
   asset_routes: {
     asset: string;
     network: string;
@@ -2893,6 +2894,22 @@ function Crypto({
     aura: "Aura",
     goswap: "GoSwap",
   };
+  async function updateExchangeRule(rule: string, method: string) {
+    setWorkingRoute(rule);
+    setRouteNotice("");
+    try {
+      await walletRequest("admin-exchange-rule", { rule, method });
+      await reload();
+      setRouteNotice("Правило обмена сохранено");
+    } catch (error) {
+      setRouteNotice(error instanceof Error ? error.message : "Не удалось сохранить правило");
+    } finally {
+      setWorkingRoute("");
+    }
+  }
+  const exchangeMethods: Record<string, string> = {
+    internal: "GoSwap · 1:1", fixedfloat: "FixedFloat", dex: "DEX", disabled: "Отключено",
+  };
   const assets = new Map<string, CryptoData["asset_routes"]>();
   for (const route of data.asset_routes ?? []) {
     const routes = assets.get(route.asset) ?? [];
@@ -3003,6 +3020,19 @@ function Crypto({
           Отключение скрывает актив и запрещает новые депозиты, счета, переводы
           и выводы. Остатки и история не удаляются.
         </p>
+      </section>
+      <section className={card}>
+        <div className="wpay-admin-section-title"><h2>Правила обмена</h2></div>
+        <p className="mb-3 text-sm opacity-60">Правило выбирает маршрут на экране обмена. Исполнение этих маршрутов пока недоступно.</p>
+        {(data.exchange_rules ?? []).map((rule) => (
+          <label key={rule.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--admin-border)] py-3 last:border-0">
+            <span className="text-sm font-medium">{rule.label}</span>
+            <select className={input} value={rule.method} disabled={Boolean(workingRoute)}
+              onChange={(event) => void updateExchangeRule(rule.id, event.target.value)}>
+              {rule.methods.map((method) => <option key={method} value={method}>{exchangeMethods[method]}</option>)}
+            </select>
+          </label>
+        ))}
       </section>
       <div className="inline-grid grid-cols-3 gap-1 rounded-xl border border-[var(--admin-border)] bg-[var(--admin-surface-muted)] p-1">
         {(["addresses", "deposits", "balances"] as const).map((key) => (

@@ -4,6 +4,10 @@ Secrets: GOSWAP_API_TOKEN, WPAY_BOT_TOKEN (or BOARD_BOT_TOKEN).
 Only this module sees the provider token; organization funds are never a user's
 balance. All money arithmetic uses Decimal and SQLite write transactions.
 """
+from wallet_exchange_routes import (
+    prepare as prepare_exchange_rules, rules as exchange_rules,
+    save_rule as save_exchange_rule, resolve as resolve_exchange_route,
+)
 import asyncio
 from wallet_fixedfloat_orders import Orders
 from wallet_card_ui import CardUI
@@ -701,6 +705,7 @@ def install_wallet(app, root, owner_check):
     prepare_finance_worker(ledger)
     prepare_notifications(ledger)
     prepare_exchange_limits(ledger)
+    prepare_exchange_rules(ledger)
     exchange = FixedFloat(os.environ.get('FIXEDFLOAT_API_KEY', ''), os.environ.get('FIXEDFLOAT_API_SECRET', ''), ApiError)
     exchange.ledger = ledger
     app['wpay_exchange'] = exchange
@@ -1391,6 +1396,7 @@ def install_wallet(app, root, owner_check):
         return {
             'addresses': addresses, 'deposits': deposits, 'balances': balances,
             'asset_routes': asset_route_rows(),
+            'exchange_rules': exchange_rules(ledger),
         }
 
     async def safe_provider(method, data=None):
@@ -1798,6 +1804,11 @@ def install_wallet(app, root, owner_check):
                 source='miniapp',
                 start_param=request.get('wpay_start_param'),
             )
+            if action == 'exchange-route' and request.method == 'GET':
+                return web.json_response(
+                    resolve_exchange_route(ledger, request.query, asset_enabled, deposit_provider),
+                    headers={'Cache-Control': 'no-store'},
+                )
             if action == 'aura-user-withdrawal' and request.method in {'GET', 'POST'}:
                 return await aura_withdrawal_response(request, uid)
             if action == 'addresses' and request.method == 'GET':
@@ -2012,6 +2023,17 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(admin_payments())
             if action == 'admin-crypto' and request.method == 'GET':
                 return web.json_response(admin_crypto())
+            if action == 'admin-exchange-rule' and request.method == 'POST':
+                body = await request.json()
+                ledger.begin('admin_exchange_rule', uid, 'Update exchange routing')
+                try:
+                    save_exchange_rule(ledger, body, uid)
+                    record_admin_action(uid, 'exchange.rule', detail=body)
+                    ledger.commit()
+                except Exception:
+                    ledger.rollback()
+                    raise
+                return web.json_response({'rules': exchange_rules(ledger)})
             if action == 'admin-assets' and request.method == 'POST':
                 body = await request.json()
                 if not isinstance(body, dict):
