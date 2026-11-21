@@ -565,6 +565,7 @@ export default function WalletAuraCards({
       "Заявка на карту отправлена",
     );
   const [goSwapOrder, setGoSwapOrder] = useState<{ plan: StorefrontPlan; quote: GoSwapIssue } | null>(null);
+  const [goSwapSheetReady, setGoSwapSheetReady] = useState(false);
   const [goSwapSheetOpened, setGoSwapSheetOpened] = useState(false);
   useEffect(() => {
     if (!goSwapOrder) {
@@ -584,6 +585,7 @@ export default function WalletAuraCards({
   const issueGoSwap = (plan: StorefrontPlan) => mutate("goswap-quote", async () => {
     const quote = await walletRequest<GoSwapIssue>("goswap-card-quote", { plan_id: plan.plan_id });
     if (quote.state === "quoted") {
+      setGoSwapSheetReady(false);
       setGoSwapPayment("wallet");
       setGoSwapSheetExpanded(false);
       setGoSwapOrder({ plan, quote });
@@ -1542,6 +1544,7 @@ export default function WalletAuraCards({
           sheet?.setSwipeStep();
           sheet?.stepClose();
         }}
+        onSheetOpened={() => setGoSwapSheetReady(true)}
         onSheetStepOpen={() => setGoSwapSheetExpanded(true)}
         onSheetStepClose={() => setGoSwapSheetExpanded(false)}
         onSheetClosed={() => setGoSwapOrder(null)}
@@ -1586,12 +1589,14 @@ export default function WalletAuraCards({
                 <span>Итого:</span>
                 <strong>{offerNumber.format(Number(goSwapOrder.quote.total))} USDT</strong>
               </div>
-              <Button rounded large data-wpay-primary="" className={`wpay-aura-primary !mt-3 !w-full${!busy && (goSwapPayment === "wallet" || onSbpTopUp) ? " wpay-goswap-pay-shine" : ""}`}
-                disabled={Boolean(busy) || (goSwapPayment === "sbp" && !onSbpTopUp)}
+              <Button rounded large data-wpay-primary="" className={`wpay-aura-primary !mt-3 !w-full${goSwapSheetReady && !busy && (goSwapPayment === "wallet" || onSbpTopUp) ? " wpay-goswap-pay-shine" : ""}`}
+                disabled={!goSwapSheetReady || Boolean(busy) || (goSwapPayment === "sbp" && !onSbpTopUp)}
+                aria-busy={!goSwapSheetReady || Boolean(busy)}
                 onClick={goSwapPayment === "wallet" ? payGoSwapOrder : () => {
                   setGoSwapOrder(null);
                   onSbpTopUp?.();
                 }}>
+                {(!goSwapSheetReady || busy) && <span className="mr-2 inline-flex align-middle" aria-hidden="true"><Preloader size={18} color="white" /></span>}
                 {goSwapPayment === "sbp" ? "Пополнить через СБП" : busy === "goswap-issue" ? "Оплачиваем…" : "Оплатить"}
               </Button>
               <button type="button" className="wpay-goswap-order-expand" onClick={expandGoSwapSheet}>Условия карты <ChevronDown size={15} /></button>
