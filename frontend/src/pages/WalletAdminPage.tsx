@@ -1,5 +1,5 @@
 import { RecordMenu, RecordValue } from "./WalletAdminRecord";
-import { AdminOperations, type AdminOperationsData } from "./WalletAdminOperations";
+import { AdminOperations, AdminUserOperationHistory, type AdminOperationsData } from "./WalletAdminOperations";
 import { currencyLabel, networkLabel, networkStandards } from "../wallet/catalog";
 import { cryptoAssetsByTicker } from "../wallet/cryptoAssets";
 import WalletAssetAvatar from "./WalletAssetAvatar";
@@ -2235,7 +2235,7 @@ function AdminUserDrawer({
   const [balanceReason, setBalanceReason] = useState("");
   useEffect(() => {
     const close = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && !(event.target instanceof Element && event.target.closest("dialog[open]"))) onClose();
     };
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
@@ -2776,20 +2776,7 @@ function AdminUserDrawer({
               {section === "history" && (
                 <section className="wpay-admin-user-section">
                   <h3>Последние операции</h3>
-                  {detail.events.length ? (
-                    detail.events
-                      .slice(0, 12)
-                      .map((item, index) => (
-                        <Row
-                          key={index}
-                          title={text(item.type)}
-                          subtitle={date(item.created_at)}
-                          right={`${amount(item.amount)} ${text(item.asset)}`}
-                        />
-                      ))
-                  ) : (
-                    <p className="wpay-admin-user-empty">Операций пока нет.</p>
-                  )}
+                  <AdminUserOperationHistory events={detail.events} />
                 </section>
               )}
 

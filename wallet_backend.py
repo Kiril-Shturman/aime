@@ -1054,10 +1054,10 @@ def install_wallet(app, root, owner_check):
                 'SELECT network,body FROM wallet_addresses WHERE user_id=? LIMIT 50',
                 (user_id,),
             ),
-            'events': decoded_rows(
+            'events': with_operation_revenue(decoded_rows(
                 'SELECT event_id,asset,amount,type,created_at,detail FROM wallet_events '
                 'WHERE user_id=? ORDER BY rowid DESC LIMIT 50', (user_id,),
-            ),
+            )),
             'notifications': decoded_rows(
                 'SELECT notification_id,event_type,title,status,attempts,last_error,created_at,sent_at '
                 'FROM notification_outbox WHERE user_id=? ORDER BY rowid DESC LIMIT 50', (user_id,),
@@ -1477,13 +1477,16 @@ def install_wallet(app, root, owner_check):
         fee = Decimal(detail['service_fee'])
         return -fee if kind.endswith('_refund') else fee
 
-    def admin_payments():
-        result = {'events': decoded_rows('SELECT rowid,* FROM wallet_events ORDER BY rowid DESC LIMIT 500')}
-        for table, key in [('wallet_quotes', 'quotes'), ('wallet_invoices', 'invoices'), ('wallet_transfers', 'transfers'), ('wallet_withdrawal_intents', 'withdrawals')]:
-            result[key] = decoded_rows(f'SELECT rowid,* FROM {table} ORDER BY rowid DESC LIMIT 500') if table in tables() else []
-        for item in result['events']:
+    def with_operation_revenue(events):
+        for item in events:
             revenue = operation_revenue(item['type'], item['detail'])
             item['revenue'] = str(revenue) if revenue is not None else None
+        return events
+
+    def admin_payments():
+        result = {'events': with_operation_revenue(decoded_rows('SELECT rowid,* FROM wallet_events ORDER BY rowid DESC LIMIT 500'))}
+        for table, key in [('wallet_quotes', 'quotes'), ('wallet_invoices', 'invoices'), ('wallet_transfers', 'transfers'), ('wallet_withdrawal_intents', 'withdrawals')]:
+            result[key] = decoded_rows(f'SELECT rowid,* FROM {table} ORDER BY rowid DESC LIMIT 500') if table in tables() else []
         today = datetime.now(timezone.utc).date()
         cutoff = (today - timedelta(days=89)).isoformat()
         result['as_of'] = today.isoformat()

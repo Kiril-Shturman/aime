@@ -2101,7 +2101,7 @@
 
 .wpay-admin-user-search .wpay-admin-user-action,
 .wpay-admin-user-drawer .wpay-admin-user-action,
-.wpay-admin-user-drawer .wpay-admin-user-section button:not(.wpay-admin-row):not(.wpay-admin-wallet-address):not(.admin-record-copy) {
+.wpay-admin-user-drawer .wpay-admin-user-section button:not(.wpay-admin-row):not(.wpay-admin-wallet-address):not(.admin-record-copy):not(.admin-ops-open):not(.admin-ops-reset) {
   border-radius: 10px;
   background: #2563eb;
   color: white;

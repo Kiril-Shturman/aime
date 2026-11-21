@@ -51,6 +51,7 @@
 .admin-ops-filter-group { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .admin-ops-filter-range { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .admin-ops-filters label { display: grid; gap: 5px; min-width: 0; color: var(--admin-muted); font-size: 12px; }
+.admin-ops-list { min-width: 0; container-type: inline-size; container-name: admin-operation-list; }
 .admin-ops-table { margin: 20px 0 10px; overflow-x: auto; }
 .admin-ops-table table { width: 100%; min-width: 590px; table-layout: fixed; border-collapse: collapse; }
 .admin-ops-table th, .admin-ops-table td { padding: 12px 8px; text-align: left; border-bottom: 1px solid var(--admin-border); }
@@ -76,7 +77,7 @@
   .admin-ops-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-ops-chart { min-height: 120px; }
 }
-@media (max-width: 570px) {
+@container admin-operation-list (max-width: 589px) {
   .admin-ops-table table, .admin-ops-table tbody { display: block; min-width: 0; }
   .admin-ops-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .admin-ops-table tr { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, auto); border-bottom: 1px solid var(--admin-border); }
@@ -84,6 +85,8 @@
   .admin-ops-table td:first-child { grid-column: 1 / -1; padding-top: 12px; }
   .admin-ops-table td:nth-child(2) { grid-column: 1 / -1; padding-left: 52px; }
   .admin-ops-table td:nth-child(3) { padding-left: 52px; padding-bottom: 12px; }
+  .admin-ops-table td:nth-child(5) { grid-column: 1 / -1; padding-bottom: 10px; }
+  .admin-ops-table td:nth-child(5)::before { content: "Доход wPay · "; color: var(--admin-muted); font-weight: 400; }
 }
 .admin-ops-searchbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
 .admin-ops-search { position: relative; min-width: 0; }
@@ -130,6 +133,4 @@
 }
 @media (max-width: 570px) {
   .admin-ops-dialog { border-radius: 0; }
-  .admin-ops-table td:nth-child(5) { grid-column: 1 / -1; padding-bottom: 10px; }
-  .admin-ops-table td:nth-child(5)::before { content: "Доход wPay · "; color: var(--admin-muted); font-weight: 400; }
 }

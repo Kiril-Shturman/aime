@@ -52,6 +52,16 @@ async function setup(page: Page, theme = "dark") {
         ],
         total: 1,
       };
+    if (action === "admin-user")
+      data = {
+        account: { user_id: "user-1", first_name: "Александр" },
+        contacts: { email: null, phone: null },
+        aura: { customer: null, kyc: null, cards: [] },
+        balances: [], addresses: [], notifications: [], audit: [],
+        referrals: { invited: [], referred_by: null },
+        events: [{ event_id: "user-topup-101", user_id: "user-1", asset: "USDT", amount: "-18.225002",
+          revenue: "3", type: "card_topup", created_at: "2026-11-21T00:00:00Z", detail: { status: "completed" } }],
+      };
     if (action === "admin-database")
       data = {
         tables: { wallet_accounts: 1 },
@@ -109,6 +119,18 @@ for (const theme of ["dark", "light"]) {
         .locator(".wpay-admin-desktop-only")
         .getByText("Александр", { exact: true }),
     ).toBeVisible();
+    await page.locator(".wpay-admin-desktop-only").getByText("Александр", { exact: true }).click();
+    const profile = page.getByRole("dialog", { name: "Карточка пользователя Александр" });
+    await profile.getByRole("button", { name: "История", exact: true }).click();
+    await expect(profile.locator(".admin-ops-operation .wpay-currency-icon")).toBeVisible();
+    await profile.getByRole("button", { name: "Пополнение карты" }).click();
+    const userOperation = page.getByRole("dialog", { name: "Подробности операции" });
+    await expect(userOperation.getByText("user-topup-101", { exact: true })).toBeVisible();
+    await expect(userOperation.getByText("3 USDT", { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(userOperation).toBeHidden();
+    await expect(profile.getByRole("button", { name: "Пополнение карты" })).toBeVisible();
+    await profile.getByRole("button", { name: "Закрыть", exact: true }).click();
     await page
       .getByRole("navigation", { name: "Разделы админки" })
       .getByRole("link", { name: "Операции", exact: true })

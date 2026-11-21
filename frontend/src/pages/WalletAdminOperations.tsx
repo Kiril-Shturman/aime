@@ -202,11 +202,6 @@ export function AdminOperations({ data }: { data: AdminOperationsData }) {
   const [filters, setFilters] = useState(emptyFilters);
   const [limit, setLimit] = useState(25);
   const [advanced, setAdvanced] = useState(false);
-  const [selected, setSelected] = useState<ReturnType<typeof normalize> | null>(null);
-  const dialogRef = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    if (selected && !dialogRef.current?.open) dialogRef.current?.showModal();
-  }, [selected]);
   const rows = (data[source] ?? []).map(row => normalize(row, source));
   const query = filters.query.trim().toLowerCase();
   const filtered = rows.filter(row => (
@@ -255,32 +250,58 @@ export function AdminOperations({ data }: { data: AdminOperationsData }) {
           <label>Сумма до<input type="number" min="0" step="any" value={filters.max} onChange={e => update("max", e.target.value)} /></label>
         </div>
         </div>
-        {filtered.length ? (
-          <div className="admin-ops-table">
-            <table><thead><tr><th>Операция</th><th>Пользователь / ID</th><th>Статус</th><th>Сумма</th>{source === "events" && <th>Доход wPay</th>}</tr></thead>
-              <tbody>{filtered.slice(0, limit).map(row => (
-                <tr key={row.id} onClick={() => setSelected(row)}>
-                  <td><div className="admin-ops-operation"><TransactionAvatar kind={row.model.kind} positive={(row.amount ?? 0) > 0} compact /><div><button type="button" className="admin-ops-open" onClick={event => { event.stopPropagation(); setSelected(row); }}><strong>{row.title}</strong><ChevronRight size={14} /></button><small title={row.reference || undefined}>{row.day ? new Date(row.stamp).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short", timeZone: "UTC" }) : "—"}{row.reference && ` · ${row.reference}`}</small></div></div></td>
-                  <td><strong>{row.user || "—"}</strong><small title={row.id}>{row.id || "—"}</small></td>
-                  <td>{row.status ? <span className="admin-ops-status" data-state={row.status}>{statuses[row.status] ?? row.status}</span> : "—"}</td>
-                  <td className="admin-ops-amount">{row.amount !== null && Number.isFinite(row.amount) ? `${row.amount > 0 ? "+" : ""}${fmt.format(row.amount)} ${row.asset}` : "—"}</td>
-                  {source === "events" && <td className="admin-ops-amount">{row.revenue == null ? "—" : `${fmt.format(row.revenue)} ${row.asset}`}</td>}
-                </tr>
-              ))}</tbody>
-            </table>
-          </div>
-        ) : <p className="admin-ops-empty">По этим условиям операций нет.</p>}
+        <AdminOperationList visible={filtered.slice(0, limit)} relatedRows={rows} showRevenue={source === "events"} />
         {filtered.length > limit && <button className="admin-ops-reset" type="button" onClick={() => setLimit(limit + 25)}>Показать ещё</button>}
       </section>
-      <dialog className="admin-ops-dialog" ref={dialogRef} onClose={() => setSelected(null)} aria-labelledby="admin-ops-dialog-title">
+    </div>
+  );
+}
+
+
+type AdminOperation = ReturnType<typeof normalize>;
+
+function AdminOperationList({ visible, relatedRows, showRevenue }: {
+  visible: AdminOperation[];
+  relatedRows: AdminOperation[];
+  showRevenue: boolean;
+}) {
+  const titleId = useId();
+  const [selected, setSelected] = useState<AdminOperation | null>(null);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    if (selected && !dialogRef.current?.open) dialogRef.current?.showModal();
+  }, [selected]);
+  return (
+    <div className="admin-ops-list">
+      {visible.length ? (
+        <div className="admin-ops-table">
+          <table><thead><tr><th>Операция</th><th>Пользователь / ID</th><th>Статус</th><th>Сумма</th>{showRevenue && <th>Доход wPay</th>}</tr></thead>
+            <tbody>{visible.map(row => (
+              <tr key={row.id} onClick={() => setSelected(row)}>
+                <td><div className="admin-ops-operation"><TransactionAvatar kind={row.model.kind} positive={(row.amount ?? 0) > 0} compact /><div><button type="button" className="admin-ops-open" onClick={event => { event.stopPropagation(); setSelected(row); }}><strong>{row.title}</strong><ChevronRight size={14} /></button><small title={row.reference || undefined}>{row.day ? new Date(row.stamp).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short", timeZone: "UTC" }) : "—"}{row.reference && ` · ${row.reference}`}</small></div></div></td>
+                <td><strong>{row.user || "—"}</strong><small title={row.id}>{row.id || "—"}</small></td>
+                <td>{row.status ? <span className="admin-ops-status" data-state={row.status}>{statuses[row.status] ?? row.status}</span> : "—"}</td>
+                <td className="admin-ops-amount">{row.amount !== null && Number.isFinite(row.amount) ? `${row.amount > 0 ? "+" : ""}${fmt.format(row.amount)} ${row.asset}` : "—"}</td>
+                {showRevenue && <td className="admin-ops-amount">{row.revenue == null ? "—" : `${fmt.format(row.revenue)} ${row.asset}`}</td>}
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ) : <p className="admin-ops-empty">По этим условиям операций нет.</p>}
+      <dialog className="admin-ops-dialog" ref={dialogRef} onClose={() => setSelected(null)} aria-labelledby={titleId}>
         <header>
-          <h2 id="admin-ops-dialog-title">Подробности операции</h2>
+          <h2 id={titleId}>Подробности операции</h2>
           <button type="button" className="admin-ops-reset" aria-label="Закрыть детали операции" onClick={() => dialogRef.current?.close()}><X size={18} /></button>
         </header>
-        {selected && <OperationRecord key={selected.id} record={selected} related={rows.filter(row => (
+        {selected && <OperationRecord key={selected.id} record={selected} related={relatedRows.filter(row => (
           row.id === selected.id || selected.operationKey && row.operationKey === selected.operationKey && row.user === selected.user
         ))} />}
       </dialog>
     </div>
   );
+}
+
+export function AdminUserOperationHistory({ events }: { events: Row[] }) {
+  const rows = events.map(row => normalize(row, "events"));
+  return <AdminOperationList visible={rows} relatedRows={rows} showRevenue />;
 }
