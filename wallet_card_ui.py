@@ -160,7 +160,7 @@ class CardUI:
                             except Exception:self.ledger.rollback();raise
                         except Exception as error:warning=getattr(error,'name','CARD_OPERATIONS_UNAVAILABLE')
                     self.operation_checked[key]=time.monotonic()+30
-        rows={row['operation_id']:dict(row) for row in self.ledger.db.execute('SELECT operation_id,operation_type,status,previous_status,asset,amount,fee,merchant,decline_message,provider_created_at FROM aura_card_operations WHERE card_id=? AND user_id=? AND environment=?',(card_id,uid,self.environment))}
+        rows={row['operation_id']:dict(row) for row in self.ledger.db.execute('SELECT operation_id,operation_type,status,previous_status,asset,amount,fee,merchant,original_amount,original_currency,decline_message,provider_created_at FROM aura_card_operations WHERE card_id=? AND user_id=? AND environment=?',(card_id,uid,self.environment))}
         for entity in self.ledger.db.execute("SELECT remote_id,status,request_body,created_at FROM wallet_provider_entities WHERE provider='aura' AND environment=? AND user_id=? AND entity_type='card_recharge' AND remote_id IS NOT NULL AND status IN ('requested','sent','completed','failed')",(self.environment,uid)):
             stored=json.loads(entity['request_body']);result=stored.get('result')
             if stored.get('card_id')!=card_id or not isinstance(result,dict) or entity['remote_id'] in rows:continue

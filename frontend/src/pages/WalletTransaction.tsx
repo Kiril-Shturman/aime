@@ -7,7 +7,7 @@ import { currencyLabel, networkLabel } from '../wallet/catalog'
 
 type Kind = 'deposit'|'ruble_deposit'|'withdrawal'|'transfer'|'check'|'exchange'|'qr'|'card_payment'|'card_topup'|'card_issue'|'refund'|'referral'|'adjustment'|'other'
 type Status = 'completed'|'processing'|'failed'|'refunded'
-export interface TransactionView { id:string; kind:Kind; status:Status; amount:string; asset:string; date:string; rows:[string,string][]; demo?:boolean }
+export interface TransactionView { id:string; kind:Kind; status:Status; amount:string; asset:string; date:string; rows:[string,string][]; demo?:boolean; title?: string }
 const kinds = {
   deposit: {title:'Пополнение криптовалютой',icon:ArrowDownLeft}, ruble_deposit:{title:'Пополнение рублями',icon:ArrowDownLeft},
   withdrawal:{title:'Вывод криптовалюты',icon:ArrowUpRight}, transfer:{title:'Перевод пользователю',icon:ArrowUpRight}, check:{title:'Крипточек',icon:Ticket},
@@ -119,7 +119,7 @@ export function TransactionDetailContent({model}:{model:TransactionView}) {
       <div className="mx-auto w-full max-w-[560px] px-4 pb-10 pt-5 text-black dark:text-white">
         {model.demo&&<p className="mb-6 text-center text-[13px] font-medium text-black/45 dark:text-white/45">Пример операции · средства не перемещаются</p>}
         <div className="text-center"><span className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full text-white shadow-sm ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={36} strokeWidth={1.8}/></span>
-          <h1 className="mt-5 text-[21px] font-semibold tracking-tight">{meta.title}</h1>
+          <h1 className="mt-5 text-[21px] font-semibold tracking-tight">{model.title ?? meta.title}</h1>
           <p className="mt-2 break-words text-[40px] font-semibold leading-tight tracking-tight tabular-nums sm:text-[46px]">{amount!==0?(positive?'+':'−'):''}{number(String(Math.abs(amount)))} <span className="text-[23px] text-black/40 dark:text-white/40">{model.asset}</span></p>
           <span role="status" className={`mt-4 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[14px] font-medium ${model.status==='failed'?'bg-red-500/10 text-red-600 dark:bg-red-400/15 dark:text-red-400':model.status==='processing'?'bg-orange-500/10 text-orange-600 dark:bg-orange-400/15 dark:text-orange-400':'bg-green-500/10 text-green-600 dark:bg-green-400/15 dark:text-green-400'}`}><StateIcon size={15}/>{state.label}</span>
         </div>
@@ -164,8 +164,10 @@ export function TransactionListRow({item,onSelect}:{item:TransactionView;onSelec
  const crypto = item.kind === 'deposit' || item.kind === 'withdrawal'
  const network = item.rows.find(([label]) => label === 'Сеть')?.[1]
  const context = crypto ? [currencyLabel(item.asset), network].filter(Boolean).join(' · ') : item.rows.find(([label])=>['Магазин','Получатель','Сеть','Способ','Карта','Получено','Период'].includes(label))?.[1]??'WPay'
+ const timestamp = !item.demo && Number.isFinite(Date.parse(item.date))
+   ? new Date(item.date).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
  const currency = item.asset === 'USD' ? '$' : ''
  const unit = item.asset === 'RUB' ? ' ₽' : item.asset === 'USD' ? '' : ' ' + item.asset
  const amount = `${positive ? '+' : Number(item.amount) < 0 ? '−' : ''}${currency}${number(String(Math.abs(Number(item.amount))))}${unit}`
- return <ListItem link chevron={false} onClick={()=>onSelect(item)} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={22}/></span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{kinds[item.kind].title}</span><span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">{context}{item.demo?' · Демо':''}</span></span><span className={`shrink-0 text-right text-[16px] font-medium tabular-nums ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{amount}</span></span>}/>
+ return <ListItem link chevron={false} onClick={()=>onSelect(item)} contentClassName="!h-16" innerClassName="!min-w-0 !h-16 !py-2 after:!opacity-30" media={<span className={`wpay-currency-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white ${positive?'bg-gradient-to-b from-green-300 to-green-500 dark:from-green-400 dark:to-green-600':'bg-gradient-to-b from-blue-300 to-blue-500 dark:from-blue-400 dark:to-blue-600'}`}><Icon size={22}/></span>} innerChildren={<span className="flex h-full min-w-0 items-center justify-between gap-3"><span className="min-w-0"><span className="block truncate text-[17px] font-semibold leading-6 text-black dark:text-white">{item.title ?? kinds[item.kind].title}</span><span className="mt-0.5 block truncate text-[14px] leading-5 text-black/45 dark:text-white/45">{[timestamp, context, item.demo ? 'Демо' : ''].filter(Boolean).join(' · ')}</span></span><span className={`shrink-0 whitespace-nowrap text-right text-[16px] font-medium tabular-nums ${positive?'text-green-600 dark:text-green-400':'text-black dark:text-white'}`}>{amount}</span></span>}/>
 }

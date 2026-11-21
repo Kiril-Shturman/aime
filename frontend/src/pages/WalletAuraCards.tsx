@@ -1,3 +1,4 @@
+import { TransactionDetails, TransactionListRow, type TransactionView } from "./WalletTransaction";
 import WalletSubscriptionFeatures from "./WalletSubscriptionFeatures";
 import WalletCardFace, { type CardSkin } from "./WalletCardFace";
 import PlusCircleFill from "framework7-icons/react/esm/PlusCircleFill.js";
@@ -39,7 +40,7 @@ import {
   walletRequest,
   WalletApiError,
 } from "../lib/wallet-api";
-import { useLiveWallet, usd } from "./WalletLive";
+import { useLiveWallet } from "./WalletLive";
 
 const DEMO_CARD_ID = "wpay-ui-demo-card";
 type AuraCard = {
@@ -113,6 +114,8 @@ type CardOperation = {
   asset: string;
   amount: string;
   fee: string | null;
+  original_amount?: string | null;
+  original_currency?: string | null;
   merchant: string | null;
   decline_message: string | null;
   provider_created_at: string;
@@ -165,6 +168,7 @@ export default function WalletAuraCards({
   const [quoteError, setQuoteError] = useState("");
   const [quoteRetry, setQuoteRetry] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedOperation, setSelectedOperation] = useState<TransactionView | null>(null);
   const [operations, setOperations] = useState<CardOperation[]>([]);
   const [operationsLoading, setOperationsLoading] = useState(false);
   const [skin, setSkin] = useState<CardSkin>("silver");
@@ -785,16 +789,27 @@ export default function WalletAuraCards({
       <strong>{value}</strong>
     </div>
   );
-  const operationTitle = (op: CardOperation) =>
-    op.merchant ||
-    ({
-      refund: "Возврат",
-      recharge: "Пополнение",
-      topup: "Пополнение",
-      purchase: "Покупка",
-      payment: "Оплата",
-    }[op.operation_type] ??
-      "Операция по карте");
+  const historyItem = (op: CardOperation): TransactionView => {
+    const topup = ["recharge", "topup"].includes(op.operation_type);
+    const refund = ["refund", "reversal"].includes(op.operation_type);
+    const purchase = ["purchase", "payment"].includes(op.operation_type);
+    const status = ["failed", "declined", "rejected"].includes(op.status) ? "failed"
+      : ["processing", "pending", "authorized", "requested"].includes(op.status) ? "processing"
+      : refund || op.status === "refunded" ? "refunded" : "completed";
+    const original = op.original_amount != null && op.original_currency;
+    const asset = original ? op.original_currency! : op.asset;
+    const value = String(original ? op.original_amount : op.amount).replace(/^[+-]/, "");
+    const rows: TransactionView["rows"] = [["Статус карты", operationStatus(op.status)]];
+    if (op.merchant) rows.push(["Магазин", op.merchant]);
+    if (op.fee != null) rows.push(["Комиссия", `${op.fee} ${op.asset}`]);
+    if (op.decline_message) rows.push(["Причина", op.decline_message]);
+    return {
+      id: op.operation_id, kind: topup ? "card_topup" : refund ? "refund" : purchase ? "card_payment" : "other",
+      title: refund ? "Возврат по карте" : !topup && !purchase ? "Операция по карте" : undefined,
+      asset, amount: status === "failed" ? "0" : topup || refund ? value : `-${value}`,
+      status, date: op.provider_created_at, rows,
+    };
+  };
   return (
     <>
       <main
@@ -1272,30 +1287,7 @@ export default function WalletAuraCards({
               ) : operations.length ? (
                 <List strong inset dividers className="wpay-aura-list !my-0">
                   {operations.slice(0, 20).map((op) => (
-                    <ListItem
-                      key={op.operation_id}
-                      title={operationTitle(op)}
-                      subtitle={`${operationStatus(op.status)}${op.decline_message ? ` · ${op.decline_message}` : ""}`}
-                      contentClassName="!min-h-16"
-                      innerClassName="!min-h-16 !py-2 after:!opacity-30"
-                      media={
-                        <span className="wpay-aura-operation-icon">
-                          <CreditCard size={22} />
-                        </span>
-                      }
-                      after={
-                        <span className="text-[15px] font-medium tabular-nums text-black dark:text-white">
-                          {["refund", "recharge", "topup"].includes(
-                            op.operation_type,
-                          )
-                            ? "+"
-                            : "−"}
-                          {op.asset === "USDT" || op.asset === "USD"
-                            ? usd(Number(op.amount))
-                            : `${op.amount} ${op.asset}`}
-                        </span>
-                      }
-                    />
+                    <TransactionListRow key={op.operation_id} item={historyItem(op)} onSelect={setSelectedOperation} />
                   ))}
                 </List>
               ) : (
@@ -1308,6 +1300,7 @@ export default function WalletAuraCards({
           )
         )}
       </main>
+      <TransactionDetails item={selectedOperation} onClose={() => setSelectedOperation(null)} />
       <aside className="wpay-card-tariff-aside" aria-label="Тарифы карт">
         {desktop && (
           <DesktopOwnedCards

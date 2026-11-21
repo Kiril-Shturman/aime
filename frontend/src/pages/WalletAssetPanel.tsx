@@ -1,3 +1,4 @@
+import { TransactionDetails, TransactionListRow, transactionFromApi, type TransactionView } from "./WalletTransaction";
 import WalletOwnedWallets from "./WalletOwnedWallets";
 import WalletAssetAvatar from "./WalletAssetAvatar";
 import {
@@ -8,7 +9,7 @@ import {
 } from "../wallet/catalog";
 import { previewBalances, portfolioExamples } from "../wallet/demo";
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Button, Card } from "konsta/react";
+import { Button, Card, List } from "konsta/react";
 import { createPortal } from "react-dom";
 import { Sheet } from "framework7-react";
 import QRCode from "react-qr-code";
@@ -93,6 +94,7 @@ export default function WalletAssetPanel({
         .join(",")
     : undefined;
   const [ownedAvailable, setOwnedAvailable] = useState(false);
+  const [selectedTransaction, setSelectedTransaction] = useState<TransactionView | null>(null);
   const [allHistory, setAllHistory] = useState(false);
   const historySection = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -476,50 +478,22 @@ export default function WalletAssetPanel({
           <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
             История транзакций
           </h3>
-          <Card className="!m-0 !rounded-[30px]" contentWrapPadding="p-5">
-            {!transactions.length && (
-              <p className="py-3 text-center text-[14px] text-black/45 dark:text-white/45">
-                Операций в {code} пока нет
-              </p>
-            )}
-            {(allHistory ? transactions : transactions.slice(0, 3)).map(
-              (item) => (
-                <div
-                  key={item.event_id}
-                  className="flex items-center justify-between gap-3 border-b border-black/[.06] py-3 first:pt-0 last:border-0 last:pb-0 dark:border-white/[.08]"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-[15px] font-medium text-black dark:text-white">
-                      {item.type === "deposit"
-                        ? "Пополнение"
-                        : item.type === "qr_refunded"
-                          ? "Возврат"
-                          : item.type === "qr_failed"
-                            ? "Платёж не прошёл"
-                            : String(item.detail.merchant_name || "QR-оплата")}
-                    </span>
-                    <span className="mt-1 block text-[12px] text-black/40 dark:text-white/40">
-                      {new Date(item.created_at).toLocaleDateString("ru-RU")}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[14px] font-medium tabular-nums text-black dark:text-white">
-                    {Number(item.amount) > 0 ? "+" : ""}
-                    {cryptoAmount(item.amount)} {code}
-                  </span>
-                </div>
-              ),
-            )}
-            {transactions.length > 3 && (
-              <Button
-                clear
-                rounded
-                className="!mt-3 !w-full"
-                onClick={() => setAllHistory((value) => !value)}
-              >
-                {allHistory ? "Свернуть" : "Все транзакции"}
-              </Button>
-            )}
-          </Card>
+          {transactions.length ? (
+            <List strong inset dividers className="!mx-0 !my-0 overflow-hidden !rounded-[30px] [&>ul]:!rounded-[30px]">
+              {(allHistory ? transactions : transactions.slice(0, 3)).map((item) => (
+                <TransactionListRow key={item.event_id} item={transactionFromApi(item)} onSelect={setSelectedTransaction} />
+              ))}
+            </List>
+          ) : (
+            <Card className="!m-0 !rounded-[30px]" contentWrapPadding="p-5">
+              <p className="py-3 text-center text-[14px] text-black/45 dark:text-white/45">Операций в {code} пока нет</p>
+            </Card>
+          )}
+          {transactions.length > 3 && (
+            <Button clear rounded className="!mt-3 !w-full" onClick={() => setAllHistory((value) => !value)}>
+              {allHistory ? "Свернуть" : "Все транзакции"}
+            </Button>
+          )}
         </section>
         <section className="wpay-asset-about px-4 pb-5 pt-4">
           <h3 className="mb-3 px-2 text-[16px] font-semibold text-black/50 dark:text-white/50">
@@ -704,6 +678,7 @@ export default function WalletAssetPanel({
           </>
         )}
       </div>
+      <TransactionDetails item={active ? selectedTransaction : null} onClose={() => setSelectedTransaction(null)} />
     </main>
   );
 }
