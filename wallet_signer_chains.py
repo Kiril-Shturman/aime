@@ -17,7 +17,7 @@ from tronpy.keys import PrivateKey as TronKey, Signature
 from tronpy.proto import calculate_txid_from_raw_data
 
 from wallet_chain import ERC20, TRON_USDT, units
-from wallet_dex import ROUTER as PANCAKE_ROUTER, swap_calldata
+from wallet_dex import ROUTER as PANCAKE_ROUTER, UNISWAP_ROUTER, swap_calldata
 
 URLS = {'ETH': 'https://ethereum-rpc.publicnode.com',
         'BSC': 'https://bsc-rpc.publicnode.com', 'TRON': 'https://api.trongrid.io', 'SOL': 'https://api.mainnet-beta.solana.com'}
@@ -210,20 +210,24 @@ class Chains:
         }
 
     def estimate_bnb_swap(self, source, recipient, amount, minimum_usdt, deadline):
+        return self.estimate_evm_swap("BSC", source, recipient, amount, minimum_usdt, deadline)
+
+    def estimate_evm_swap(self, network, source, recipient, amount, minimum_usdt, deadline):
+        router, asset = {"BSC": (PANCAKE_ROUTER, "BNB"), "ETH": (UNISWAP_ROUTER, "ETH")}[network]
         source = to_checksum_address(source)
         recipient = to_checksum_address(recipient)
         now = int(time.time())
         if not now < deadline <= now + 120:
             raise PaymentError('QUOTE_EXPIRED')
         quantity = atomic(amount, 18)
-        minimum = atomic(minimum_usdt, 18)
-        data = swap_calldata(recipient, minimum, deadline)
-        if int(self.rpc('BSC', 'eth_chainId', []), 16) != CHAIN_IDS['BSC']:
+        minimum = atomic(minimum_usdt, ERC20[(network, "USDT")][1])
+        data = swap_calldata(recipient, minimum, deadline, network)
+        if int(self.rpc(network, 'eth_chainId', []), 16) != CHAIN_IDS[network]:
             raise PaymentError('RPC_UNAVAILABLE')
-        native = int(self.rpc('BSC', 'eth_getBalance', [source, 'pending']), 16)
-        gas_price = int(self.rpc('BSC', 'eth_gasPrice', []), 16) * 12 // 10 + 1
-        gas = int(self.rpc('BSC', 'eth_estimateGas', [
-            {'from': source, 'to': PANCAKE_ROUTER, 'value': hex(quantity), 'data': data}, 'pending',
+        native = int(self.rpc(network, 'eth_getBalance', [source, 'pending']), 16)
+        gas_price = int(self.rpc(network, 'eth_gasPrice', []), 16) * 12 // 10 + 1
+        gas = int(self.rpc(network, 'eth_estimateGas', [
+            {'from': source, 'to': router, 'value': hex(quantity), 'data': data}, 'pending',
         ]), 16) * 13 // 10 + 1
         if not 21000 <= gas <= 500000 or not 0 < gas_price <= 500_000_000_000:
             raise PaymentError('RPC_UNAVAILABLE')
@@ -231,13 +235,13 @@ class Chains:
         if native < quantity + max_fee:
             raise PaymentError('NO_GAS')
         return {
-            'asset': 'BNB', 'amount': amount, 'minimum_usdt': minimum_usdt,
+            'asset': asset, 'amount': amount, 'minimum_usdt': minimum_usdt,
             'native_balance': units(native, 18), 'max_fee': units(max_fee, 18),
-            'fee_currency': 'BNB', 'expires_at': deadline, 'source_address': source,
-            'recipient': recipient, 'network': 'BSC',
+            'fee_currency': asset, 'expires_at': deadline, 'source_address': source,
+            'recipient': recipient, 'network': network,
             'unsigned': {
-                'chainId': CHAIN_IDS['BSC'], 'to': PANCAKE_ROUTER, 'value': quantity, 'data': data,
-                'nonce': int(self.rpc('BSC', 'eth_getTransactionCount', [source, 'pending']), 16),
+                'chainId': CHAIN_IDS[network], 'to': router, 'value': quantity, 'data': data,
+                'nonce': int(self.rpc(network, 'eth_getTransactionCount', [source, 'pending']), 16),
                 'gas': gas, 'gasPrice': gas_price,
             },
         }
@@ -366,6 +370,20 @@ class Chains:
                 return None
             if int(receipt['status'], 16) != 1:
                 raise PaymentError('TX_FAILED')
+            if quote.get('minimum_usdt') is not None:
+                token, decimals = ERC20[(network, 'USDT')]
+                minimum = atomic(quote['minimum_usdt'], decimals)
+                recipient = quote['recipient'][2:].lower().rjust(64, '0')
+                credited = sum(
+                    int(log['data'], 16) for log in receipt['logs']
+                    if log.get('address', '').lower() == token.lower()
+                    and len(log.get('topics', [])) == 3
+                    and log['topics'][0].lower().removeprefix('0x') == TRANSFER_TOPIC
+                    and log['topics'][2].lower().removeprefix('0x') == recipient
+                )
+                if credited < minimum:
+                    raise ValueError('Expected swap payout missing')
+                return True
             if quote.get('asset') in {'BNB', 'ETH'}:
                 return True
             token = quote.get('asset', 'USDT')

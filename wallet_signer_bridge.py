@@ -4,7 +4,7 @@ import json
 import re
 import time
 
-from wallet_exchange_funding import CUSTODY_WITHDRAWAL_CAPABILITIES
+from wallet_exchange_funding import CUSTODY_WITHDRAWAL_CAPABILITIES, DEX_CAPABILITY
 from wallet_key_export import EXPORT_CAPABILITY
 
 
@@ -17,7 +17,7 @@ def bridge(db,body):
         return export_bridge(db,body)
     if op=='heartbeat':
         networks=body['networks']
-        if not isinstance(networks,list) or set(networks)-({'BSC','ETH','TRON','SOL','BTC','TON',EXPORT_CAPABILITY} | set(CUSTODY_WITHDRAWAL_CAPABILITIES.values())):raise ValueError('Invalid networks')
+        if not isinstance(networks,list) or set(networks)-({'BSC','ETH','TRON','SOL','BTC','TON',EXPORT_CAPABILITY,DEX_CAPABILITY} | set(CUSTODY_WITHDRAWAL_CAPABILITIES.values())):raise ValueError('Invalid networks')
         db.execute('INSERT OR REPLACE INTO custody_signer_status VALUES (?,?,?,?)',(worker,json.dumps(networks),body['key_id'],time.time()))
         return {'ok':True}
     if op=='claim':
@@ -34,8 +34,9 @@ def bridge(db,body):
                     OR EXISTS (SELECT 1 FROM custody_withdrawal_intents w
                                WHERE w.job_id=j.id AND w.asset='BNB' AND ?)
                 )
+                AND (? OR NOT EXISTS (SELECT 1 FROM custody_withdrawal_intents w WHERE w.job_id=j.id AND w.dex_minimum IS NOT NULL))
                 ORDER BY next_attempt_at,created_at LIMIT 1
-            """,(time.time(),time.time(),int(body.get('custody_withdrawals') is True),body.get('native_bnb') is True)).fetchone()
+            """,(time.time(),time.time(),int(body.get('custody_withdrawals') is True),body.get('native_bnb') is True, body.get('evm_dex') is True)).fetchone()
             if not row:db.execute('COMMIT');return {'job':None}
             db.execute("UPDATE custody_funding_jobs SET worker_id=?,lease_until=?,state=CASE WHEN state='confirmed' THEN 'signing' ELSE state END WHERE id=?",(worker,time.time()+120,row['id']))
             db.execute('COMMIT')

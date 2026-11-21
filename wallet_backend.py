@@ -4,6 +4,7 @@ Secrets: GOSWAP_API_TOKEN, WPAY_BOT_TOKEN (or BOARD_BOT_TOKEN).
 Only this module sees the provider token; organization funds are never a user's
 balance. All money arithmetic uses Decimal and SQLite write transactions.
 """
+from collections.abc import Mapping
 from wallet_exchange_routes import (
     prepare as prepare_exchange_rules, rules as exchange_rules,
     save_rule as save_exchange_rule, resolve as resolve_exchange_route, internal_exchange,
@@ -15,11 +16,11 @@ from wallet_card_ui import CardUI
 from wallet_goswap_cards import GoSwapCards
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
 from wallet_key_export import prepare as prepare_key_export, route as key_export_route, fresh as fresh_wallet_auth
-from wallet_exchange_funding import Funding
+from wallet_exchange_funding import DEX_CAPABILITY, Funding
 from wallet_custody_withdrawal import CustodyWithdrawal
 from wallet_admin_wallets import control_wallet, user_wallet_inventory
 from wallet_custody import Custody, custody_route, prepare as prepare_custody
-from wallet_chain import ASSET_NETWORKS as CUSTODY_ASSET_NETWORKS, ChainReader
+from wallet_chain import ASSET_NETWORKS as CUSTODY_ASSET_NETWORKS, ChainReader, ERC20
 from wallet_aura_errors import wallet_error_payload
 import hashlib
 import hmac
@@ -2006,6 +2007,67 @@ def install_wallet(app, root, owner_check):
                 if quote is None:
                     raise ApiError('DEX_UNAVAILABLE', 'DEX пока не вернул котировку', 503)
                 return web.json_response(quote, headers={'Cache-Control': 'no-store'})
+            if action in {'exchange-dex', 'exchange-dex-prepare', 'exchange-dex-confirm'}:
+                body = request.query if request.method == 'GET' else await request.json()
+                if not isinstance(body, Mapping):
+                    raise ValueError('Некорректная заявка DEX')
+                asset = body.get('asset')
+                network = {'BNB': 'BSC', 'ETH': 'ETH'}.get(asset) if isinstance(asset, str) else None
+                pair = {'from_asset': asset, 'from_network': network, 'to_asset': 'USDT', 'to_network': network}
+                enabled = bool(
+                    network and custody.configured and custody.chain_env == 'mainnet'
+                    and os.environ.get('WPAY_EVM_DEX_ENABLED') == '1'
+                    and resolve_exchange_route(ledger, pair, asset_enabled, deposit_provider)['method'] == 'dex'
+                    and exchange_funding.signer(network, capability=DEX_CAPABILITY)
+                )
+                if action == 'exchange-dex' and request.method == 'GET':
+                    job_id = body.get('job_id')
+                    if job_id is None:
+                        pending = ledger.db.execute("""
+                            SELECT j.id FROM custody_funding_jobs j JOIN custody_withdrawal_intents w ON w.job_id=j.id
+                            WHERE j.user_id=? AND w.asset=? AND w.dex_minimum IS NOT NULL
+                            AND j.state IN ('estimating','quoted','confirmed','signing','signed','broadcast','unknown')
+                            ORDER BY j.created_at DESC LIMIT 1
+                        """, (uid, asset)).fetchone()
+                        job_id = pending['id'] if pending else None
+                    job = custody_withdrawal.owned(uid, job_id, dex=True) if job_id else None
+                    if body.get('job_id') and (not job or job['asset'] != asset):
+                        raise ApiError('NOT_FOUND', 'Заявка не найдена', 404)
+                    return web.json_response({'enabled': enabled, 'job': custody_withdrawal.public(job) if job else None},
+                                             headers={'Cache-Control': 'no-store'})
+                if request.method != 'POST' or action == 'exchange-dex':
+                    raise ApiError('METHOD_NOT_ALLOWED', 'Неверный метод', 405)
+                if not enabled:
+                    raise ApiError('DEX_UNAVAILABLE', 'Исполнение DEX для этой пары пока недоступно', 503)
+                if action == 'exchange-dex-confirm':
+                    if set(body) != {'asset', 'job_id', 'approval_id'} or any(
+                        not isinstance(body[k], str) or not re.fullmatch(r'[a-f0-9]{32}', body[k]) for k in ('job_id', 'approval_id')
+                    ):
+                        raise ValueError('Укажите заявку и подтверждение DEX')
+                    job = custody_withdrawal.owned(uid, body['job_id'], dex=True)
+                    if not job or job['asset'] != asset:
+                        raise ApiError('NOT_FOUND', 'Заявка не найдена', 404)
+                    exchange_funding.confirm(uid, body['job_id'], body['approval_id'], native_bnb=True, dex=True)
+                    return web.json_response(custody_withdrawal.public(custody_withdrawal.owned(uid, body['job_id'], dex=True)))
+                if set(body) != {'asset', 'amount'}:
+                    raise ValueError('Укажите монету и сумму DEX')
+                exchange.throttle(uid)
+                quote = await quote_native(app['wpay_chain'], asset, body['amount'])
+                if not quote:
+                    raise ApiError('DEX_UNAVAILABLE', 'DEX пока не вернул котировку', 503)
+                address = await provider.call('getClientAddress', {'client_ref': client_ref, 'network': network}, post=True)
+                if address.get('network') != network or address.get('client_ref') != client_ref:
+                    raise ApiError('EXCHANGE_UNAVAILABLE', 'GoSwap не подтвердил реквизиты пользователя', 502)
+                with localcontext() as ctx:
+                    ctx.prec = 80
+                    precision = ERC20[(network, 'USDT')][1]
+                    minimum = (Decimal(quote['to_amount']) * Decimal('0.99')).quantize(Decimal(1).scaleb(-precision), rounding='ROUND_DOWN')
+                    if minimum <= 0 or minimum < money(address['min_deposit']):
+                        raise ApiError('AMOUNT_TOO_SMALL', 'Сумма получения ниже минимума зачисления GoSwap', 400)
+                save_address(ledger, uid, address, 'USDT')
+                return web.json_response(custody_withdrawal.prepare(uid, {
+                    'asset': asset, 'address': address['address'], 'amount': body['amount'],
+                }, dex_minimum=format(minimum, 'f')), headers={'Cache-Control': 'no-store'})
             if action == 'exchange-route' and request.method == 'GET':
                 route = resolve_exchange_route(ledger, request.query, asset_enabled, deposit_provider)
                 route['managed_order_enabled'] = False

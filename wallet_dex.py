@@ -102,14 +102,15 @@ async def quote_native(chain, asset, amount):
         return None
 
 
-def swap_calldata(recipient, minimum, deadline):
-    """Encode native BNB → USDT with a fixed router path and a bounded payout."""
+def swap_calldata(recipient, minimum, deadline, network="BSC"):
+    """Encode native EVM asset → USDT with a fixed router path and a bounded payout."""
     if not isinstance(recipient, str) or not re.fullmatch(r"0x[0-9a-fA-F]{40}", recipient) or int(recipient, 16) == 0:
         raise ValueError("Invalid payout recipient")
     if type(minimum) is not int or type(deadline) is not int or not all(0 < value < 2**256 for value in (minimum, deadline)):
         raise ValueError("Invalid swap constraints")
-    token, _ = ERC20[("BSC", "USDT")]
+    wrapped = {"BSC": WBNB, "ETH": WETH}[network]
+    token, _ = ERC20[(network, "USDT")]
     return "0x7ff36ab5" + (
         f"{minimum:064x}{128:064x}{recipient[2:].lower():0>64}{deadline:064x}"
-        f"{2:064x}{WBNB:0>64}{token[2:]:0>64}"
+        f"{2:064x}{wrapped:0>64}{token[2:]:0>64}"
     )

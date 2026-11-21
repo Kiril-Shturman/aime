@@ -1,5 +1,6 @@
 """Browser-side custody withdrawal intents for the isolated custody signer."""
 
+import json
 import re
 import time
 import uuid
@@ -10,7 +11,7 @@ from bip_utils import P2WPKHAddrDecoder
 
 from wallet_fixedfloat_orders import address
 from wallet_custody import require_wallet_active
-from wallet_exchange_funding import CUSTODY_WITHDRAWAL_NETWORKS
+from wallet_exchange_funding import CUSTODY_WITHDRAWAL_NETWORKS, DEX_CAPABILITY
 
 
 class CustodyWithdrawal:
@@ -20,12 +21,12 @@ class CustodyWithdrawal:
         self.enabled = enabled
         self.bnb_enabled = bnb_enabled
 
-    def owned(self, uid, job_id):
+    def owned(self, uid, job_id, *, dex=False):
         return self.ledger.db.execute("""
-            SELECT j.*, w.recipient, w.amount, w.asset, w.requested_by
+            SELECT j.*, w.recipient, w.amount, w.asset, w.requested_by, w.dex_minimum
             FROM custody_funding_jobs j JOIN custody_withdrawal_intents w ON w.job_id=j.id
-            WHERE j.user_id=? AND j.id=?
-        """, (uid, job_id)).fetchone()
+            WHERE j.user_id=? AND j.id=? AND (w.dex_minimum IS NOT NULL)=?
+        """, (uid, job_id, dex)).fetchone()
 
     def public(self, row):
         view = self.funding.public(row)
@@ -34,6 +35,8 @@ class CustodyWithdrawal:
         if row["error"] == "NO_GAS":
             view["detail"] = "Недостаточно валюты сети для оплаты комиссии."
         quote = view["quote"]
+        if quote and row["dex_minimum"] is not None:
+            quote["minimum_usdt"] = json.loads(row["quote"])["minimum_usdt"]
         if quote and quote.get("fee_currency") == row["asset"]:
             with localcontext() as context:
                 context.prec = 50
@@ -53,12 +56,13 @@ class CustodyWithdrawal:
             return normalized
         return value if network in {"TRON", "SOL"} else "0x" + normalized
 
-    def prepare(self, uid, body, *, actor=None, wallet_id=None, audit=None):
+    def prepare(self, uid, body, *, actor=None, wallet_id=None, audit=None, dex_minimum=None):
         asset = body.get("asset", "BNB")
         if not isinstance(asset, str) or asset not in CUSTODY_WITHDRAWAL_NETWORKS:
             raise ValueError("Монета не поддерживается для вывода")
         network = CUSTODY_WITHDRAWAL_NETWORKS[asset]
-        if not self.funding.signer(network, withdrawal_asset=asset):
+        dex = dex_minimum is not None
+        if not self.funding.signer(network, withdrawal_asset=asset, capability=DEX_CAPABILITY if dex else None):
             raise self.funding.error("SIGNER_UNAVAILABLE", f"Подписант {asset} временно недоступен", 503)
         if set(body) - {"address", "amount", "asset"} or not {"address", "amount"} <= set(body):
             raise ValueError("Укажите адрес и сумму")
@@ -95,7 +99,7 @@ class CustodyWithdrawal:
                 state IN ('estimating','quoted','confirmed','signing','signed','broadcast','unknown')
             """, (wallet["id"],)).fetchone()
             if current:
-                row = self.owned(uid, current["id"])
+                row = self.owned(uid, current["id"], dex=dex)
                 if not row or row["requested_by"] != actor or row["asset"] != asset or row["recipient"] != recipient or Decimal(row["amount"]) != amount:
                     raise self.funding.error("PAYMENT_IN_PROGRESS", "С этого адреса уже выполняется операция", 409)
                 self.ledger.commit()
@@ -106,7 +110,7 @@ class CustodyWithdrawal:
                 VALUES (?,?,?,?,?,'estimating',?,?)
             """, (identifier, identifier, uid, wallet["id"], network, stamp, stamp))
             self.ledger.db.execute(
-                "INSERT INTO custody_withdrawal_intents (job_id,recipient,amount,asset,requested_by) VALUES (?,?,?,?,?)", (identifier, recipient, raw, asset, actor),
+                "INSERT INTO custody_withdrawal_intents (job_id,recipient,amount,asset,requested_by,dex_minimum) VALUES (?,?,?,?,?,?)", (identifier, recipient, raw, asset, actor, dex_minimum),
             )
             if actor and audit:
                 audit(actor, "wallet.withdrawal_requested", uid,
@@ -115,7 +119,7 @@ class CustodyWithdrawal:
         except Exception:
             self.ledger.rollback()
             raise
-        return self.public(self.owned(uid, identifier))
+        return self.public(self.owned(uid, identifier, dex=dex))
 
     async def route(self, request, action, uid, require_asset_enabled, *, actor=None, wallet_id=None, audit=None):
         if action not in {"custody-withdrawal", "custody-withdrawal-prepare", "custody-withdrawal-confirm"}:
@@ -129,7 +133,7 @@ class CustodyWithdrawal:
                 raise ValueError("Монета не поддерживается для вывода")
             row = self.ledger.db.execute("""
                 SELECT j.id FROM custody_funding_jobs j JOIN custody_withdrawal_intents w ON w.job_id=j.id
-                WHERE j.user_id=? AND w.asset=? AND w.requested_by IS ?
+                WHERE j.user_id=? AND w.asset=? AND w.requested_by IS ? AND w.dex_minimum IS NULL
                   AND (? IS NULL OR j.wallet_id=?) AND j.state IN
                     ('estimating','quoted','confirmed','signing','signed','broadcast','unknown')
                 ORDER BY j.created_at DESC LIMIT 1

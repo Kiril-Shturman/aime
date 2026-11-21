@@ -10,7 +10,7 @@ type Job = {
   amount: string;
   tx_hash: string | null;
   detail: string | null;
-  quote: { approval_id: string; max_fee: string; fee_currency: string; estimated_total?: string; expires_at: number; source_address: string } | null;
+  quote: { approval_id: string; max_fee: string; fee_currency: string; minimum_usdt?: string; estimated_total?: string; expires_at: number; source_address: string } | null;
 };
 type Status = { enabled: boolean; job: Job | null };
 
@@ -28,9 +28,10 @@ const statuses: Record<string, string> = {
 };
 const inputClass = "rounded-xl bg-black/5 p-3 dark:bg-white/10";
 
-export default function WalletCustodyWithdrawal({ asset, network, adminScope }: {
+export default function WalletCustodyWithdrawal({ asset, network, adminScope, dexAmount }: {
   asset: string;
   network: string;
+  dexAmount?: string;
   adminScope?: { userId: string; walletId: string };
 }) {
   const [status, setStatus] = useState<Status>();
@@ -44,7 +45,8 @@ export default function WalletCustodyWithdrawal({ asset, network, adminScope }: 
 
   const operator = adminScope?.userId;
   const walletId = adminScope?.walletId;
-  const action = operator ? "admin-custody-withdrawal" : "custody-withdrawal";
+  const dex = dexAmount !== undefined;
+  const action = dex ? "exchange-dex" : operator ? "admin-custody-withdrawal" : "custody-withdrawal";
   const scope = operator && walletId
     ? new URLSearchParams({ user_id: operator, wallet_id: walletId }).toString()
     : "";
@@ -67,11 +69,11 @@ export default function WalletCustodyWithdrawal({ asset, network, adminScope }: 
     };
   }, [action, asset, jobId, polling, scope]);
 
-  const normalized = amount.trim().replace(",", ".");
+  const normalized = (dexAmount ?? amount).trim().replace(",", ".");
   const precision = ({ TRX: 6, XAUT: 6, SOL: 9, BTC: 8, GRAM: 9 } as Record<string, number>)[asset] ?? 18;
   const validAmount = new RegExp(`^\\d{1,12}(?:\\.\\d{1,${precision}})?$`).test(normalized) && /[1-9]/.test(normalized);
   const validAddress = network === "BTC" ? /^bc1q[a-z0-9]{38}$/.test(address.trim()) : isRecipientAddress(network, address.trim());
-  const valid = validAddress && validAmount;
+  const valid = (dex || validAddress) && validAmount;
   const quote = job?.state === "quoted" ? job.quote : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -81,8 +83,8 @@ export default function WalletCustodyWithdrawal({ asset, network, adminScope }: 
     setError("");
     try {
       const result = quote && job
-        ? await walletRequest<Job>(action + "-confirm" + (scope ? "?" + scope : ""), { job_id: job.job_id, approval_id: quote.approval_id })
-        : await walletRequest<Job>(action + "-prepare" + (scope ? "?" + scope : ""), { asset, address: address.trim(), amount: normalized });
+        ? await walletRequest<Job>(action + "-confirm" + (scope ? "?" + scope : ""), { ...(dex ? { asset } : {}), job_id: job.job_id, approval_id: quote.approval_id })
+        : await walletRequest<Job>(action + "-prepare" + (scope ? "?" + scope : ""), { asset, ...(dex ? {} : { address: address.trim() }), amount: normalized });
       setStatus({ enabled: true, job: result });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось обновить заявку");
@@ -91,13 +93,15 @@ export default function WalletCustodyWithdrawal({ asset, network, adminScope }: 
     }
   }
 
+  if (dex && !status) return null;
   return (
     <form onSubmit={submit} className="mx-auto grid w-full max-w-[560px] gap-4 px-4 py-6">
       <p className="text-sm opacity-60">{networkNames[network] ?? network} · Собственный кошелёк</p>
       {operator && <p className="text-sm opacity-60">Операторский вывод для {operator}. Подтверждение попадёт в аудит.</p>}
       {job ? (
         <Card className="!m-0 !rounded-[28px]">
-          <p className="font-semibold">Получатель получит {job.amount} {asset}</p>
+          <p className="font-semibold">{dex ? "Обмен" : "Получатель получит"} {job.amount} {asset}</p>
+          {dex && quote?.minimum_usdt && <p className="mt-2 text-sm">Минимум к зачислению: {quote.minimum_usdt} USDT</p>}
           <p className="break-all text-sm opacity-60">{job.recipient}</p>
           {quote && (
             <dl className="mt-3 grid gap-2 text-sm">
@@ -113,11 +117,11 @@ export default function WalletCustodyWithdrawal({ asset, network, adminScope }: 
               </div>
             </dl>
           )}
-          {statuses[job.state] && <p role="status" className="mt-2">{statuses[job.state]}</p>}
+          {statuses[job.state] && <p role="status" className="mt-2">{dex && job.state === "done" ? "Обмен подтверждён сетью. USDT зачислит GoSwap." : statuses[job.state]}</p>}
           {job.detail && <p className="mt-2 text-sm">{job.detail}</p>}
           {job.tx_hash && <p className="mt-2 break-all font-mono text-xs">{network === "TON" ? "Хеш сообщения: " : ""}{job.tx_hash}</p>}
         </Card>
-      ) : (
+      ) : !dex && (
         <>
           <label className="grid gap-2 text-sm">
             Адрес получателя
@@ -132,11 +136,11 @@ export default function WalletCustodyWithdrawal({ asset, network, adminScope }: 
         </>
       )}
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
-      {status && !status.enabled && <p role="status">Вывод {asset} сейчас недоступен.</p>}
+      {status && !status.enabled && <p role="status">{dex ? "Исполнение DEX сейчас недоступно." : `Вывод ${asset} сейчас недоступен.`}</p>}
       {(!job || quote) && (
         <Button type="submit" rounded data-wpay-primary=""
           disabled={busy || !status?.enabled || (!quote && !valid)}>
-          {busy ? "Проверяем…" : quote ? `Подтвердить вывод ${asset}` : "Рассчитать комиссию"}
+          {busy ? "Проверяем…" : quote ? (dex ? "Подтвердить обмен" : `Подтвердить вывод ${asset}`) : (dex ? "Подготовить обмен" : "Рассчитать комиссию")}
         </Button>
       )}
       {job && !quote && !pending.has(job.state) && (
@@ -144,7 +148,7 @@ export default function WalletCustodyWithdrawal({ asset, network, adminScope }: 
           setAddress("");
           setAmount("");
           setStatus((current) => current && { ...current, job: null });
-        }}>Новый вывод</Button>
+        }}>{dex ? "Новый обмен" : "Новый вывод"}</Button>
       )}
     </form>
   );

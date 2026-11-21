@@ -19,7 +19,7 @@ from wallet_custody import decode, fingerprint
 from wallet_custody_tools import load_private, verify_wallet
 from wallet_fixedfloat_orders import Orders, address
 from wallet_signer_chains import Chains, PaymentError, atomic
-from wallet_exchange_funding import CUSTODY_WITHDRAWAL_NETWORKS, CUSTODY_WITHDRAWAL_CAPABILITIES
+from wallet_exchange_funding import CUSTODY_WITHDRAWAL_NETWORKS, CUSTODY_WITHDRAWAL_CAPABILITIES, DEX_CAPABILITY
 from wallet_custody_withdrawal import CustodyWithdrawal
 from wallet_key_export import EXPORT_NETWORKS, EXPORT_CAPABILITY
 
@@ -137,13 +137,23 @@ class Controller:
         if 'withdrawal' in item:
             binding['kind'] = 'custody_withdrawal'
             binding['asset'] = item['withdrawal']['asset']
+            if item['withdrawal'].get('dex_minimum') is not None:
+                binding['kind'] = 'dex_swap'
+                binding['minimum_usdt'] = item['withdrawal']['dex_minimum']
         else:
             binding['provider_id'] = item['order']['provider_id']
         return binding
 
-    def estimate(self, item, instructions):
+    def estimate(self, item, instructions, approved=None):
         job, wallet = item['job'], item['wallet']
         if 'withdrawal' in item:
+            minimum = item['withdrawal'].get('dex_minimum')
+            if minimum is not None:
+                return self.chains.estimate_evm_swap(
+                    job['network'], wallet['address'], instructions['pay_address'],
+                    instructions['from_amount'], minimum,
+                    approved['expires_at'] if approved else int(time.time()) + 90,
+                )
             quote = self.chains.estimate_withdrawal(item['withdrawal']['asset'], job['network'], wallet['address'],
                                                     instructions['pay_address'], instructions['from_amount'],
                                                     public_key=wallet['public_key'])
@@ -219,7 +229,7 @@ class Controller:
             if fresh['pay_address'] != quote['recipient'] or fresh['from_amount'] != quote['amount']:
                 raise ValueError('Payment instructions changed')
             # Re-estimation validates live balances, nonce, fee and execution; never silently alter approval.
-            current = self.estimate(item, fresh)
+            current = self.estimate(item, fresh, approved=quote)
             if job['network'] in {'BSC','ETH'} and (current['unsigned']['nonce'] != quote['unsigned']['nonce']):
                 raise PaymentError('QUOTE_EXPIRED')
             if Decimal(current['max_fee']) > Decimal(quote['max_fee']):
@@ -276,11 +286,11 @@ class Controller:
             self.bridge('export-complete', job_id=job['id'], ciphertext=None)
 
     def cycle(self):
-        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'SOL', 'BTC', 'TON', EXPORT_CAPABILITY, *CUSTODY_WITHDRAWAL_CAPABILITIES.values()], key_id=self.key_id)
+        self.bridge('heartbeat', networks=['BSC', 'ETH', 'TRON', 'SOL', 'BTC', 'TON', EXPORT_CAPABILITY, DEX_CAPABILITY, *CUSTODY_WITHDRAWAL_CAPABILITIES.values()], key_id=self.key_id)
         export = self.bridge('export-claim', multi_network=True)
         if export.get('job'):
             self.process_export(export)
-        item = self.bridge('claim', custody_withdrawals=True)
+        item = self.bridge('claim', custody_withdrawals=True, evm_dex=True)
         if item.get('job'):
             self.process(item)
 

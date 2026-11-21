@@ -31,6 +31,38 @@ class SignerChainTests(unittest.TestCase):
             with self.assertRaises(ValueError): adapter.verify(changed, payload, txid)
             with self.assertRaises(ValueError): adapter.verify(quote, payload, '0x' + '0' * 64)
 
+    def test_evm_dex_binds_minimum_and_checks_finalized_payout(self):
+        from wallet_chain import ERC20
+        from wallet_dex import ROUTER, UNISWAP_ROUTER
+        from wallet_signer_chains import TRANSFER_TOPIC
+
+        source = "0x" + "11" * 20
+        recipient = "0x" + "22" * 20
+        txid = "0x" + "ab" * 32
+        for network, chain_id, router in (("BSC", 56, ROUTER), ("ETH", 1, UNISWAP_ROUTER)):
+            adapter = Chains()
+            with patch.object(adapter, "rpc", side_effect=[
+                hex(chain_id), hex(10**20), hex(10**9), hex(120_000), "0x2"
+            ]):
+                quote = adapter.estimate_evm_swap(network, source, recipient, "0.1", "2", int(time.time()) + 60)
+            token, decimals = ERC20[(network, "USDT")]
+            minimum = 2 * 10**decimals
+            self.assertEqual(quote["unsigned"]["to"], router)
+            self.assertEqual(int(quote["unsigned"]["data"][10:74], 16), minimum)
+            log = {
+                "address": token,
+                "topics": ["0x" + TRANSFER_TOPIC, "0x" + "33" * 32, "0x" + recipient[2:].rjust(64, "0")],
+                "data": hex(minimum),
+            }
+            receipt = {"transactionHash": txid, "blockNumber": "0x3", "blockHash": "0xabc", "status": "0x1", "logs": [log]}
+            final_block = {"number": "0x4", "hash": "0xabc"}
+            with patch.object(adapter, "rpc", side_effect=[receipt, final_block, final_block]):
+                self.assertTrue(adapter.receipt(quote, txid))
+            log["data"] = hex(minimum - 1)
+            with patch.object(adapter, "rpc", side_effect=[receipt, final_block, final_block]):
+                with self.assertRaisesRegex(ValueError, "Expected swap payout"):
+                    adapter.receipt(quote, txid)
+
     def test_tron_signed_roundtrip_and_tampering(self):
         from wallet_chain import TRON_USDT
         seed = b'2' * 32

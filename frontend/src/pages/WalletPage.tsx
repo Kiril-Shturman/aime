@@ -1888,15 +1888,19 @@ function CryptoFlowPushView({
               value={amount.replace(",", ".")} mode={managedPayout ? "fixed" : "float"} quoteValid={Boolean(currentQuote?.payout)}
               onIntentChange={setExchangeOrderOpen} />
           )}
+          {canQuoteDex && sourceNetwork && (fromAsset.code === "BNB" || fromAsset.code === "ETH") && (
+            <WalletCustodyWithdrawal key={pair} asset={fromAsset.code} network={sourceNetwork} dexAmount={amount} />
+          )}
           {exchangeMethod === "internal" ? (
             <Button data-wpay-primary="" rounded large className="!w-full"
               disabled={internalBusy || parsedAmount <= 0 || parsedAmount > (networkBalance("from") ?? 0)}
               onClick={() => void submitInternalExchange()}>
               {internalBusy ? "Перемещаем…" : "Переместить USDT 1:1"}
             </Button>
-          ) : !(managedPayout || (canQuote && fixedFloatOrdersEnabled && fromAsset.code === "USDT")) && <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">Исполнение обмена пока недоступно</p>}
+          ) : !(managedPayout || (canQuote && fixedFloatOrdersEnabled && fromAsset.code === "USDT")
+            || (exchangeMethod === "dex" && (fromAsset.code === "BNB" || fromAsset.code === "ETH"))) && <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">Исполнение обмена пока недоступно</p>}
           <p className="mt-3 text-center text-[12px] text-black/35 dark:text-white/35">
-            Расчёт справочный. Обмен пока недоступен.
+            Котировка справочная. Сумма и комиссия уточняются перед подтверждением.
           </p>
         </main>
         {createPortal(
