@@ -66,6 +66,8 @@ type CardPlan = {
   issue_fee: string | null;
   available: boolean;
   tariff_configured?: boolean;
+  provider_issue_fee?: string | null;
+  service_issue_fee?: string;
   service_recharge_pct: string;
   service_minimum_fee: string;
 };
@@ -811,6 +813,34 @@ export default function WalletAuraCards({
       <strong>{value}</strong>
     </div>
   );
+  const offerTerms = () => {
+    const auraPlan = fees?.plans?.find(plan => plan.kind === currentKind && plan.skin === activeOffer?.skin);
+    const plan = goSwapOffer ? storefrontPlan : auraPlan;
+    const provider = goSwapOffer ? "GoSwap" : "Aura";
+    const providerTopup = goSwapOffer ? storefrontPlan.provider_recharge_fee
+      : currentKind === "physical" ? fees?.physical_recharge_fee_pct : fees?.recharge_fee_pct;
+    const serviceTopup = plan?.service_recharge_pct ?? "0";
+    const totalTopup = goSwapOffer ? storefrontPlan.total_recharge_pct
+      : providerTopup == null || providerTopup === "" ? undefined
+        : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 8 }).format(Number(providerTopup) + Number(serviceTopup));
+    const minimum = goSwapOffer ? "От $10 · при первом пополнении"
+      : fees?.minimum_recharge_amount ? `От ${fees.minimum_recharge_amount} USDT` : "—";
+    const issue = goSwapOffer ? storefrontPlan.issue_fee ? `${storefrontPlan.issue_fee} USDT` : "—"
+      : fees ? planPrice(currentKind, activeOffer?.skin) : "—";
+    return <>
+      <h3 className="mt-5 text-base font-semibold">Условия карты</h3>
+      <div className="wpay-aura-info wpay-aura-card-terms mt-2">
+        {infoRow("Выпуск карты", issue)}
+        {plan?.provider_issue_fee != null && infoRow(`${provider} + wPay`, `${plan.provider_issue_fee} + ${plan.service_issue_fee ?? "0"} USDT`)}
+        {infoRow("Комиссия за пополнение", totalTopup != null ? `${totalTopup}%` : "—")}
+        {providerTopup != null && providerTopup !== "" && infoRow(`${provider} + wPay`, `${providerTopup}% + ${serviceTopup}%`)}
+        {Number(plan?.service_minimum_fee) > 0 && infoRow("Минимальная комиссия wPay", `${plan?.service_minimum_fee} USDT`)}
+        {infoRow("Минимум пополнения", minimum)}
+        {goSwapOffer && storefrontPlan.conditions?.length ? infoRow("Оплата телефоном", storefrontPlan.conditions.join(" · ")) : null}
+        {premiumOffer && infoRow("Доставка", "Бесплатно")}
+      </div>
+    </>;
+  };
   const historyItem = (op: CardOperation): TransactionView => {
     const topup = ["recharge", "topup"].includes(op.operation_type);
     const refund = ["refund", "reversal"].includes(op.operation_type);
@@ -1203,17 +1233,7 @@ export default function WalletAuraCards({
                 issuerDetails: storefrontPlan.region === "Сингапур",
               }}
             />
-            <h3 className="mt-5 text-base font-semibold">Условия карты</h3>
-            <div className="wpay-aura-info wpay-aura-card-terms mt-2">
-              {infoRow("Валюта карты", "USD")}
-              {storefrontPlan.issue_fee && infoRow("Выпуск карты", `${storefrontPlan.issue_fee} USDT`)}
-              {storefrontPlan.provider_issue_fee && infoRow("Из них GoSwap / wPay", `${storefrontPlan.provider_issue_fee} / ${storefrontPlan.service_issue_fee} USDT`)}
-              {storefrontPlan.total_recharge_pct && infoRow("Пополнение карты", `${storefrontPlan.total_recharge_pct}% сверху`)}
-              {storefrontPlan.provider_recharge_fee && infoRow("Из них GoSwap / wPay", `${storefrontPlan.provider_recharge_fee}% / ${storefrontPlan.service_recharge_pct}%`)}
-              {Number(storefrontPlan.service_minimum_fee) > 0 && infoRow("Минимальная комиссия wPay", `${storefrontPlan.service_minimum_fee} USDT`)}
-              {infoRow("Первое пополнение", "От $10 · активирует карту")}
-              {storefrontPlan.conditions?.length ? infoRow("Оплата телефоном", storefrontPlan.conditions.join(" · ")) : null}
-            </div>
+            {offerTerms()}
             <Button rounded large disabled className="wpay-aura-primary !mt-4 !w-full">Оформить карту</Button>
             <p className="mt-2 text-center text-sm opacity-60">Выпуск и оплата GoSwap в мини-аппе пока не подключены.</p>
           </section>
@@ -1256,35 +1276,7 @@ export default function WalletAuraCards({
                 }
               />
             )}
-            <div className="wpay-aura-info mt-4">
-              {currentKind === "virtual" &&
-                fees &&
-                infoRow(
-                  "Пополнение карты",
-                  `От ${fees.minimum_recharge_amount} USDT · комиссия ${fees.recharge_fee_pct}%`,
-                )}
-              {fees?.plans
-                ?.filter(
-                  (plan) =>
-                    plan.kind === currentKind &&
-                    plan.skin === activeOffer?.skin,
-                )
-                .map((plan) => (
-                  <div key={plan.plan_id}>
-                    {infoRow(
-                      "Комиссия wPay за пополнение",
-                      `${plan.service_recharge_pct}% · минимум ${plan.service_minimum_fee} USDT`,
-                    )}
-                  </div>
-                ))}
-              {premiumOffer && infoRow("Доставка", "Бесплатно")}
-              {infoRow(
-                "Выпуск",
-                fees
-                  ? planPrice(currentKind, activeOffer?.skin)
-                  : "Тариф загружается",
-              )}
-            </div>
+            {offerTerms()}
             <Button
               rounded
               large
