@@ -1247,3 +1247,23 @@
 .wpay-card-catalog-services > span:not(.wpay-catalog-app-store) svg { width: 13px; height: 13px; }
 .wpay-card-catalog-services > .wpay-catalog-app-store { width: 26px; min-height: 26px; padding: 0; }
 .wpay-catalog-app-store svg { width: 12px; height: 12px; flex-basis: 12px; }
+
+.wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art) {
+  --catalog-glow: #ff691c78;
+  background: radial-gradient(ellipse at 84% 60%, var(--catalog-glow), transparent 61%), #161b29;
+}
+.wpay-card-catalog-art:has(.wpay-card-catalog-subscription-art) {
+  grid-row: 1 / 5;
+}
+.wpay-card-catalog-subscription-art {
+  position: relative;
+  display: block;
+  width: 93%;
+  height: auto;
+  margin: -20% auto -5%;
+  filter: drop-shadow(0 7px 13px #ff711a8c);
+}
+.wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art) .wpay-card-catalog-price {
+  border-color: #ffc39955;
+  background: linear-gradient(120deg, #291c2aab, #9b3b1b91);
+}

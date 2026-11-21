@@ -1,3 +1,4 @@
+import subscriptionArtwork from "../assets/card-benefits/subscriptions.webp";
 import LogoApple from "framework7-icons/react/esm/LogoApple.js";
 import LogoGoogle from "framework7-icons/react/esm/LogoGoogle.js";
 import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
@@ -1062,7 +1063,12 @@ export default function WalletAuraCards({
               </span>
               <ChevronRight size={20} aria-hidden="true" />
             </span>
-            <span className="wpay-card-catalog-art" aria-hidden="true"><LiveCardArtwork kind={kind} skin={appearance} /></span>
+            <span className="wpay-card-catalog-art" aria-hidden="true">
+              <LiveCardArtwork kind={kind} skin={appearance} />
+              {appearance === "silver" && kind === "virtual" && (
+                <img className="wpay-card-catalog-subscription-art" src={subscriptionArtwork} alt="" />
+              )}
+            </span>
             <span className="wpay-card-catalog-benefits">
               {appearance === "silver" ? "Подписки и онлайн-покупки"
                 : appearance === "navy" ? "Бронирования и покупки в поездках"
