@@ -8,6 +8,7 @@ from wallet_exchange_routes import (
     prepare as prepare_exchange_rules, rules as exchange_rules,
     save_rule as save_exchange_rule, resolve as resolve_exchange_route, internal_exchange,
 )
+from wallet_dex import PAIR as DEX_PAIR, quote_bnb
 import asyncio
 from wallet_fixedfloat_orders import Orders
 from wallet_card_ui import CardUI
@@ -1827,6 +1828,19 @@ def install_wallet(app, root, owner_check):
                     ledger, uid, await request.json(), request.headers.get('Idempotency-Key', ''),
                     asset_enabled, deposit_provider, ApiError,
                 ), headers={'Cache-Control': 'no-store'})
+            if action == 'exchange-dex-quote' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != set(DEX_PAIR) | {'amount'}:
+                    raise ValueError('Укажите пару и сумму DEX')
+                if any(body[key] != value for key, value in DEX_PAIR.items()) or resolve_exchange_route(
+                    ledger, body, asset_enabled, deposit_provider,
+                )['method'] != 'dex':
+                    raise ApiError('EXCHANGE_UNAVAILABLE', 'Котировка DEX для этой пары недоступна', 409)
+                exchange.throttle(uid)
+                quote = await quote_bnb(app['wpay_chain'], body['amount'])
+                if quote is None:
+                    raise ApiError('DEX_UNAVAILABLE', 'PancakeSwap пока не вернул котировку', 503)
+                return web.json_response(quote, headers={'Cache-Control': 'no-store'})
             if action == 'exchange-route' and request.method == 'GET':
                 route = resolve_exchange_route(ledger, request.query, asset_enabled, deposit_provider)
                 route['managed_order_enabled'] = False

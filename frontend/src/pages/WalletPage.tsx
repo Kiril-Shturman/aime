@@ -1569,6 +1569,26 @@ function CryptoFlowPushView({
       if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, text: error instanceof Error ? error.message : "Не удалось рассчитать обмен" });
     }
   }
+  const canQuoteDex = exchangeMethod === "dex" && fromAsset.code === "BNB" &&
+    sourceNetwork === "BSC" && toAsset.code === "USDT" && destinationNetwork === "BSC" &&
+    Number(amount.replace(",", ".")) > 0;
+  async function quoteDex() {
+    quoteRequest.current?.abort();
+    const controller = new AbortController();
+    quoteRequest.current = controller;
+    setProviderQuote({ key: quoteKey, text: "Запрашиваем котировку PancakeSwap…" });
+    try {
+      const quote = await walletRequest<{ to_amount: string }>("exchange-dex-quote", {
+        from_asset: fromAsset.code, from_network: sourceNetwork,
+        to_asset: toAsset.code, to_network: destinationNetwork, amount: amount.replace(",", "."),
+      }, controller.signal);
+      if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, payout: quote.to_amount,
+        text: `PancakeSwap v2 · ${quote.to_amount} USDT. Комиссия сети не включена.` });
+    } catch (error) {
+      if (!controller.signal.aborted) setProviderQuote({ key: quoteKey,
+        text: error instanceof Error ? error.message : "Не удалось получить котировку PancakeSwap" });
+    }
+  }
   const currentQuote = providerQuote?.key === quoteKey ? providerQuote : null;
   const [internalBusy, setInternalBusy] = useState(false);
   const exchangeIntent = useRef<{ fingerprint: string; key: string } | null>(null);
@@ -1731,7 +1751,7 @@ function CryptoFlowPushView({
                         aria-label="Сумма получения"
                         className={`min-w-0 flex-1 truncate text-[44px] font-medium leading-none tracking-tight ${receiveAmount > 0 && hasRate ? "text-black dark:text-white" : "text-black/30 dark:text-white/30"}`}
                       >
-                        {exchangeMethod === "fixedfloat"
+                        {(exchangeMethod === "fixedfloat" || exchangeMethod === "dex")
                           ? currentQuote?.payout ?? "—"
                           : hasRate && receiveAmount > 0 ? formatCrypto(receiveAmount, 8) : "0.00"}
                       </output>
@@ -1778,11 +1798,6 @@ function CryptoFlowPushView({
               <ArrowRightArrowLeft className="rotate-90 text-[22px]" />
             </button>
           </div>
-          {exchangeMethod === "dex" && <p
-            role="status" className="my-4 text-center text-[13px] text-black/45 dark:text-white/45"
-          >
-            {hasRate ? `Оценка по рынку · 1 ${fromAsset.code} ≈ ${formatCrypto(exchangeRate, 8)} ${toAsset.code}` : "Курс пока недоступен"}
-          </p>}
           <p role="status" className="mb-4 text-center text-sm">
             {exchangeMethod === "internal" ? "Внутренний обмен GoSwap · 1:1"
               : exchangeMethod === "dex" ? "DEX · обмен в одной сети"
@@ -1796,7 +1811,12 @@ function CryptoFlowPushView({
               Рассчитать в FixedFloat
             </Button>
           )}
-          {canQuote && currentQuote && (
+          {canQuoteDex && (
+            <Button data-wpay-primary="" rounded large className="!w-full" onClick={() => void quoteDex()}>
+              Рассчитать в PancakeSwap
+            </Button>
+          )}
+          {(canQuote || canQuoteDex) && currentQuote && (
             <p role="status" className="mt-3 text-center text-sm">{currentQuote.text}</p>
           )}
           {managedPayout && sourceNetwork && destinationNetwork && canQuote && (
