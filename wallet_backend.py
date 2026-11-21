@@ -50,7 +50,7 @@ from wallet_notifications import (
 from wallet_referrals import capture as capture_referral, ensure_code as ensure_referral_code, prepare as prepare_referrals, summary as referral_summary
 from wallet_operations import goswap_network_balances, prepare_operations, operations_route, save_address
 from wallet_withdrawals import prepare_withdrawals, withdrawal_route, reconcile as reconcile_withdrawals, debt
-from wallet_tariffs import set_card_issue_enabled
+from wallet_tariffs import set_card_issue_enabled, set_storefront_product
 from wallet_tariffs import prepare as prepare_tariffs, snapshot as tariff_snapshot, create_version as create_tariff_version
 from wallet_aura import saved_kyc_identity
 from wallet_aura import (
@@ -2213,6 +2213,19 @@ def install_wallet(app, root, owner_check):
                     await admin_card_action(request, uid),
                     headers={'Cache-Control': 'private, no-store'},
                 )
+            if action == 'admin-card-storefront' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'slot', 'product'}:
+                    raise ValueError('Некорректная настройка витрины')
+                ledger.begin('admin_card_storefront', uid, 'Change card storefront configuration')
+                try:
+                    set_storefront_product(ledger, body['slot'], body['product'], uid)
+                    record_admin_action(uid, 'tariffs.card_storefront', detail=body)
+                    ledger.commit()
+                except Exception:
+                    ledger.rollback()
+                    raise
+                return web.json_response({'ok': True})
             if action == 'admin-card-plan-availability' and request.method == 'POST':
                 body = await request.json()
                 if not isinstance(body, dict) or set(body) != {'product', 'enabled'}:

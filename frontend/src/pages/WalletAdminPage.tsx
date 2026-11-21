@@ -770,6 +770,20 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
     }
   }
 
+  async function selectStorefrontProvider(slot: string, product: string) {
+    setSaving(true);
+    setNotice("");
+    try {
+      await walletRequest("admin-card-storefront", { slot, product });
+      await reload();
+      setNotice("Настройка витрины сохранена");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Не удалось сохранить провайдера");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   function choose(product: string) {
     const item = data.items.find((row) => row.product === product);
     if (!item) return;
@@ -834,7 +848,17 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                   <li key={item.product} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                     <span className="w-5 text-[var(--admin-muted)]">{String(item.storefront_position)}.</span>
                     <strong>{item.label}</strong>
-                    <span className="admin-wallet-provider" data-provider="aura">Aura</span>
+                    <span className="admin-wallet-provider" data-provider="aura">Сейчас Aura</span>
+                    {typeof item.storefront_goswap_product === "string" && (
+                      <select aria-label={`Провайдер для «${item.label}»`}
+                        className="admin-storefront-provider"
+                        value={text(item.storefront_selected_product)}
+                        disabled={saving}
+                        onChange={event => void selectStorefrontProvider(item.product, event.target.value)}>
+                        <option value={item.product}>Aura</option>
+                        <option value={item.storefront_goswap_product}>GoSwap · после подключения</option>
+                      </select>
+                    )}
                     <small className="ml-auto text-[var(--admin-muted)]">
                       {item.issue_enabled === false ? "Выпуск выключен"
                         : !item.version_id ? "Тариф не настроен"
@@ -844,7 +868,8 @@ function Tariffs({ data, reload }: { data: TariffsData; reload: () => Promise<vo
                   </li>
                 ))}
             </ol>
-            <p className="mt-3 text-xs text-[var(--admin-muted)]">Физические карты отображаются, когда Aura возвращает цену выпуска. Карты GoSwap пока не подключены к витрине.</p>
+            {notice && <p role="status" className="mt-2 text-xs">{notice}</p>}
+            <p className="mt-3 text-xs text-[var(--admin-muted)]">Физические карты отображаются, когда Aura возвращает цену выпуска. Выбор GoSwap сохраняется для будущего запуска. До подключения выпуска на витрине действует Aura.</p>
           </div>
         )}
         {section === "cards" && ([["Карты Aura", "Aura"], ["Карты GoSwap", "GoSwap"]] as const).map(([label, provider]) => (

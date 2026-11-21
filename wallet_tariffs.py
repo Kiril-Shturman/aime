@@ -30,6 +30,7 @@ GOSWAP_SINGAPORE_TERMS = {
     "provider_issue_fee": "7.00", "provider_issue_currency": "USD",
     "provider_recharge_fee": "1.3", "conditions": ["Apple Pay", "Google Pay"],
 }
+GOSWAP_STOREFRONT_PLANS = {"card_subscriptions": "goswap_card_sg_1", "card_travel": "goswap_card_sg_2"}
 GOSWAP_CARD_PLANS = {
     "goswap_card_sg_1": {**GOSWAP_SINGAPORE_TERMS, "label": CARD_PLANS["card_subscriptions"]["label"]},
     "goswap_card_sg_2": {**GOSWAP_SINGAPORE_TERMS, "label": CARD_PLANS["card_travel"]["label"]},
@@ -54,6 +55,9 @@ def prepare(ledger):
       CREATE TABLE IF NOT EXISTS wallet_card_plan_availability (
         product TEXT PRIMARY KEY, enabled INTEGER NOT NULL,
         updated_at REAL NOT NULL, updated_by TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS wallet_card_storefront (
+        slot TEXT PRIMARY KEY, product TEXT NOT NULL, updated_at REAL NOT NULL, updated_by TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS wallet_tariff_product_created
         ON wallet_tariff_versions(product,created_at DESC);
@@ -100,15 +104,30 @@ def set_card_issue_enabled(ledger, product, enabled, actor):
     )
 
 
+def set_storefront_product(ledger, slot, product, actor):
+    if not isinstance(slot, str) or slot not in CARD_PLANS:
+        raise ValueError("Неизвестная позиция витрины")
+    if not isinstance(product, str) or product not in (slot, GOSWAP_STOREFRONT_PLANS.get(slot)):
+        raise ValueError("Тариф несовместим с этой позицией витрины")
+    ledger.db.execute(
+        "INSERT INTO wallet_card_storefront VALUES (?,?,?,?) ON CONFLICT(slot) "
+        "DO UPDATE SET product=excluded.product,updated_at=excluded.updated_at,updated_by=excluded.updated_by",
+        (slot, product, time.time(), actor),
+    )
+
+
 def snapshot(ledger):
     items = []
+    selected = dict(ledger.db.execute("SELECT slot,product FROM wallet_card_storefront").fetchall())
     positions = {product: index for index, product in enumerate(CARD_PLANS, start=1)}
     for product, (label, enforced) in PRODUCTS.items():
         item = active(ledger, product)
         item.update(label=label, enforced=enforced)
         if product in CARD_PLANS:
             item.update(CARD_PLANS[product], card_plan=True, provider="Aura", category="cards",
-                        issue_enabled=card_issue_enabled(ledger, product), storefront_position=positions[product])
+                        issue_enabled=card_issue_enabled(ledger, product), storefront_position=positions[product],
+                        storefront_active_product=product, storefront_selected_product=selected.get(product, product),
+                        storefront_goswap_product=GOSWAP_STOREFRONT_PLANS.get(product))
         elif product in GOSWAP_CARD_PLANS:
             item.update(GOSWAP_CARD_PLANS[product], card_plan=True, provider="GoSwap", category="cards",
                         issue_enabled=card_issue_enabled(ledger, product))

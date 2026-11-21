@@ -2208,3 +2208,5 @@
 .admin-tariff-sections button:hover { border-color: var(--wpay-admin-action); }
 .admin-tariff-sections button > svg:first-child { grid-column: 1 / -1; color: var(--wpay-admin-action); }
 .admin-tariff-sections button > svg:last-child { color: var(--admin-muted); }
+
+.wpay-admin-content select.admin-storefront-provider { width: auto; min-height: 32px; max-width: 100%; padding: 4px 10px; border-radius: 8px; }
