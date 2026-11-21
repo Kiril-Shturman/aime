@@ -25,6 +25,7 @@ import {
   Check,
   CreditCard,
   ShoppingBasket,
+  Store,
   Copy,
   Truck,
   KeyRound,
@@ -1061,6 +1062,12 @@ export default function WalletAuraCards({
               {plan?.total_recharge_pct != null && (
                 <span><b>{offerNumber.format(Number(plan.total_recharge_pct))}%</b><small>Пополнение</small></span>
               )}
+            </span>
+            <span className="wpay-card-catalog-services">
+              {plan?.conditions?.includes("Apple Pay") && <img src="/brands/apple-pay.svg" alt="Apple Pay" />}
+              {plan?.conditions?.includes("Google Pay") && <img src="/brands/google-pay.svg" alt="Google Pay" />}
+              {appearance === "silver" && <span><Store size={13} aria-hidden="true" />App Store</span>}
+              {plan?.region === "Сингапур" && <span><span aria-hidden="true">🇸🇬</span>Сингапур</span>}
             </span>
           </button>
         ))}

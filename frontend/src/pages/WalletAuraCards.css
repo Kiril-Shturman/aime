@@ -1113,3 +1113,13 @@
 .wpay-card-catalog-price { grid-column: 1 / -1; background: #0b172657; border: 0; border-radius: 16px; padding: 10px 12px; }
 .wpay-card-catalog-price > span { display: grid; gap: 2px; }
 .wpay-card-catalog-price b { color: #fff; }
+
+.wpay-card-catalog-item, .dark .wpay-card-catalog-item { grid-template-columns: minmax(0, 1fr) minmax(0, .95fr); }
+.wpay-card-catalog-art .wpay-bank-card.wpay-card-scene { aspect-ratio: 1.586; transform: none; }
+.wpay-card-catalog-art .wpay-card-face { inset: 0; border-radius: 12px; }
+.wpay-card-catalog-price { padding: 0; background: transparent; justify-content: flex-start; flex-wrap: wrap; }
+.wpay-card-catalog-price > span { background: #ffffff1a; border-radius: 999px; padding: 7px 12px; text-align: center; }
+.wpay-card-catalog-services { grid-column: 1 / -1; display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.wpay-card-catalog-services img { width: auto; height: 22px; }
+.wpay-card-catalog-services > span { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; background: #ffffff1a; border-radius: 999px; padding: 4px 8px; }
+.wpay-card-catalog-services:empty { display: none; }
