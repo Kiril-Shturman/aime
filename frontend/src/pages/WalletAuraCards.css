@@ -1252,6 +1252,7 @@
 
 .wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art) {
   row-gap: 9px;
+  padding-top: 25px;
   background: none;
   border-color: transparent;
   box-shadow: none;
@@ -1274,6 +1275,7 @@
 
 .wpay-card-catalog-art:has(.wpay-card-catalog-subscription-art) {
   grid-row: 1 / 5;
+  margin-top: -45px;
 }
 .wpay-card-catalog-subscription-art {
   position: relative;
