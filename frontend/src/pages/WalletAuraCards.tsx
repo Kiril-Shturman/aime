@@ -758,6 +758,20 @@ export default function WalletAuraCards({
     ?? legacyOffers.map(offer => ({ ...offer, plan: undefined }));
   const carouselOffers = desktop ? [] : offers;
   const catalogEnabled = !desktop && !loading && cards.length === 0 && !goswapIssues.some(item => item.state === "completed") && offers.length > 0;
+  const showCatalog = catalogEnabled && catalogOffer === null;
+  const [rapiraAsk, setRapiraAsk] = useState<number | null>(null);
+  useEffect(() => {
+    if (!showCatalog) return;
+    const controller = new AbortController();
+    setRapiraAsk(null);
+    void walletRequest<{ ask: { price: string }[] }>("rapira-depth", undefined, controller.signal)
+      .then(({ ask }) => {
+        const prices = ask.map(({ price }) => Number(price)).filter(price => Number.isFinite(price) && price > 0);
+        if (!controller.signal.aborted && prices.length) setRapiraAsk(Math.min(...prices));
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [showCatalog]);
   const catalogSwipe = useRef<{ x: number; y: number } | null>(null);
   const activeOffer = carouselOffers[activeSlide - cards.length];
   useEffect(() => {
@@ -1038,7 +1052,7 @@ export default function WalletAuraCards({
       status, date: op.provider_created_at, rows,
     };
   };
-  if (catalogEnabled && catalogOffer === null) {
+  if (showCatalog) {
     return (
       <main className="wpay-card-catalog mx-auto w-full max-w-[560px] px-4 pb-6" aria-label="Витрина карт">
         {offers.map(({ kind, skin: appearance, plan }, index) => (
@@ -1092,7 +1106,8 @@ export default function WalletAuraCards({
               <span><b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
                 ? (Number(plan.issue_fee) === 10 ? "10$ или 850₽" : `${offerNumber.format(Number(plan.issue_fee))}$`) : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>
               {plan?.total_recharge_pct != null && (
-                <span><b>{offerNumber.format(Number(plan.total_recharge_pct))}%</b><small>Пополнение</small></span>
+                <span><b>{rapiraAsk === null ? "—" : (rapiraAsk * (1 + Number(plan.total_recharge_pct) / 100))
+                  .toLocaleString("ru-RU", { style: "currency", currency: "RUB" })}</b><small>Ориентир за 1 USDT</small></span>
               )}
             </span>
           </button>
