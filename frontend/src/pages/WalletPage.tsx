@@ -1501,27 +1501,36 @@ function CryptoFlowPushView({
     return network ? usdtNetworkBalances[network] : undefined;
   };
   const sourceNetwork = fromAsset.code === "USDT" ? networkFor("from") : assetNetworks[fromAsset.code]?.[0];
-  const [destinationAvailability, setDestinationAvailability] = useState<{ key: string; available: string[] } | null>(null);
+  const [destinationAvailability, setDestinationAvailability] = useState<{ key: string; available: string[]; failed?: boolean } | null>(null);
   const destinationKey = new URLSearchParams({ from_asset: fromAsset.code, from_network: sourceNetwork ?? "" }).toString();
   useEffect(() => {
-    if (assetPicker !== "to" || flow?.kind !== "exchange" || !sourceNetwork) return;
+    if (flow?.kind !== "exchange" || !sourceNetwork) return;
     const controller = new AbortController();
     setDestinationAvailability(null);
     void walletRequest<{ available: string[] }>(`exchange-destinations?${destinationKey}`, undefined, controller.signal)
       .then(({ available }) => { if (!controller.signal.aborted) setDestinationAvailability({ key: destinationKey, available }); })
-      .catch(() => { if (!controller.signal.aborted) setDestinationAvailability({ key: destinationKey, available: [] }); });
+      .catch(() => { if (!controller.signal.aborted) setDestinationAvailability({ key: destinationKey, available: [], failed: true }); });
     return () => controller.abort();
   }, [assetPicker, destinationKey, flow?.kind, sourceNetwork]);
   const canSelectDestination = (asset: string, network: string) =>
     assetPicker !== "to" || (destinationAvailability?.key === destinationKey &&
       destinationAvailability.available.includes(`${asset}:${network}`));
   const destinationNetwork = toAsset.code === "USDT" ? networkFor("to") : assetNetworks[toAsset.code]?.[0];
+  const availability = destinationAvailability?.key === destinationKey ? destinationAvailability : null;
+  const destinationReady = Boolean(availability?.available.includes(`${toAsset.code}:${destinationNetwork}`));
+  useEffect(() => {
+    if (flow?.kind !== "exchange" || destinationReady || !availability?.available.length) return;
+    const preferred = availability.available.find((value) => value === "USDT:BSC") ?? availability.available[0];
+    const [asset, network] = preferred.split(":");
+    setToCode(asset);
+    if (asset === "USDT") setUsdtNetworks((previous) => ({ ...previous, to: network }));
+  }, [flow?.kind, availability, destinationReady]);
   const pair = new URLSearchParams({
     from_asset: fromAsset.code, from_network: sourceNetwork ?? "",
     to_asset: toAsset.code, to_network: destinationNetwork ?? "",
   }).toString();
   useEffect(() => {
-    if (flow?.kind !== "exchange" || !sourceNetwork || !destinationNetwork) return;
+    if (flow?.kind !== "exchange" || !sourceNetwork || !destinationNetwork || !destinationReady) return;
     let controller: AbortController | undefined;
     const load = () => {
       controller?.abort();
@@ -1534,8 +1543,8 @@ function CryptoFlowPushView({
     load();
     window.addEventListener("focus", load);
     return () => { controller?.abort(); window.removeEventListener("focus", load); };
-  }, [flow?.kind, pair, sourceNetwork, destinationNetwork]);
-  const exchangeMethod = exchangeRoute?.pair === pair ? exchangeRoute.method : "";
+  }, [flow?.kind, pair, sourceNetwork, destinationNetwork, destinationReady]);
+  const exchangeMethod = destinationReady && exchangeRoute?.pair === pair ? exchangeRoute.method : "";
   const [manualPayout, setManualPayout] = useState(false);
   const [fixedFloatOrdersEnabled, setFixedFloatOrdersEnabled] = useState(false);
   useEffect(() => {
@@ -1547,7 +1556,7 @@ function CryptoFlowPushView({
       .catch(() => { if (!controller.signal.aborted) setFixedFloatOrdersEnabled(false); });
     return () => controller.abort();
   }, [flow?.kind, exchangeMethod, fromAsset.code, toAsset.code]);
-  const defaultPayout = exchangeRoute?.pair === pair ? exchangeRoute.payout : undefined;
+  const defaultPayout = destinationReady && exchangeRoute?.pair === pair ? exchangeRoute.payout : undefined;
   const managedPayout = manualPayout ? undefined : defaultPayout;
   const [, setExchangeOrderOpen] = useState(false);
 
@@ -1738,7 +1747,8 @@ function CryptoFlowPushView({
             {(["from", "to"] as const).map((side) => {
               const giving = side === "from",
                 asset = giving ? fromAsset : toAsset;
-              const usdtNetwork = asset.code === "USDT" ? networkFor(side) : undefined;
+              const showCurrency = giving || destinationReady;
+              const usdtNetwork = showCurrency && asset.code === "USDT" ? networkFor(side) : undefined;
               const displayBalance = asset.code === "USDT" ? networkBalance(side) : balances[asset.code];
               const network = usdtNetwork ? addressNetworkStandards[usdtNetwork] : null;
               return (
@@ -1777,7 +1787,7 @@ function CryptoFlowPushView({
                         aria-label="Сумма получения"
                         className={`min-w-0 flex-1 truncate text-[44px] font-medium leading-none tracking-tight ${receiveAmount > 0 && hasRate ? "text-black dark:text-white" : "text-black/30 dark:text-white/30"}`}
                       >
-                        {(exchangeMethod === "fixedfloat" || exchangeMethod === "dex")
+                        {!destinationReady ? "—" : (exchangeMethod === "fixedfloat" || exchangeMethod === "dex")
                           ? currentQuote?.payout ?? "—"
                           : hasRate && receiveAmount > 0 ? formatCrypto(receiveAmount, 8) : "0.00"}
                       </output>
@@ -1793,7 +1803,7 @@ function CryptoFlowPushView({
                       }}
                       className="flex min-h-12 shrink-0 items-center gap-1.5 py-1 pl-1 text-black dark:text-white"
                     >
-                      {usdtNetwork ? (
+                      {showCurrency && (usdtNetwork ? (
                         <span className="wpay-exchange-asset-avatar">
                           <WalletAssetAvatar icon={asset.icon} color={asset.color} iconColor={asset.iconColor} network={usdtNetwork} />
                         </span>
@@ -1804,9 +1814,9 @@ function CryptoFlowPushView({
                       >
                         {asset.icon}
                       </span>
-                      )}
+                      ))}
                       <span className="text-left">
-                        <span className="block text-[18px] font-semibold leading-tight">{asset.code}</span>
+                        <span className="block text-[18px] font-semibold leading-tight">{showCurrency ? asset.code : "Выбрать"}</span>
                         {network && <span className="block text-xs text-black/45 dark:text-white/45">{network}</span>}
                       </span>
                       <ChevronRight className="rotate-90 text-[16px] text-black/35 dark:text-white/35" />
@@ -1825,7 +1835,9 @@ function CryptoFlowPushView({
             </button>
           </div>
           <p role="status" className="mb-4 text-center text-sm">
-            {exchangeMethod === "internal" ? "Внутренний обмен GoSwap · 1:1"
+            {availability?.failed ? "Не удалось проверить доступные пары"
+              : availability && !availability.available.length ? "Для этой валюты сейчас нет доступных направлений"
+              : exchangeMethod === "internal" ? "Внутренний обмен GoSwap · 1:1"
               : exchangeMethod === "dex" ? "DEX · обмен в одной сети"
               : exchangeMethod === "fixedfloat" ? "Маршрут через FixedFloat"
               : exchangeMethod === "disabled" ? "Для этой пары обмен отключён"
