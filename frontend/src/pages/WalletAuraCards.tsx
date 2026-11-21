@@ -1,4 +1,4 @@
-import subscriptionArtwork from "../assets/card-benefits/subscription-services.png";
+import subscriptionArtwork from "../assets/card-benefits/subscription-services-amber.png";
 import LogoApple from "framework7-icons/react/esm/LogoApple.js";
 import LogoGoogle from "framework7-icons/react/esm/LogoGoogle.js";
 import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
