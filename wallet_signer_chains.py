@@ -225,6 +225,10 @@ class Chains:
         if int(self.rpc(network, 'eth_chainId', []), 16) != CHAIN_IDS[network]:
             raise PaymentError('RPC_UNAVAILABLE')
         native = int(self.rpc(network, 'eth_getBalance', [source, 'pending']), 16)
+        if native < quantity:
+            raise PaymentError('NO_FUNDS')
+        if native == quantity:
+            raise PaymentError('NO_GAS')
         gas_price = int(self.rpc(network, 'eth_gasPrice', []), 16) * 12 // 10 + 1
         gas = int(self.rpc(network, 'eth_estimateGas', [
             {'from': source, 'to': router, 'value': hex(quantity), 'data': data}, 'pending',
