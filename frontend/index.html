@@ -3,32 +3,35 @@
   <head>
     <meta charset="UTF-8" />
     <script>
-      // Telegram may send a native callback before its WebApp SDK is ready.
+      // Queue native callbacks while the Telegram SDK is loading.
       (() => {
         const pending = [];
         const earlyReceiver = (type, data) => {
           if (pending.length < 64) pending.push([type, data]);
         };
-        const ensureReceiver = () => {
+        const connectReceiver = () => {
           const proxy = window.TelegramGameProxy || {};
-          if (typeof proxy.receiveEvent === "function") return;
           const webView = window.Telegram && window.Telegram.WebView;
-          proxy.receiveEvent = webView && typeof webView.receiveEvent === "function"
+          const sdkReceiver = webView && typeof webView.receiveEvent === "function"
             ? webView.receiveEvent.bind(webView)
-            : earlyReceiver;
+            : undefined;
+          if (typeof proxy.receiveEvent !== "function" || proxy.receiveEvent === earlyReceiver) {
+            proxy.receiveEvent = sdkReceiver || earlyReceiver;
+          }
           window.TelegramGameProxy = proxy;
-        };
-        ensureReceiver();
-        window.addEventListener("pageshow", ensureReceiver);
-        document.addEventListener("DOMContentLoaded", () => {
-          ensureReceiver();
-          const receiver = window.TelegramGameProxy;
-          if (receiver.receiveEvent === earlyReceiver) return;
+          if (typeof window.TelegramGameProxy_receiveEvent !== "function"
+              || window.TelegramGameProxy_receiveEvent === earlyReceiver) {
+            window.TelegramGameProxy_receiveEvent = proxy.receiveEvent;
+          }
+          if (proxy.receiveEvent === earlyReceiver) return;
           for (const [type, data] of pending.splice(0)) {
-            try { receiver.receiveEvent(type, data); }
+            try { proxy.receiveEvent(type, data); }
             catch (error) { console.warn("Telegram callback failed", error); }
           }
-        }, { once: true });
+        };
+        connectReceiver();
+        window.addEventListener("pageshow", connectReceiver);
+        document.addEventListener("DOMContentLoaded", connectReceiver, { once: true });
       })();
     </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
