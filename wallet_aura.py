@@ -3720,6 +3720,7 @@ def process_inbox(ledger, environment, limit=20):
                         ledger, f"aura:deposit:{environment}:{deposit_id}",
                         owner[0], "deposit", "Пополнение зачислено",
                         f"На баланс USDT TRC‑20 зачислено {net:f} {asset}.",
+                        variables={"amount": format(net, "f"), "asset": asset, "network_suffix": " USDT TRC‑20"},
                     )
             elif kind in {"customer.deposit.pending", "customer.deposit.rejected"}:
                 deposit_id = _safe_identifier(data.get("id") or data.get("deposit_id"), "deposit id")

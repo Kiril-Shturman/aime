@@ -1405,7 +1405,7 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         from wallet_notifications import enqueue
 
         endpoint = "/api/wallet/admin-notifications"
-        template = {"title": "wPay · {title}", "message": "{message}\nСпасибо!", "button_text": ""}
+        template = {"title": "wPay · {title}", "message": "Зачислено {amount} {asset}.\nСпасибо!", "button_text": ""}
         request = {"operation": "template", "event_type": "deposit", "template": template}
         denied = await self.wpay.post(endpoint, headers={"X-Telegram-Init-Data": init_data(123)}, json=request)
         self.assertEqual(denied.status, 403)
@@ -1414,9 +1414,10 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         settings = (await response.json())["settings"]
         self.assertEqual(next(row for row in settings if row["event_type"] == "deposit")["template"], template)
         ledger = self.app["wpay_ledger"]
-        enqueue(ledger, "deposit:test-template", "tg:123", "deposit", "Зачисление", "10 USDT")
+        enqueue(ledger, "deposit:test-template", "tg:123", "deposit", "Зачисление", "10 USDT",
+                variables={"amount": "10", "asset": "USDT"})
         row = ledger.db.execute("SELECT title,message,button_text FROM notification_outbox").fetchone()
-        self.assertEqual(tuple(row), ("wPay · Зачисление", "10 USDT\nСпасибо!", None))
+        self.assertEqual(tuple(row), ("wPay · Зачисление", "Зачислено 10 USDT.\nСпасибо!", None))
         request["template"] = None
         reset = await self.wpay.post(endpoint, headers=self.owner, json=request)
         self.assertEqual(reset.status, 200)

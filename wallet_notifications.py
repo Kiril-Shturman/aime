@@ -24,12 +24,13 @@ DEFAULT_EVENTS = {
 
 TEMPLATE_DEFAULT = {"title": "{title}", "message": "{message}", "button_text": "Открыть WPay"}
 TEMPLATE_LIMITS = {"title": 200, "message": 3500, "button_text": 64}
-TEMPLATE_TOKEN = re.compile(r"\{(title|message)\}")
+TEMPLATE_TOKEN = re.compile(r"\{(title|message|amount|asset|network_suffix)\}")
+DEPOSIT_TOKENS = {"{amount}", "{asset}", "{network_suffix}"}
 
 
-def render_template(template, title, message):
-    values = {"title": str(title), "message": str(message)}
-    return TEMPLATE_TOKEN.sub(lambda token: values[token[1]], template)
+def render_template(template, title, message, variables=None):
+    values = {"title": str(title), "message": str(message), **(variables or {})}
+    return TEMPLATE_TOKEN.sub(lambda token: values.get(token[1], ""), template)
 
 
 def save_template(ledger, event_type, template, actor):
@@ -40,11 +41,12 @@ def save_template(ledger, event_type, template, actor):
         return
     if not isinstance(template, dict) or template.keys() != TEMPLATE_DEFAULT.keys():
         raise ValueError("Некорректный шаблон уведомления")
+    allowed = {"{title}", "{message}"} | (DEPOSIT_TOKENS if event_type == "deposit" else set())
     for field, limit in TEMPLATE_LIMITS.items():
         value = template[field]
         if not isinstance(value, str) or len(value) > limit or (field != "button_text" and not value.strip()):
             raise ValueError("Проверьте текст и длину полей шаблона")
-        if any(token not in {"{title}", "{message}"} for token in re.findall(r"\{[^{}]+\}", value)):
+        if any(token not in allowed for token in re.findall(r"\{[^{}]+\}", value)):
             raise ValueError("В шаблоне есть неизвестная переменная")
         if field == "button_text" and TEMPLATE_TOKEN.search(value):
             raise ValueError("Текст кнопки задаётся без переменных")
@@ -94,7 +96,7 @@ def prepare(ledger):
 
 
 def enqueue(ledger, source_key, user_id, event_type, title, message,
-            button_text="Открыть WPay", button_url=None):
+            button_text="Открыть WPay", button_url=None, *, variables=None):
     """Queue in the caller's current transaction; source_key makes retries harmless."""
     if not user_id or not str(user_id).startswith("tg:"):
         return False
@@ -112,14 +114,14 @@ def enqueue(ledger, source_key, user_id, event_type, title, message,
     if custom:
         template = json.loads(custom[0])
         original_title = title
-        title = render_template(template["title"], title, message)
+        title = render_template(template["title"], title, message, variables)
         button_text = template["button_text"]
         if event_type == "card_otp":
             # Freeze the template with the queued row without persisting the code.
             otp_body_template = re.sub(r"\{title\}", lambda _: str(original_title), template["message"])
             message = render_template(otp_body_template, original_title, message)
         else:
-            message = render_template(template["message"], original_title, message)
+            message = render_template(template["message"], original_title, message, variables)
     stamp = time.time()
     cursor = ledger.db.execute(
         "INSERT OR IGNORE INTO notification_outbox "

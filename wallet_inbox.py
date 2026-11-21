@@ -250,6 +250,7 @@ async def process(ledger, provider, row, money, ApiError):
                         ledger, "goswap:deposit:" + str(payload.get("deposit_id")),
                         owner[0], "deposit", "Пополнение зачислено",
                         f"На баланс зачислено {amount} {asset}.",
+                        variables={"amount": amount, "asset": asset, "network_suffix": ""},
                     )
             elif kind in {
                 "qr_payment_completed",

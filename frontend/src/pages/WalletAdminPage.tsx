@@ -3261,6 +3261,12 @@ const defaultNotificationTemplate: NotificationTemplate = {
   title: "{title}", message: "{message}", button_text: "Открыть WPay",
 };
 
+const depositNotificationTemplate: NotificationTemplate = {
+  ...defaultNotificationTemplate,
+  title: "Пополнение зачислено",
+  message: "На баланс{network_suffix} зачислено {amount} {asset}.",
+};
+
 const notificationExamples: Record<string, [string, string]> = {
   deposit: ["Пополнение зачислено", "На баланс USDT TRC‑20 зачислено 10 USDT."],
   withdrawal: ["Вывод средств", "Статус вывода: completed. Сумма: 5 USDT."],
@@ -3411,7 +3417,7 @@ function Notifications({
               <div className="flex items-center gap-3">
                 <button type="button" className="text-sm font-semibold text-blue-600 dark:text-blue-400"
                   disabled={Boolean(saving)} aria-expanded={editor?.eventType === setting.event_type}
-                  onClick={() => setEditor({ eventType: setting.event_type, draft: { ...(setting.template ?? defaultNotificationTemplate) } })}>
+                  onClick={() => setEditor({ eventType: setting.event_type, draft: { ...(setting.template ?? (setting.event_type === "deposit" ? depositNotificationTemplate : defaultNotificationTemplate)) } })}>
                   Редактировать
                 </button>
                 <input type="checkbox" aria-label={`Отправлять уведомления «${setting.label}»`}
@@ -3424,8 +3430,12 @@ function Notifications({
         </div>
         {editor && (() => {
           const [exampleTitle, exampleMessage] = notificationExamples[editor.eventType] ?? ["Уведомление", "Пример сообщения"];
+          const variables: Record<string, string> = {
+            title: exampleTitle, message: exampleMessage,
+            amount: "10", asset: "USDT", network_suffix: " USDT TRC‑20",
+          };
           const preview = (value: string) =>
-            value.replace(/\{(title|message)\}/g, (_, token) => token === "title" ? exampleTitle : exampleMessage);
+            value.replace(/\{(title|message|amount|asset|network_suffix)\}/g, (_, token) => variables[token]);
           const fields = [
             ["title", "Заголовок", 200],
             ["message", "Текст сообщения", 3500],
@@ -3437,7 +3447,11 @@ function Notifications({
               <div className="grid gap-3">
                 <h3 className="font-semibold">{data.settings.find((item) => item.event_type === editor.eventType)?.label}</h3>
                 <p className="text-xs opacity-70">
-                  {"{title}"} вставляет исходный заголовок, {"{message}"} — текст события. Пустое поле кнопки скрывает её.
+                  {editor.eventType === "deposit" ? (
+                    <>{"{amount}"} — сумма зачисления, {"{asset}"} — валюта, {"{network_suffix}"} — сеть Aura. Пустое поле кнопки скрывает её.</>
+                  ) : (
+                    <>{"{title}"} вставляет исходный заголовок, {"{message}"} — текст события. Пустое поле кнопки скрывает её.</>
+                  )}
                 </p>
                 {fields.map(([name, label, maxLength]) => {
                   const props = {
