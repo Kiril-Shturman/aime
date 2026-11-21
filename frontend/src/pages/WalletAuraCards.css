@@ -1030,7 +1030,5 @@
   inset: auto 0 0;
   z-index: 31;
   padding: 8px 16px max(12px, env(safe-area-inset-bottom));
-  background: var(--f7-page-bg-color, #fff);
 }
-.dark .wpay-card-action-slot:not(:empty) { background: var(--f7-page-bg-color, #000); }
 .wpay-card-action-slot:not(:empty) + .wpay-bottom-menu { display: none; }
