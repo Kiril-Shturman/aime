@@ -1,5 +1,5 @@
 import WalletExchangeOrder from "./WalletExchangeOrder";
-import { assetNetworks } from "../wallet/catalog";
+import { assetNetworks, networkLabel } from "../wallet/catalog";
 import SupportChatPushView from "./WalletSupportChat";
 import WalletPromos from "./WalletPromos";
 import WalletVerification, {
@@ -1525,9 +1525,9 @@ function CryptoFlowPushView({
   const managedPayout = exchangeRoute?.pair === pair ? exchangeRoute.payout : undefined;
   const [, setExchangeOrderOpen] = useState(false);
 
-  const [providerQuote, setProviderQuote] = useState<{ key: string; text: string } | null>(null);
+  const [providerQuote, setProviderQuote] = useState<{ key: string; text: string; payout?: string } | null>(null);
   const quoteRequest = useRef<AbortController | null>(null);
-  const quoteKey = `${pair}&amount=${amount}`;
+  const quoteKey = `${pair}&amount=${amount}&rate=${managedPayout ? "fixed" : "float"}`;
   useEffect(() => () => quoteRequest.current?.abort(), [flow?.kind, quoteKey, exchangeMethod]);
   const canQuote = exchangeMethod === "fixedfloat" && fromAsset.code === "USDT" &&
     toAsset.code === "USDT" && Number(amount.replace(",", ".")) > 0;
@@ -1537,17 +1537,39 @@ function CryptoFlowPushView({
     quoteRequest.current = controller;
     setProviderQuote({ key: quoteKey, text: "Рассчитываем…" });
     try {
-      const quote = await walletRequest<{ available: boolean; to_amount: string | null }>("exchange-quote", {
+      const quote = await walletRequest<{ available: boolean; to_amount: string | null; reasons: string[]; unavailable_sides?: string[] }>("exchange-quote", {
         from_network: sourceNetwork, to_network: destinationNetwork,
         amount: amount.replace(",", "."), rate_type: managedPayout ? "fixed" : "float",
       }, controller.signal);
-      if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, text: quote.available && quote.to_amount
-        ? `Оценка FixedFloat · ${quote.to_amount} USDT`
-        : "FixedFloat пока не даёт расчёт для этой суммы или пары" });
+      if (controller.signal.aborted) return;
+      const payout = quote.available ? quote.to_amount ?? undefined : undefined;
+      const reasons: Record<string, string> = {
+        LIMIT_MIN: "Сумма меньше минимума FixedFloat для этого направления",
+        LIMIT_MAX: "Сумма выше лимита FixedFloat для этого направления",
+        RESERVE_FROM: "У FixedFloat недостаточно ликвидности для этой пары",
+        RESERVE_TO: "У FixedFloat недостаточно ликвидности для выплаты",
+        MAINTENANCE_FROM: "Сеть отправки на обслуживании в FixedFloat",
+        MAINTENANCE_TO: "Сеть выплаты на обслуживании в FixedFloat",
+        OFFLINE_FROM: "Сеть отправки недоступна в FixedFloat",
+        OFFLINE_TO: "Сеть выплаты недоступна в FixedFloat",
+      };
+      const unavailable = quote.unavailable_sides?.map((side) =>
+        side === "from"
+          ? `FixedFloat сейчас не принимает USDT в сети ${networkLabel(sourceNetwork ?? "", "USDT")}`
+          : `FixedFloat сейчас не выплачивает USDT в сети ${networkLabel(destinationNetwork ?? "", "USDT")}`,
+      );
+      setProviderQuote({
+        key: quoteKey, payout,
+        text: payout ? `По расчёту FixedFloat получите ${payout} USDT`
+          : unavailable?.length ? unavailable.join(". ")
+          : quote.reasons.map((reason) => reasons[reason] ?? "Направление временно недоступно в FixedFloat").join(". ")
+            || "Не удалось получить расчёт FixedFloat",
+      });
     } catch (error) {
       if (!controller.signal.aborted) setProviderQuote({ key: quoteKey, text: error instanceof Error ? error.message : "Не удалось рассчитать обмен" });
     }
   }
+  const currentQuote = providerQuote?.key === quoteKey ? providerQuote : null;
   const [internalBusy, setInternalBusy] = useState(false);
   const exchangeIntent = useRef<{ fingerprint: string; key: string } | null>(null);
   const submittingExchange = useRef(false);
@@ -1709,9 +1731,9 @@ function CryptoFlowPushView({
                         aria-label="Сумма получения"
                         className={`min-w-0 flex-1 truncate text-[44px] font-medium leading-none tracking-tight ${receiveAmount > 0 && hasRate ? "text-black dark:text-white" : "text-black/30 dark:text-white/30"}`}
                       >
-                        {hasRate && receiveAmount > 0
-                          ? formatCrypto(receiveAmount, 8)
-                          : "0.00"}
+                        {exchangeMethod === "fixedfloat"
+                          ? currentQuote?.payout ?? "—"
+                          : hasRate && receiveAmount > 0 ? formatCrypto(receiveAmount, 8) : "0.00"}
                       </output>
                     )}
                     <button
@@ -1756,14 +1778,11 @@ function CryptoFlowPushView({
               <ArrowRightArrowLeft className="rotate-90 text-[22px]" />
             </button>
           </div>
-          <p
-            role="status"
-            className="my-4 text-center text-[13px] text-black/45 dark:text-white/45"
+          {exchangeMethod === "dex" && <p
+            role="status" className="my-4 text-center text-[13px] text-black/45 dark:text-white/45"
           >
-            {hasRate
-              ? `Оценка по рынку · 1 ${fromAsset.code} ≈ ${formatCrypto(exchangeRate, 8)} ${toAsset.code}`
-              : "Курс пока недоступен"}
-          </p>
+            {hasRate ? `Оценка по рынку · 1 ${fromAsset.code} ≈ ${formatCrypto(exchangeRate, 8)} ${toAsset.code}` : "Курс пока недоступен"}
+          </p>}
           <p role="status" className="mb-4 text-center text-sm">
             {exchangeMethod === "internal" ? "Внутренний обмен GoSwap · 1:1"
               : exchangeMethod === "dex" ? "DEX · обмен в одной сети"
@@ -1777,13 +1796,13 @@ function CryptoFlowPushView({
               Рассчитать в FixedFloat
             </Button>
           )}
-          {canQuote && providerQuote?.key === quoteKey && (
-            <p role="status" className="mt-3 text-center text-sm">{providerQuote.text}</p>
+          {canQuote && currentQuote && (
+            <p role="status" className="mt-3 text-center text-sm">{currentQuote.text}</p>
           )}
           {managedPayout && sourceNetwork && destinationNetwork && canQuote && (
             <WalletExchangeOrder key={pair} active={flow?.kind === "exchange"} enabled
               managedPayout={managedPayout} from={sourceNetwork} to={destinationNetwork}
-              value={amount.replace(",", ".")} mode="fixed" quoteValid={parsedAmount > 0}
+              value={amount.replace(",", ".")} mode="fixed" quoteValid={Boolean(currentQuote?.payout)}
               onIntentChange={setExchangeOrderOpen} />
           )}
           {exchangeMethod === "internal" ? (

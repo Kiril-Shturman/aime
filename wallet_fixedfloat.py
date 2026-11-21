@@ -263,7 +263,14 @@ class FixedFloat:
             "execution_enabled": False,
         }
         if not networks[source]["can_send"] or not networks[destination]["can_receive"]:
-            return {**summary, "reasons": ["NETWORK_UNAVAILABLE"]}
+            return {
+                **summary, "reasons": ["NETWORK_UNAVAILABLE"],
+                "unavailable_sides": [
+                    side for side, ready in (("from", networks[source]["can_send"]),
+                                             ("to", networks[destination]["can_receive"]))
+                    if not ready
+                ],
+            }
         result = await self.call(
             "price",
             {
