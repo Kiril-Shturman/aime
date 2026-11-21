@@ -938,7 +938,7 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   await expect(sheet.locator(".wpay-goswap-order-terms")).toBeHidden();
   await sheet.getByRole("radio", { name: "Через СБП" }).check();
   await expect(sheet.getByText("Баланс: 42 USDT")).toBeHidden();
-  await expect(sheet.getByRole("button", { name: "Пополнить через СБП" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Оплатить", exact: true })).toBeVisible();
   await expect(sheet.locator(".wpay-goswap-payment-check:visible")).toHaveCount(1);
   await sheet.getByRole("radio", { name: "С кошелька" }).check();
   expect(payments).toBe(0);

@@ -1,3 +1,4 @@
+import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
 import { createPortal } from "react-dom";
 import { TransactionDetails, TransactionListRow, type TransactionView } from "./WalletTransaction";
 import WalletSubscriptionFeatures from "./WalletSubscriptionFeatures";
@@ -1658,7 +1659,10 @@ export default function WalletAuraCards({
                   onSbpTopUp?.();
                 }}>
                 {(!goSwapSheetReady || busy) && <span className="mr-2 inline-flex align-middle" aria-hidden="true"><Preloader size={18} color="white" /></span>}
-                {goSwapPayment === "sbp" ? "Пополнить через СБП" : busy === "goswap-issue" ? "Оплачиваем…" : "Оплатить"}
+                <span className="wpay-card-action-label">
+                  <CreditcardFill className="h-5 w-5" aria-hidden="true" />
+                  {busy === "goswap-issue" ? "Оплачиваем…" : "Оплатить"}
+                </span>
               </Button>
               <button type="button" className="wpay-goswap-order-expand" onClick={expandGoSwapSheet}>Условия карты <ChevronDown size={15} /></button>
             </div>
