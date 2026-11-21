@@ -1249,8 +1249,8 @@
 .wpay-catalog-app-store svg { width: 12px; height: 12px; flex-basis: 12px; }
 
 .wpay-card-catalog-item:has(.wpay-card-catalog-subscription-art) {
-  --catalog-glow: #ff691c78;
-  background: radial-gradient(ellipse at 84% 60%, var(--catalog-glow), transparent 61%), #161b29;
+  background: linear-gradient(90deg, #12101de8, #12101d18 76%),
+    #16121a url("../assets/card-benefits/subscription-background.jpg") center / cover no-repeat;
 }
 .wpay-card-catalog-art:has(.wpay-card-catalog-subscription-art) {
   grid-row: 1 / 5;
