@@ -79,6 +79,10 @@ class FakeProvider:
             return {'address': 'test-address', 'network': data['network'], 'url': 'https://goswap.site/pay?dep=test'}
         if method == 'createWithdrawal':
             return {'withdrawal_id': 'withdrawal-one', 'spend_id': data['spend_id'], 'status': 'processing'}
+        if method == 'getCardDetails':
+            return {'card_id': data['card_id'], 'url': 'https://example.test/card'}
+        if method in {'createCard', 'topUpCard'}:
+            return {'op_id': 'card-operation', 'spend_id': data['spend_id'], 'status': 'processing'}
         raise AssertionError('Unexpected provider call ' + method)
 
     async def close(self):
@@ -330,6 +334,25 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(confirmed.status, 200)
         self.assertEqual((await confirmed.json())['result']['status'], 'processing')
         self.assertEqual(self.provider.calls[-1], ('createWithdrawal', params, True))
+
+    async def test_admin_goswap_card_methods_require_confirmation_for_operations(self):
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        catalog = await (await self.client.get('/api/wallet/admin-goswap', headers=admin)).json()
+        methods = {item['method']: item for item in catalog['methods']}
+        self.assertTrue({'getCards', 'getCardOps', 'getCardDetails', 'createCard', 'topUpCard'} <= methods.keys())
+        route = '/api/wallet/admin-goswap-action'
+        for name, params, post in (
+            ('getCardDetails', {'card_id': 12}, False),
+            ('createCard', {'client_ref': 'user-12', 'product': 'sg', 'spend_id': 'card-12'}, True),
+            ('topUpCard', {'card_id': 12, 'amount': '10.00', 'spend_id': 'top-12'}, True),
+        ):
+            request = {'method': name, 'params': params}
+            rejected = await self.client.post(route, json=request, headers=admin)
+            self.assertEqual(rejected.status, 409)
+            confirmed = await self.client.post(route, json={**request, 'confirm': name}, headers=admin)
+            self.assertEqual(confirmed.status, 200, await confirmed.text())
+            self.assertIn('no-store', confirmed.headers['Cache-Control'])
+            self.assertEqual(self.provider.calls[-1], (name, params, post))
 
     async def test_admin_deposit_provider_defaults_switch_and_validation(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}

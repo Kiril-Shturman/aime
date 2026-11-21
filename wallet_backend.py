@@ -98,6 +98,21 @@ ADMIN_GOSWAP_METHODS = {
     'getDeposits': {'title': 'Пополнения', 'post': False, 'params': ['client_ref', 'network', 'count', 'offset'], 'required': [], 'example': {'count': 1000, 'offset': 0}},
     'getTransactions': {'title': 'Лента операций', 'post': False, 'params': ['asset', 'type', 'count', 'before', 'after'], 'required': [], 'example': {'count': 100, 'after': 0}},
     'getQrPayments': {'title': 'QR-платежи', 'post': False, 'params': ['payment_ids', 'spend_ids', 'status', 'count', 'offset'], 'required': [], 'example': {'count': 100, 'offset': 0}},
+    'getCards': {'title': 'Карты клиентов', 'post': False,
+                 'params': ['client_ref', 'card_ids', 'status', 'count', 'offset'],
+                 'required': [], 'example': {'count': 100, 'offset': 0}},
+    'getCardOps': {'title': 'Выпуски и пополнения карт', 'post': False,
+                   'params': ['card_ids', 'spend_id', 'kind', 'status', 'count', 'offset'],
+                   'required': [], 'example': {'spend_id': '', 'count': 100, 'offset': 0}},
+    'getCardDetails': {'title': 'Временная ссылка на реквизиты карты', 'post': False, 'dangerous': True,
+                       'params': ['card_id'], 'required': ['card_id'], 'example': {'card_id': ''}},
+    'createCard': {'title': 'Выпустить карту клиенту', 'post': True, 'dangerous': True,
+                   'params': ['client_ref', 'spend_id', 'product'], 'required': ['client_ref', 'spend_id'],
+                   'example': {'client_ref': '', 'spend_id': '', 'product': 'sg'}},
+    'topUpCard': {'title': 'Пополнить карту клиента', 'post': True, 'dangerous': True,
+                  'params': ['card_id', 'amount', 'spend_id', 'max_fee'],
+                  'required': ['card_id', 'amount', 'spend_id'],
+                  'example': {'card_id': '', 'amount': '10.00', 'spend_id': '', 'max_fee': ''}},
     'estimateWithdrawal': {'title': 'Расчёт вывода', 'post': False, 'params': ['asset', 'network', 'address', 'amount', 'memo'], 'required': ['asset', 'network', 'address', 'amount'], 'example': {'asset': 'USDT', 'network': 'BSC', 'address': '', 'amount': '10'}},
     'createInvoice': {'title': 'Создать счёт', 'post': True, 'params': ['asset', 'amount', 'description', 'payload', 'expires_in'], 'required': ['asset', 'amount'], 'example': {'asset': 'USDT', 'amount': '10', 'description': '', 'payload': '', 'expires_in': 3600}},
     'transfer': {'title': 'Выплата пользователю', 'post': True, 'dangerous': True, 'params': ['user_id', 'asset', 'amount', 'spend_id', 'comment'], 'required': ['user_id', 'asset', 'amount', 'spend_id'], 'example': {'user_id': '', 'asset': 'USDT', 'amount': '1', 'spend_id': '', 'comment': ''}},
@@ -1566,7 +1581,9 @@ def install_wallet(app, root, owner_check):
         missing = [key for key in spec['required'] if key not in params]
         if missing:
             raise ApiError('MISSING_PARAMS', 'Обязательные параметры: ' + ', '.join(missing), 400)
-        if spec['post'] and body.get('confirm') != method:
+        if 'card_id' in params and (type(params['card_id']) is not int or params['card_id'] <= 0):
+            raise ApiError('INVALID_PARAMS', 'card_id должен быть положительным целым числом', 400)
+        if (spec['post'] or spec.get('dangerous')) and body.get('confirm') != method:
             raise ApiError('CONFIRMATION_REQUIRED', f'Подтвердите вызов {method}', 409)
         result = await provider.call(method, params, post=spec['post'])
         record_admin_action(
@@ -2366,7 +2383,7 @@ def install_wallet(app, root, owner_check):
             if action == 'admin-goswap-action' and request.method == 'POST':
                 if not token:
                     raise ApiError('NOT_CONFIGURED', 'GoSwap пока не подключён', 503)
-                return web.json_response(await admin_goswap_action(request, uid))
+                return web.json_response(await admin_goswap_action(request, uid), headers={'Cache-Control': 'private, no-store'})
             if action == 'admin-aura-console' and request.method == 'GET':
                 return web.json_response(admin_aura_console())
             if action == 'admin-aura-action' and request.method == 'POST':

@@ -3160,7 +3160,7 @@ function GoSwap({ data }: { data: GoSwapData }) {
         {
           method: method.method,
           params,
-          confirm: method.post ? method.method : undefined,
+          confirm: method.post || method.dangerous ? method.method : undefined,
         },
       );
       setResult(response.result);
