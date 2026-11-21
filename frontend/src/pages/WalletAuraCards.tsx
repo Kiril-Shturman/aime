@@ -1648,6 +1648,7 @@ export default function WalletAuraCards({
               </div>
               <Button rounded large data-wpay-primary="" className={`wpay-aura-primary !mt-3 !w-full${goSwapSheetReady && !busy && (goSwapPayment === "wallet" || onSbpTopUp) ? " wpay-goswap-pay-shine" : ""}`}
                 disabled={!goSwapSheetReady || Boolean(busy) || (goSwapPayment === "sbp" && !onSbpTopUp)}
+                aria-label="Оплатить"
                 aria-busy={!goSwapSheetReady || Boolean(busy)}
                 onClick={() => {
                   haptic("light");
@@ -1658,11 +1659,16 @@ export default function WalletAuraCards({
                   setGoSwapOrder(null);
                   onSbpTopUp?.();
                 }}>
-                {(!goSwapSheetReady || busy) && <span className="mr-2 inline-flex align-middle" aria-hidden="true"><Preloader size={18} color="white" /></span>}
-                <span className="wpay-card-action-label">
-                  <CreditcardFill className="h-5 w-5" aria-hidden="true" />
-                  {busy === "goswap-issue" ? "Оплачиваем…" : "Оплатить"}
-                </span>
+                {!goSwapSheetReady || busy ? (
+                  <span className="wpay-card-action-label" role="status" aria-label="Загрузка">
+                    <Preloader size={18} color="white" />
+                  </span>
+                ) : (
+                  <span className="wpay-card-action-label">
+                    <CreditcardFill className="h-5 w-5" aria-hidden="true" />
+                    Оплатить
+                  </span>
+                )}
               </Button>
               <button type="button" className="wpay-goswap-order-expand" onClick={expandGoSwapSheet}>Условия карты <ChevronDown size={15} /></button>
             </div>
