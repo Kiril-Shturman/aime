@@ -170,7 +170,7 @@ function CutoutIcon({ kind }: { kind: Kind }) {
     <svg width="29" height="29" viewBox="0 0 30 30" aria-hidden="true">
       <mask id={id} maskUnits="userSpaceOnUse" x="0" y="0" width="30" height="30">
         <circle cx="15" cy="15" r="14" fill="white" />
-        <Icon x={7} y={7} size={16} color="black" strokeWidth={2.4} />
+        <Icon x={7} y={7} size={16} color="black" strokeWidth={3.4} />
       </mask>
       <circle cx="15" cy="15" r="14" fill="white" mask={`url(#${id})`} />
     </svg>
