@@ -1059,8 +1059,8 @@
   transform: scaleY(.88);
   transition: transform 220ms ease-out;
 }
-.wpay-aura-carousel--centered > :first-child { scroll-snap-align: start; }
-.wpay-aura-carousel--centered > :last-child { scroll-snap-align: end; }
+.wpay-aura-carousel--centered > :first-child { flex-basis: calc(100% - 22px); scroll-snap-align: start; }
+.wpay-aura-carousel--centered > :last-child { flex-basis: calc(100% - 22px); scroll-snap-align: end; }
 .wpay-aura-carousel--centered > :only-child { flex-basis: 100%; scroll-snap-align: start; }
 .wpay-aura-carousel--centered > .is-current-card { transform: none; }
 @media (prefers-reduced-motion: reduce) {
