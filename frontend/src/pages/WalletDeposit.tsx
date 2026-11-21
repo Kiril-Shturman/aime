@@ -468,9 +468,11 @@ export default function WalletDeposit({
               <p className="mt-4 text-[13px] text-black/40 dark:text-white/40">
                 Адрес для пополнения
               </p>
-              <p className="mt-2 select-text break-all font-mono text-[14px] leading-6">
-                {deposit.address}
-              </p>
+              <button type="button" aria-label="Скопировать адрес пополнения" onClick={() => void copy()}
+                className="mt-2 flex min-h-9 w-full items-center justify-between gap-3 text-left text-[14px] text-blue-600 dark:text-blue-400">
+                <span className="min-w-0 break-all">{deposit.address}</span>
+                {copied ? <Check size={19} className="shrink-0" /> : <Copy size={19} className="shrink-0" />}
+              </button>
               <Button
                 data-wpay-primary=""
                 rounded
