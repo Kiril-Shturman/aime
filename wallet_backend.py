@@ -2033,7 +2033,12 @@ def install_wallet(app, root, owner_check):
                     job = custody_withdrawal.owned(uid, job_id, dex=True) if job_id else None
                     if body.get('job_id') and (not job or job['asset'] != asset):
                         raise ApiError('NOT_FOUND', 'Заявка не найдена', 404)
-                    return web.json_response({'enabled': enabled, 'job': custody_withdrawal.public(job) if job else None},
+                    available = None
+                    if enabled and not job:
+                        observation = await app['wpay_chain'].asset(custody, uid, asset, create=False)
+                        available = observation['amount']
+                    return web.json_response({'enabled': enabled, 'available': available,
+                                              'job': custody_withdrawal.public(job) if job else None},
                                              headers={'Cache-Control': 'no-store'})
                 if request.method != 'POST' or action == 'exchange-dex':
                     raise ApiError('METHOD_NOT_ALLOWED', 'Неверный метод', 405)
@@ -2052,6 +2057,14 @@ def install_wallet(app, root, owner_check):
                 if set(body) != {'asset', 'amount'}:
                     raise ValueError('Укажите монету и сумму DEX')
                 exchange.throttle(uid)
+                raw_amount = body['amount']
+                if not isinstance(raw_amount, str) or not re.fullmatch(r'[0-9]{1,8}(?:\.[0-9]{1,18})?', raw_amount) or Decimal(raw_amount) <= 0:
+                    raise ValueError('Укажите корректную сумму обмена')
+                observation = await app['wpay_chain'].asset(custody, uid, asset, create=False)
+                if observation['amount'] is None:
+                    raise ApiError('RPC_UNAVAILABLE', 'Не удалось проверить баланс кошелька', 503)
+                if Decimal(raw_amount) > Decimal(observation['amount']):
+                    raise ApiError('INSUFFICIENT_FUNDS', f'На собственном кошельке недостаточно {asset}', 409)
                 quote = await quote_native(app['wpay_chain'], asset, body['amount'])
                 if not quote:
                     raise ApiError('DEX_UNAVAILABLE', 'DEX пока не вернул котировку', 503)

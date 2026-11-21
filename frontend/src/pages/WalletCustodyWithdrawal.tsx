@@ -12,7 +12,7 @@ type Job = {
   detail: string | null;
   quote: { approval_id: string; max_fee: string; fee_currency: string; minimum_usdt?: string; estimated_total?: string; expires_at: number; source_address: string } | null;
 };
-type Status = { enabled: boolean; job: Job | null };
+type Status = { enabled: boolean; job: Job | null; available?: string | null };
 
 const pending = new Set(["estimating", "confirmed", "signing", "signed", "broadcast", "unknown"]);
 const statuses: Record<string, string> = {
@@ -73,7 +73,13 @@ export default function WalletCustodyWithdrawal({ asset, network, adminScope, de
   const precision = ({ TRX: 6, XAUT: 6, SOL: 9, BTC: 8, GRAM: 9 } as Record<string, number>)[asset] ?? 18;
   const validAmount = new RegExp(`^\\d{1,12}(?:\\.\\d{1,${precision}})?$`).test(normalized) && /[1-9]/.test(normalized);
   const validAddress = network === "BTC" ? /^bc1q[a-z0-9]{38}$/.test(address.trim()) : isRecipientAddress(network, address.trim());
-  const valid = (dex || validAddress) && validAmount;
+  const atomic = (value: string) => {
+    const [whole, fraction = ""] = value.split(".");
+    return BigInt(whole + fraction.padEnd(18, "0"));
+  };
+  const available = status?.available;
+  const exceedsBalance = dex && validAmount && available != null && atomic(normalized) > atomic(available);
+  const valid = validAmount && (dex ? available != null && !exceedsBalance : validAddress);
   const quote = job?.state === "quoted" ? job.quote : null;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -137,7 +143,9 @@ export default function WalletCustodyWithdrawal({ asset, network, adminScope, de
       )}
       {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
       {status && !status.enabled && <p role="status">{dex ? "Исполнение DEX сейчас недоступно." : `Вывод ${asset} сейчас недоступен.`}</p>}
-      {(!job || quote) && (
+      {exceedsBalance && !job && <p role="status">Недостаточно {asset}. Доступно {available} {asset}.</p>}
+      {dex && status?.enabled && !job && available == null && <p role="status">Баланс кошелька пока недоступен.</p>}
+      {(quote || (!job && (!dex || valid))) && (
         <Button type="submit" rounded data-wpay-primary=""
           disabled={busy || !status?.enabled || (!quote && !valid)}>
           {busy ? "Проверяем…" : quote ? (dex ? "Подтвердить обмен" : `Подтвердить вывод ${asset}`) : (dex ? "Подготовить обмен" : "Рассчитать комиссию")}
