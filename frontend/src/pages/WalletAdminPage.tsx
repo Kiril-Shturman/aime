@@ -1,3 +1,5 @@
+import WalletKeyExport from "./WalletKeyExport";
+import WalletCustodyWithdrawal from "./WalletCustodyWithdrawal";
 import Aurora from "../components/reactbits/Aurora";
 import { WalletFinanceReport } from "./WalletUserFinance";
 import {
@@ -2024,6 +2026,7 @@ function AdminUserDrawer({
     ["cards", "Карты"],
     ["history", "История"],
   ] as const;
+  const [walletAction, setWalletAction] = useState<{ walletId: string; asset: string; action: "withdraw" | "export" } | null>(null);
   const [section, setSection] = useState<(typeof tabs)[number][0]>("profile");
   const [balanceNetwork, setBalanceNetwork] = useState("");
   const [actionWorking, setActionWorking] = useState("");
@@ -2095,6 +2098,7 @@ function AdminUserDrawer({
     if (!wallet.wallet_id || actionWorking) return;
     const labels = { freeze: "Заморозить", archive: "Архивировать", restore: "Восстановить" };
     if (!window.confirm(`${labels[operation]} кошелёк ${wallet.network}?`)) return;
+    setWalletAction(null);
     setActionWorking(operation);
     setActionNotice("");
     try {
@@ -2207,7 +2211,7 @@ function AdminUserDrawer({
             <>
               <nav aria-label="Разделы карточки пользователя" className="sticky top-0 z-10 mb-3 flex gap-2 overflow-x-auto rounded-2xl bg-[var(--admin-surface)] p-2">
                 {tabs.map(([id, label]) => (
-                  <button key={id} type="button" aria-pressed={section === id} onClick={() => setSection(id)}
+                  <button key={id} type="button" aria-pressed={section === id} onClick={() => { setWalletAction(null); setSection(id); }}
                     className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${section === id ? "bg-blue-500/15 text-blue-600 dark:text-blue-300" : "text-[var(--admin-muted)]"}`}>
                     {label}
                   </button>
@@ -2403,11 +2407,30 @@ function AdminUserDrawer({
                                   disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "restore")}>Восстановить</button>
                               ) : (
                                 <>
+                                  {wallet.environment === "mainnet" && wallet.asset !== "USDT" && (
+                                    <button type="button" className="rounded-lg bg-blue-500/10 px-3 py-2 text-xs"
+                                      onClick={() => setWalletAction({ walletId: wallet.wallet_id!, asset: wallet.asset, action: "withdraw" })}>Вывести</button>
+                                  )}
+                                  <button type="button" className="rounded-lg bg-black/5 px-3 py-2 text-xs dark:bg-white/10"
+                                    onClick={() => setWalletAction({ walletId: wallet.wallet_id!, asset: wallet.asset, action: "export" })}>Экспорт ключа</button>
                                   <button type="button" className="rounded-lg bg-amber-500/15 px-3 py-2 text-xs"
                                     disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "freeze")}>Заморозить</button>
                                   <button type="button" className="rounded-lg bg-red-500/10 px-3 py-2 text-xs"
                                     disabled={Boolean(actionWorking)} onClick={() => void updateWallet(wallet, "archive")}>В архив</button>
                                 </>
+                              )}
+                            </div>
+                          )}
+                          {wallet.wallet_id && !wallet.state && walletAction?.walletId === wallet.wallet_id && walletAction.asset === wallet.asset && (
+                            <div className="mt-4 rounded-2xl border border-[var(--admin-border)] p-2" key={walletAction.action}>
+                              <button type="button" onClick={() => setWalletAction(null)}
+                                className="ml-auto block rounded-lg px-3 py-2 text-sm">Закрыть действие</button>
+                              {walletAction.action === "export" ? (
+                                <WalletKeyExport walletId={wallet.wallet_id} address={wallet.address}
+                                  network={wallet.network} adminUserId={userId} />
+                              ) : (
+                                <WalletCustodyWithdrawal asset={wallet.asset} network={wallet.network}
+                                  adminScope={{ userId, walletId: wallet.wallet_id }} />
                               )}
                             </div>
                           )}

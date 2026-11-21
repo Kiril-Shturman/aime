@@ -355,6 +355,17 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(status['deposit_providers']['USDT']['BSC'], 'wpay')
         self.assertEqual(status['deposit_modes']['USDT']['BSC'], 'disabled')
 
+    async def test_operator_wallet_actions_require_admin_and_fresh_telegram(self):
+        path = '/api/wallet/admin-custody-export-prepare?user_id=tg:999'
+        member = {'X-Telegram-Init-Data': init_data(999)}
+        self.assertEqual((await self.client.post(path, headers=member, json={})).status, 403)
+        owner = await self.client.post(path, headers=OWNER, json={})
+        self.assertEqual(owner.status, 403)
+        self.assertEqual((await owner.json())['error']['name'], 'FRESH_TELEGRAM_AUTH_REQUIRED')
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        response = await self.client.post(path, headers=admin, json={})
+        self.assertEqual(response.status, 503)
+
     async def test_admin_can_leave_only_usdt_trc20_and_server_enforces_it(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}
         member = {'X-Telegram-Init-Data': init_data(999)}

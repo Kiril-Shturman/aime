@@ -76,6 +76,33 @@ class FundingTests(unittest.TestCase):
             "confirmed",
         )
 
+    def test_operator_withdrawal_is_tied_to_wallet_and_initiating_operator(self):
+        from wallet_custody_withdrawal import CustodyWithdrawal
+
+        withdrawal = CustodyWithdrawal(self.funding, enabled=True)
+        self.call("heartbeat", networks=["BSC", "BNB_WITHDRAWAL"], key_id=self.keys["key_id"])
+        wallet = self.custody.create("tg:1", "BSC")
+        recorded = []
+        def audit(actor, action, target, detail):
+            recorded.append((actor, action, target, detail["wallet_id"]))
+        with self.assertRaises(ApiError):
+            withdrawal.prepare("tg:2", {"address": self.pay, "amount": "0.01"},
+                               actor="tg:99", wallet_id=wallet["id"], audit=audit)
+        job = withdrawal.prepare("tg:1", {"address": self.pay, "amount": "0.01"},
+                                  actor="tg:99", wallet_id=wallet["id"], audit=audit)
+        self.call("claim", native_bnb=True)
+        self.call("quote", job_id=job["job_id"], quote={
+            "approval_id": "b" * 32, "expires_at": time.time() + 60,
+        })
+        for actor in (None, "tg:98"):
+            with self.assertRaises(ApiError):
+                self.funding.confirm("tg:1", job["job_id"], "b" * 32, True, actor=actor, audit=audit)
+        self.funding.confirm("tg:1", job["job_id"], "b" * 32, True, actor="tg:99", audit=audit)
+        self.assertEqual(recorded, [
+            ("tg:99", "wallet.withdrawal_requested", "tg:1", wallet["id"]),
+            ("tg:99", "wallet.withdrawal_confirmed", "tg:1", wallet["id"]),
+        ])
+
     def test_admin_freeze_cancels_unsigned_jobs_and_archive_preserves_wallet(self):
         from wallet_admin_wallets import control_wallet
         from wallet_custody_withdrawal import CustodyWithdrawal

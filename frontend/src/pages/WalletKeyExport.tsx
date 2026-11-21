@@ -24,12 +24,20 @@ export default function WalletKeyExport({
   walletId,
   address,
   network,
+  adminUserId,
 }: {
   walletId: string;
   address: string;
   network: string;
+  adminUserId?: string;
 }) {
   const spec = formats[network];
+  const endpoint = (operation: string, jobId?: string) => {
+    const query = new URLSearchParams();
+    if (adminUserId) query.set("user_id", adminUserId);
+    if (jobId) query.set("job_id", jobId);
+    return `${adminUserId ? "admin-" : ""}custody-export-${operation}${query.size ? "?" + query : ""}`;
+  };
   const [open, setOpen] = useState(false);
   const [acknowledged, setAcknowledged] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -85,14 +93,14 @@ export default function WalletKeyExport({
         await crypto.subtle.exportKey("spki", keys.publicKey),
       );
       const job = await walletRequest<{ job_id: string }>(
-        "custody-export-prepare",
+        endpoint("prepare"),
         { wallet_id: walletId, public_key: publicKey, acknowledged: true },
         abort.signal,
       );
       let ready = false;
       for (let i = 0; i < 35 && !abort.signal.aborted; i++) {
         const status = await walletRequest<{ state: string }>(
-          `custody-export-status?job_id=${job.job_id}`,
+          endpoint("status", job.job_id),
           undefined,
           abort.signal,
         );
@@ -122,7 +130,7 @@ export default function WalletKeyExport({
       const result = await walletRequest<{
         job_id: string;
         ciphertext: string;
-      }>("custody-export-reveal", { job_id: job.job_id }, abort.signal);
+      }>(endpoint("reveal"), { job_id: job.job_id }, abort.signal);
       const plaintext = new Uint8Array(
         await crypto.subtle.decrypt(
           { name: "RSA-OAEP" },
@@ -186,6 +194,7 @@ export default function WalletKeyExport({
             </button>
           </div>
           <p className="mt-3 text-sm leading-6 opacity-60">
+            {adminUserId && <>Операторский экспорт для {adminUserId}. Действие будет записано в аудит. <br /></>}
             Ключ даёт полный доступ к этому адресу. Никому его не передавайте.
             Он будет скрыт через 30 секунд или при сворачивании приложения.
           </p>

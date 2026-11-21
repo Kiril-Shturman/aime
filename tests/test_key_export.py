@@ -15,6 +15,8 @@ from wallet_key_export import prepare,route,bridge
 
 class ExportTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        self.events = []
+        self.audit = lambda *args, **kwargs: self.events.append((args, kwargs))
         self.tmp=tempfile.TemporaryDirectory();self.ledger=Ledger(self.tmp.name+'/db')
         for uid in ['tg:1','tg:2']:self.ledger.account(uid)
         prepare_custody(self.ledger);prepare_funding(self.ledger);prepare(self.ledger)
@@ -25,7 +27,11 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         async def handler(request):
             try:
                 # This route unit fixture supplies the identity already verified by the main API.
-                return await route(request,request.match_info['action'],request.headers.get('X-Test-User','tg:1'),self.custody)
+                actor = request.headers.get("X-Test-Operator")
+                return await route(
+                    request, request.match_info['action'], request.headers.get('X-Test-User','tg:1'),
+                    self.custody, actor=actor, audit=self.audit,
+                )
             except ApiError as e:return web.json_response({'error':e.name},status=e.status)
             except ValueError:return web.json_response({'error':'INVALID'},status=400)
         app=web.Application();app.router.add_route('*','/{action}',handler)
@@ -100,6 +106,24 @@ class ExportTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(Account.from_key(bytes.fromhex(document['private_key'])).address,self.wallet['address'])
         self.assertNotIn(document['private_key'],str(dict(row)))
         self.assertNotIn(document['private_key'],json.dumps([dict(r) for r in self.ledger.db.execute('SELECT * FROM custody_activity')]))
+
+    async def test_operator_export_is_isolated_by_operator_and_audited(self):
+        operator = {**self.headers, "X-Test-Operator": "tg:99"}
+        response = await self.request_job(headers=operator)
+        self.assertEqual(response.status, 200)
+        job = (await response.json())["job_id"]
+        bridge(self.ledger.db, {"op": "export-claim", "worker_id": "export-worker"})
+        bridge(self.ledger.db, {"op": "export-complete", "worker_id": "export-worker",
+                               "job_id": job, "ciphertext": base64.b64encode(b"C" * 384).decode()})
+        for headers in (self.headers, {**self.headers, "X-Test-Operator": "tg:98"}):
+            denied = await self.http.post("/custody-export-reveal", json={"job_id": job}, headers=headers)
+            self.assertEqual(denied.status, 404)
+        revealed = await self.http.post("/custody-export-reveal", json={"job_id": job}, headers=operator)
+        self.assertEqual(revealed.status, 200)
+        self.assertEqual([entry[0] for entry in self.events], [
+            ("tg:99", "wallet.export_requested", "tg:1"),
+            ("tg:99", "wallet.export_delivered", "tg:1"),
+        ])
 
     async def test_multichain_material_restores_same_address(self):
         try:

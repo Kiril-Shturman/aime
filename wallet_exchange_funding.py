@@ -47,6 +47,9 @@ def prepare(ledger):
     if "asset" not in columns:
         ledger.db.execute("ALTER TABLE custody_withdrawal_intents ADD COLUMN asset TEXT NOT NULL DEFAULT 'BNB'")
 
+    if "requested_by" not in columns:
+        ledger.db.execute("ALTER TABLE custody_withdrawal_intents ADD COLUMN requested_by TEXT")
+
 
 class Funding:
     def __init__(self,ledger,orders,custody,enabled=False):
@@ -105,17 +108,17 @@ class Funding:
         except Exception:self.ledger.rollback();raise
         return self.public(self.ledger.db.execute('SELECT * FROM custody_funding_jobs WHERE id=?',(job,)).fetchone())
 
-    def confirm(self,uid,job_id,approval_id,native_bnb=False):
+    def confirm(self,uid,job_id,approval_id,native_bnb=False,actor=None,audit=None):
         if not native_bnb and not self.enabled:raise self.error('FUNDING_NOT_ENABLED','Оплата с собственного кошелька не включена',503)
-        self.ledger.begin('funding_confirm',uid,job_id)
+        self.ledger.begin('funding_confirm',actor or uid,job_id)
         try:
             row=self.ledger.db.execute('SELECT * FROM custody_funding_jobs WHERE id=? AND user_id=?',(job_id,uid)).fetchone()
             if not row:raise self.error('NOT_FOUND','Платёж не найден',404)
             require_wallet_active(self.ledger.db, row['wallet_id'], self.error)
             withdrawal = self.ledger.db.execute(
-                'SELECT 1 FROM custody_withdrawal_intents WHERE job_id=?', (job_id,),
+                'SELECT requested_by FROM custody_withdrawal_intents WHERE job_id=?', (job_id,),
             ).fetchone()
-            if bool(withdrawal) != native_bnb:
+            if bool(withdrawal) != native_bnb or (withdrawal and withdrawal['requested_by'] != actor):
                 raise self.error('NOT_FOUND','Платёж не найден',404)
             if row['state'] in {'confirmed','signing','signed','broadcast','unknown','done'}:
                 self.ledger.commit();return self.public(row)
@@ -125,6 +128,8 @@ class Funding:
             if not native_bnb:
                 self.payable(uid,row['intent_id'])
             self.ledger.db.execute("UPDATE custody_funding_jobs SET state='confirmed',updated_at=?,lease_until=0 WHERE id=?",(time.time(),job_id))
+            if actor and audit:
+                audit(actor, 'wallet.withdrawal_confirmed', uid, detail={'wallet_id': row['wallet_id'], 'job_id': job_id})
             self.ledger.commit()
         except Exception:self.ledger.rollback();raise
         return self.public(self.ledger.db.execute('SELECT * FROM custody_funding_jobs WHERE id=?',(job_id,)).fetchone())

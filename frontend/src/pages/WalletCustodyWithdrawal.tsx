@@ -13,7 +13,7 @@ type Job = {
   quote: { approval_id: string; max_fee: string; fee_currency: string; estimated_total?: string; expires_at: number; source_address: string } | null;
 };
 type Status = { enabled: boolean; job: Job | null };
-const action = "custody-withdrawal";
+
 const pending = new Set(["estimating", "confirmed", "signing", "signed", "broadcast", "unknown"]);
 const statuses: Record<string, string> = {
   estimating: "Считаем комиссию сети…",
@@ -28,7 +28,11 @@ const statuses: Record<string, string> = {
 };
 const inputClass = "rounded-xl bg-black/5 p-3 dark:bg-white/10";
 
-export default function WalletCustodyWithdrawal({ asset, network }: { asset: string; network: string }) {
+export default function WalletCustodyWithdrawal({ asset, network, adminScope }: {
+  asset: string;
+  network: string;
+  adminScope?: { userId: string; walletId: string };
+}) {
   const [status, setStatus] = useState<Status>();
   const [address, setAddress] = useState("");
   const [amount, setAmount] = useState("");
@@ -38,9 +42,15 @@ export default function WalletCustodyWithdrawal({ asset, network }: { asset: str
   const jobId = job?.job_id;
   const polling = !job || pending.has(job.state) || job.state === "quoted";
 
+  const operator = adminScope?.userId;
+  const walletId = adminScope?.walletId;
+  const action = operator ? "admin-custody-withdrawal" : "custody-withdrawal";
+  const scope = operator && walletId
+    ? new URLSearchParams({ user_id: operator, wallet_id: walletId }).toString()
+    : "";
   useEffect(() => {
     const controller = new AbortController();
-    const route = `${action}?asset=${encodeURIComponent(asset)}${jobId ? "&job_id=" + encodeURIComponent(jobId) : ""}`;
+    const route = `${action}?asset=${encodeURIComponent(asset)}${jobId ? "&job_id=" + encodeURIComponent(jobId) : ""}${scope ? "&" + scope : ""}`;
     async function refresh() {
       try {
         const value = await walletRequest<Status>(route, undefined, controller.signal);
@@ -55,7 +65,7 @@ export default function WalletCustodyWithdrawal({ asset, network }: { asset: str
       controller.abort();
       window.clearInterval(timer);
     };
-  }, [asset, jobId, polling]);
+  }, [action, asset, jobId, polling, scope]);
 
   const normalized = amount.trim().replace(",", ".");
   const precision = ({ TRX: 6, XAUT: 6, SOL: 9, BTC: 8, GRAM: 9 } as Record<string, number>)[asset] ?? 18;
@@ -71,8 +81,8 @@ export default function WalletCustodyWithdrawal({ asset, network }: { asset: str
     setError("");
     try {
       const result = quote && job
-        ? await walletRequest<Job>(action + "-confirm", { job_id: job.job_id, approval_id: quote.approval_id })
-        : await walletRequest<Job>(action + "-prepare", { asset, address: address.trim(), amount: normalized });
+        ? await walletRequest<Job>(action + "-confirm" + (scope ? "?" + scope : ""), { job_id: job.job_id, approval_id: quote.approval_id })
+        : await walletRequest<Job>(action + "-prepare" + (scope ? "?" + scope : ""), { asset, address: address.trim(), amount: normalized });
       setStatus({ enabled: true, job: result });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Не удалось обновить заявку");
@@ -84,6 +94,7 @@ export default function WalletCustodyWithdrawal({ asset, network }: { asset: str
   return (
     <form onSubmit={submit} className="mx-auto grid w-full max-w-[560px] gap-4 px-4 py-6">
       <p className="text-sm opacity-60">{networkNames[network] ?? network} · Собственный кошелёк</p>
+      {operator && <p className="text-sm opacity-60">Операторский вывод для {operator}. Подтверждение попадёт в аудит.</p>}
       {job ? (
         <Card className="!m-0 !rounded-[28px]">
           <p className="font-semibold">Получатель получит {job.amount} {asset}</p>

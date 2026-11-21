@@ -8,7 +8,7 @@ import asyncio
 from wallet_fixedfloat_orders import Orders
 from wallet_card_ui import CardUI
 from wallet_fixedfloat import FixedFloat, exchange_route, prepare_exchange_limits
-from wallet_key_export import prepare as prepare_key_export, route as key_export_route
+from wallet_key_export import prepare as prepare_key_export, route as key_export_route, fresh as fresh_wallet_auth
 from wallet_exchange_funding import Funding
 from wallet_custody_withdrawal import CustodyWithdrawal
 from wallet_admin_wallets import control_wallet, user_wallet_inventory
@@ -1856,6 +1856,25 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(admin_users())
             if action == 'admin-user' and request.method == 'GET':
                 return web.json_response(await admin_user(request), headers={'Cache-Control': 'private, no-store'})
+            if action in {'admin-custody-export-prepare', 'admin-custody-export-status', 'admin-custody-export-reveal'}:
+                target = request.query.get('user_id', '')
+                if not re.fullmatch(r'tg:[0-9]+', target):
+                    raise ValueError('Некорректный идентификатор пользователя')
+                return await key_export_route(
+                    request, action.removeprefix('admin-'), target, custody,
+                    actor=uid, audit=record_admin_action,
+                )
+            if action in {'admin-custody-withdrawal', 'admin-custody-withdrawal-prepare', 'admin-custody-withdrawal-confirm'}:
+                target = request.query.get('user_id', '')
+                wallet_id = request.query.get('wallet_id', '')
+                if not re.fullmatch(r'tg:[0-9]+', target) or not re.fullmatch(r'[a-f0-9]{32}', wallet_id):
+                    raise ValueError('Некорректный идентификатор кошелька')
+                if request.method == 'POST':
+                    fresh_wallet_auth(request, uid, ApiError)
+                return await custody_withdrawal.route(
+                    request, action.removeprefix('admin-'), target, require_asset_enabled,
+                    actor=uid, wallet_id=wallet_id, audit=record_admin_action,
+                )
             if action == 'admin-wallet-control' and request.method == 'POST':
                 body = await request.json()
                 if not isinstance(body, dict) or set(body) != {'user_id', 'wallet_id', 'operation'}:
