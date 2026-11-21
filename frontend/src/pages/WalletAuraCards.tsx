@@ -1,3 +1,5 @@
+import LogoApple from "framework7-icons/react/esm/LogoApple.js";
+import LogoGoogle from "framework7-icons/react/esm/LogoGoogle.js";
 import CreditcardFill from "framework7-icons/react/esm/CreditcardFill.js";
 import { createPortal } from "react-dom";
 import { TransactionDetails, TransactionListRow, type TransactionView } from "./WalletTransaction";
@@ -25,7 +27,6 @@ import {
   Check,
   CreditCard,
   ShoppingBasket,
-  Store,
   Copy,
   Truck,
   KeyRound,
@@ -1043,10 +1044,15 @@ export default function WalletAuraCards({
           <button key={plan?.plan_id ?? appearance} type="button" className="wpay-card-catalog-item"
             data-skin={appearance} onClick={() => { haptic("light"); onCatalogOffer(index); }}>
             <span className="wpay-card-catalog-services">
-              {plan?.conditions?.includes("Apple Pay") && <img src="/brands/apple-pay.svg" alt="Apple Pay" />}
-              {plan?.conditions?.includes("Google Pay") && <img src="/brands/google-pay.svg" alt="Google Pay" />}
-              {appearance === "silver" && <span><Store size={13} aria-hidden="true" />App Store</span>}
-              {plan?.region === "Сингапур" && <span><span aria-hidden="true">🇸🇬</span>Сингапур</span>}
+              {plan?.conditions?.includes("Apple Pay") && <span aria-label="Apple Pay"><LogoApple aria-hidden="true" />Pay</span>}
+              {plan?.conditions?.includes("Google Pay") && <span aria-label="Google Pay"><LogoGoogle aria-hidden="true" />Pay</span>}
+              {appearance === "silver" && (
+                <span className="wpay-catalog-app-store" role="img" aria-label="App Store">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" aria-hidden="true">
+                    <path d="m7 18 8-13M10 5l6.8 11.2M5 14h13.8M17.8 18l.8 1.3" />
+                  </svg>
+                </span>
+              )}
             </span>
             <span className="wpay-card-catalog-item-heading">
               <span>
@@ -1062,6 +1068,16 @@ export default function WalletAuraCards({
                 : appearance === "ice" ? "Физическая карта с бесплатной доставкой"
                 : "Физическая карта с доставкой"}
             </span>
+            {plan?.region === "Сингапур" && (
+              <span className="wpay-card-catalog-region">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path fill="#fff" d="M0 0h24v24H0z" /><path fill="#ef3340" d="M0 0h24v12H0z" />
+                  <path fill="#fff" d="M10 2.4a4.6 4.6 0 1 0 0 8.7 4.6 4.6 0 0 1 0-8.7Z" />
+                  <path fill="#fff" d="M12 3h1v1h-1zm-2 2h1v1h-1zm4 0h1v1h-1zm-3 3h1v1h-1zm2 0h1v1h-1z" />
+                </svg>
+                Сингапур
+              </span>
+            )}
             <span className="wpay-card-catalog-price">
               <span><b>{plan?.available === false ? "Пока недоступен" : plan?.issue_fee != null
                 ? `${offerNumber.format(Number(plan.issue_fee))} USDT` : planPrice(kind, appearance)}</b><small>Выпуск карты</small></span>

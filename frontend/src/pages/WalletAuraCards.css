@@ -1172,3 +1172,42 @@
   border-radius: 999px;
   padding: 11px 8px;
 }
+
+.wpay-card-catalog-item, .dark .wpay-card-catalog-item { padding-bottom: 0; }
+.wpay-card-catalog-art { margin-top: -30px; }
+.wpay-card-catalog-services > span {
+  min-height: 25px;
+  padding: 3px 7px;
+  color: #fff;
+  background: linear-gradient(155deg, #ffffff31, #ffffff11);
+  border: 1px solid #ffffff38;
+  box-shadow: inset 0 1px #ffffff25;
+}
+.wpay-card-catalog-services svg { width: 14px; height: 14px; fill: currentColor; }
+.wpay-card-catalog-services > .wpay-catalog-app-store {
+  width: 25px;
+  padding: 0;
+  justify-content: center;
+  background: linear-gradient(160deg, #5dbaff, #1461dc);
+}
+.wpay-catalog-app-store svg { fill: none; }
+.wpay-card-catalog-region {
+  grid-area: 4 / 2;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+}
+.wpay-card-catalog-region svg { width: 16px; height: 16px; border-radius: 50%; }
+.wpay-card-catalog-price {
+  grid-area: 5 / 1 / 6 / -1;
+  margin-inline: -12px;
+  padding: 12px 10px;
+  border: 0;
+  border-top: 1px solid #ffffff48;
+  border-radius: 20px 20px 27px 27px;
+  background: linear-gradient(150deg, #ffffff24, #ffffff08 60%), #0b1a3266;
+  backdrop-filter: blur(14px);
+  box-shadow: inset 0 1px #ffffff28;
+}
