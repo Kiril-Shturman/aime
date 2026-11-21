@@ -1119,7 +1119,7 @@ export default function WalletAuraCards({
               )}
             </span>
             <span className="wpay-card-catalog-benefits">
-              {plan?.plan_id === "goswap_card_us" ? "Для ключевых американских сервисов" : appearance === "silver" ? "Подписки и онлайн-покупки"
+              {plan?.plan_id === "goswap_card_us" ? "Ключевые американские сервисы" : appearance === "silver" ? "Подписки и онлайн-покупки"
                 : appearance === "navy" ? "Бронирования и покупки в поездках"
                 : appearance === "ice" ? "Физическая карта с бесплатной доставкой"
                 : "Физическая карта с доставкой"}
