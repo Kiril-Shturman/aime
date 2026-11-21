@@ -2230,6 +2230,35 @@ def install_wallet(app, root, owner_check):
                 return web.json_response(result)
             if action == 'admin-database' and request.method == 'GET':
                 return web.json_response(admin_database(request))
+            if action == 'admin-operation-logs' and request.method == 'GET':
+                event_id = request.query.get('event_id', '')
+                event = ledger.db.execute(
+                    'SELECT detail FROM wallet_events WHERE event_id=?', (event_id,),
+                ).fetchone()
+                if not event:
+                    raise ApiError('NOT_FOUND', 'Операция не найдена', 404)
+                detail = json.loads(event['detail'])
+                identifiers = {str(detail[key]) for key in (
+                    'withdrawal_id', 'payment_id', 'deposit_id', 'transfer_id', 'invoice_id',
+                    'order_id', 'operation_id', 'spend_id',
+                ) if detail.get(key)}
+                items = []
+                if identifiers:
+                    placeholders = ','.join('?' for _ in identifiers)
+                    expected_provider = 'aura' if event_id.startswith(('aura:', 'deposit:aura:')) else 'goswap'
+                    document = "CASE WHEN json_valid(CAST(raw_body AS TEXT)) THEN CAST(raw_body AS TEXT) ELSE '{}' END"
+                    fields = ('id', 'withdrawal_id', 'payment_id', 'deposit_id', 'transfer_id', 'invoice_id', 'order_id', 'operation_id')
+                    matches = [f'entity_id IN ({placeholders})']
+                    if expected_provider == 'aura':
+                        matches.extend(f"json_extract({document}, '$.data.{field}') IN ({placeholders})" for field in fields)
+                    items = decoded_rows(
+                        'SELECT id,provider,origin,update_type,status,version,received_at,processed_at,attempts,'
+                        'error IS NOT NULL AS has_error FROM wallet_webhook_inbox '
+                        f"WHERE signature_valid=1 AND provider=? AND ({' OR '.join(matches)}) "
+                        'ORDER BY received_at DESC LIMIT 100',
+                        (expected_provider, *tuple(identifiers) * len(matches)),
+                    )
+                return web.json_response({'items': items}, headers={'Cache-Control': 'private, no-store'})
             if action == 'admin-payments' and request.method == 'GET':
                 return web.json_response(admin_payments(), headers={'Cache-Control': 'private, no-store'})
             if action == 'admin-crypto' and request.method == 'GET':

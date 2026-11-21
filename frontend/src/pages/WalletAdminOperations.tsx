@@ -2,7 +2,9 @@ import { useEffect, useId, useRef, useState } from "react";
 import {
   Activity, ChevronRight, ReceiptText, Search, SlidersHorizontal, TrendingUp, X,
 } from "lucide-react";
-import { TransactionAvatar, TransactionDetailContent, transactionFromApi, type TransactionView } from "./WalletTransaction";
+import { TransactionAvatar, transactionFromApi } from "./WalletTransaction";
+import { RecordMenu, RecordValue } from "./WalletAdminRecord";
+import { walletRequest } from "../lib/wallet-api";
 import "./WalletAdminOperations.css";
 
 type Row = Record<string, unknown>;
@@ -67,7 +69,8 @@ function normalize(row: Row, source: keyof typeof sources) {
     else if (status === "refunded") model.status = "refunded";
   }
   return {
-    id, user, type, title, status, model, asset, amount, stamp, revenue,
+    id, user, type, title, status, model, asset, amount, stamp, revenue, source,
+    operationKey: [detail.withdrawal_id, detail.payment_id, detail.deposit_id, detail.transfer_id, detail.invoice_id, detail.order_id, detail.operation_id, detail.spend_id].map(s).find(Boolean),
     day: createdAt.slice(0, 10),
     reference: [detail.merchant_name, detail.network, detail.operation_id, detail.payment_id, detail.order_id, detail.tx_hash, detail.transaction_hash, row.withdrawal_id].map(s).filter(Boolean).join(" · "),
   };
@@ -149,12 +152,57 @@ function OperationsChart({ daily, asOf }: { daily: Daily[]; asOf?: string }) {
   );
 }
 
+const recordTabs = [["details", "Детали"], ["history", "История"], ["logs", "Логи события"]] as const;
+
+function OperationRecord({ record, related }: {
+  record: ReturnType<typeof normalize>; related: ReturnType<typeof normalize>[];
+}) {
+  const [tab, setTab] = useState<(typeof recordTabs)[number][0]>("details");
+  const [logs, setLogs] = useState<Row[] | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    if (tab !== "logs" || record.source !== "events") return;
+    const controller = new AbortController();
+    walletRequest<{ items: Row[] }>(`admin-operation-logs?${new URLSearchParams({ event_id: record.id })}`, undefined, controller.signal)
+      .then(data => { if (!controller.signal.aborted) setLogs(data.items); })
+      .catch(() => { if (!controller.signal.aborted) setError(true); });
+    return () => controller.abort();
+  }, [tab, record.id, record.source]);
+  const dateTime = (stamp: number) => Number.isFinite(stamp)
+    ? new Date(stamp).toLocaleString("ru-RU", { timeZone: "UTC" }) + " UTC" : "—";
+  return <div className="admin-ops-record">
+    <RecordMenu label="Разделы операции" tabs={recordTabs} active={tab} onSelect={setTab} />
+    {tab === "details" && <>
+      <dl className="admin-record-fields">
+        <RecordValue label="Операция" value={record.title} />
+        <RecordValue label="Сумма" value={record.amount === null ? undefined : `${fmt.format(record.amount)} ${record.asset}`} copyable />
+        <RecordValue label="ID операции" value={record.id} copyable />
+        <RecordValue label="Дата и время" value={dateTime(record.stamp)} />
+        {record.model.rows.map(([label, value], index) => (
+          <RecordValue key={`${label}-${index}`} label={label} value={value} copyable={/id|номер|хеш|адрес|пользователь/i.test(label)} />
+        ))}
+      </dl>
+      {record.source === "events" && <button className="admin-record-link" type="button" onClick={() => setTab("logs")}>Перейти в логи</button>}
+    </>}
+    {tab === "history" && <dl className="admin-record-fields">
+      {related.map(row => <RecordValue key={row.id} label={dateTime(row.stamp)} value={`${row.title} · ${statuses[row.status] ?? (row.status || "Записано")}`} />)}
+    </dl>}
+    {tab === "logs" && (record.source !== "events" || logs?.length === 0
+      ? <p className="admin-record-empty">Связанных событий провайдера нет.</p>
+      : error ? <p role="alert">Не удалось загрузить логи.</p>
+      : logs ? <dl className="admin-record-fields">{logs.map(log => (
+        <RecordValue key={s(log.id)} label={`${s(log.provider)} · ${s(log.update_type)}`}
+          value={`${dateTime(Number(log.received_at) * 1000)} · ${log.has_error ? "Ошибка обработки" : log.processed_at ? "Обработано" : "Ожидает обработки"}`} />
+      ))}</dl> : <p role="status">Загружаем логи…</p>)}
+  </div>;
+}
+
 export function AdminOperations({ data }: { data: AdminOperationsData }) {
   const [source, setSource] = useState<keyof typeof sources>("events");
   const [filters, setFilters] = useState(emptyFilters);
   const [limit, setLimit] = useState(25);
   const [advanced, setAdvanced] = useState(false);
-  const [selected, setSelected] = useState<TransactionView | null>(null);
+  const [selected, setSelected] = useState<ReturnType<typeof normalize> | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     if (selected && !dialogRef.current?.open) dialogRef.current?.showModal();
@@ -211,8 +259,8 @@ export function AdminOperations({ data }: { data: AdminOperationsData }) {
           <div className="admin-ops-table">
             <table><thead><tr><th>Операция</th><th>Пользователь / ID</th><th>Статус</th><th>Сумма</th>{source === "events" && <th>Доход wPay</th>}</tr></thead>
               <tbody>{filtered.slice(0, limit).map(row => (
-                <tr key={row.id} onClick={() => setSelected(row.model)}>
-                  <td><div className="admin-ops-operation"><TransactionAvatar kind={row.model.kind} positive={(row.amount ?? 0) > 0} compact /><div><button type="button" className="admin-ops-open" onClick={event => { event.stopPropagation(); setSelected(row.model); }}><strong>{row.title}</strong><ChevronRight size={14} /></button><small title={row.reference || undefined}>{row.day ? new Date(row.stamp).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short", timeZone: "UTC" }) : "—"}{row.reference && ` · ${row.reference}`}</small></div></div></td>
+                <tr key={row.id} onClick={() => setSelected(row)}>
+                  <td><div className="admin-ops-operation"><TransactionAvatar kind={row.model.kind} positive={(row.amount ?? 0) > 0} compact /><div><button type="button" className="admin-ops-open" onClick={event => { event.stopPropagation(); setSelected(row); }}><strong>{row.title}</strong><ChevronRight size={14} /></button><small title={row.reference || undefined}>{row.day ? new Date(row.stamp).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short", timeZone: "UTC" }) : "—"}{row.reference && ` · ${row.reference}`}</small></div></div></td>
                   <td><strong>{row.user || "—"}</strong><small title={row.id}>{row.id || "—"}</small></td>
                   <td>{row.status ? <span className="admin-ops-status" data-state={row.status}>{statuses[row.status] ?? row.status}</span> : "—"}</td>
                   <td className="admin-ops-amount">{row.amount !== null && Number.isFinite(row.amount) ? `${row.amount > 0 ? "+" : ""}${fmt.format(row.amount)} ${row.asset}` : "—"}</td>
@@ -226,10 +274,12 @@ export function AdminOperations({ data }: { data: AdminOperationsData }) {
       </section>
       <dialog className="admin-ops-dialog" ref={dialogRef} onClose={() => setSelected(null)} aria-labelledby="admin-ops-dialog-title">
         <header>
-          <h2 id="admin-ops-dialog-title">Детали операции</h2>
+          <h2 id="admin-ops-dialog-title">Подробности операции</h2>
           <button type="button" className="admin-ops-reset" aria-label="Закрыть детали операции" onClick={() => dialogRef.current?.close()}><X size={18} /></button>
         </header>
-        {selected && <TransactionDetailContent key={selected.id} model={selected} />}
+        {selected && <OperationRecord key={selected.id} record={selected} related={rows.filter(row => (
+          row.id === selected.id || selected.operationKey && row.operationKey === selected.operationKey && row.user === selected.user
+        ))} />}
       </dialog>
     </div>
   );

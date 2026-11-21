@@ -1507,6 +1507,29 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
             {"aura:test:card_operation:legacy": ("card_topup", "15"), "local-topup": ("card_topup", "-16")},
         )
 
+    async def test_admin_operation_logs_match_signed_provider_event_without_returning_payload(self):
+        db = self.app["wpay_ledger"].db
+        db.execute("INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)", (
+            "aura:test:card_topup:local", "tg:123", "USDT", "-15", "card_topup",
+            "2026-11-21T00:00:00Z", json.dumps({"operation_id": "topup-1"}),
+        ))
+        for event_id, operation_id, valid in (("one", "topup-1", 1), ("two", "topup-2", 1), ("three", "topup-1", 0)):
+            db.execute(
+                "INSERT INTO wallet_webhook_inbox(event_key,raw_body,signature,signature_valid,origin,"
+                "update_type,entity_id,received_at,provider) VALUES (?,?,?,?,'webhook','card.operation',?,?,'aura')",
+                (event_id, json.dumps({"data": {"id": operation_id}}).encode(), "signature", valid, event_id, time.time()),
+            )
+        endpoint = "/api/wallet/admin-operation-logs?event_id=aura:test:card_topup:local"
+        denied = await self.wpay.get(endpoint, headers={"X-Telegram-Init-Data": init_data(123)})
+        self.assertEqual(denied.status, 403)
+        response = await self.wpay.get(endpoint, headers=self.owner)
+        self.assertEqual(response.status, 200, await response.text())
+        items = (await response.json())["items"]
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["update_type"], "card.operation")
+        self.assertNotIn("raw_body", items[0])
+        self.assertNotIn("signature", items[0])
+
     async def test_admin_operations_aggregates_completed_volume_and_card_fees_by_asset(self):
         db = self.app["wpay_ledger"].db
         stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())

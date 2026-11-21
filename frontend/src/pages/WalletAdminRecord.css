@@ -1,0 +1,21 @@
+.admin-record-menu { display: flex; gap: 18px; overflow-x: auto; flex: none; border-bottom: 1px solid var(--admin-border); }
+.admin-record-menu button { flex: none; min-height: 45px; padding: 0 4px; border-bottom: 2px solid transparent; color: var(--admin-muted); font-size: 14px; cursor: pointer; }
+.admin-record-menu button[aria-pressed="true"] { color: var(--admin-text); border-bottom-color: #1674e9; font-weight: 650; }
+.admin-record-menu button:focus-visible, .admin-record-field button:focus-visible { outline: 2px solid #1674e9; outline-offset: -3px; }
+.admin-record-fields { margin: 0; }
+.admin-record-field { padding: 14px 0; border-bottom: 1px solid var(--admin-border); }
+.admin-record-field dt, .admin-record-field small { color: var(--admin-muted); font-size: 13px; }
+.admin-record-field dd { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 15px; overflow-wrap: anywhere; }
+.admin-record-field button { display: inline-grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 8px; color: var(--admin-muted); cursor: pointer; }
+.admin-record-field button:hover { background: var(--admin-surface-muted); color: var(--admin-text); }
+.admin-record-field small { display: block; margin-top: 4px; }
+.admin-record-link { margin: 18px 0; color: #1674e9; cursor: pointer; }
+.admin-record-empty { padding: 18px 0; color: var(--admin-muted); }
+.admin-ops-dialog { background: var(--admin-surface); }
+.admin-ops-dialog > header { padding: 24px 26px 12px; border-bottom: 0; }
+.admin-ops-dialog > header h2 { font-size: 23px; letter-spacing: -.025em; }
+.admin-ops-record { padding: 0 26px 26px; }
+.admin-ops-record > .admin-record-menu { position: sticky; top: 72px; z-index: 1; background: var(--admin-surface); margin-bottom: 8px; }
+.wpay-admin-user-drawer.admin-record-profile { grid-template-rows: auto auto minmax(0, 1fr); }
+.admin-record-profile-menu { padding: 0 24px; background: var(--admin-surface); }
+.wpay-admin-user-drawer .wpay-admin-user-section .admin-record-field button { padding: 0; background: transparent; color: var(--admin-muted); box-shadow: none; }

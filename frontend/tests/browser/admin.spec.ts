@@ -74,6 +74,8 @@ async function setup(page: Page, theme = "dark") {
         transfers: [],
         withdrawals: [],
       };
+    if (action === "admin-operation-logs")
+      data = { items: [{ id: 1, provider: "aura", update_type: "card.operation", received_at: 1795305600, processed_at: 1795305601 }] };
     if (action === "admin-notifications")
       data = {
         settings: [],
@@ -121,8 +123,13 @@ for (const theme of ["dark", "light"]) {
     await expect(page.getByRole("table").getByText("Пополнение карты", { exact: true })).toBeVisible();
     await expect(page.getByRole("table").getByText("Ошибка оплаты по QR", { exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "Пополнение карты" }).click();
-    const details = page.getByRole("dialog", { name: "Детали операции" });
+    const details = page.getByRole("dialog", { name: "Подробности операции" });
     await expect(details.getByText("topup-101", { exact: true })).toBeVisible();
+    await expect(details.getByRole("button", { name: "Скопировать ID операции" })).toBeVisible();
+    await details.getByRole("button", { name: "История" }).click();
+    await expect(details.getByText("Пополнение карты · Выполнено")).toBeVisible();
+    await details.getByRole("button", { name: "Логи события" }).click();
+    await expect(details.getByText("aura · card.operation")).toBeVisible();
     await details.getByRole("button", { name: "Закрыть детали операции" }).click();
     await expect(details).toBeHidden();
     await page.getByRole("button", { name: "Фильтры" }).click();

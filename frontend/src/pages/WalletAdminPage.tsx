@@ -1,3 +1,4 @@
+import { RecordMenu, RecordValue } from "./WalletAdminRecord";
 import { AdminOperations, type AdminOperationsData } from "./WalletAdminOperations";
 import { currencyLabel, networkLabel, networkStandards } from "../wallet/catalog";
 import { cryptoAssetsByTicker } from "../wallet/cryptoAssets";
@@ -2205,6 +2206,7 @@ function AdminUserDrawer({
     ["wallets", "Кошельки"],
     ["cards", "Карты"],
     ["history", "История"],
+    ["logs", "Логи"],
   ] as const;
   const [auraWithdrawEnv, setAuraWithdrawEnv] = useState<string | null>(null);
   const [walletAction, setWalletAction] = useState<{ walletId: string; asset: string; action: "withdraw" | "export" } | null>(null);
@@ -2376,7 +2378,7 @@ function AdminUserDrawer({
         onClick={onClose}
       />
       <aside
-        className="wpay-admin-user-drawer"
+        className="wpay-admin-user-drawer admin-record-profile"
         role="dialog"
         aria-modal="true"
         aria-label={`Карточка пользователя ${name}`}
@@ -2396,6 +2398,10 @@ function AdminUserDrawer({
             <X size={20} />
           </button>
         </header>
+        <div className="admin-record-profile-menu">
+          <RecordMenu label="Разделы карточки пользователя" tabs={tabs} active={section}
+            onSelect={id => { setWalletAction(null); setAuraWithdrawEnv(null); setSection(id); }} />
+        </div>
         <div className="wpay-admin-drawer-scroll">
           {loading ? (
             <div className="wpay-admin-drawer-state">Загружаем профиль…</div>
@@ -2409,14 +2415,6 @@ function AdminUserDrawer({
             </div>
           ) : detail ? (
             <>
-              <nav aria-label="Разделы карточки пользователя" className="sticky top-0 z-10 mb-3 flex gap-2 overflow-x-auto rounded-2xl bg-[var(--admin-surface)] p-2">
-                {tabs.map(([id, label]) => (
-                  <button key={id} type="button" aria-pressed={section === id} onClick={() => { setWalletAction(null); setAuraWithdrawEnv(null); setSection(id); }}
-                    className={`shrink-0 rounded-xl px-3 py-2 text-sm font-semibold ${section === id ? "bg-blue-500/15 text-blue-600 dark:text-blue-300" : "text-[var(--admin-muted)]"}`}>
-                    {label}
-                  </button>
-                ))}
-              </nav>
               {actionNotice && <p role="status" className="wpay-admin-operator-notice mb-3">{actionNotice}</p>}
               <div className="wpay-admin-user-badges">
                 <span className={customer ? "is-good" : ""}>
@@ -2484,40 +2482,17 @@ function AdminUserDrawer({
               {section === "profile" && (
                 <section className="wpay-admin-user-section">
                   <h3>Профиль и контакты</h3>
-                  <div className="wpay-admin-user-facts">
-                    <div>
-                      <small>Telegram ID</small>
-                      <b>{text(account?.telegram_id)}</b>
-                    </div>
-                    <button type="button" onClick={() => copy(customer?.customer_id)}>
-                      <small>Aura · Customer ID</small><b>{text(customer?.customer_id)}</b>
-                    </button>
-                    <button type="button" onClick={() => copy(account?.client_ref)}>
-                      <small>GoSwap · client_ref</small><b>{text(account?.client_ref)}</b>
-                    </button>
-                    <div>
-                      <small>Роль</small>
-                      <b>{text(account?.role)}</b>
-                    </div>
-                    <div>
-                      <small>Email</small>
-                      <b>{text(detail.contacts.email)}</b>
-                    </div>
-                    <div>
-                      <small>Телефон</small>
-                      <b>{text(detail.contacts.phone)}</b>
-                    </div>
-                    <div>
-                      <small>Последний вход</small>
-                      <b>
-                        {date(account?.last_miniapp_at || account?.last_seen)}
-                      </b>
-                    </div>
-                    <div>
-                      <small>Бот запущен</small>
-                      <b>{date(account?.bot_started_at)}</b>
-                    </div>
-                  </div>
+                  <dl className="admin-record-fields">
+                    <RecordValue label="ID пользователя" value={userId} copyable />
+                    <RecordValue label="Telegram ID" value={text(account?.telegram_id)} copyable />
+                    <RecordValue label="Aura · Customer ID" value={text(customer?.customer_id)} copyable />
+                    <RecordValue label="GoSwap · client_ref" value={text(account?.client_ref)} copyable />
+                    <RecordValue label="Роль" value={text(account?.role)} />
+                    <RecordValue label="Email" value={text(detail.contacts.email)} copyable />
+                    <RecordValue label="Телефон" value={text(detail.contacts.phone)} copyable />
+                    <RecordValue label="Последний вход" value={date(account?.last_miniapp_at || account?.last_seen)} />
+                    <RecordValue label="Бот запущен" value={date(account?.bot_started_at)} />
+                  </dl>
                 </section>
               )}
 
@@ -2803,7 +2778,7 @@ function AdminUserDrawer({
                 </section>
               )}
 
-              {section === "history" && (
+              {section === "logs" && (
                 <section className="wpay-admin-user-section">
                   <h3>Последние действия операторов</h3>
                   {detail.audit.length ? (
