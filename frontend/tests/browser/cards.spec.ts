@@ -943,7 +943,16 @@ test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", a
   await sheet.getByRole("radio", { name: "С кошелька" }).check();
   expect(payments).toBe(0);
   const handle = sheet.getByRole("button", { name: "Раскрыть условия карты" });
-  await handle.click();
+  const openedArt = (await art.boundingBox())!;
+  const upwardX = openedArt.x + openedArt.width / 2;
+  const upwardY = openedArt.y + 80;
+  const collapsedTop = (await sheet.boundingBox())!.y;
+  await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: upwardX, y: upwardY }] });
+  for (const delta of [25, 50, 80]) {
+    await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: upwardX, y: upwardY - delta }] });
+  }
+  await expect.poll(async () => collapsedTop - (await sheet.boundingBox())!.y).toBeGreaterThan(10);
+  await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
   await expect(handle).toHaveAttribute("aria-expanded", "true");
   await expect(sheet).not.toHaveClass(/wpay-goswap-order-sheet--collapsed/);
   await expect(sheet.getByText("Минимум пополнения", { exact: true })).toBeInViewport();

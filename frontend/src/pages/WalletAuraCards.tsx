@@ -1590,9 +1590,11 @@ export default function WalletAuraCards({
                   }
                   const dx = Math.abs(touch.clientX - start.x);
                   const dy = touch.clientY - start.y;
-                  if (dy <= dx && !start.sheet.classList.contains("wpay-goswap-order-sheet--dragging")) return;
+                  if (Math.abs(dy) <= dx && !start.sheet.classList.contains("wpay-goswap-order-sheet--dragging")) return;
+                  const hiddenHeight = goSwapSheetExpanded ? 0
+                    : Math.max(0, parseFloat(start.sheet.style.getPropertyValue("--f7-sheet-swipe-step")) || 0);
                   start.sheet.classList.add("wpay-goswap-order-sheet--dragging");
-                  start.sheet.style.setProperty("--wpay-checkout-drag-y", `${Math.max(0, dy)}px`);
+                  start.sheet.style.setProperty("--wpay-checkout-drag-y", `${Math.max(-hiddenHeight, dy)}px`);
                 }}
                 onTouchCancel={resetCheckoutSwipe}
                 onTouchEnd={event => {
@@ -1600,9 +1602,9 @@ export default function WalletAuraCards({
                   const touch = event.changedTouches[0];
                   if (!start || !touch) return;
                   const dy = touch.clientY - start.y;
-                  if (dy > 55 && dy > Math.abs(touch.clientX - start.x)) {
-                    f7.sheet.get(".wpay-goswap-order-sheet")?.close();
-                  }
+                  if (Math.abs(dy) <= Math.abs(touch.clientX - start.x)) return;
+                  if (dy > 55) f7.sheet.get(".wpay-goswap-order-sheet")?.close();
+                  else if (dy < -55 && !goSwapSheetExpanded) expandGoSwapSheet();
                 }}>
                 <LiveCardArtwork kind="virtual" skin={goSwapOrder.plan.skin} />
               </div>
