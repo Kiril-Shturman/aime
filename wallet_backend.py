@@ -1828,6 +1828,17 @@ def install_wallet(app, root, owner_check):
                     ledger, uid, await request.json(), request.headers.get('Idempotency-Key', ''),
                     asset_enabled, deposit_provider, ApiError,
                 ), headers={'Cache-Control': 'no-store'})
+            if action == 'exchange-btc-quote' and request.method == 'POST':
+                body = await request.json()
+                if not isinstance(body, dict) or set(body) != {'from_network', 'to_network', 'amount', 'rate_type'}:
+                    raise ValueError('Укажите сети и сумму BTC')
+                if body.get('from_network') != 'BTC' or not isinstance(body.get('to_network'), str):
+                    raise ValueError('Укажите сеть получения USDT')
+                pair = {**body, 'from_asset': 'BTC', 'to_asset': 'USDT'}
+                if resolve_exchange_route(ledger, pair, asset_enabled, deposit_provider)['method'] != 'fixedfloat':
+                    raise ApiError('EXCHANGE_UNAVAILABLE', 'Обмен BTC для этой пары отключён', 409)
+                exchange.throttle(uid)
+                return web.json_response(await exchange.quote(body, from_asset='BTC'), headers={'Cache-Control': 'no-store'})
             if action == 'exchange-dex-quote' and request.method == 'POST':
                 body = await request.json()
                 if not isinstance(body, dict) or set(body) != set(DEX_PAIR) | {'amount'}:

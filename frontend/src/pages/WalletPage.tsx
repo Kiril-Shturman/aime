@@ -1541,7 +1541,7 @@ function CryptoFlowPushView({
   const quoteRequest = useRef<AbortController | null>(null);
   const quoteKey = `${pair}&amount=${amount}&rate=${managedPayout ? "fixed" : "float"}`;
   useEffect(() => () => quoteRequest.current?.abort(), [flow?.kind, quoteKey, exchangeMethod]);
-  const canQuote = exchangeMethod === "fixedfloat" && fromAsset.code === "USDT" &&
+  const canQuote = exchangeMethod === "fixedfloat" && ["USDT", "BTC"].includes(fromAsset.code) &&
     toAsset.code === "USDT" && Number(amount.replace(",", ".")) > 0;
   async function quoteFixedFloat() {
     quoteRequest.current?.abort();
@@ -1549,7 +1549,7 @@ function CryptoFlowPushView({
     quoteRequest.current = controller;
     setProviderQuote({ key: quoteKey, text: "Рассчитываем…" });
     try {
-      const quote = await walletRequest<{ available: boolean; to_amount: string | null; reasons: string[]; unavailable_sides?: string[] }>("exchange-quote", {
+      const quote = await walletRequest<{ available: boolean; to_amount: string | null; reasons: string[]; unavailable_sides?: string[] }>(fromAsset.code === "BTC" ? "exchange-btc-quote" : "exchange-quote", {
         from_network: sourceNetwork, to_network: destinationNetwork,
         amount: amount.replace(",", "."), rate_type: managedPayout ? "fixed" : "float",
       }, controller.signal);
@@ -1567,7 +1567,7 @@ function CryptoFlowPushView({
       };
       const unavailable = quote.unavailable_sides?.map((side) =>
         side === "from"
-          ? `FixedFloat сейчас не принимает USDT в сети ${networkLabel(sourceNetwork ?? "", "USDT")}`
+          ? `FixedFloat сейчас не принимает ${fromAsset.code} в сети ${networkLabel(sourceNetwork ?? "", "USDT")}`
           : `FixedFloat сейчас не выплачивает USDT в сети ${networkLabel(destinationNetwork ?? "", "USDT")}`,
       );
       setProviderQuote({
@@ -1838,7 +1838,7 @@ function CryptoFlowPushView({
               Указать адрес получения вручную
             </label>
           )}
-          {(managedPayout || fixedFloatOrdersEnabled) && sourceNetwork && destinationNetwork && canQuote && (
+          {(managedPayout || fixedFloatOrdersEnabled) && sourceNetwork && destinationNetwork && canQuote && fromAsset.code === "USDT" && currentQuote?.payout && (
             <WalletExchangeOrder key={`${pair}:${managedPayout ?? "manual"}`} active={flow?.kind === "exchange"} enabled
               managedPayout={managedPayout} from={sourceNetwork} to={destinationNetwork}
               value={amount.replace(",", ".")} mode={managedPayout ? "fixed" : "float"} quoteValid={Boolean(currentQuote?.payout)}
@@ -1850,7 +1850,7 @@ function CryptoFlowPushView({
               onClick={() => void submitInternalExchange()}>
               {internalBusy ? "Перемещаем…" : "Переместить USDT 1:1"}
             </Button>
-          ) : !(managedPayout || (canQuote && fixedFloatOrdersEnabled)) && <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">Исполнение обмена пока недоступно</p>}
+          ) : !(managedPayout || (canQuote && fixedFloatOrdersEnabled && fromAsset.code === "USDT")) && <p className="mt-4 text-center text-sm text-black/50 dark:text-white/50">Исполнение обмена пока недоступно</p>}
           <p className="mt-3 text-center text-[12px] text-black/35 dark:text-white/35">
             Расчёт справочный. Обмен пока недоступен.
           </p>
