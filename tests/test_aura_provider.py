@@ -1596,11 +1596,12 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         )
 
     async def test_card_storefront_projects_admin_order_and_keeps_goswap_unavailable(self):
-        from wallet_tariffs import set_storefront_position
+        from wallet_tariffs import set_card_issue_enabled, set_storefront_position
 
         ledger = self.app["wpay_ledger"]
         set_storefront_position(ledger, "goswap_card_sg_1", 1, "test")
         set_storefront_position(ledger, "card_travel", 4, "test")
+        set_card_issue_enabled(ledger, "goswap_card_sg_1", True, "test")
         result = await self.wpay.get("/api/wallet/aura-card-fees", headers=self.owner)
         self.assertEqual(result.status, 200, await result.text())
         payload = await result.json()
@@ -1610,6 +1611,18 @@ class AuraRouteIntegrationTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("card_subscriptions", [row["plan_id"] for row in offers])
         self.assertEqual([row["position"] for row in offers], sorted(row["position"] for row in offers))
         self.assertIn("card_subscriptions", [row["plan_id"] for row in payload["plans"]])
+
+    async def test_card_storefront_hides_disabled_tariffs(self):
+        from wallet_tariffs import set_card_issue_enabled, set_storefront_position
+
+        ledger = self.app["wpay_ledger"]
+        for product, position in (("goswap_card_sg_1", 1), ("card_travel", 2)):
+            set_storefront_position(ledger, product, position, "test")
+            set_card_issue_enabled(ledger, product, False, "test")
+        result = await self.wpay.get("/api/wallet/aura-card-fees", headers=self.owner)
+        self.assertEqual(result.status, 200, await result.text())
+        offers = {row["plan_id"] for row in (await result.json())["storefront"]}
+        self.assertTrue(offers.isdisjoint({"goswap_card_sg_1", "card_travel"}))
 
     async def test_admin_can_toggle_goswap_card_availability_independently(self):
         from wallet_tariffs import snapshot

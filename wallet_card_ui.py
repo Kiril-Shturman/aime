@@ -70,14 +70,16 @@ class CardUI:
         storefront = []
         goswap_cards = getattr(self, 'goswap_cards', None)
         goswap_prices = {}
-        positions = storefront_positions(self.ledger)
-        if goswap_cards and any(product in GOSWAP_CARD_PLANS and position is not None for product, position in positions.items()):
+        ordered = sorted(
+            (position, product) for product, position in storefront_positions(self.ledger).items()
+            if position is not None and card_issue_enabled(self.ledger, product)
+        )
+        if goswap_cards and any(product in GOSWAP_CARD_PLANS for _, product in ordered):
             try:
                 goswap_prices = await goswap_cards.catalogue()
             except (goswap_cards.error, ValueError, TypeError):
                 pass
         goswap_skins = {'goswap_card_sg_1': 'silver', 'goswap_card_sg_2': 'navy', 'goswap_card_us': 'silver'}
-        ordered = sorted((position, product) for product, position in positions.items() if position is not None)
         for position, product in ordered:
             if product in aura_plans:
                 plan = aura_plans[product]
@@ -93,7 +95,7 @@ class CardUI:
                 storefront.append({
                     **terms, 'skin': goswap_skins[product],
                     'plan_id': product, 'provider': 'GoSwap', 'position': position,
-                    'available': provider_issue is not None and card_issue_enabled(self.ledger, product), 'issue_fee': format(issue, 'f'),
+                    'available': provider_issue is not None, 'issue_fee': format(issue, 'f'),
                     'service_issue_fee': tariff['fixed_fee'],
                     'service_recharge_pct': tariff['percent_fee'],
                     'service_minimum_fee': tariff['minimum_fee'],
