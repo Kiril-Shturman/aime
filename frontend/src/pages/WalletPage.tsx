@@ -11,6 +11,9 @@ import { resolveDeposit } from "../wallet/deposit";
 import WalletAssetAvatar from "./WalletAssetAvatar";
 import { type PointerEvent as ReactPointerEvent } from "react";
 import SunMax from "framework7-icons/react/esm/SunMax.js";
+import BookFill from "framework7-icons/react/esm/BookFill.js";
+import ChatBubble2Fill from "framework7-icons/react/esm/ChatBubble2Fill.js";
+import MoonStarsFill from "framework7-icons/react/esm/MoonStarsFill.js";
 import MoonStars from "framework7-icons/react/esm/MoonStars.js";
 import { WalletNavbar, WalletBackLink, PushViewShell } from "./WalletNavigation";
 import { usePullToRefresh, PullRefreshIndicator } from "./WalletScroll";
@@ -3063,7 +3066,7 @@ function ProfileListItem(props: ComponentProps<typeof F7ListItem>) {
     title,
   );
   const personal = /Имя|данные|проверки|Документы/.test(title);
-  const Icon = verification
+  const Icon = title === "Чат с поддержкой" ? ChatBubble2Fill : title === "Частые вопросы" ? BookFill : verification
     ? CheckmarkShieldFill
     : /кошельк/i.test(title)
       ? WalletFill
@@ -3211,7 +3214,7 @@ function ProfileSection({
           <ProfileListItem link title="Частые вопросы" subtitle="Ответы о кошельке и операциях" onClick={() => setProfilePage("faq")} />
           <F7ListItem title="Тёмная тема" subtitle="Светлое и тёмное оформление" mediaItem className="wpay-profile-theme-row">
             <span slot="media" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[#007aff] text-white">
-              <MoonStars aria-hidden="true" className="text-[26px]" />
+              <MoonStarsFill aria-hidden="true" className="text-[24px]" />
             </span>
             <span slot="after">
               <F7Toggle
