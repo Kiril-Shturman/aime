@@ -3134,7 +3134,7 @@ function ProfileSection({
   initials: string;
   showNotice: NoticeHandler;
 }) {
-  const { theme, set: setTheme } = useTheme();
+  const { theme, toggle: toggleTheme } = useTheme();
   useEffect(() => {
     preloadVerificationArtwork();
   }, []);
@@ -3207,16 +3207,18 @@ function ProfileSection({
           Настройки и помощь
         </h2>
         <F7List strong inset dividers className="profile-settings-list">
-          <ProfileListItem link title="Чат с поддержкой" onClick={() => setProfilePage("chat")} />
-          <ProfileListItem link title="Частые вопросы" onClick={() => setProfilePage("faq")} />
-          <F7ListItem title="Тёмная тема">
-            <MoonStars slot="media" aria-hidden="true" className="text-[26px] text-[#007aff] dark:text-[#0a84ff]" />
+          <ProfileListItem link title="Чат с поддержкой" subtitle="Сообщения и обращения" onClick={() => setProfilePage("chat")} />
+          <ProfileListItem link title="Частые вопросы" subtitle="Ответы о кошельке и операциях" onClick={() => setProfilePage("faq")} />
+          <F7ListItem title="Тёмная тема" subtitle="Светлое и тёмное оформление" mediaItem>
+            <span slot="media" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[#007aff] text-white">
+              <MoonStars aria-hidden="true" className="text-[26px]" />
+            </span>
             <span slot="after">
               <F7Toggle
                 init={false}
                 checked={theme === "dark"}
                 aria-label="Тёмная тема"
-                onChange={(event) => setTheme(event.target.checked ? "dark" : "light")}
+                onChange={() => toggleTheme()}
               />
             </span>
           </F7ListItem>
