@@ -3209,7 +3209,7 @@ function ProfileSection({
         <F7List strong inset dividers className="profile-settings-list">
           <ProfileListItem link title="Чат с поддержкой" subtitle="Сообщения и обращения" onClick={() => setProfilePage("chat")} />
           <ProfileListItem link title="Частые вопросы" subtitle="Ответы о кошельке и операциях" onClick={() => setProfilePage("faq")} />
-          <F7ListItem title="Тёмная тема" subtitle="Светлое и тёмное оформление" mediaItem>
+          <F7ListItem title="Тёмная тема" subtitle="Светлое и тёмное оформление" mediaItem className="wpay-profile-theme-row">
             <span slot="media" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[#007aff] text-white">
               <MoonStars aria-hidden="true" className="text-[26px]" />
             </span>
