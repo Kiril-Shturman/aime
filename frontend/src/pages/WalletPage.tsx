@@ -3210,6 +3210,7 @@ function ProfileSection({
           <ProfileListItem link title="Чат с поддержкой" onClick={() => setProfilePage("chat")} />
           <ProfileListItem link title="Частые вопросы" onClick={() => setProfilePage("faq")} />
           <F7ListItem title="Тёмная тема">
+            <MoonStars slot="media" aria-hidden="true" className="text-[26px] text-[#007aff] dark:text-[#0a84ff]" />
             <span slot="after">
               <F7Toggle
                 init={false}
@@ -3219,18 +3220,6 @@ function ProfileSection({
               />
             </span>
           </F7ListItem>
-          <ProfileListItem
-            link
-            title="Основная валюта"
-            after="RUB"
-            onClick={() => setProfilePage("currency")}
-          />
-          <ProfileListItem
-            link
-            title="Банковский провайдер"
-            subtitle="Не подключён"
-            onClick={() => setProfilePage("provider")}
-          />
         </F7List>
         <F7List strong inset dividers className="profile-legal-list">
           <F7ListItem
