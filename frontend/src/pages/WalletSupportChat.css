@@ -179,14 +179,22 @@
   margin-top: 8px;
 }
 
-.wpay-support-chat .message-sent .message-bubble {
-  position: relative;
+/* Keep the indicator outside Framework7's masked iOS bubble. */
+.wpay-support-chat .message-sent .message-content:has(> .support-unsent-icon) {
+  display: grid;
+  grid-template-columns: 18px minmax(0, auto);
+  column-gap: 8px;
+  align-items: center;
+}
+.wpay-support-chat .support-unsent-icon + .message-bubble {
+  grid-column: 2;
+}
+.wpay-support-chat .message-content:has(> .support-unsent-icon) .message-footer {
+  grid-column: 2;
+  justify-self: end;
 }
 .wpay-support-chat .support-unsent-icon {
-  position: absolute;
-  right: calc(100% + 8px);
-  top: 50%;
-  transform: translateY(-50%);
+  grid-column: 1;
   display: grid;
   place-items: center;
   width: 18px;

@@ -167,10 +167,13 @@ for (const theme of ["light", "dark"]) {
     const unsent = chat.locator(".support-unsent-icon");
     await expect(unsent).toHaveCount(1);
     await expect(unsent).toBeVisible();
-    expect(await unsent.evaluate((icon) =>
-      icon.getBoundingClientRect().right <
-      icon.closest(".message-bubble")!.getBoundingClientRect().left,
-    )).toBe(true);
+    expect(await unsent.evaluate((icon) => {
+      const bubble = icon.nextElementSibling!;
+      const box = icon.getBoundingClientRect();
+      return bubble.classList.contains("message-bubble") &&
+        box.right < bubble.getBoundingClientRect().left &&
+        document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === icon;
+    })).toBe(true);
     expect(writes()).toBe(0);
     expect(
       await page.evaluate(

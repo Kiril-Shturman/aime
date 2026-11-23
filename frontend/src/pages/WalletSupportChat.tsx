@@ -243,7 +243,7 @@ export default function SupportChatPushView({
                 footer={row.footer}
               >
                 {row.footer && (
-                  <span slot="bubble-start" className="support-unsent-icon" aria-hidden="true">
+                  <span slot="content-start" className="support-unsent-icon" aria-hidden="true">
                     i
                   </span>
                 )}
