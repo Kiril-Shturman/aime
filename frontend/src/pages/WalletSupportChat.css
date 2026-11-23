@@ -11,6 +11,7 @@
   --f7-messagebar-textarea-bg-color: var(--f7-glass-bg-color);
   --f7-messagebar-textarea-border: none;
   --f7-messagebar-textarea-height: 44px;
+  --f7-messagebar-textarea-padding: 12px 16px;
   --f7-glass-bg-color: rgba(255, 255, 255, 0.75);
   --f7-glass-backdrop: saturate(180%) blur(16px);
   --f7-glass-shadow:

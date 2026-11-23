@@ -115,12 +115,17 @@ for (const theme of ["light", "dark"]) {
       return {
         background: css.backgroundColor,
         radius: parseFloat(css.borderTopLeftRadius),
+        textHeight: parseFloat(css.lineHeight),
+        paddingTop: parseFloat(css.paddingTop),
+        paddingBottom: parseFloat(css.paddingBottom),
       };
     });
     expect(fieldStyle.background).toBe(
       theme === "dark" ? "rgba(50, 50, 50, 0.5)" : "rgba(255, 255, 255, 0.75)",
     );
     expect(fieldStyle.radius).toBeGreaterThanOrEqual(20);
+    expect(fieldStyle.paddingTop).toBe(fieldStyle.paddingBottom);
+    expect(fieldStyle.paddingTop + fieldStyle.textHeight + fieldStyle.paddingBottom).toBeCloseTo(fieldBox!.height, 0);
     await page.screenshot({
       path: test.info().outputPath(`support-empty-${theme}.png`),
       animations: "disabled",
