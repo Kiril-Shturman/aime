@@ -88,7 +88,8 @@ for (const theme of ["light", "dark"]) {
     const keyboardTop = screenHeight - 280;
     await page.evaluate((height) => {
       const viewport = window.visualViewport!;
-      Object.defineProperty(viewport, "height", { configurable: true, value: height });
+      Object.defineProperty(viewport, "height", { configurable: true, value: height - 24 });
+      Object.defineProperty(viewport, "offsetTop", { configurable: true, value: 24 });
       viewport.dispatchEvent(new Event("resize"));
     }, keyboardTop);
     await expect.poll(async () => {
@@ -101,6 +102,7 @@ for (const theme of ["light", "dark"]) {
     await page.evaluate(() => {
       const viewport = window.visualViewport!;
       Reflect.deleteProperty(viewport, "height");
+      Reflect.deleteProperty(viewport, "offsetTop");
       viewport.dispatchEvent(new Event("resize"));
     });
 

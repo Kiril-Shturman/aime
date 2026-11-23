@@ -135,8 +135,9 @@ export default function SupportChatPushView({
         layoutHeight = window.innerHeight;
         panel.style.height = `${layoutHeight}px`;
       }
-      const offset = Math.max(0, layoutHeight - viewport.height);
-      panel.style.top = `${Math.max(0, viewport.offsetTop)}px`;
+      // iOS may pan the visual viewport during focus. Only track its bottom edge.
+      const visibleBottom = viewport.height + Math.max(0, viewport.offsetTop);
+      const offset = Math.max(0, layoutHeight - visibleBottom);
       panel.style.setProperty("--support-keyboard-offset", `${offset}px`);
       panel.style.setProperty(
         "--support-keyboard-progress",
@@ -173,7 +174,6 @@ export default function SupportChatPushView({
       panel.removeAttribute("data-support-keyboard-motion");
       panel.style.removeProperty("--support-keyboard-progress");
       panel.style.removeProperty("--support-keyboard-offset");
-      panel.style.top = "";
       panel.style.height = "";
     };
   }, [open, inline]);
