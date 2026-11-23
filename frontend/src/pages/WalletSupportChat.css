@@ -47,17 +47,22 @@
   flex-shrink: 0;
   justify-content: center;
   position: relative;
-  border-radius: 32px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
   backdrop-filter: saturate(180%) blur(16px);
-  box-shadow: var(--f7-glass-shadow);
+  box-shadow: inset 0 0 0 1px rgba(127, 127, 127, 0.14),
+    0 2px 8px rgba(0, 0, 0, 0.08);
   background-color: var(--f7-glass-bg-color);
 }
 .wpay-support-chat .messagebar .link {
   display: flex;
   align-items: center;
   justify-content: center;
-  min-width: 44px;
-  height: 44px;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border-radius: 50%;
   color: var(--f7-messagebar-link-color);
 }
 .wpay-support-chat .messagebar textarea {
@@ -127,24 +132,22 @@
   padding: 16px 12px 24px;
 }
 .wpay-support-chat .support-compose {
-  padding-bottom: calc(var(--wpay-bottom-inset) + 4px);
+  padding-bottom: calc(
+    (var(--wpay-bottom-inset) + 4px) * (1 - var(--support-keyboard-progress, 0)) +
+    16px * var(--support-keyboard-progress, 0)
+  );
   background: transparent;
   border: 0;
 }
 @media (prefers-reduced-motion: no-preference) {
   .wpay-viewport[data-support-keyboard-motion] {
-    --support-keyboard-motion: 170ms cubic-bezier(0.2, 0.75, 0.3, 1);
-    transition: transform 300ms ease-out, height var(--support-keyboard-motion),
-      top var(--support-keyboard-motion);
+    --support-keyboard-motion: 110ms ease-out;
+    transition: transform 300ms ease-out, bottom var(--support-keyboard-motion);
   }
   [data-support-keyboard-motion] .wpay-support-chat .support-compose {
     transition: padding-bottom var(--support-keyboard-motion);
   }
 }
-[data-support-keyboard-open] .wpay-support-chat .support-compose {
-  padding-bottom: 16px;
-}
-
 .wpay-support-chat .support-attach {
   color: #111 !important;
 }

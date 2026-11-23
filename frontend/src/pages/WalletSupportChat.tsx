@@ -125,11 +125,15 @@ export default function SupportChatPushView({
     const panel = mainRef.current?.closest("section");
     if (!viewport || !panel) return;
     const resize = () => {
-      const keyboardOpen = viewport.scale === 1 && window.innerHeight - viewport.height > 100;
-      panel.toggleAttribute("data-support-keyboard-open", keyboardOpen);
-      panel.style.height = `${viewport.height}px`;
-      panel.style.top = `${viewport.offsetTop}px`;
-      panel.style.bottom = "auto";
+      if (viewport.scale !== 1) return;
+      const top = Math.max(0, viewport.offsetTop);
+      const hiddenBottom = Math.max(0, window.innerHeight - viewport.height - top);
+      panel.style.top = `${top}px`;
+      panel.style.bottom = `${hiddenBottom}px`;
+      panel.style.setProperty(
+        "--support-keyboard-progress",
+        String(Math.min(1, hiddenBottom / 100)),
+      );
     };
     resize();
     panel.setAttribute("data-support-keyboard-motion", "");
@@ -139,8 +143,7 @@ export default function SupportChatPushView({
       viewport.removeEventListener("resize", resize);
       viewport.removeEventListener("scroll", resize);
       panel.removeAttribute("data-support-keyboard-motion");
-      panel.removeAttribute("data-support-keyboard-open");
-      panel.style.height = "";
+      panel.style.removeProperty("--support-keyboard-progress");
       panel.style.top = "";
       panel.style.bottom = "";
     };
