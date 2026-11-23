@@ -124,28 +124,38 @@ export default function SupportChatPushView({
     const viewport = window.visualViewport;
     const panel = mainRef.current?.closest("section");
     if (!viewport || !panel) return;
+    let layoutWidth = window.innerWidth;
+    let layoutHeight = window.innerHeight;
+    panel.style.height = `${layoutHeight}px`;
     const resize = () => {
       if (viewport.scale !== 1) return;
-      const top = Math.max(0, viewport.offsetTop);
-      const hiddenBottom = Math.max(0, window.innerHeight - viewport.height - top);
-      panel.style.top = `${top}px`;
-      panel.style.bottom = `${hiddenBottom}px`;
+      if (layoutWidth !== window.innerWidth) {
+        layoutWidth = window.innerWidth;
+        layoutHeight = window.innerHeight;
+        panel.style.height = `${layoutHeight}px`;
+      }
+      const offset = Math.max(0, layoutHeight - viewport.height);
+      panel.style.top = `${Math.max(0, viewport.offsetTop)}px`;
+      panel.style.setProperty("--support-keyboard-offset", `${offset}px`);
       panel.style.setProperty(
         "--support-keyboard-progress",
-        String(Math.min(1, hiddenBottom / 100)),
+        String(Math.min(1, offset / 100)),
       );
     };
     resize();
     panel.setAttribute("data-support-keyboard-motion", "");
+    window.addEventListener("resize", resize);
     viewport.addEventListener("resize", resize);
     viewport.addEventListener("scroll", resize);
     return () => {
+      window.removeEventListener("resize", resize);
       viewport.removeEventListener("resize", resize);
       viewport.removeEventListener("scroll", resize);
       panel.removeAttribute("data-support-keyboard-motion");
       panel.style.removeProperty("--support-keyboard-progress");
+      panel.style.removeProperty("--support-keyboard-offset");
       panel.style.top = "";
-      panel.style.bottom = "";
+      panel.style.height = "";
     };
   }, [open, inline]);
   function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
@@ -283,7 +293,7 @@ export default function SupportChatPushView({
               </Message>
             ))}
           </Messages>
-          <div ref={endRef} />
+          <div ref={endRef} className="support-thread-end" />
         </div>
         <div
           className="support-compose shrink-0 px-4 pt-3"

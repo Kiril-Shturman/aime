@@ -83,6 +83,8 @@ for (const theme of ["light", "dark"]) {
       document.documentElement.style.removeProperty("--tg-safe-area-inset-bottom");
       (node as HTMLElement).style.removeProperty("--f7-safe-area-bottom");
     });
+    const thread = chat.getByRole("log");
+    const threadBeforeKeyboard = await thread.boundingBox();
     const keyboardTop = screenHeight - 280;
     await page.evaluate((height) => {
       const viewport = window.visualViewport!;
@@ -93,6 +95,9 @@ for (const theme of ["light", "dark"]) {
       const box = (await input.boundingBox())!;
       return keyboardTop - box.y - box.height;
     }).toBeCloseTo(16, 0);
+    const threadWithKeyboard = (await thread.boundingBox())!;
+    expect(threadWithKeyboard.height).toBe(threadBeforeKeyboard!.height);
+    expect(threadWithKeyboard.y).toBe(threadBeforeKeyboard!.y);
     await page.evaluate(() => {
       const viewport = window.visualViewport!;
       Reflect.deleteProperty(viewport, "height");

@@ -132,22 +132,31 @@
   padding: 16px 12px 24px;
 }
 .wpay-support-chat .support-compose {
-  padding-bottom: calc(
-    (var(--wpay-bottom-inset) + 4px) * (1 - var(--support-keyboard-progress, 0)) +
-    16px * var(--support-keyboard-progress, 0)
+  --support-composer-shift: calc(
+    var(--support-keyboard-offset, 0px) +
+    (12px - var(--wpay-bottom-inset)) * var(--support-keyboard-progress, 0)
   );
+  padding-bottom: calc(var(--wpay-bottom-inset) + 4px);
   background: transparent;
   border: 0;
 }
+[data-support-keyboard-motion] .wpay-support-chat .support-compose {
+  position: relative;
+  z-index: 2;
+  transform: translateY(calc(-1 * var(--support-composer-shift)));
+}
+[data-support-keyboard-motion] .wpay-support-chat .support-thread {
+  clip-path: inset(0 0 var(--support-keyboard-offset, 0px) 0);
+}
+[data-support-keyboard-motion] .wpay-support-chat .support-thread-end {
+  height: var(--support-keyboard-offset, 0px);
+}
 @media (prefers-reduced-motion: no-preference) {
-  .wpay-viewport[data-support-keyboard-motion] {
-    --support-keyboard-motion: 110ms ease-out;
-    transition: transform 300ms ease-out, bottom var(--support-keyboard-motion);
-  }
   [data-support-keyboard-motion] .wpay-support-chat .support-compose {
-    transition: padding-bottom var(--support-keyboard-motion);
+    transition: transform 110ms ease-out;
   }
 }
+
 .wpay-support-chat .support-attach {
   color: #111 !important;
 }
