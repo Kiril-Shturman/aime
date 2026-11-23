@@ -75,8 +75,10 @@ for (const theme of ["light", "dark"]) {
       document.documentElement.style.setProperty("--tg-safe-area-inset-bottom", "34px");
       (node as HTMLElement).style.setProperty("--f7-safe-area-bottom", "34px");
     });
-    const insetFieldBox = await input.boundingBox();
-    expect(screenHeight - insetFieldBox!.y - insetFieldBox!.height).toBeCloseTo(38, 0);
+    await expect.poll(async () => {
+      const box = (await input.boundingBox())!;
+      return screenHeight - box.y - box.height;
+    }).toBeCloseTo(38, 0);
     await chat.evaluate(node => {
       document.documentElement.style.removeProperty("--tg-safe-area-inset-bottom");
       (node as HTMLElement).style.removeProperty("--f7-safe-area-bottom");
@@ -87,14 +89,20 @@ for (const theme of ["light", "dark"]) {
       Object.defineProperty(viewport, "height", { configurable: true, value: height });
       viewport.dispatchEvent(new Event("resize"));
     }, keyboardTop);
-    const keyboardFieldBox = await input.boundingBox();
-    expect(keyboardTop - keyboardFieldBox!.y - keyboardFieldBox!.height).toBeCloseTo(16, 0);
+    await expect.poll(async () => {
+      const box = (await input.boundingBox())!;
+      return keyboardTop - box.y - box.height;
+    }).toBeCloseTo(16, 0);
     await page.evaluate(() => {
       const viewport = window.visualViewport!;
       Reflect.deleteProperty(viewport, "height");
       viewport.dispatchEvent(new Event("resize"));
     });
 
+    await expect.poll(async () => {
+      const box = (await input.boundingBox())!;
+      return screenHeight - box.y - box.height;
+    }).toBeCloseTo(screenHeight - initialFieldBox!.y - initialFieldBox!.height, 0);
     const fieldBox = await input.boundingBox();
     for (const label of ["Прикрепить фото", "Отправить сообщение"]) {
       const buttonBox = await chat.getByRole("link", { name: label }).boundingBox();

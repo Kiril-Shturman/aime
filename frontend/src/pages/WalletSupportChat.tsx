@@ -132,11 +132,13 @@ export default function SupportChatPushView({
       panel.style.bottom = "auto";
     };
     resize();
+    panel.setAttribute("data-support-keyboard-motion", "");
     viewport.addEventListener("resize", resize);
     viewport.addEventListener("scroll", resize);
     return () => {
       viewport.removeEventListener("resize", resize);
       viewport.removeEventListener("scroll", resize);
+      panel.removeAttribute("data-support-keyboard-motion");
       panel.removeAttribute("data-support-keyboard-open");
       panel.style.height = "";
       panel.style.top = "";
