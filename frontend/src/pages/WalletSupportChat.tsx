@@ -128,6 +128,7 @@ export default function SupportChatPushView({
     let layoutWidth = window.innerWidth;
     let layoutHeight = window.innerHeight;
     panel.style.height = `${layoutHeight}px`;
+    let headerPadding = "";
     const resize = () => {
       if (viewport.scale !== 1) return;
       if (layoutWidth !== window.innerWidth) {
@@ -139,12 +140,24 @@ export default function SupportChatPushView({
       const visibleBottom = viewport.height + Math.max(0, viewport.offsetTop);
       const offset = Math.max(0, layoutHeight - visibleBottom);
       panel.style.setProperty("--support-keyboard-offset", `${offset}px`);
+      if (offset > 1 && headerPadding) {
+        panel.style.setProperty("--support-header-padding", headerPadding);
+      } else {
+        panel.style.removeProperty("--support-header-padding");
+      }
       panel.style.setProperty(
         "--support-keyboard-progress",
         String(Math.min(1, offset / 100)),
       );
     };
+    const ios = telegram?.platform === "ios";
+    const header = panel.querySelector<HTMLElement>(".wpay-support-native-header");
     let capturedOnPress = false;
+    let unlockHeaderTimer = 0;
+    const unlockHeader = () => {
+      headerPadding = "";
+      panel.style.removeProperty("--support-header-padding");
+    };
     const captureBeforeKeyboard = (event: Event) => {
       if (!(event.target instanceof HTMLTextAreaElement) || viewport.scale !== 1) return;
       if (event.type === "focusin" && capturedOnPress) {
@@ -152,22 +165,39 @@ export default function SupportChatPushView({
         return;
       }
       capturedOnPress = event.type === "pointerdown";
+      if (ios && header) {
+        window.clearTimeout(unlockHeaderTimer);
+        headerPadding = getComputedStyle(header).paddingTop;
+      }
       // Keep the previous baseline if the keyboard has already started opening.
       if (layoutHeight - viewport.height > 40) return;
       layoutHeight = viewport.height;
       panel.style.height = `${layoutHeight}px`;
       resize();
+      if (ios && capturedOnPress && document.activeElement !== event.target) {
+        event.preventDefault();
+        event.target.focus({ preventScroll: true });
+      }
+    };
+    const releaseAfterKeyboard = (event: FocusEvent) => {
+      if (event.target instanceof HTMLTextAreaElement) {
+        unlockHeaderTimer = window.setTimeout(unlockHeader, 350);
+      }
     };
     resize();
     panel.setAttribute("data-support-keyboard-motion", "");
     main.addEventListener("pointerdown", captureBeforeKeyboard, true);
     main.addEventListener("focusin", captureBeforeKeyboard, true);
+    if (ios) main.addEventListener("focusout", releaseAfterKeyboard);
     window.addEventListener("resize", resize);
     viewport.addEventListener("resize", resize);
     viewport.addEventListener("scroll", resize);
     return () => {
       main.removeEventListener("pointerdown", captureBeforeKeyboard, true);
       main.removeEventListener("focusin", captureBeforeKeyboard, true);
+      main.removeEventListener("focusout", releaseAfterKeyboard);
+      window.clearTimeout(unlockHeaderTimer);
+      unlockHeader();
       window.removeEventListener("resize", resize);
       viewport.removeEventListener("resize", resize);
       viewport.removeEventListener("scroll", resize);
@@ -176,7 +206,7 @@ export default function SupportChatPushView({
       panel.style.removeProperty("--support-keyboard-offset");
       panel.style.height = "";
     };
-  }, [open, inline]);
+  }, [open, inline, telegram?.platform]);
   function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files || []);
     event.target.value = "";

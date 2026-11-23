@@ -83,6 +83,8 @@ for (const theme of ["light", "dark"]) {
       document.documentElement.style.removeProperty("--tg-safe-area-inset-bottom");
       (node as HTMLElement).style.removeProperty("--f7-safe-area-bottom");
     });
+    await input.click();
+    await expect(input).toBeFocused();
     const thread = chat.getByRole("log");
     const threadBeforeKeyboard = await thread.boundingBox();
     const keyboardTop = screenHeight - 280;
