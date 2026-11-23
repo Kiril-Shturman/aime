@@ -141,14 +141,21 @@
   background: transparent;
   border: 0;
 }
-[data-support-keyboard-motion] .wpay-support-chat .support-compose {
+[data-support-keyboard-motion] .wpay-support-chat {
   position: relative;
+}
+[data-support-keyboard-motion] .wpay-support-chat .support-compose {
+  position: absolute;
+  inset: auto 0 0;
   z-index: 2;
   padding-bottom: 4px;
   transform: translateY(calc(-1 * var(--support-composer-shift)));
 }
-[data-support-keyboard-motion] .wpay-support-chat .support-thread {
+[data-support-keyboard-motion] .wpay-support-chat .support-thread.page-content {
+  position: absolute;
+  inset: 0;
   --support-thread-inset: calc(
+    var(--support-composer-height, 60px) +
     var(--support-keyboard-offset, 0px) +
     var(--wpay-bottom-inset) * (1 - var(--support-keyboard-progress, 0))
   );

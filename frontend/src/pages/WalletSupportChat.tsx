@@ -81,6 +81,7 @@ export default function SupportChatPushView({
     };
   }, []);
   const mainRef = useRef<HTMLElement | null>(null);
+  const composerRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const root = mainRef.current;
     root
@@ -118,13 +119,20 @@ export default function SupportChatPushView({
     if (!open || inline) return;
     const viewport = window.visualViewport;
     const panel = mainRef.current?.closest("section");
-    if (!viewport || !panel) return;
+    const composer = composerRef.current;
+    if (!viewport || !panel || !composer) return;
 
     let layoutWidth = window.innerWidth;
     let layoutHeight = window.innerHeight;
     let frame: number | undefined;
     panel.style.height = `${layoutHeight}px`;
     panel.setAttribute("data-support-keyboard-motion", "");
+    const reserveComposerSpace = () => {
+      panel.style.setProperty("--support-composer-height", `${composer.offsetHeight}px`);
+    };
+    reserveComposerSpace();
+    const composerObserver = new ResizeObserver(reserveComposerSpace);
+    composerObserver.observe(composer);
 
     function update() {
       frame = undefined;
@@ -153,7 +161,9 @@ export default function SupportChatPushView({
       viewport.removeEventListener("resize", scheduleUpdate);
       viewport.removeEventListener("scroll", scheduleUpdate);
       if (frame !== undefined) window.cancelAnimationFrame(frame);
+      composerObserver.disconnect();
       panel.removeAttribute("data-support-keyboard-motion");
+      panel.style.removeProperty("--support-composer-height");
       panel.style.removeProperty("--support-keyboard-progress");
       panel.style.removeProperty("--support-keyboard-offset");
       panel.style.height = "";
@@ -297,6 +307,7 @@ export default function SupportChatPushView({
           <div className="support-thread-end" />
         </div>
         <div
+          ref={composerRef}
           className="support-compose shrink-0 px-4 pt-3"
           onKeyDown={(event) => {
             if (
