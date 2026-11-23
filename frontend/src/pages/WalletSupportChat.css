@@ -18,7 +18,7 @@
     inset -1px -1px 0px -0.5px #ffffff, inset 1px 1px 0px -0.5px #ffffff,
     inset 3px 3px 10px -3px #ddd, inset -3px -3px 10px -3px #ddd,
     inset 0 0 5px 1px #fff, inset 0 0 0 0.5px rgba(0, 0, 0, 0.25),
-    inset 0 0 24px 0 rgba(0, 0, 0, 0.1), 0 0 25px 0 rgba(0, 0, 0, 0.2);
+    inset 0 0 24px 0 rgba(0, 0, 0, 0.1), 0 2px 9px rgba(0, 0, 0, 0.08);
 }
 .dark .wpay-support-chat .messagebar {
   --f7-messagebar-link-color: #0a84ff;
@@ -31,7 +31,7 @@
     inset 2px 2px 0.5px -2px #262626, inset -2px -2px 0.5px -2px #262626,
     inset 0 0 5px 1px #141414, inset 0 0 0 1px rgba(255, 255, 255, 0.15),
     inset 0 0 10px 0 rgba(255, 255, 255, 0.075),
-    inset 0 0 24px 0 rgba(255, 255, 255, 0.05), 0 0 25px 0 rgba(0, 0, 0, 0.15);
+    inset 0 0 24px 0 rgba(255, 255, 255, 0.05), 0 2px 9px rgba(0, 0, 0, 0.12);
 }
 .wpay-support-chat .messagebar .toolbar-inner {
   display: flex;
@@ -111,10 +111,11 @@
 .wpay-support-chat {
   --f7-theme-color: #007aff;
   --f7-messages-content-bg-color: transparent;
-  background: #fff;
+  --support-surface: #fff;
+  background: var(--support-surface);
 }
 .dark .wpay-support-chat {
-  background: #1c1c1e;
+  --support-surface: #1c1c1e;
   --f7-theme-color: #0a84ff;
   --f7-message-received-bg-color: #26262a;
   --f7-message-received-text-color: #fff;
@@ -127,14 +128,11 @@
 }
 .wpay-support-chat .support-compose {
   padding-bottom: calc(var(--wpay-bottom-inset) + 4px);
-  background: linear-gradient(to top, #fff 65%, #ffffff00);
+  background: transparent;
   border: 0;
 }
 [data-support-keyboard-open] .wpay-support-chat .support-compose {
   padding-bottom: 16px;
-}
-.dark .wpay-support-chat .support-compose {
-  background: linear-gradient(to top, #1c1c1e 65%, #1c1c1e00);
 }
 
 .wpay-support-chat .support-attach {
@@ -146,9 +144,20 @@
 
 /* In fullscreen the title shares Telegram's controls row. */
 .wpay-support-native-header {
+  position: relative;
+  z-index: 2;
   flex: none;
+  margin-bottom: -16px;
+  padding-bottom: 16px;
   padding-top: var(--wpay-top-inset);
+  --support-surface: #fff;
+  background: linear-gradient(to bottom, var(--support-surface), transparent);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
   text-align: center;
+}
+.dark .wpay-support-native-header {
+  --support-surface: #1c1c1e;
 }
 .wpay-support-native-header[data-fullscreen="true"] {
   padding-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px));
@@ -239,7 +248,6 @@
   }
   .wpay-support-chat--inline .support-compose {
     padding: 16px 24px;
-    background: inherit;
     border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
   }
 }
