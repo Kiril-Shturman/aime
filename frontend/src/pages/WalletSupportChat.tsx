@@ -6,7 +6,6 @@ import {
   Messagebar,
   MessagebarAttachments,
   MessagebarAttachment,
-  MessagebarSheet,
   Input,
   Link,
 } from "framework7-react";
@@ -14,7 +13,7 @@ import ArrowUpCircleFill from "framework7-icons/react/esm/ArrowUpCircleFill.js";
 import CameraFill from "framework7-icons/react/esm/CameraFill.js";
 import QuestionCircleFill from "framework7-icons/react/esm/QuestionCircleFill.js";
 import { PushViewShell } from "./WalletNavigation";
-import { haptic } from "../lib/telegram";
+import { haptic, tg } from "../lib/telegram";
 import "framework7/components/messagebar/css";
 import "framework7/components/messages/css";
 import "./WalletSupportChat.css";
@@ -38,7 +37,19 @@ export default function SupportChatPushView({
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [photoError, setPhotoError] = useState("");
   const fileInput = useRef<{ el: HTMLElement | null }>({ el: null });
-  const [photoSheet, setPhotoSheet] = useState(false);
+  const telegram = tg();
+  const nativeBack = Boolean(
+    telegram?.platform && telegram.platform !== "unknown" &&
+    telegram.BackButton && telegram.isVersionAtLeast?.("6.1"),
+  );
+  const [fullscreen, setFullscreen] = useState(false);
+  useEffect(() => {
+    if (!open || inline || !nativeBack) return;
+    const syncFullscreen = () => setFullscreen(Boolean(telegram?.isFullscreen));
+    syncFullscreen();
+    telegram?.onEvent?.("fullscreenChanged", syncFullscreen);
+    return () => telegram?.offEvent?.("fullscreenChanged", syncFullscreen);
+  }, [open, inline, nativeBack, telegram]);
   const objectUrls = useRef(new Set<string>());
   const canSend = Boolean(draft.trim() || photos.length);
   const messageRows = useMemo(
@@ -134,7 +145,6 @@ export default function SupportChatPushView({
     const selected = Array.from(event.target.files || []);
     event.target.value = "";
     if (!selected.length) return;
-    setPhotoSheet(false);
     const accepted: Photo[] = [];
     let error = "";
     for (const file of selected) {
@@ -276,21 +286,20 @@ export default function SupportChatPushView({
             textareaId="wpay-support-message"
             value={draft}
             attachmentsVisible={photos.length > 0}
-            sheetVisible={photoSheet}
             data-can-send={String(canSend)}
             placeholder="Сообщение…"
             onInput={(event) => setDraft(event.target.value)}
-            onFocus={() => setPhotoSheet(false)}
           >
             <Link
               slot="inner-start"
               iconOnly
               aria-label="Прикрепить фото"
               className="support-attach"
-              aria-expanded={photoSheet}
               onClick={() => {
                 mainRef.current?.querySelector("textarea")?.blur();
-                setPhotoSheet((current) => !current);
+                fileInput.current?.el
+                  ?.querySelector<HTMLInputElement>("input[type=file]")
+                  ?.click();
               }}
             >
               <CameraFill className="text-[27px]" />
@@ -319,22 +328,6 @@ export default function SupportChatPushView({
             >
               <ArrowUpCircleFill className="text-[27px]" />
             </Link>
-            <MessagebarSheet aria-label="Выбор фотографий">
-              <div className="support-photo-picker">
-                <p>Фото к обращению</p>
-                <Link
-                  onClick={() =>
-                    fileInput.current?.el
-                      ?.querySelector<HTMLInputElement>("input[type=file]")
-                      ?.click()
-                  }
-                  aria-label="Выбрать фото с устройства"
-                >
-                  <CameraFill className="text-[25px]" /> Выбрать фото
-                </Link>
-                <Link onClick={() => setPhotoSheet(false)}>Отмена</Link>
-              </div>
-            </MessagebarSheet>
           </Messagebar>
         </div>
       </main>
@@ -344,12 +337,18 @@ export default function SupportChatPushView({
     <PushViewShell
       open={open}
       title="Поддержка"
-      subtitle="WPay"
+      hideNavbar={nativeBack}
+      nativeBack={nativeBack}
       scrollContent={false}
       assetSurface
       zClass="z-[12000]"
       onClose={onClose}
     >
+      {nativeBack && (
+        <header className="wpay-support-native-header" data-fullscreen={fullscreen}>
+          <h1>Поддержка</h1>
+        </header>
+      )}
       {chat}
     </PushViewShell>
   );

@@ -144,28 +144,36 @@
   color: #fff !important;
 }
 
-.wpay-support-chat .support-photo-picker {
-  padding: 18px 8px 8px;
-  color: #111;
+/* In fullscreen the title shares Telegram's controls row. */
+.wpay-support-native-header {
+  flex: none;
+  padding-top: var(--wpay-top-inset);
+  text-align: center;
 }
-.dark .wpay-support-chat .support-photo-picker {
-  color: #fff;
+.wpay-support-native-header[data-fullscreen="true"] {
+  padding-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px));
+  padding-inline: 88px;
 }
-.wpay-support-chat .support-photo-picker > p {
-  margin-bottom: 10px;
-  font-size: 15px;
+.wpay-support-native-header h1 {
+  display: grid;
+  place-items: center;
+  min-height: 42px;
+  font-size: 17px;
   font-weight: 600;
 }
-.wpay-support-chat .support-photo-picker > .link {
-  gap: 10px;
-  justify-content: flex-start;
-  width: 100%;
+.wpay-support-native-header[data-fullscreen="true"] h1 {
+  min-height: max(36px, var(--tg-content-safe-area-inset-top, 0px));
 }
 
 .wpay-support-chat .messages {
   --f7-message-margin: 20px;
   --f7-message-bubble-padding-vertical: 10px;
   --f7-message-bubble-padding-horizontal: 18px;
+}
+/* Framework7 pulls footers out of the row by default. Keep them in flow. */
+.wpay-support-chat .message-footer {
+  margin: 4px 0 0;
+  line-height: 1.25;
 }
 .wpay-support-chat .messages > .message:not(.message-first) {
   margin-top: 8px;

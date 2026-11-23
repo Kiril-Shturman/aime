@@ -133,10 +133,9 @@ for (const theme of ["light", "dark"]) {
     await expect(
       chat.getByRole("link", { name: "Отправить сообщение" }),
     ).toHaveAttribute("aria-disabled", "true");
-    await chat.getByRole("link", { name: "Прикрепить фото" }).click();
-    await expect(chat.locator(".messagebar-sheet")).toBeVisible();
     const chooserEvent = page.waitForEvent("filechooser");
-    await chat.getByRole("link", { name: "Выбрать фото с устройства" }).click();
+    await chat.getByRole("link", { name: "Прикрепить фото" }).click();
+    await expect(chat.locator(".messagebar-sheet")).toHaveCount(0);
     const chooser = await chooserEvent;
     await chooser.setFiles([
       { name: "screen-1.png", mimeType: "image/png", buffer: image },
@@ -207,9 +206,32 @@ test("photo-only drafts are supported, bad types and excessive attachment counts
     5,
   );
   await expect(chat.locator(".messagebar-attachment")).toHaveCount(0);
+  const footer = chat.locator(".message-sent .message-footer").last();
+  await expect(footer).toBeVisible();
+  const input = chat.getByRole("textbox", { name: "Сообщение поддержке" });
+  await input.fill("Следующее сообщение");
+  await chat.getByRole("link", { name: "Отправить сообщение" }).click();
+  const lastBubble = chat.locator(".message-sent .message-bubble").last();
+  const previousFooter = await chat.locator(".message-sent .message-footer").nth(0).boundingBox();
+  expect((await lastBubble.boundingBox())!.y).toBeGreaterThan(previousFooter!.y + previousFooter!.height);
   expect(writes()).toBe(0);
 
-  await page.getByRole("link", { name: "Назад", exact: true }).click();
+  await page.evaluate(() => {
+    (window as any).Telegram.WebView.receiveEvent("fullscreen_changed", { is_fullscreen: true });
+    document.documentElement.style.setProperty("--tg-safe-area-inset-top", "47px");
+    document.documentElement.style.setProperty("--tg-content-safe-area-inset-top", "40px");
+  });
+  const title = page.getByRole("heading", { name: "Поддержка", exact: true });
+  await expect(title).toBeVisible();
+  await expect(page.locator(".wpay-support-native-header")).toHaveAttribute("data-fullscreen", "true");
+  const titleBox = await title.boundingBox();
+  expect(titleBox!.y).toBeCloseTo(47, 0);
+  expect(titleBox!.height).toBeCloseTo(40, 0);
+
+  await expect(page.getByRole("link", { name: "Назад", exact: true })).toHaveCount(0);
+  await page.evaluate(() => {
+    (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {});
+  });
   await expect(page).toHaveURL(/\/wallet(?:[?#]|$)/);
   await expect(page.getByRole("link", { name: /Чат с поддержкой/ })).toBeVisible();
 });
