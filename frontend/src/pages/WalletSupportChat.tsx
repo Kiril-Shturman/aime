@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   f7,
   Messages,
@@ -119,11 +119,12 @@ export default function SupportChatPushView({
     if (open)
       endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [open]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open || inline) return;
     const viewport = window.visualViewport;
-    const panel = mainRef.current?.closest("section");
-    if (!viewport || !panel) return;
+    const main = mainRef.current;
+    const panel = main?.closest("section");
+    if (!viewport || !main || !panel) return;
     let layoutWidth = window.innerWidth;
     let layoutHeight = window.innerHeight;
     panel.style.height = `${layoutHeight}px`;
@@ -142,12 +143,30 @@ export default function SupportChatPushView({
         String(Math.min(1, offset / 100)),
       );
     };
+    let capturedOnPress = false;
+    const captureBeforeKeyboard = (event: Event) => {
+      if (!(event.target instanceof HTMLTextAreaElement) || viewport.scale !== 1) return;
+      if (event.type === "focusin" && capturedOnPress) {
+        capturedOnPress = false;
+        return;
+      }
+      capturedOnPress = event.type === "pointerdown";
+      // Keep the previous baseline if the keyboard has already started opening.
+      if (layoutHeight - viewport.height > 40) return;
+      layoutHeight = viewport.height;
+      panel.style.height = `${layoutHeight}px`;
+      resize();
+    };
     resize();
     panel.setAttribute("data-support-keyboard-motion", "");
+    main.addEventListener("pointerdown", captureBeforeKeyboard, true);
+    main.addEventListener("focusin", captureBeforeKeyboard, true);
     window.addEventListener("resize", resize);
     viewport.addEventListener("resize", resize);
     viewport.addEventListener("scroll", resize);
     return () => {
+      main.removeEventListener("pointerdown", captureBeforeKeyboard, true);
+      main.removeEventListener("focusin", captureBeforeKeyboard, true);
       window.removeEventListener("resize", resize);
       viewport.removeEventListener("resize", resize);
       viewport.removeEventListener("scroll", resize);
