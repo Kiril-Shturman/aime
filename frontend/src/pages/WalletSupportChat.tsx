@@ -125,6 +125,23 @@ export default function SupportChatPushView({
     let layoutWidth = window.innerWidth;
     let layoutHeight = window.innerHeight;
     let frame: number | undefined;
+    let keyboardOpened = false;
+    const header = panel.querySelector<HTMLElement>(".wpay-support-native-header");
+    const title = header?.querySelector("h1");
+    const unlockHeader = () => {
+      header?.style.removeProperty("--support-locked-header-top");
+      header?.style.removeProperty("--support-locked-title-height");
+      keyboardOpened = false;
+    };
+    const lockHeader = (event: Event) => {
+      if (!(event.target instanceof HTMLTextAreaElement) || !header || !title ||
+          header.style.getPropertyValue("--support-locked-header-top")) return;
+      header.style.setProperty("--support-locked-header-top", getComputedStyle(header).paddingTop);
+      header.style.setProperty("--support-locked-title-height", `${title.getBoundingClientRect().height}px`);
+    };
+    const releaseUnopenedHeader = () => {
+      if (!keyboardOpened) unlockHeader();
+    };
     panel.style.height = `${layoutHeight}px`;
     panel.setAttribute("data-support-keyboard-motion", "");
     const reserveComposerSpace = () => {
@@ -139,12 +156,15 @@ export default function SupportChatPushView({
       if (!viewport || !panel || viewport.scale !== 1) return;
       // Freeze the layout before focus. Only a width change starts a new layout.
       if (layoutWidth !== window.innerWidth) {
+        unlockHeader();
         layoutWidth = window.innerWidth;
         layoutHeight = window.innerHeight;
         panel.style.height = `${layoutHeight}px`;
       }
       const visibleBottom = viewport.height + Math.max(0, viewport.offsetTop);
       const offset = Math.max(0, layoutHeight - visibleBottom);
+      if (offset >= 80) keyboardOpened = true;
+      if (offset <= 1 && keyboardOpened) unlockHeader();
       panel.style.setProperty("--support-keyboard-offset", `${offset}px`);
       panel.style.setProperty("--support-keyboard-progress", String(Math.min(1, offset / 100)));
     }
@@ -153,10 +173,17 @@ export default function SupportChatPushView({
       frame ??= window.requestAnimationFrame(update);
     };
     update();
+    composer.addEventListener("pointerdown", lockHeader, true);
+    composer.addEventListener("focusin", lockHeader);
+    composer.addEventListener("focusout", releaseUnopenedHeader);
     window.addEventListener("resize", scheduleUpdate);
     viewport.addEventListener("resize", scheduleUpdate);
     viewport.addEventListener("scroll", scheduleUpdate);
     return () => {
+      composer.removeEventListener("pointerdown", lockHeader, true);
+      composer.removeEventListener("focusin", lockHeader);
+      composer.removeEventListener("focusout", releaseUnopenedHeader);
+      unlockHeader();
       window.removeEventListener("resize", scheduleUpdate);
       viewport.removeEventListener("resize", scheduleUpdate);
       viewport.removeEventListener("scroll", scheduleUpdate);

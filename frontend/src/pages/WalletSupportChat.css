@@ -184,7 +184,7 @@
   flex: none;
   margin-bottom: -16px;
   padding-bottom: 16px;
-  padding-top: var(--wpay-top-inset);
+  padding-top: var(--support-locked-header-top, var(--wpay-top-inset));
   --support-surface: #fff;
   background: linear-gradient(to bottom, var(--support-surface), transparent);
   -webkit-backdrop-filter: blur(2px);
@@ -195,18 +195,18 @@
   --support-surface: #1c1c1e;
 }
 .wpay-support-native-header[data-fullscreen="true"] {
-  padding-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px));
+  padding-top: var(--support-locked-header-top, max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)));
   padding-inline: 88px;
 }
 .wpay-support-native-header h1 {
   display: grid;
   place-items: center;
-  min-height: 42px;
+  min-height: var(--support-locked-title-height, 42px);
   font-size: 17px;
   font-weight: 600;
 }
 .wpay-support-native-header[data-fullscreen="true"] h1 {
-  min-height: max(36px, var(--tg-content-safe-area-inset-top, 0px));
+  min-height: var(--support-locked-title-height, max(36px, var(--tg-content-safe-area-inset-top, 0px)));
 }
 
 .wpay-support-chat .messages {

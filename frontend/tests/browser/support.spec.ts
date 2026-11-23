@@ -259,6 +259,7 @@ test("photo-only drafts are supported, bad types and excessive attachment counts
   expect((await lastBubble.boundingBox())!.y).toBeGreaterThan(previousFooter!.y + previousFooter!.height);
   expect(writes()).toBe(0);
 
+  await input.blur();
   await page.evaluate(() => {
     (window as any).Telegram.WebView.receiveEvent("fullscreen_changed", { is_fullscreen: true });
     document.documentElement.style.setProperty("--tg-safe-area-inset-top", "47px");
@@ -270,6 +271,25 @@ test("photo-only drafts are supported, bad types and excessive attachment counts
   const titleBox = await title.boundingBox();
   expect(titleBox!.y).toBeCloseTo(47, 0);
   expect(titleBox!.height).toBeCloseTo(40, 0);
+  await input.click();
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    Object.defineProperty(viewport, "height", { configurable: true, value: innerHeight - 280 });
+    document.documentElement.style.setProperty("--tg-safe-area-inset-top", "70px");
+    document.documentElement.style.setProperty("--tg-content-safe-area-inset-top", "56px");
+    viewport.dispatchEvent(new Event("resize"));
+  });
+  await expect.poll(() => chat.evaluate((node) =>
+    getComputedStyle(node).getPropertyValue("--support-keyboard-offset"),
+  )).toBe("280px");
+  expect((await title.boundingBox())!.y).toBeCloseTo(47, 0);
+  expect((await title.boundingBox())!.height).toBeCloseTo(40, 0);
+  await page.evaluate(() => {
+    const viewport = window.visualViewport!;
+    Reflect.deleteProperty(viewport, "height");
+    viewport.dispatchEvent(new Event("resize"));
+  });
+  await expect.poll(async () => (await title.boundingBox())!.y).toBeCloseTo(70, 0);
 
   await expect(page.getByRole("link", { name: "Назад", exact: true })).toHaveCount(0);
   await page.evaluate(() => {
