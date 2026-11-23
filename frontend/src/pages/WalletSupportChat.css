@@ -185,13 +185,16 @@
   grid-template-columns: 18px minmax(0, auto);
   column-gap: 8px;
   align-items: center;
+  padding-bottom: calc(var(--f7-message-footer-font-size) * 1.25 + 4px);
 }
 .wpay-support-chat .support-unsent-icon + .message-bubble {
   grid-column: 2;
 }
 .wpay-support-chat .message-content:has(> .support-unsent-icon) .message-footer {
-  grid-column: 2;
-  justify-self: end;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  white-space: nowrap;
 }
 .wpay-support-chat .support-unsent-icon {
   grid-column: 1;
@@ -200,7 +203,10 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #d92732;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  background: #ff2638;
   color: #fff;
   font-size: 13px;
   font-weight: 700;

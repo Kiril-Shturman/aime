@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
+  f7,
   Messages,
   Message,
   MessagesTitle,
@@ -16,6 +17,7 @@ import { PushViewShell } from "./WalletNavigation";
 import { haptic, tg } from "../lib/telegram";
 import "framework7/components/messagebar/css";
 import "framework7/components/messages/css";
+import "framework7/components/dialog/css";
 import "./WalletSupportChat.css";
 
 type Photo = { id: string; name: string; url: string };
@@ -178,6 +180,26 @@ export default function SupportChatPushView({
     objectUrls.current.delete(photo.url);
     setPhotoError("");
   }
+  function confirmRetry() {
+    haptic("light");
+    f7.dialog.create({
+      title: "Отправить заново?",
+      text: "Повторить отправку этого сообщения?",
+      destroyOnClose: true,
+      buttons: [
+        { text: "Отмена", keyCodes: [27] },
+        {
+          text: "Отправить",
+          strong: true,
+          keyCodes: [13],
+          onClick: () => f7.dialog.alert(
+            "Операторы пока не подключены. Сообщение осталось неотправленным.",
+            "Не удалось отправить",
+          ),
+        },
+      ],
+    }).open();
+  }
   function saveDraft() {
     const text = draft.trim();
     if (!text && !photos.length) return;
@@ -243,9 +265,15 @@ export default function SupportChatPushView({
                 footer={row.footer}
               >
                 {row.footer && (
-                  <span slot="content-start" className="support-unsent-icon" aria-hidden="true">
+                  <button
+                    slot="content-start"
+                    type="button"
+                    className="support-unsent-icon"
+                    aria-label="Отправить сообщение заново"
+                    onClick={confirmRetry}
+                  >
                     i
-                  </span>
+                  </button>
                 )}
               </Message>
             ))}

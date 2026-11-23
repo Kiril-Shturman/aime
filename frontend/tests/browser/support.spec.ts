@@ -174,6 +174,22 @@ for (const theme of ["light", "dark"]) {
         box.right < bubble.getBoundingClientRect().left &&
         document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === icon;
     })).toBe(true);
+    await unsent.click();
+    const confirm = page.locator(".dialog.modal-in");
+    await expect(confirm).toContainText("Отправить заново?");
+    await confirm.getByText("Отмена", { exact: true }).click();
+    await expect(confirm).toHaveCount(0);
+    await expect(unsent).toBeVisible();
+    await unsent.click();
+    await confirm.getByText("Отправить", { exact: true }).click();
+    await expect(confirm).toContainText("Не удалось отправить");
+    await confirm.locator(".dialog-button").click();
+    await input.fill("Да");
+    await chat.getByRole("link", { name: "Отправить сообщение" }).click();
+    const shortMessage = chat.locator(".message-sent").last();
+    const bubble = await shortMessage.locator(".message-bubble").boundingBox();
+    const footer = await shortMessage.locator(".message-footer").boundingBox();
+    expect(bubble!.width).toBeLessThan(footer!.width);
     expect(writes()).toBe(0);
     expect(
       await page.evaluate(
