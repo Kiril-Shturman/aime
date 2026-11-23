@@ -241,7 +241,13 @@ export default function SupportChatPushView({
                 last={index === messageRows.length - 1}
                 tail={index === messageRows.length - 1}
                 footer={row.footer}
-              />
+              >
+                {row.footer && (
+                  <span slot="bubble-start" className="support-unsent-icon" aria-hidden="true">
+                    i
+                  </span>
+                )}
+              </Message>
             ))}
           </Messages>
           <div ref={endRef} />

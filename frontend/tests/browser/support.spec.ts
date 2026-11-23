@@ -164,6 +164,13 @@ for (const theme of ["light", "dark"]) {
       chat.getByRole("log").getByAltText("screen-2.png"),
     ).toBeVisible();
     await expect(chat.getByRole("log")).toContainText("Не отправлено");
+    const unsent = chat.locator(".support-unsent-icon");
+    await expect(unsent).toHaveCount(1);
+    await expect(unsent).toBeVisible();
+    expect(await unsent.evaluate((icon) =>
+      icon.getBoundingClientRect().right <
+      icon.closest(".message-bubble")!.getBoundingClientRect().left,
+    )).toBe(true);
     expect(writes()).toBe(0);
     expect(
       await page.evaluate(

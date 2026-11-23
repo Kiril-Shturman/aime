@@ -179,6 +179,26 @@
   margin-top: 8px;
 }
 
+.wpay-support-chat .message-sent .message-bubble {
+  position: relative;
+}
+.wpay-support-chat .support-unsent-icon {
+  position: absolute;
+  right: calc(100% + 8px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #d92732;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 @media (min-width: 1100px) {
   .wpay-desktop-body > .wpay-support-guide {
     display: block;
