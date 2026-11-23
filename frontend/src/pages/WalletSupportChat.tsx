@@ -112,6 +112,8 @@ export default function SupportChatPushView({
     const panel = mainRef.current?.closest("section");
     if (!viewport || !panel) return;
     const resize = () => {
+      const keyboardOpen = viewport.scale === 1 && window.innerHeight - viewport.height > 100;
+      panel.toggleAttribute("data-support-keyboard-open", keyboardOpen);
       panel.style.height = `${viewport.height}px`;
       panel.style.top = `${viewport.offsetTop}px`;
       panel.style.bottom = "auto";
@@ -122,6 +124,7 @@ export default function SupportChatPushView({
     return () => {
       viewport.removeEventListener("resize", resize);
       viewport.removeEventListener("scroll", resize);
+      panel.removeAttribute("data-support-keyboard-open");
       panel.style.height = "";
       panel.style.top = "";
       panel.style.bottom = "";

@@ -129,6 +129,9 @@
   background: linear-gradient(to top, #fff 65%, #ffffff00);
   border: 0;
 }
+[data-support-keyboard-open] .wpay-support-chat .support-compose {
+  padding-bottom: 16px;
+}
 .dark .wpay-support-chat .support-compose {
   background: linear-gradient(to top, #1c1c1e 65%, #1c1c1e00);
 }

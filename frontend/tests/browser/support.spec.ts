@@ -81,6 +81,20 @@ for (const theme of ["light", "dark"]) {
       document.documentElement.style.removeProperty("--tg-safe-area-inset-bottom");
       (node as HTMLElement).style.removeProperty("--f7-safe-area-bottom");
     });
+    const keyboardTop = screenHeight - 280;
+    await page.evaluate((height) => {
+      const viewport = window.visualViewport!;
+      Object.defineProperty(viewport, "height", { configurable: true, value: height });
+      viewport.dispatchEvent(new Event("resize"));
+    }, keyboardTop);
+    const keyboardFieldBox = await input.boundingBox();
+    expect(keyboardTop - keyboardFieldBox!.y - keyboardFieldBox!.height).toBeCloseTo(16, 0);
+    await page.evaluate(() => {
+      const viewport = window.visualViewport!;
+      Reflect.deleteProperty(viewport, "height");
+      viewport.dispatchEvent(new Event("resize"));
+    });
+
     const fieldBox = await input.boundingBox();
     for (const label of ["Прикрепить фото", "Отправить сообщение"]) {
       const buttonBox = await chat.getByRole("link", { name: label }).boundingBox();
