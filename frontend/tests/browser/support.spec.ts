@@ -26,12 +26,11 @@ async function openChat(page: Page, theme = "light") {
     .getByRole("button", { name: "Профиль", exact: true })
     .last()
     .click();
-  await page
-    .getByRole("link", { name: "Помощь и поддержка", exact: true })
-    .click();
   await page.getByRole("link", { name: /Чат с поддержкой/ }).click();
   const chat = page.locator(".wpay-support-chat");
   await expect(chat).toBeVisible();
+  await expect(page).toHaveURL(/\/wallet\/support(?:[?#]|$)/);
+  await expect(page.locator(".wpay-f7-profile")).toHaveCount(0);
   await expect
     .poll(() =>
       chat
@@ -190,4 +189,18 @@ test("photo-only drafts are supported, bad types and excessive attachment counts
   );
   await expect(chat.locator(".messagebar-attachment")).toHaveCount(0);
   expect(writes()).toBe(0);
+
+  await page.getByRole("link", { name: "Назад", exact: true }).click();
+  await expect(page).toHaveURL(/\/wallet(?:[?#]|$)/);
+  await expect(page.getByRole("link", { name: /Чат с поддержкой/ })).toBeVisible();
+});
+
+test("desktop support URL displays its own workspace", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.addInitScript(() => localStorage.setItem("wpay:intro:v1", "seen"));
+  await page.route("**/api/**", (route) => route.fulfill({ json: {} }));
+  await page.goto("/wallet/support");
+  await expect(page.getByRole("log", { name: "Переписка с поддержкой" })).toBeVisible();
+  await expect(page.locator(".wpay-f7-profile")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Как описать вопрос" })).toBeVisible();
 });

@@ -1,3 +1,4 @@
+import { useLocation, useNavigate } from "react-router-dom";
 import WalletExchangeOrder from "./WalletExchangeOrder";
 import { assetNetworks, networkLabel } from "../wallet/catalog";
 import SupportChatPushView from "./WalletSupportChat";
@@ -372,9 +373,26 @@ function WalletScreen() {
     action();
   }
 
-  const supportSelected = homeProfilePage === "support";
+  const location = useLocation();
+  const navigate = useNavigate();
+  const supportSelected = location.pathname.replace(/\/$/, "") === "/wallet/support";
+
+  function openSupport() {
+    setHomeProfilePage(null);
+    navigate("/wallet/support", { state: { fromWallet: true } });
+    pageRef.current?.scrollTo({ top: 0, behavior: "instant" });
+  }
+
+  function closeSupport() {
+    if (location.state?.fromWallet === true) navigate(-1);
+    else {
+      setActiveTab("profile");
+      navigate("/wallet", { replace: true });
+    }
+  }
 
   function selectTab(tab: WalletTab) {
+    if (supportSelected) navigate("/wallet", { replace: true });
     if (tab !== "cards") setCardCatalogOffer(null);
     haptic("light");
     setSelectedAssetCode(null);
@@ -461,7 +479,8 @@ function WalletScreen() {
     document.querySelector(".k-app") ?? document.body,
   );
 
-  return (
+  const mobileSupport = supportSelected && !desktopMenu;
+  const walletPage = mobileSupport ? null : (
     <Page
       ref={pageRef}
       className="wpay-desktop-page wpay-viewport overscroll-y-none pb-[calc(96px+env(safe-area-inset-bottom))] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
@@ -471,11 +490,11 @@ function WalletScreen() {
       onPointerCancel={pull.finish}
     >
       <DesktopSidebar
-        tab={homeProfilePage === "referral" || homeProfilePage === "support" ? homeProfilePage : activeTab}
+        tab={supportSelected ? "support" : homeProfilePage === "referral" ? "referral" : activeTab}
         onSelect={selectTab}
         onOpenPage={(page) => {
-          setHomeProfilePage(page);
-          if (page === "support") pageRef.current?.scrollTo({ top: 0, behavior: "instant" });
+          if (page === "support") openSupport();
+          else setHomeProfilePage(page);
         }}
         dark={theme === "dark"}
         onTheme={toggleTheme}
@@ -488,7 +507,9 @@ function WalletScreen() {
         title={supportSelected ? "Поддержка" : tabMeta[activeTab].title}
         subtitle={supportSelected ? undefined : tabMeta[activeTab].subtitle}
         left={
-          activeTab === "cards" && cardCatalogOffer !== null ? (
+          supportSelected ? (
+            <WalletBackLink onClick={closeSupport} />
+          ) : activeTab === "cards" && cardCatalogOffer !== null ? (
             <WalletBackLink onClick={() => { haptic("light"); setCardCatalogOffer(null); pageRef.current?.scrollTo({ top: 0 }); }} />
           ) : <button
             type="button"
@@ -551,7 +572,7 @@ function WalletScreen() {
       >
         {supportSelected ? (
           <>
-            <SupportChatPushView open inline onClose={() => setHomeProfilePage(null)} />
+            <SupportChatPushView open inline onClose={closeSupport} />
             <aside className="wpay-desktop-card wpay-support-guide" aria-labelledby="wpay-support-guide-title">
               <div className="wpay-desktop-section-head">
                 <h2 id="wpay-support-guide-title">Как описать вопрос</h2>
@@ -740,12 +761,13 @@ function WalletScreen() {
                     cardsEnabled={live.capabilities.cards && !live.demo}
                     onWallet={() => selectTab("wallet")}
                     onCards={() => selectTab("cards")}
-                    onSupport={() => open("support")}
+                    onSupport={openSupport}
                     onNotifications={() => open("notifications")}
                   />
                 )}
                 user={user}
                 initials={initials}
+                onSupport={openSupport}
                 showNotice={showNotice}
               />
             )}
@@ -759,6 +781,7 @@ function WalletScreen() {
           onClose={() => setHomeProfilePage(null)}
           showNotice={showNotice}
           onSaveName={() => {}}
+          onSupport={openSupport}
         />
       )}
       <AssetPushView
@@ -821,6 +844,13 @@ function WalletScreen() {
         {notice}
       </div>
     </Page>
+  );
+
+  return (
+    <>
+      {walletPage}
+      {!desktopMenu && <SupportChatPushView open={mobileSupport} onClose={closeSupport} />}
+    </>
   );
 }
 
@@ -3131,8 +3161,10 @@ function ProfileSection({
   initials,
   showNotice,
   balanceAside,
+  onSupport,
 }: {
-  balanceAside: (open: (page: "support" | "notifications") => void) => React.ReactNode;
+  onSupport: () => void;
+  balanceAside: (open: (page: "notifications") => void) => React.ReactNode;
   user: ReturnType<typeof getUser>;
   initials: string;
   showNotice: NoticeHandler;
@@ -3153,7 +3185,7 @@ function ProfileSection({
   return (
     <>
       <main
-        className={`wpay-f7-profile ios mx-auto w-full max-w-[560px] pb-6 transition-[transform,opacity] duration-300 ease-out ${profilePage && !["notifications", "security", "currency", "support", "chat", "faq"].includes(profilePage) ? "-translate-x-[22%] opacity-60" : "translate-x-0 opacity-100"}`}
+        className={`wpay-f7-profile ios mx-auto w-full max-w-[560px] pb-6 transition-[transform,opacity] duration-300 ease-out ${profilePage && !["notifications", "security", "currency", "support", "faq"].includes(profilePage) ? "-translate-x-[22%] opacity-60" : "translate-x-0 opacity-100"}`}
       >
         <section className="px-safe-4 pb-6 pt-7 text-center">
           <div className="wpay-currency-icon mx-auto flex h-24 w-24 items-center justify-center overflow-hidden rounded-full bg-gradient-to-b from-blue-300 to-blue-600 text-[34px] font-semibold text-white shadow-sm dark:from-blue-400 dark:to-blue-700">
@@ -3210,7 +3242,7 @@ function ProfileSection({
           Настройки и помощь
         </h2>
         <F7List strong inset dividers className="profile-settings-list">
-          <ProfileListItem link title="Чат с поддержкой" subtitle="Сообщения и обращения" onClick={() => setProfilePage("chat")} />
+          <ProfileListItem link title="Чат с поддержкой" subtitle="Сообщения и обращения" onClick={onSupport} />
           <ProfileListItem link title="Частые вопросы" subtitle="Ответы о кошельке и операциях" onClick={() => setProfilePage("faq")} />
           <F7ListItem title="Тёмная тема" subtitle="Светлое и тёмное оформление" mediaItem className="wpay-profile-theme-row">
             <span slot="media" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-[#007aff] text-white">
@@ -3270,6 +3302,7 @@ function ProfileSection({
         onClose={() => setProfilePage(null)}
         showNotice={showNotice}
         onSaveName={setProfileName}
+        onSupport={onSupport}
       />
     </>
   );
@@ -3283,7 +3316,6 @@ const profilePageTitles = {
   currency: "Основная валюта",
   provider: "Банковский провайдер",
   support: "Поддержка",
-  chat: "Чат с поддержкой",
   faq: "Частые вопросы",
   referral: "Партнерка",
   terms: "Соглашение",
@@ -3295,7 +3327,9 @@ function ProfileSettingsPushView({
   onClose,
   showNotice,
   onSaveName,
+  onSupport,
 }: {
+  onSupport: () => void;
   page: keyof typeof profilePageTitles | null;
   onClose: () => void;
   showNotice: NoticeHandler;
@@ -3327,7 +3361,6 @@ function ProfileSettingsPushView({
     },
   );
   const [nameSaved, setNameSaved] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
   const [displayPage, setDisplayPage] =
     useState<keyof typeof profilePageTitles>("personal");
   const [verificationContacts, setVerificationContacts] = useState(false);
@@ -3336,7 +3369,6 @@ function ProfileSettingsPushView({
   useEffect(() => {
     setVerificationContacts(false);
     if (page) setDisplayPage(page);
-    else setChatOpen(false);
   }, [page]);
 
   const notificationContent = (
@@ -3436,7 +3468,7 @@ function ProfileSettingsPushView({
         link
         title="Чат с поддержкой"
         subtitle="Сообщения и обращения"
-        onClick={() => setChatOpen(true)}
+        onClick={onSupport}
       />
       <ProfileListItem
         link
@@ -3462,7 +3494,7 @@ function ProfileSettingsPushView({
   return (
     <>
       <PushViewShell
-        open={page !== null && page !== "chat" && !popupPages.includes(page)}
+        open={page !== null && !popupPages.includes(page)}
         title={profilePageTitles[displayPage]}
         subtitle="Настройки профиля"
         scrollContent={displayPage !== "verification"}
@@ -3634,7 +3666,7 @@ function ProfileSettingsPushView({
                 contacts={verificationContacts}
                 onContacts={() => setVerificationContacts(true)}
                 onPersonal={() => setDisplayPage("personal")}
-                onSupport={() => setChatOpen(true)}
+                onSupport={onSupport}
               />
               <aside className="wpay-desktop-card wpay-verification-steps" aria-labelledby="wpay-verification-steps-title">
                 <h2 id="wpay-verification-steps-title">Этапы проверки</h2>
@@ -3732,10 +3764,6 @@ function ProfileSettingsPushView({
                   )}
         </main>
       </NotificationSheet>
-      <SupportChatPushView
-        open={page === "chat" || (chatOpen && page !== null)}
-        onClose={page === "chat" ? onClose : () => setChatOpen(false)}
-      />
     </>
   );
 }

@@ -141,7 +141,9 @@ function AppRoutes() {
           <Route path="/connect/gmail" element={<GmailConnectPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/wallet" element={<WalletPage />} />
+          <Route path="/wallet" element={<WalletPage />}>
+            <Route path="support" />
+          </Route>
         </Routes>
         {hasTabPill && <TabPill className="md:hidden" />}
       </div>
