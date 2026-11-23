@@ -134,7 +134,8 @@
 .wpay-support-chat .support-compose {
   --support-composer-shift: calc(
     var(--support-keyboard-offset, 0px) +
-    (12px - var(--wpay-bottom-inset)) * var(--support-keyboard-progress, 0)
+    12px * var(--support-keyboard-progress, 0) +
+    var(--wpay-bottom-inset) * (1 - var(--support-keyboard-progress, 0))
   );
   padding-bottom: calc(var(--wpay-bottom-inset) + 4px);
   background: transparent;
@@ -143,13 +144,18 @@
 [data-support-keyboard-motion] .wpay-support-chat .support-compose {
   position: relative;
   z-index: 2;
+  padding-bottom: 4px;
   transform: translateY(calc(-1 * var(--support-composer-shift)));
 }
 [data-support-keyboard-motion] .wpay-support-chat .support-thread {
-  clip-path: inset(0 0 var(--support-keyboard-offset, 0px) 0);
+  --support-thread-inset: calc(
+    var(--support-keyboard-offset, 0px) +
+    var(--wpay-bottom-inset) * (1 - var(--support-keyboard-progress, 0))
+  );
+  clip-path: inset(0 0 var(--support-thread-inset) 0);
 }
 [data-support-keyboard-motion] .wpay-support-chat .support-thread-end {
-  height: var(--support-keyboard-offset, 0px);
+  height: var(--support-thread-inset);
 }
 @media (prefers-reduced-motion: no-preference) {
   [data-support-keyboard-motion] .wpay-support-chat .support-compose {
@@ -171,7 +177,7 @@
   flex: none;
   margin-bottom: -16px;
   padding-bottom: 16px;
-  padding-top: var(--support-header-padding, var(--wpay-top-inset));
+  padding-top: var(--wpay-top-inset);
   --support-surface: #fff;
   background: linear-gradient(to bottom, var(--support-surface), transparent);
   -webkit-backdrop-filter: blur(2px);
@@ -182,7 +188,7 @@
   --support-surface: #1c1c1e;
 }
 .wpay-support-native-header[data-fullscreen="true"] {
-  padding-top: var(--support-header-padding, max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px)));
+  padding-top: max(env(safe-area-inset-top, 0px), var(--tg-safe-area-inset-top, 0px));
   padding-inline: 88px;
 }
 .wpay-support-native-header h1 {

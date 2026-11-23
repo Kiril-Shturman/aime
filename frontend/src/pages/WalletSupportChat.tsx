@@ -81,7 +81,6 @@ export default function SupportChatPushView({
     };
   }, []);
   const mainRef = useRef<HTMLElement | null>(null);
-  const endRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const root = mainRef.current;
     root
@@ -115,98 +114,51 @@ export default function SupportChatPushView({
       send.tabIndex = canSend ? 0 : -1;
     }
   }, [photos, messageRows, canSend]);
-  useEffect(() => {
-    if (open)
-      endRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [open]);
   useLayoutEffect(() => {
     if (!open || inline) return;
     const viewport = window.visualViewport;
-    const main = mainRef.current;
-    const panel = main?.closest("section");
-    if (!viewport || !main || !panel) return;
+    const panel = mainRef.current?.closest("section");
+    if (!viewport || !panel) return;
+
     let layoutWidth = window.innerWidth;
     let layoutHeight = window.innerHeight;
+    let frame: number | undefined;
     panel.style.height = `${layoutHeight}px`;
-    let headerPadding = "";
-    const resize = () => {
-      if (viewport.scale !== 1) return;
+    panel.setAttribute("data-support-keyboard-motion", "");
+
+    function update() {
+      frame = undefined;
+      if (!viewport || !panel || viewport.scale !== 1) return;
+      // Freeze the layout before focus. Only a width change starts a new layout.
       if (layoutWidth !== window.innerWidth) {
         layoutWidth = window.innerWidth;
         layoutHeight = window.innerHeight;
         panel.style.height = `${layoutHeight}px`;
       }
-      // iOS may pan the visual viewport during focus. Only track its bottom edge.
       const visibleBottom = viewport.height + Math.max(0, viewport.offsetTop);
       const offset = Math.max(0, layoutHeight - visibleBottom);
       panel.style.setProperty("--support-keyboard-offset", `${offset}px`);
-      if (offset > 1 && headerPadding) {
-        panel.style.setProperty("--support-header-padding", headerPadding);
-      } else {
-        panel.style.removeProperty("--support-header-padding");
-      }
-      panel.style.setProperty(
-        "--support-keyboard-progress",
-        String(Math.min(1, offset / 100)),
-      );
+      panel.style.setProperty("--support-keyboard-progress", String(Math.min(1, offset / 100)));
+    }
+
+    const scheduleUpdate = () => {
+      frame ??= window.requestAnimationFrame(update);
     };
-    const ios = telegram?.platform === "ios";
-    const header = panel.querySelector<HTMLElement>(".wpay-support-native-header");
-    let capturedOnPress = false;
-    let unlockHeaderTimer = 0;
-    const unlockHeader = () => {
-      headerPadding = "";
-      panel.style.removeProperty("--support-header-padding");
-    };
-    const captureBeforeKeyboard = (event: Event) => {
-      if (!(event.target instanceof HTMLTextAreaElement) || viewport.scale !== 1) return;
-      if (event.type === "focusin" && capturedOnPress) {
-        capturedOnPress = false;
-        return;
-      }
-      capturedOnPress = event.type === "pointerdown";
-      if (ios && header) {
-        window.clearTimeout(unlockHeaderTimer);
-        headerPadding = getComputedStyle(header).paddingTop;
-      }
-      // Keep the previous baseline if the keyboard has already started opening.
-      if (layoutHeight - viewport.height > 40) return;
-      layoutHeight = viewport.height;
-      panel.style.height = `${layoutHeight}px`;
-      resize();
-      if (ios && capturedOnPress && document.activeElement !== event.target) {
-        event.preventDefault();
-        event.target.focus({ preventScroll: true });
-      }
-    };
-    const releaseAfterKeyboard = (event: FocusEvent) => {
-      if (event.target instanceof HTMLTextAreaElement) {
-        unlockHeaderTimer = window.setTimeout(unlockHeader, 350);
-      }
-    };
-    resize();
-    panel.setAttribute("data-support-keyboard-motion", "");
-    main.addEventListener("pointerdown", captureBeforeKeyboard, true);
-    main.addEventListener("focusin", captureBeforeKeyboard, true);
-    if (ios) main.addEventListener("focusout", releaseAfterKeyboard);
-    window.addEventListener("resize", resize);
-    viewport.addEventListener("resize", resize);
-    viewport.addEventListener("scroll", resize);
+    update();
+    window.addEventListener("resize", scheduleUpdate);
+    viewport.addEventListener("resize", scheduleUpdate);
+    viewport.addEventListener("scroll", scheduleUpdate);
     return () => {
-      main.removeEventListener("pointerdown", captureBeforeKeyboard, true);
-      main.removeEventListener("focusin", captureBeforeKeyboard, true);
-      main.removeEventListener("focusout", releaseAfterKeyboard);
-      window.clearTimeout(unlockHeaderTimer);
-      unlockHeader();
-      window.removeEventListener("resize", resize);
-      viewport.removeEventListener("resize", resize);
-      viewport.removeEventListener("scroll", resize);
+      window.removeEventListener("resize", scheduleUpdate);
+      viewport.removeEventListener("resize", scheduleUpdate);
+      viewport.removeEventListener("scroll", scheduleUpdate);
+      if (frame !== undefined) window.cancelAnimationFrame(frame);
       panel.removeAttribute("data-support-keyboard-motion");
       panel.style.removeProperty("--support-keyboard-progress");
       panel.style.removeProperty("--support-keyboard-offset");
       panel.style.height = "";
     };
-  }, [open, inline, telegram?.platform]);
+  }, [open, inline]);
   function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files || []);
     event.target.value = "";
@@ -342,7 +294,7 @@ export default function SupportChatPushView({
               </Message>
             ))}
           </Messages>
-          <div ref={endRef} className="support-thread-end" />
+          <div className="support-thread-end" />
         </div>
         <div
           className="support-compose shrink-0 px-4 pt-3"
