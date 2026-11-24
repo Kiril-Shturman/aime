@@ -286,39 +286,3 @@
     border-top: 1px solid color-mix(in srgb, currentColor 10%, transparent);
   }
 }
-
-.support-keyboard-test-controls {
-  position: relative;
-  z-index: 3;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px;
-  font-size: 13px;
-}
-.support-keyboard-test-controls button {
-  border-radius: 8px;
-  padding: 5px 8px;
-  background: rgb(127 127 127 / 14%);
-}
-.support-keyboard-test-controls button[aria-pressed="true"] {
-  background: #007aff;
-  color: white;
-}
-.support-keyboard-test-baseline {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 16px;
-}
-.support-keyboard-test-input {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  padding: 8px;
-  border: 1px solid currentColor;
-  border-radius: 10px;
-  font-size: 17px;
-}
