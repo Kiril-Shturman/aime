@@ -291,6 +291,15 @@ test("photo-only drafts are supported, bad types and excessive attachment counts
   });
   await expect.poll(async () => (await title.boundingBox())!.y).toBeCloseTo(70, 0);
 
+  for (let tap = 0; tap < 5; tap += 1) await title.click();
+  await expect(page.getByRole("textbox", { name: "Тестовое поле HTML" })).toBeVisible();
+  await page.getByRole("button", { name: "2. React" }).click();
+  await expect(page.getByRole("textbox", { name: "Тестовое поле React" })).toBeVisible();
+  await page.getByRole("button", { name: "3. Framework7" }).click();
+  await expect(input).toBeVisible();
+  await page.getByRole("button", { name: "Закрыть проверку" }).click();
+  await expect(page.getByRole("button", { name: "2. React" })).toHaveCount(0);
+
   await expect(page.getByRole("link", { name: "Назад", exact: true })).toHaveCount(0);
   await page.evaluate(() => {
     (window as any).Telegram.WebView.receiveEvent("back_button_pressed", {});

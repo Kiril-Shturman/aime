@@ -34,6 +34,9 @@ export default function SupportChatPushView({
   onClose: () => void;
   inline?: boolean;
 }) {
+  const [keyboardTest, setKeyboardTest] = useState<"html" | "react" | "framework7" | null>(null);
+  const plainKeyboardTest = keyboardTest === "html";
+  const titleTaps = useRef(0);
   const [draft, setDraft] = useState("");
   const [messages, setMessages] = useState<DraftMessage[]>([]);
   const [photos, setPhotos] = useState<Photo[]>([]);
@@ -116,7 +119,7 @@ export default function SupportChatPushView({
     }
   }, [photos, messageRows, canSend]);
   useLayoutEffect(() => {
-    if (!open || inline) return;
+    if (!open || inline || plainKeyboardTest) return;
     const viewport = window.visualViewport;
     const panel = mainRef.current?.closest("section");
     const composer = composerRef.current;
@@ -195,7 +198,7 @@ export default function SupportChatPushView({
       panel.style.removeProperty("--support-keyboard-offset");
       panel.style.height = "";
     };
-  }, [open, inline]);
+  }, [open, inline, plainKeyboardTest]);
   function selectPhotos(event: ChangeEvent<HTMLInputElement>) {
     const selected = Array.from(event.target.files || []);
     event.target.value = "";
@@ -347,6 +350,9 @@ export default function SupportChatPushView({
             }
           }}
         >
+          {keyboardTest === "react" ? (
+            <textarea className="support-keyboard-test-input" aria-label="Тестовое поле React" placeholder="Проверка клавиатуры…" />
+          ) : <>
           {photoError && (
             <p className="support-photo-error" role="alert">
               {photoError}
@@ -417,6 +423,7 @@ export default function SupportChatPushView({
               <ArrowUpCircleFill className="text-[27px]" />
             </Link>
           </Messagebar>
+          </>}
         </div>
       </main>
   );
@@ -434,10 +441,31 @@ export default function SupportChatPushView({
     >
       {nativeBack && (
         <header className="wpay-support-native-header" data-fullscreen={fullscreen}>
-          <h1>Поддержка</h1>
+          <h1 onClick={() => {
+            titleTaps.current += 1;
+            if (titleTaps.current === 5) {
+              titleTaps.current = 0;
+              setKeyboardTest("html");
+            }
+          }}>Поддержка</h1>
         </header>
       )}
-      {chat}
+      {keyboardTest && (
+        <div className="support-keyboard-test-controls" aria-label="Варианты проверки клавиатуры">
+          {(["html", "react", "framework7"] as const).map((mode, index) => (
+            <button key={mode} type="button" aria-pressed={mode === keyboardTest} onClick={() => setKeyboardTest(mode)}>
+              {["1. HTML", "2. React", "3. Framework7"][index]}
+            </button>
+          ))}
+          <button type="button" aria-label="Закрыть проверку" onClick={() => setKeyboardTest(null)}>×</button>
+        </div>
+      )}
+      {plainKeyboardTest ? (
+        <div className="support-keyboard-test-baseline">
+          <p>Контрольная страница</p>
+          <textarea className="support-keyboard-test-input" aria-label="Тестовое поле HTML" placeholder="Проверка клавиатуры…" />
+        </div>
+      ) : chat}
     </PushViewShell>
   );
 }
