@@ -100,16 +100,17 @@
   visibility: hidden !important;
   pointer-events: none !important;
 }
-:is(.wpay-biometric-row, .wpay-profile-theme-row) .item-inner {
+.wpay-biometric-row .item-inner {
   position: relative;
 }
-:is(.wpay-biometric-row, .wpay-profile-theme-row) .item-after {
+.wpay-biometric-row .item-after {
   position: absolute;
   top: 50%;
   right: 18px;
   transform: translateY(-50%);
 }
-:is(.wpay-biometric-row, .wpay-profile-theme-row) :is(.item-title, .item-subtitle) {
+.wpay-biometric-row .item-title,
+.wpay-biometric-row .item-subtitle {
   padding-right: 66px;
 }
 

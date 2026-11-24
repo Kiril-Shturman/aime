@@ -1,4 +1,3 @@
-import asyncio
 import hashlib
 import hmac
 import json
@@ -13,7 +12,10 @@ from unittest.mock import patch
 
 from aiohttp import web
 from aiohttp.test_utils import TestClient, TestServer
-from wallet_backend import ApiError, Ledger, install_wallet, telegram_user
+from wallet_backend import (
+    ApiError, Ledger, _telegram_html, _telegram_text_length,
+    install_wallet, telegram_user,
+)
 from wallet_operations import prepare_operations, save_address
 
 TOKEN = 'unit-test-provider-key'
@@ -80,10 +82,6 @@ class FakeProvider:
             return {'address': 'test-address', 'network': data['network'], 'url': 'https://goswap.site/pay?dep=test'}
         if method == 'createWithdrawal':
             return {'withdrawal_id': 'withdrawal-one', 'spend_id': data['spend_id'], 'status': 'processing'}
-        if method == 'getCardDetails':
-            return {'card_id': data['card_id'], 'url': 'https://example.test/card'}
-        if method in {'createCard', 'topUpCard'}:
-            return {'op_id': 'card-operation', 'spend_id': data['spend_id'], 'status': 'processing'}
         raise AssertionError('Unexpected provider call ' + method)
 
     async def close(self):
@@ -107,6 +105,22 @@ class AuthenticationTests(unittest.TestCase):
             ledger.deposit({**payload, 'deposit_id': 'b', 'credited': '0.000000000000000001'})
             self.assertEqual(str(ledger.balance('one', 'ETH')[0]), '123456789012.123456789012345679')
             ledger.db.close()
+
+    def test_broadcast_rich_text_keeps_telegram_spoilers_quotes_and_code(self):
+        result = _telegram_html(
+            '<span class="tg-spoiler extra">secret</span>'
+            '<blockquote>quote</blockquote>'
+            '<blockquote expandable="">long quote</blockquote>'
+            '<pre><code>print(&quot;ok&quot;)</code></pre>'
+        )
+        self.assertEqual(
+            result,
+            '<tg-spoiler>secret</tg-spoiler>'
+            '<blockquote>quote</blockquote>'
+            '<blockquote expandable>long quote</blockquote>'
+            '<pre><code>print(&quot;ok&quot;)</code></pre>',
+        )
+        self.assertEqual(_telegram_text_length(result), 32)
 
     def test_address_migration_preserves_network_identity_and_asset_support(self):
         with tempfile.TemporaryDirectory() as path:
@@ -180,26 +194,6 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         response = await self.webhook('deposit_received', payload)
         self.assertEqual(response.status, 200)
         return payload
-
-    async def test_miniapp_notifications_only_deliver_new_notices_for_the_user(self):
-        from wallet_notifications import enqueue
-
-        route = '/api/wallet/miniapp-notifications'
-        headers = {'X-Telegram-Init-Data': init_data(123)}
-        enqueue(self.ledger, 'before-open', 'tg:123', 'deposit', 'Old', 'Old notice')
-        initial = await self.client.get(route, headers=headers)
-        snapshot = await initial.json()
-        self.assertEqual(snapshot['items'], [])
-        enqueue(self.ledger, 'another-user', 'tg:124', 'deposit', 'Other', 'Other user')
-        enqueue(self.ledger, 'otp', 'tg:123', 'card_otp', 'OTP', 'OTP')
-        enqueue(self.ledger, 'visible', 'tg:123', 'deposit', 'Received', 'New notice')
-        fresh = await self.client.get(route, params={'after': snapshot['after']}, headers=headers)
-        feed = await fresh.json()
-        self.assertEqual([item['title'] for item in feed['items']], ['Received'])
-        repeat = await self.client.get(route, params={'after': feed['after']}, headers=headers)
-        self.assertEqual((await repeat.json())['items'], [])
-        anonymous = await self.client.get(route)
-        self.assertEqual(anonymous.status, 401)
 
     async def test_anonymous_and_member_cannot_read_or_spend(self):
         for headers in [{}, {'X-Board-Key': 'member'}, {'X-Telegram-Init-Data': init_data() + '&hash=forged'}]:
@@ -296,7 +290,7 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
     async def test_deposit_identity_is_server_owned(self):
         response = await self.client.post('/api/wallet/deposit', json={'asset': 'USDT', 'network': 'BSC', 'client_ref': 'attacker'}, headers=OWNER)
         self.assertEqual(response.status, 200)
-        call = [x for x in self.provider.calls if x[0] == 'getClientAddress'][0]
+        call = [x for x in self.provider.calls if x[0] == 'createDeposit'][0]
         self.assertEqual(call[1]['client_ref'], self.ledger.account('owner'))
         response = await self.client.post('/api/wallet/deposit', json={'asset': 'BTC', 'network': 'BSC'}, headers=OWNER)
         self.assertEqual(response.status, 400)
@@ -314,9 +308,110 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['provider']['balance'][0]['available'], '10')
         self.assertTrue((await (await self.client.get('/api/wallet/access', headers={'X-Telegram-Init-Data': init_data(321)})).json())['owner'])
         admin_headers = {'X-Telegram-Init-Data': init_data(321)}
-        for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts', 'admin-notifications']:
+        for action in ['admin-users', 'admin-database', 'admin-payments', 'admin-crypto', 'admin-goswap', 'admin-broadcasts', 'admin-notifications', 'admin-audit', 'admin-cards']:
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers=admin_headers)).status, 200)
             self.assertEqual((await self.client.get('/api/wallet/' + action, headers={'X-Telegram-Init-Data': init_data(999)})).status, 403)
+
+    async def test_admin_user_detail_enriches_aura_and_masks_contacts(self):
+        uid = 'tg:555'
+        self.ledger.account(uid, {'first_name': 'Test', 'username': 'tester'})
+        stamp = time.time()
+        customer_id = 'wpay-admin-user-test'
+        self.ledger.db.execute(
+            'INSERT INTO wallet_profile_contacts VALUES (?,?,?,?,?)',
+            (uid, 'test', 'secret@example.com', '+79991234567', stamp),
+        )
+        self.ledger.db.execute(
+            'INSERT INTO aura_customers VALUES (?,?,?,?,?,?,?,?,?)',
+            (uid, customer_id, 'test', 'registered', None, None, None, stamp, stamp),
+        )
+        self.ledger.db.execute(
+            'INSERT INTO aura_kyc_cases VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+            (uid, customer_id, 'test', 'pending', 0, 0, None, None, '{}', stamp, stamp - 90000),
+        )
+        self.ledger.db.execute(
+            'INSERT INTO aura_cards VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+            ('card-admin-test', uid, customer_id, 'test', 'virtual', 'opened', 0,
+             '411111******1234', None, None, None, '{}', stamp, stamp),
+        )
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        users = await self.client.get('/api/wallet/admin-users', headers=admin)
+        self.assertEqual(users.status, 200, await users.text())
+        item = next(row for row in (await users.json())['items'] if row['user_id'] == uid)
+        self.assertEqual(item['aura_customer_id'], customer_id)
+        self.assertEqual(item['kyc_status'], 'pending')
+        self.assertEqual(item['card_count'], 1)
+        detail = await self.client.get(
+            '/api/wallet/admin-user?user_id=' + uid, headers=admin,
+        )
+        self.assertEqual(detail.status, 200, await detail.text())
+        raw = await detail.text()
+        self.assertNotIn('secret@example.com', raw)
+        self.assertNotIn('+79991234567', raw)
+        body = json.loads(raw)
+        self.assertEqual(body['contacts']['email'], 'se***@example.com')
+        self.assertTrue(body['contacts']['phone'].endswith('67'))
+        self.assertEqual(body['aura']['cards'][0]['masked_pan'], '411111******1234')
+        cards = await self.client.get('/api/wallet/admin-cards', headers=admin)
+        self.assertEqual(cards.status, 200, await cards.text())
+        card_body = await cards.json()
+        self.assertEqual(card_body['total'], 1)
+        self.assertEqual(card_body['items'][0]['user_id'], uid)
+        self.assertEqual(card_body['items'][0]['masked_pan'], '411111******1234')
+        self.assertNotIn('body', card_body['items'][0])
+        denied = await self.client.get(
+            '/api/wallet/admin-user?user_id=' + uid,
+            headers={'X-Telegram-Init-Data': init_data(999)},
+        )
+        self.assertEqual(denied.status, 403)
+        overview = await (await self.client.get(
+            '/api/wallet/admin-overview', headers=admin,
+        )).json()
+        kyc_problem = next(row for row in overview['problems']['items'] if row['kind'] == 'kyc')
+        self.assertEqual(kyc_problem['count'], 1)
+
+    async def test_admin_user_actions_are_scoped_and_audited_without_content(self):
+        from wallet_notifications import enqueue
+        admin = {'X-Telegram-Init-Data': init_data(321)}
+        member = {'X-Telegram-Init-Data': init_data(999)}
+        uid = 'tg:777'
+        self.ledger.account(uid, bot_started=True, source='bot')
+        self.assertTrue(enqueue(
+            self.ledger, 'test:retry:one', uid, 'deposit',
+            'Sensitive title', 'Sensitive notification body',
+        ))
+        self.ledger.db.execute(
+            "UPDATE notification_outbox SET status='failed',last_error='private provider error' "
+            "WHERE user_id=?", (uid,),
+        )
+        denied = await self.client.post('/api/wallet/admin-user-action', json={
+            'user_id': uid, 'operation': 'retry_notifications',
+        }, headers=member)
+        self.assertEqual(denied.status, 403)
+        response = await self.client.post('/api/wallet/admin-user-action', json={
+            'user_id': uid, 'operation': 'retry_notifications',
+        }, headers=admin)
+        self.assertEqual(response.status, 200, await response.text())
+        self.assertEqual((await response.json())['queued'], 1)
+        self.assertEqual(self.ledger.db.execute(
+            'SELECT status FROM notification_outbox WHERE user_id=?', (uid,),
+        ).fetchone()[0], 'queued')
+        audit_response = await self.client.get(
+            '/api/wallet/admin-audit?user_id=' + uid, headers=admin,
+        )
+        self.assertEqual(audit_response.status, 200, await audit_response.text())
+        raw = await audit_response.text()
+        self.assertNotIn('Sensitive title', raw)
+        self.assertNotIn('Sensitive notification body', raw)
+        self.assertNotIn('private provider error', raw)
+        audit = json.loads(raw)
+        self.assertEqual(audit['total'], 1)
+        self.assertEqual(audit['items'][0]['action'], 'user.retry_notifications')
+        self.assertEqual(audit['items'][0]['detail'], {'queued': 1})
+        detail = await (await self.client.get(
+            '/api/wallet/admin-user?user_id=' + uid, headers=admin,
+        )).json()
+        self.assertEqual(detail['audit'][0]['outcome'], 'succeeded')
 
     async def test_notification_center_settings_and_deduped_deposit(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}
@@ -355,107 +450,6 @@ class WalletRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(confirmed.status, 200)
         self.assertEqual((await confirmed.json())['result']['status'], 'processing')
         self.assertEqual(self.provider.calls[-1], ('createWithdrawal', params, True))
-
-    async def test_client_goswap_issue_reserves_once_and_recovers_timeout(self):
-        from wallet_tariffs import set_card_issue_enabled, set_storefront_position
-
-        uid = 'tg:123'
-        plan = 'goswap_card_sg_1'
-        set_storefront_position(self.ledger, plan, 1, 'admin')
-        set_card_issue_enabled(self.ledger, plan, True, 'admin')
-        self.ledger.put_balance(uid, 'USDT', Decimal('10'), Decimal('0'))
-        original = self.provider.call
-        calls = []
-        completed = {}
-
-        async def provider_call(method, data=None, post=False):
-            if method == 'getMe':
-                return {'can_issue_cards': True, 'card_topup_limit_usd': '2000',
-                        'card_products': [{'product': 'sg', 'status': 'available', 'issue': '7.00'}]}
-            if method == 'createCard':
-                calls.append(data)
-                completed.update(kind='issue', spend_id=data['spend_id'], status='completed',
-                                 total='7.00', card_id=12, op_id='issue-12')
-                raise ApiError('PROVIDER_TIMEOUT', 'timeout', 504)
-            if method == 'getCardOps':
-                return {'items': [completed]}
-            return await original(method, data, post)
-
-        self.provider.call = provider_call
-        owner = {'X-Telegram-Init-Data': init_data(123)}
-        other = {'X-Telegram-Init-Data': init_data(124)}
-        response = await self.client.post('/api/wallet/goswap-card-quote', headers=owner, json={'plan_id': plan})
-        self.assertEqual(response.status, 200, await response.text())
-        intent = (await response.json())['intent_id']
-        body = {'intent_id': intent}
-        denied = await self.client.post('/api/wallet/goswap-card-issue', headers=other, json=body)
-        self.assertEqual(denied.status, 404)
-        responses = await asyncio.gather(*(self.client.post('/api/wallet/goswap-card-issue', headers=owner, json=body) for _ in range(2)))
-        self.assertEqual([response.status for response in responses], [200, 200])
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(self.ledger.balance(uid, 'USDT'), (Decimal(3), Decimal(7)))
-        self.ledger.db.execute("UPDATE wallet_goswap_card_issues SET updated_at=0")
-        result = await self.client.post('/api/wallet/goswap-card-issue', headers=owner, json=body)
-        self.assertEqual((await result.json())['state'], 'completed')
-        self.assertEqual(self.ledger.balance(uid, 'USDT'), (Decimal(3), Decimal(0)))
-        again = await self.client.post('/api/wallet/goswap-card-issue', headers=owner, json=body)
-        self.assertEqual((await again.json())['state'], 'completed')
-        self.assertEqual(len(calls), 1)
-        self.assertEqual(self.ledger.db.execute("SELECT COUNT(*) FROM wallet_events WHERE type='card_issue'").fetchone()[0], 1)
-
-    async def test_admin_goswap_card_methods_require_confirmation_for_operations(self):
-        admin = {'X-Telegram-Init-Data': init_data(321)}
-        catalog = await (await self.client.get('/api/wallet/admin-goswap', headers=admin)).json()
-        methods = {item['method']: item for item in catalog['methods']}
-        self.assertTrue({'getCards', 'getCardOps', 'getCardDetails', 'createCard', 'topUpCard'} <= methods.keys())
-        route = '/api/wallet/admin-goswap-action'
-        for name, params, post in (
-            ('getCardDetails', {'card_id': 12}, False),
-            ('createCard', {'client_ref': 'user-12', 'product': 'sg', 'spend_id': 'card-12'}, True),
-            ('topUpCard', {'card_id': 12, 'amount': '10.00', 'spend_id': 'top-12'}, True),
-        ):
-            request = {'method': name, 'params': params}
-            rejected = await self.client.post(route, json=request, headers=admin)
-            self.assertEqual(rejected.status, 409)
-            confirmed = await self.client.post(route, json={**request, 'confirm': name}, headers=admin)
-            self.assertEqual(confirmed.status, 200, await confirmed.text())
-            self.assertIn('no-store', confirmed.headers['Cache-Control'])
-            self.assertEqual(self.provider.calls[-1], (name, params, post))
-
-    async def test_admin_deposit_provider_defaults_switch_and_validation(self):
-        admin = {'X-Telegram-Init-Data': init_data(321)}
-        routes = (await (await self.client.get('/api/wallet/status')).json())['deposit_providers']
-        self.assertEqual(routes['USDT'], dict.fromkeys(('BSC', 'ETH', 'SOL', 'TON'), 'goswap') | {'TRON': 'aura'})
-        self.assertEqual(routes['BTC'], {'BTC': 'wpay'})
-        invalid = await self.client.post('/api/wallet/admin-assets', headers=admin, json={
-            'asset': 'BTC', 'network': 'BTC', 'provider': 'aura',
-        })
-        self.assertEqual(invalid.status, 400)
-        changed = await self.client.post('/api/wallet/admin-assets', headers=admin, json={
-            'asset': 'USDT', 'network': 'BSC', 'provider': 'wpay',
-        })
-        self.assertEqual(changed.status, 200, await changed.text())
-        response = await self.client.post('/api/wallet/address', headers=OWNER, json={'network': 'BSC'})
-        self.assertEqual(response.status, 409)
-        disabled = await self.client.post('/api/wallet/admin-assets', headers=admin, json={
-            'asset': 'USDT', 'enabled': False,
-        })
-        self.assertEqual(disabled.status, 200)
-        status = await (await self.client.get('/api/wallet/status')).json()
-        self.assertNotIn('USDT', status['asset_routes'])
-        self.assertEqual(status['deposit_providers']['USDT']['BSC'], 'wpay')
-        self.assertEqual(status['deposit_modes']['USDT']['BSC'], 'disabled')
-
-    async def test_operator_wallet_actions_require_admin_and_fresh_telegram(self):
-        path = '/api/wallet/admin-custody-export-prepare?user_id=tg:999'
-        member = {'X-Telegram-Init-Data': init_data(999)}
-        self.assertEqual((await self.client.post(path, headers=member, json={})).status, 403)
-        owner = await self.client.post(path, headers=OWNER, json={})
-        self.assertEqual(owner.status, 403)
-        self.assertEqual((await owner.json())['error']['name'], 'FRESH_TELEGRAM_AUTH_REQUIRED')
-        admin = {'X-Telegram-Init-Data': init_data(321)}
-        response = await self.client.post(path, headers=admin, json={})
-        self.assertEqual(response.status, 503)
 
     async def test_admin_can_leave_only_usdt_trc20_and_server_enforces_it(self):
         admin = {'X-Telegram-Init-Data': init_data(321)}
@@ -523,30 +517,6 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status, 200)
         self.assertEqual(self.provider.calls[-1], ('getTransactions', {'count': 100, 'before': 55}, False))
 
-    async def test_network_balances_use_fifo_exclude_aura_and_cap_by_available(self):
-        from wallet_operations import goswap_network_balances
-
-        uid = 'owner'
-        for event_id, amount, kind, detail in (
-            ('deposit:b', '5', 'deposit', '{"network":"BSC"}'),
-            ('deposit:e', '4', 'deposit', '{"network":"ETH"}'),
-            ('withdrawal:one:1', '-3', 'withdrawal_completed', '{}'),
-            ('aura:test:card_topup:one', '-2', 'card_topup', '{}'),
-            ('provider-row:42', '-1', 'deposit_return', '{"details":{"deposit_id":"e"}}'),
-        ):
-            self.ledger.db.execute(
-                'INSERT INTO wallet_events VALUES (?,?,?,?,?,?,?)',
-                (event_id, uid, 'USDT', amount, kind, '2026-01-01', detail),
-            )
-        self.ledger.put_balance(uid, 'USDT', Decimal('5'), Decimal('1'))
-        self.ledger.db.execute(
-            'INSERT INTO wallet_provider_positions VALUES (?,?,?,?,?,?,?)',
-            ('aura', 'test', uid, 'USDT', '1', '0', 0),
-        )
-        self.assertEqual(goswap_network_balances(self.ledger, uid, 'USDT'), {
-            'BSC': Decimal('1'), 'ETH': Decimal('3'),
-        })
-
     async def test_saved_addresses_are_isolated_and_server_scoped(self):
         user = {'X-Telegram-Init-Data': init_data(123)}
         response = await self.client.post('/api/wallet/address', json={'network': 'BSC', 'client_ref': 'foreign'}, headers=user)
@@ -554,18 +524,6 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(self.provider.calls[-1][1]['client_ref'], 'foreign')
         rows = await (await self.client.get('/api/wallet/addresses', headers=user)).json()
         self.assertEqual(len(rows['items']), 1)
-        url = '/api/wallet/admin-user?user_id=tg:123'
-        self.assertEqual((await self.client.get(url, headers=user)).status, 403)
-        detail = await self.client.get(url, headers=OWNER)
-        self.assertEqual(detail.status, 200, await detail.text())
-        wallets = (await detail.json())['wallets']
-        self.assertEqual([wallet for wallet in wallets if wallet['address']], [{
-            'provider': 'goswap', 'environment': None, 'network': 'BSC',
-            'asset': 'USDT', 'address': 'test-address', 'available': '0',
-            'reserved': None, 'balance_scope': 'network',
-        }])
-        expected_tron = next(wallet for wallet in wallets if wallet['network'] == 'TRON')
-        self.assertEqual((expected_tron['provider'], expected_tron['address']), ('aura', None))
         foreign = await (await self.client.get('/api/wallet/addresses', headers={'X-Telegram-Init-Data': init_data(999)})).json()
         self.assertEqual(foreign['items'], [])
         self.assertEqual((await self.client.post('/api/wallet/address', json={'network': 'TRON'}, headers=user)).status, 400)
@@ -743,10 +701,6 @@ class OperationRoutesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.ledger.balance('tg:123','USDT'),(Decimal('89'),Decimal('11')))
 
     async def test_exact_tron_rejects_invalid_precision_before_provider(self):
-        selected = await self.client.post('/api/wallet/admin-assets', headers=OWNER, json={
-            'asset': 'USDT', 'network': 'TRON', 'provider': 'goswap',
-        })
-        self.assertEqual(selected.status, 200, await selected.text())
         user={'X-Telegram-Init-Data':init_data(123)}
         for amount in ['0.9','1.0000001']:
             response=await self.client.post('/api/wallet/deposit',json={'asset':'USDT','network':'TRON','amount':amount},headers=user)

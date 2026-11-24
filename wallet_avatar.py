@@ -61,7 +61,6 @@ async def load_avatar(bot_token, telegram_id):
     except AvatarNotFound:
         raise
     except Exception:
-        # Network exceptions can include the bot-token URL; never surface their text.
         raise ValueError('Avatar unavailable') from None
     _cache[key] = (time.monotonic(), image, kind)
     _cache.move_to_end(key)

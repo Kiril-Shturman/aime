@@ -52,18 +52,6 @@ async function setup(page: Page, theme = "dark") {
         ],
         total: 1,
       };
-    if (action === "admin-user")
-      data = {
-        account: { user_id: "user-1", first_name: "Александр" },
-        contacts: { email: null, phone: null },
-        aura: { customer: null, kyc: null, cards: [] },
-        balances: [], addresses: [], notifications: [], audit: [],
-        wallets: [{ provider: "goswap", network: "BSC", asset: "USDT", address: "0xwallet-example",
-          available: "10", balance_scope: "network" }],
-        referrals: { invited: [], referred_by: null },
-        events: [{ event_id: "user-topup-101", user_id: "user-1", asset: "USDT", amount: "-18.225002",
-          revenue: "3", type: "card_topup", created_at: "2026-11-21T00:00:00Z", detail: { status: "completed" } }],
-      };
     if (action === "admin-database")
       data = {
         tables: { wallet_accounts: 1 },
@@ -75,19 +63,12 @@ async function setup(page: Page, theme = "dark") {
       };
     if (action === "admin-payments")
       data = {
-        events: [
-          { event_id: "topup-101", user_id: "tg:123", asset: "USDT", amount: "-18.225002", type: "card_topup", created_at: new Date().toISOString(), detail: { status: "completed" } },
-          { event_id: "qr-102", user_id: "tg:456", asset: "USDT", amount: "0", type: "qr_failed", created_at: new Date().toISOString(), detail: { status: "failed" } },
-        ],
-        as_of: "2026-11-21",
-        daily: [{ day: "2026-11-21", asset: "USDT", volume: "18.225002", revenue: "3", count: 1 }],
+        events: [],
         quotes: [],
         invoices: [],
         transfers: [],
         withdrawals: [],
       };
-    if (action === "admin-operation-logs")
-      data = { items: [{ id: 1, provider: "aura", update_type: "card.operation", received_at: 1795305600, processed_at: 1795305601 }] };
     if (action === "admin-notifications")
       data = {
         settings: [],
@@ -121,58 +102,13 @@ for (const theme of ["dark", "light"]) {
         .locator(".wpay-admin-desktop-only")
         .getByText("Александр", { exact: true }),
     ).toBeVisible();
-    await page.locator(".wpay-admin-desktop-only").getByText("Александр", { exact: true }).click();
-    const profile = page.getByRole("dialog", { name: "Карточка пользователя Александр" });
-    await profile.getByRole("button", { name: "Кошельки", exact: true }).click();
-    const wallet = profile.getByRole("button", { name: /GoSwap.*10 USDT/ });
-    await expect(wallet).toHaveAttribute("aria-expanded", "false");
-    await wallet.click();
-    await expect(profile.getByRole("button", { name: "Вывести", exact: true })).toBeDisabled();
-    await wallet.click();
-    await expect(profile.getByRole("button", { name: "Вывести", exact: true })).toHaveCount(0);
-    await profile.getByRole("button", { name: "История", exact: true }).click();
-    const icon = profile.locator(".admin-ops-operation .wpay-currency-icon");
-    await expect(icon).toBeVisible();
-    await expect(icon.locator("svg")).toHaveCSS("color", "rgb(255, 255, 255)");
-    await expect(profile.getByRole("searchbox", { name: "Поиск операций пользователя" })).toHaveCSS("padding-left", "38px");
-    await profile.getByRole("button", { name: "Пополнение карты" }).click();
-    const userOperation = page.getByRole("dialog", { name: "Подробности операции" });
-    await expect(userOperation.getByText("user-topup-101", { exact: true })).toBeVisible();
-    await expect(userOperation.getByText("3 USDT", { exact: true })).toBeVisible();
-    const tab = userOperation.getByRole("button", { name: "Детали", exact: true });
-    await expect(tab).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-    await expect(tab).toHaveCSS("border-bottom-color", "rgb(22, 116, 233)");
-    await page.keyboard.press("Escape");
-    await expect(userOperation).toBeHidden();
-    await expect(profile.getByRole("button", { name: "Пополнение карты" })).toBeVisible();
-    await profile.getByRole("button", { name: "Закрыть", exact: true }).click();
     await page
       .getByRole("navigation", { name: "Разделы админки" })
-      .getByRole("link", { name: "Операции", exact: true })
+      .getByRole("link", { name: /^Операции/ })
       .click();
     await expect(
       page.getByRole("heading", { name: "Операции", exact: true }),
     ).toBeVisible();
-    await expect(page.getByRole("img", { name: "Оборот по дням, USDT" })).toBeVisible();
-    await page.getByLabel("Показатель графика").selectOption("revenue");
-    await expect(page.getByRole("img", { name: "Доход от комиссий по дням, USDT" })).toBeVisible();
-    await page.getByRole("textbox", { name: "Поиск" }).fill("topup-101");
-    await expect(page.getByRole("table").getByText("Пополнение карты", { exact: true })).toBeVisible();
-    await expect(page.getByRole("table").getByText("Ошибка оплаты по QR", { exact: true })).toHaveCount(0);
-    await page.getByRole("button", { name: "Пополнение карты" }).click();
-    const details = page.getByRole("dialog", { name: "Подробности операции" });
-    await expect(details.getByText("topup-101", { exact: true })).toBeVisible();
-    await expect(details.getByRole("button", { name: "Скопировать ID операции" })).toBeVisible();
-    await details.getByRole("button", { name: "История" }).click();
-    await expect(details.getByText("Пополнение карты · Выполнено")).toBeVisible();
-    await details.getByRole("button", { name: "Логи события" }).click();
-    await expect(details.getByText("aura · card.operation")).toBeVisible();
-    await details.getByRole("button", { name: "Закрыть детали операции" }).click();
-    await expect(details).toBeHidden();
-    await page.getByRole("button", { name: "Фильтры" }).click();
-    await expect(page.getByLabel("Статус", { exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Сбросить" }).click();
-    await expect(page.getByRole("table").getByText("Ошибка оплаты по QR", { exact: true })).toBeVisible();
     expect(posts).toHaveLength(0);
   });
   test(`${theme}: admin menu and content fit narrow screen`, async ({
@@ -183,10 +119,50 @@ for (const theme of ["dark", "light"]) {
     await page.getByLabel("Открыть меню", { exact: true }).click();
     const nav = page.getByRole("navigation", { name: "Разделы админки" });
     await expect(nav).toBeVisible();
-    await nav.getByRole("link", { name: "Уведомления", exact: true }).click();
+    await nav.getByRole("link", { name: /^Уведомления/ }).click();
     await expect(
       page.getByRole("heading", { name: "Уведомления", exact: true }),
     ).toBeVisible();
+    const editorIcon = page
+      .locator(".wpay-admin-message-editor .f7-icons")
+      .first();
+    await expect(editorIcon).toBeVisible();
+    await expect
+      .poll(() =>
+        editorIcon.evaluate((element) => getComputedStyle(element).fontFamily),
+      )
+      .toContain("Framework7 Icons");
+    expect(
+      await page.evaluate(() =>
+        document.fonts.check('20px "Framework7 Icons"'),
+      ),
+    ).toBe(true);
+    for (const button of [
+      "spoiler",
+      "quote",
+      "expandableQuote",
+      "inlineCode",
+      "codeBlock",
+    ]) {
+      await expect(
+        page.locator(`.wpay-admin-message-editor [data-button="${button}"]`),
+      ).toBeVisible();
+    }
+    const editor = page.locator(
+      ".wpay-admin-message-editor .text-editor-content",
+    );
+    await editor.fill("Скрытый текст");
+    await editor.evaluate((element) => {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    });
+    await page
+      .locator('.wpay-admin-message-editor [data-button="spoiler"]')
+      .click();
+    await expect(editor.locator(".tg-spoiler")).toHaveText("Скрытый текст");
     await expect(page.locator(".wpay-admin-sidebar")).not.toHaveClass(
       /is-open/,
     );

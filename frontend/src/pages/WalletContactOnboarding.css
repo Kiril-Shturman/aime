@@ -1,0 +1,340 @@
+.wpay-contact-flow {
+  position: relative;
+  min-height: calc(100dvh - 132px);
+  margin: 0 14px 18px;
+  padding: 14px 16px 20px;
+  overflow: hidden;
+  border: 1px solid rgba(120, 120, 128, 0.13);
+  border-radius: 32px;
+  background: linear-gradient(180deg, #fff 0%, #f7f9fe 64%, #f1f5ff 100%);
+  box-shadow: 0 18px 48px rgba(28, 66, 135, 0.1);
+  color: #111827;
+}
+.dark .wpay-contact-flow {
+  border-color: rgba(255, 255, 255, 0.09);
+  background: linear-gradient(180deg, #252529 0%, #1b1c22 70%, #171a24 100%);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.28);
+  color: #fff;
+}
+.wpay-contact-topbar {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  grid-template-columns: 40px 1fr 40px;
+  align-items: center;
+  min-height: 42px;
+}
+.wpay-contact-brand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+}
+.wpay-contact-brand img {
+  display: block;
+  width: 88px;
+  height: 31px;
+  object-fit: contain;
+}
+.wpay-contact-step {
+  justify-self: end;
+  color: #8a94a7;
+  font-size: 13px;
+  font-weight: 700;
+}
+.wpay-contact-back,
+.wpay-contact-back-spacer {
+  width: 38px;
+  height: 38px;
+}
+.wpay-contact-back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(118, 118, 128, 0.09);
+  color: inherit;
+}
+.wpay-contact-back:active {
+  transform: scale(0.94);
+}
+.wpay-contact-visual {
+  position: relative;
+  width: min(78vw, 350px);
+  height: 276px;
+  margin: 2px auto 2px;
+  isolation: isolate;
+}
+.wpay-contact-visual::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 50%;
+  bottom: 16px;
+  width: 74%;
+  height: 25px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: rgba(29, 78, 216, 0.16);
+  filter: blur(16px);
+}
+.wpay-contact-flow--phone .wpay-contact-visual::after {
+  background: rgba(190, 24, 53, 0.18);
+}
+.wpay-contact-visual img {
+  position: absolute;
+  z-index: 1;
+  inset: 4px 0 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 15px 17px rgba(36, 51, 91, 0.12));
+  user-select: none;
+}
+.wpay-contact-orbit {
+  position: absolute;
+  z-index: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(37, 99, 235, 0.14);
+}
+.wpay-contact-orbit--one {
+  inset: 28px 18px;
+}
+.wpay-contact-orbit--two {
+  inset: 62px 50px;
+  border-style: dashed;
+}
+.wpay-contact-flow--phone .wpay-contact-orbit {
+  border-color: rgba(220, 38, 38, 0.14);
+}
+.wpay-contact-fly {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 10px 24px rgba(31, 64, 130, 0.15);
+  backdrop-filter: blur(12px);
+  color: #2576f5;
+  font-weight: 850;
+  animation: wpay-contact-float 3.4s ease-in-out infinite;
+}
+.dark .wpay-contact-fly {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(43, 44, 50, 0.88);
+}
+.wpay-contact-fly--mail-one {
+  top: 38px;
+  right: 15px;
+  width: 48px;
+  height: 40px;
+  border-radius: 15px;
+  transform: rotate(8deg);
+}
+.wpay-contact-fly--mail-two {
+  top: 126px;
+  left: 12px;
+  width: 39px;
+  height: 34px;
+  border-radius: 13px;
+  animation-delay: -1.25s;
+}
+.wpay-contact-fly--mail-three {
+  right: 4px;
+  bottom: 47px;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  animation-delay: -2s;
+}
+.wpay-contact-fly--phone-one {
+  top: 42px;
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  color: #dc2743;
+}
+.wpay-contact-fly--phone-two {
+  left: 8px;
+  bottom: 55px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  color: #dc2743;
+  animation-delay: -1.5s;
+}
+.wpay-contact-signal {
+  position: absolute;
+  z-index: 2;
+  top: 50px;
+  right: 58px;
+  width: 30px;
+  height: 30px;
+  border-top: 3px solid #dc2743;
+  border-right: 3px solid #dc2743;
+  border-radius: 0 30px 0 0;
+  opacity: 0.75;
+  animation: wpay-contact-pulse 1.8s ease-out infinite;
+}
+.wpay-contact-signal--two {
+  top: 41px;
+  right: 49px;
+  width: 47px;
+  height: 47px;
+  animation-delay: 0.45s;
+}
+.wpay-contact-copy {
+  text-align: center;
+}
+.wpay-contact-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 9px;
+  color: #3979ee;
+  font-size: 13px;
+  font-weight: 750;
+}
+.wpay-contact-flow--phone .wpay-contact-kicker {
+  color: #d52a44;
+}
+.wpay-contact-copy h2 {
+  margin: 0 auto;
+  max-width: 370px;
+  font-size: 26px;
+  line-height: 1.08;
+  letter-spacing: -1px;
+}
+.wpay-contact-copy p {
+  max-width: 390px;
+  margin: 11px auto 0;
+  color: #727b8e;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.dark .wpay-contact-copy p {
+  color: #a7a8b2;
+}
+.wpay-contact-form {
+  margin-top: 20px;
+}
+.wpay-contact-form label > span:first-child {
+  display: block;
+  margin: 0 4px 8px;
+  color: #777f91;
+  font-size: 12px;
+  font-weight: 700;
+}
+.wpay-contact-input {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: 11px;
+  padding: 0 17px;
+  border: 1.5px solid rgba(89, 102, 126, 0.16);
+  border-radius: 19px;
+  background: #fff;
+  box-shadow: 0 8px 25px rgba(31, 64, 130, 0.06);
+  color: #6594ee;
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s;
+}
+.wpay-contact-input:focus-within {
+  border-color: #3c82f6;
+  box-shadow: 0 0 0 4px rgba(60, 130, 246, 0.11);
+}
+.wpay-contact-flow--phone .wpay-contact-input:focus-within {
+  border-color: #e0445b;
+  box-shadow: 0 0 0 4px rgba(224, 68, 91, 0.1);
+}
+.dark .wpay-contact-input {
+  border-color: rgba(255, 255, 255, 0.1);
+  background: #2c2c30;
+  box-shadow: none;
+}
+.wpay-contact-input input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #111827;
+  font-size: 17px;
+  line-height: 24px;
+}
+.dark .wpay-contact-input input {
+  color: #fff;
+}
+.wpay-contact-input input::placeholder {
+  color: #a6adbb;
+}
+.wpay-contact-flag {
+  font-size: 21px;
+}
+.wpay-contact-error {
+  margin: 9px 4px 0;
+  color: #dc2626;
+  font-size: 13px;
+  line-height: 1.35;
+}
+.wpay-contact-continue {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  min-height: 54px !important;
+  margin-top: 14px !important;
+  font-weight: 750 !important;
+}
+.wpay-contact-secure {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: #8a94a7;
+  font-size: 11px;
+}
+@keyframes wpay-contact-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -9px;
+  }
+}
+@keyframes wpay-contact-pulse {
+  0% {
+    scale: 0.65;
+    opacity: 0;
+  }
+  35% {
+    opacity: 0.75;
+  }
+  100% {
+    scale: 1.15;
+    opacity: 0;
+  }
+}
+@media (max-height: 760px) {
+  .wpay-contact-visual {
+    height: 218px;
+  }
+  .wpay-contact-copy h2 {
+    font-size: 23px;
+  }
+  .wpay-contact-form {
+    margin-top: 14px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpay-contact-fly,
+  .wpay-contact-signal {
+    animation: none;
+  }
+}

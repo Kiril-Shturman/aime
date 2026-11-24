@@ -9,6 +9,7 @@ import "./WalletAssetPanel.css";
 import { AuraWithdrawalForm } from "./WalletAuraWithdrawal";
 import WalletKeyExport from "./WalletKeyExport";
 import WalletCustodyWithdrawal from "./WalletCustodyWithdrawal";
+import TelegramRichEditor from "../components/TelegramRichEditor";
 import { WalletFinanceReport } from "./WalletUserFinance";
 import {
   useCallback,
@@ -36,6 +37,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  ImagePlus,
   Server,
   ShieldCheck,
   Users,
@@ -60,6 +62,7 @@ import Framework7React, {
   Button as F7Button,
   Preloader as F7Preloader,
 } from "framework7-react";
+import "framework7-icons/css/framework7-icons.css";
 import { walletIdempotentRequest, walletRequest } from "../lib/wallet-api";
 import { useTheme } from "../store/ThemeStore";
 import "./WalletFramework7.css";
@@ -188,7 +191,28 @@ type GoSwapMethod = {
   required: string[];
   example: Json;
 };
+type PartnerSummary = {
+  partner_balance: {
+    ok: boolean;
+    asset: string;
+    available?: string;
+    error?: string;
+  };
+  cards: {
+    ok: boolean;
+    total?: number;
+    statuses?: Record<string, number>;
+    error?: string;
+  };
+  profit: {
+    asset: string;
+    realized: string;
+    operations: number;
+    basis: string;
+  };
+};
 type GoSwapData = {
+  summary: PartnerSummary;
   snapshot: Record<string, GoSwapStatus>;
   methods: GoSwapMethod[];
 };
@@ -207,6 +231,7 @@ type AuraMethod = {
 type AuraConsoleData = {
   environment: string;
   configured: boolean;
+  summary: PartnerSummary;
   methods: AuraMethod[];
 };
 type BroadcastData = { items: Json[] };
@@ -487,7 +512,6 @@ export default function WalletAdminPage() {
                       const item = tabs.find((candidate) => candidate.id === id)!;
                       return (
                         <F7Button
-                          aria-label={item.label}
                           large
                           fill={tab === item.id}
                           aria-current={tab === item.id ? "page" : undefined}
@@ -1431,6 +1455,61 @@ function Aura({
   );
 }
 
+function PartnerEconomics({
+  summary,
+  label,
+}: {
+  summary: PartnerSummary;
+  label: string;
+}) {
+  const statuses = Object.entries(summary.cards.statuses ?? {});
+  return (
+    <section className="grid gap-3 sm:grid-cols-3">
+      <article className={card}>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+          {label} · Партнёрский аккаунт
+        </span>
+        <h2 className="mt-2 !text-2xl">
+          {summary.partner_balance.ok
+            ? `${amount(summary.partner_balance.available)} ${summary.partner_balance.asset}`
+            : "Недоступно"}
+        </h2>
+        <p className="mt-2 text-xs opacity-45">
+          {summary.partner_balance.ok
+            ? "Доступно у провайдера"
+            : summary.partner_balance.error || "Баланс не получен"}
+        </p>
+      </article>
+      <article className={card}>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+          Выпущено карт
+        </span>
+        <h2 className="mt-2 !text-2xl">
+          {summary.cards.ok ? amount(summary.cards.total ?? 0) : "Недоступно"}
+        </h2>
+        <p className="mt-2 text-xs opacity-45">
+          {summary.cards.ok
+            ? statuses.length
+              ? statuses.map(([status, count]) => `${status}: ${count}`).join(" · ")
+              : "Карт пока нет"
+            : summary.cards.error || "Список карт не получен"}
+        </p>
+      </article>
+      <article className={card}>
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-40">
+          Наша прибыль
+        </span>
+        <h2 className="mt-2 !text-2xl">
+          {amount(summary.profit.realized)} {summary.profit.asset}
+        </h2>
+        <p className="mt-2 text-xs opacity-45">
+          Завершённые service fee · операций: {summary.profit.operations}
+        </p>
+      </article>
+    </section>
+  );
+}
+
 function AuraConsole({ data }: { data: AuraConsoleData }) {
   const [selected, setSelected] = useState(data.methods[0]?.method ?? "");
   const [draft, setDraft] = useState(() =>
@@ -1497,7 +1576,12 @@ function AuraConsole({ data }: { data: AuraConsoleData }) {
   }
 
   return (
-    <section className={`${card} !p-0 overflow-hidden`}>
+    <div className="space-y-4">
+      <PartnerEconomics
+        summary={data.summary}
+        label={`Aura ${data.environment.toUpperCase()}`}
+      />
+      <section className={`${card} !p-0 overflow-hidden`}>
       <div className="border-b border-[var(--admin-border)] p-5">
         <div className="wpay-admin-section-title !mb-0">
           <div>
@@ -1659,7 +1743,8 @@ function AuraConsole({ data }: { data: AuraConsoleData }) {
           <Empty />
         )}
       </div>
-    </section>
+      </section>
+    </div>
   );
 }
 
@@ -3187,6 +3272,7 @@ function GoSwap({ data }: { data: GoSwapData }) {
   }
   return (
     <div className="space-y-4">
+      <PartnerEconomics summary={data.summary} label="GoSwap LIVE" />
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Object.entries(data.snapshot).map(([name, value]) => (
           <article key={name} className={card}>
@@ -3337,6 +3423,59 @@ function GoSwap({ data }: { data: GoSwapData }) {
   );
 }
 
+function richTextPlain(value: string) {
+  const element = document.createElement("div");
+  element.innerHTML = value;
+  return (element.textContent || "").replace(/\s+/g, " ").trim();
+}
+
+function fileDataUrl(file: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Не удалось прочитать изображение"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function prepareBroadcastImage(file: File) {
+  if (!['image/jpeg', 'image/png'].includes(file.type))
+    throw new Error("Выберите изображение JPEG или PNG");
+  if (file.size > 12 * 1024 * 1024)
+    throw new Error("Исходное изображение должно быть не больше 12 МБ");
+  if (file.size <= 560_000) return fileDataUrl(file);
+  const bitmap = await createImageBitmap(file);
+  try {
+    const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    let width = Math.max(1, Math.round(bitmap.width * ratio));
+    let height = Math.max(1, Math.round(bitmap.height * ratio));
+    let quality = 0.88;
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Не удалось обработать изображение");
+      context.fillStyle = "#fff";
+      context.fillRect(0, 0, width, height);
+      context.drawImage(bitmap, 0, 0, width, height);
+      const blob = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, "image/jpeg", quality),
+      );
+      if (!blob) throw new Error("Не удалось обработать изображение");
+      if (blob.size <= 560_000) return fileDataUrl(blob);
+      quality = Math.max(0.55, quality - 0.08);
+      if (quality === 0.55) {
+        width = Math.max(1, Math.round(width * 0.82));
+        height = Math.max(1, Math.round(height * 0.82));
+      }
+    }
+    throw new Error("Не удалось уменьшить изображение до допустимого размера");
+  } finally {
+    bitmap.close();
+  }
+}
+
 const defaultNotificationTemplate: NotificationTemplate = {
   title: "{title}", message: "{message}", button_text: "Открыть WPay",
 };
@@ -3360,16 +3499,34 @@ function Notifications({
   reload: () => Promise<void>;
 }) {
   const [message, setMessage] = useState("");
+  const [imageData, setImageData] = useState("");
+  const [imageName, setImageName] = useState("");
+  const [imageBusy, setImageBusy] = useState(false);
+  const imageInput = useRef<HTMLInputElement | null>(null);
   const [target, setTarget] = useState<"self" | "all">("self");
   const [buttonText, setButtonText] = useState("");
   const [buttonUrl, setButtonUrl] = useState("");
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState("");
-  const canSend = useMemo(
-    () => message.trim().length > 0 && !sending,
-    [message, sending],
-  );
+  const messageLength = useMemo(() => richTextPlain(message).length, [message]);
+  const messageLimit = 32768;
+  const canSend =
+    messageLength > 0 && messageLength <= messageLimit && !sending && !imageBusy;
+  async function pickImage(file?: File) {
+    if (!file) return;
+    setImageBusy(true);
+    setNotice("");
+    try {
+      setImageData(await prepareBroadcastImage(file));
+      setImageName(file.name);
+    } catch (reason) {
+      setNotice(reason instanceof Error ? reason.message : "Ошибка изображения");
+    } finally {
+      setImageBusy(false);
+      if (imageInput.current) imageInput.current.value = "";
+    }
+  }
   async function send() {
     if (!canSend) return;
     if (
@@ -3389,10 +3546,13 @@ function Notifications({
           target,
           button_text: buttonText,
           button_url: buttonUrl,
+          image_data: imageData || undefined,
         },
       );
       setNotice(`Рассылка запущена. Получателей: ${result.total}`);
       setMessage("");
+      setImageData("");
+      setImageName("");
       await reload();
     } catch (reason) {
       setNotice(reason instanceof Error ? reason.message : "Ошибка отправки");
@@ -3620,22 +3780,63 @@ function Notifications({
           <Empty />
         )}
       </section>
-      <section className={card}>
+      <section className={`${card} wpay-admin-broadcast-card`}>
         <div className="wpay-admin-section-title">
           <div>
             <span>Ручная отправка</span>
             <h2>Новая рассылка</h2>
           </div>
+          <i className="wpay-admin-telegram-badge">Rich Message</i>
         </div>
-        <textarea
+        <p className="wpay-admin-composer-hint">
+          Оформление сохранится в Telegram. Выдели текст и выбери действие.
+        </p>
+        <TelegramRichEditor
           value={message}
-          onChange={(event) => setMessage(event.target.value)}
-          className={`${input} mt-3 min-h-32 resize-y`}
-          maxLength={4096}
-          placeholder="Текст сообщения"
+          onChange={setMessage}
+          length={messageLength}
+          limit={messageLimit}
         />
-        <div className="mt-2 text-right text-xs opacity-40">
-          {message.length}/4096
+        <div className="mt-3">
+          <input
+            ref={imageInput}
+            type="file"
+            accept="image/jpeg,image/png"
+            className="hidden"
+            onChange={(event) => void pickImage(event.target.files?.[0])}
+          />
+          {imageData ? (
+            <div className="relative overflow-hidden rounded-2xl bg-black/[.04] dark:bg-white/[.06]">
+              <img
+                src={imageData}
+                alt="Предпросмотр рассылки"
+                className="max-h-72 w-full object-contain"
+              />
+              <div className="flex items-center justify-between gap-3 px-3 py-2">
+                <span className="min-w-0 truncate text-xs opacity-55">{imageName}</span>
+                <button
+                  type="button"
+                  className="shrink-0 text-xs font-semibold text-red-500"
+                  onClick={() => { setImageData(""); setImageName(""); }}
+                >
+                  Удалить
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={imageBusy}
+              onClick={() => imageInput.current?.click()}
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-black/15 py-3 text-sm font-semibold dark:border-white/20"
+            >
+              <ImagePlus size={18} />
+              {imageBusy ? "Обрабатываю…" : "Добавить изображение"}
+            </button>
+          )}
+          <p className="mt-2 text-xs opacity-40">
+            JPEG или PNG. Картинка станет медиаблоком внутри Rich Message; общий лимит — 32 768 символов.
+          </p>
         </div>
         <div className="mt-3 grid grid-cols-2 gap-2">
           <button
@@ -3688,12 +3889,13 @@ function Notifications({
               className="border-b border-black/[.06] py-3 last:border-0 dark:border-white/[.08]"
             >
               <Row
-                title={text(row.text)}
+                title={richTextPlain(text(row.text))}
                 subtitle={`${date(row.created_at)} · ${text(row.target)}`}
                 right={`${text(row.sent)}/${text(row.total)}`}
               />
               <div className="mt-1 text-xs opacity-45">
                 Статус: {text(row.status)} · ошибок {text(row.failed)}
+                {row.has_image ? " · с изображением" : ""}
               </div>
             </div>
           ))

@@ -8,19 +8,15 @@ GRAM is not treated as native TON and is not assigned an invented token contract
 ## User-visible behavior
 
 Opening a supported asset ensures one free address per authenticated user,
-network and environment. Existing network rows beneath the application balance
-show the own address and the observed blockchain balance; a second portfolio
-block is not added. Opening a row uses the existing WalletAddressDetails Push View with its
-standard avatar, balance, actions, requisites, copy toast and back navigation.
-It identifies wPay and Mainnet/Testnet; its deposit action reveals that address
-QR. Own-wallet actions never route into provider spending or deposit history. Network failures show an
+network and environment. “Мои адреса в сети” shows wPay and Mainnet/Testnet,
+the address, QR and the observed blockchain balance. Network failures show an
 unknown balance, never a fabricated zero. The same address is returned on repeats.
 Private keys and recovery seeds never reach the browser.
 
 These addresses are separate from “Баланс приложения”, Aura deposit addresses
-and legacy GoSwap records. On-chain balances do not credit the internal ledger
-or fund a card. Supported transfers from an own wallet go through the isolated
-signer. Provider deposits keep their existing behavior.
+and legacy GoSwap records. They do not credit the internal ledger, fund a card,
+sign withdrawals, sweep funds or submit exchange orders. The address screen
+explains this explicitly. Provider deposit flows keep their existing behavior.
 Aura's test environment does not choose the environment of own wallets.
 
 Defaults are disabled/testnet. Mainnet requires server-side configuration with
@@ -153,8 +149,9 @@ permissions, fail-closed configuration and light/dark UI. Browser tests intercep
 APIs; no real blockchain funding, activation, deployment, signing or broadcasts.
 
 Next execution work remains: chain indexers with confirmation/reorg handling,
-asset-contract allowlists, idempotent deposit postings, gas funding, and
-withdrawal support for additional assets.
+asset-contract allowlists, idempotent deposit postings, gas funding, isolated
+signer and withdrawal/sweep state machines with reconciliation. Address generation
+alone does not make the service a working deposit/withdrawal processor.
 
 References:
 - https://github.com/bitcoin/bips/blob/master/bip-0084.mediawiki
@@ -186,24 +183,3 @@ they cannot be deleted from a blockchain or the upstream provider by this UI.
 TRON address generation now uses BIP44 m/44'/195'/0'/0/0 (Bip44Coins.TRON),
 with independent seeds as for other networks. Mainnet and Nile are recorded in
 metadata. Generating an address does not activate a TRON account or pay energy.
-
-### Withdrawals from wPay wallets
-
-Set `WPAY_CUSTODY_WITHDRAWAL_ENABLED=1` after updating the web release and
-the isolated signer. Each asset requires the matching signer heartbeat
-capability. The existing BNB-only flag remains available.
-
-- BNB and ETH use native transfers. XAUT uses the configured Ethereum contract
-  and requires ETH to pay gas.
-- TRX uses a native transfer and budgets for recipient account activation.
-- SOL uses a recent blockhash and checks finalized signature status.
-- GRAM is the native currency of TON. The signer uses V4R2, estimates
-  deployment when needed, and tracks the outgoing message to the recipient.
-- BTC uses confirmed outputs from the user's BIP84 wallet and currently
-  accepts mainnet P2WPKH destinations. Change returns to the source address.
-  The signer waits for six confirmations and rechecks the block hash.
-
-A withdrawal and an exchange payment share the same active-job lock per
-wallet. The signer persists the signed transaction before broadcast and
-reuses those signed bytes after an uncertain result. This path does not
-debit the wPay ledger.

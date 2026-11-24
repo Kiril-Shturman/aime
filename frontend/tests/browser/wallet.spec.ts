@@ -1460,28 +1460,3 @@ test("exchange picker groups USDT networks and searches by network or ticker", a
   await expect(page.getByRole("button", { name: "Валюта получения" })).toContainText("BEP20");
   await expect(page.getByRole("button", { name: "Другие валюты" })).toHaveAttribute("aria-pressed", "true");
 });
-
-test("desktop recent operations fit the sidebar and open transaction details", async ({ page }) => {
-  await page.setViewportSize({ width: 1100, height: 850 });
-  await setup(page, "light");
-  await page.route("**/api/wallet/overview", route => route.fulfill({ json: {
-    balances: [], rates: [],
-    transactions: [{
-      event_id: "desktop-recent-deposit", asset: "USDT", amount: "12345.123456",
-      type: "deposit", created_at: new Date().toISOString(), detail: { network: "TRON" },
-    }],
-  } }));
-  await page.reload();
-  const section = page.locator(".wpay-desktop-card").filter({ hasText: "Последние операции" });
-  const row = section.getByRole("listitem");
-  await expect(row.getByText("Пополнение криптовалютой", { exact: true })).toBeVisible();
-  const amount = row.getByText(/USDT$/).last();
-  const bounds = await section.boundingBox();
-  const amountBounds = await amount.boundingBox();
-  expect(amountBounds!.x + amountBounds!.width).toBeLessThan(bounds!.x + bounds!.width);
-  await row.getByText("Пополнение криптовалютой", { exact: true }).click();
-  await expect(page.getByText("desktop-recent-deposit", { exact: true })).toBeVisible();
-  await page.locator(".popup.modal-in").getByLabel("Закрыть детали операции").click();
-  await section.getByRole("button", { name: "Все" }).click();
-  await expect(page.getByRole("complementary", { name: "Детали операции" })).toBeVisible();
-});

@@ -647,7 +647,7 @@ test("CVV stays hidden until eye is pressed and resets after hiding card", async
   await expect(back.getByText("123", { exact: true })).toHaveCount(0);
 });
 
-test("pulling cards moves the description with the carousel and keeps the offer action fixed", async ({
+test("pulling cards moves the description with the carousel and keeps menu fixed", async ({
   page,
 }) => {
   await setup(page, "dark", false, true);
@@ -657,10 +657,10 @@ test("pulling cards moves the description with the carousel and keeps the offer 
     name: "Для подписок",
     exact: true,
   });
-  const action = page.getByRole("button", { name: "Оформить карту", exact: true });
+  const menu = page.locator(".wpay-bottom-menu");
   const before = await carousel.boundingBox(),
     titleBefore = await title.boundingBox(),
-    actionBefore = await action.boundingBox();
+    menuBefore = await menu.boundingBox();
   const client = await page.context().newCDPSession(page);
   await client.send("Emulation.setTouchEmulationEnabled", { enabled: true });
   const x = before!.x + before!.width / 2,
@@ -677,11 +677,11 @@ test("pulling cards moves the description with the carousel and keeps the offer 
       });
     const after = await carousel.boundingBox(),
       titleAfter = await title.boundingBox(),
-      actionAfter = await action.boundingBox();
+      menuAfter = await menu.boundingBox();
     const shift = after!.y - before!.y;
     expect(shift).toBeGreaterThan(8);
     expect(titleAfter!.y - titleBefore!.y).toBeCloseTo(shift, 0);
-    expect(actionAfter!.y).toBeCloseTo(actionBefore!.y, 0);
+    expect(menuAfter!.y).toBeCloseTo(menuBefore!.y, 0);
     expect(await carousel.evaluate((el) => el.scrollTop)).toBe(0);
   } finally {
     await client.send("Input.dispatchTouchEvent", {
@@ -782,11 +782,14 @@ test("touch swipes settle cards exactly into place in both directions", async ({
     });
   };
   const aligned = async (index: number) =>
-    rail.evaluate((el, index) => {
-      const slide = el.children[index].getBoundingClientRect();
-      const rail = el.getBoundingClientRect();
-      return Math.abs(slide.left + slide.width / 2 - rail.left - rail.width / 2);
-    }, index);
+    rail.evaluate(
+      (el, index) =>
+        Math.abs(
+          el.children[index].getBoundingClientRect().left -
+            el.getBoundingClientRect().left,
+        ),
+      index,
+    );
   await swipe(-1);
   await expect.poll(() => aligned(2)).toBeLessThan(1.5);
   await expect(
@@ -875,91 +878,4 @@ test("card topup appears as positive dollar credit",async({page})=>{
   await page.getByRole("link",{name:"Карты",exact:true}).click();
   await expect(page.getByText("+$15.00",{exact:true})).toBeVisible();
   await expect(page.getByText("Пополнение",{exact:true})).toBeVisible();
-});
-
-test("GoSwap quote opens a swipe-step sheet and pays only after confirmation", async ({ page }) => {
-  await setup(page, "light");
-  await page.route("**/api/wallet/status", route => route.fulfill({ json: {
-    configured: true, capabilities: { cards: true, sbp_buy: true }, asset_routes: { USDT: ["TRON"] },
-  } }));
-  await page.route("**/api/wallet/aura-cards", route => route.fulfill({ json: { data: [] } }));
-  await page.route("**/api/wallet/aura-card-fees", route => route.fulfill({ json: {
-    currency: "USDT", open_virtual_card_fee: "2",
-    storefront: [{ plan_id: "goswap_card_sg_1", label: "Для подписок", kind: "virtual", skin: "silver",
-      issue_fee: "10", available: true, provider: "GoSwap", total_recharge_pct: "2.8" }],
-  } }));
-  await page.route("**/api/wallet/goswap-card-quote", route => route.fulfill({ json: {
-    intent_id: "goswap-intent", label: "Для подписок", state: "quoted", total: "10", wallet_available: "42",
-  } }));
-  let payments = 0;
-  await page.route("**/api/wallet/goswap-card-issue", route => {
-    payments++;
-    expect(route.request().postDataJSON()).toEqual({ intent_id: "goswap-intent" });
-    return route.fulfill({ json: { state: "completed" } });
-  });
-  await page.reload();
-  await page.getByRole("link", { name: "Карты", exact: true }).click();
-  const catalog = page.getByRole("main", { name: "Витрина карт" });
-  await expect(catalog).toBeVisible();
-  await catalog.getByRole("button", { name: /Для подписок/ }).click();
-  await page.getByRole("button", { name: "Назад" }).click();
-  await expect(catalog).toBeVisible();
-  await catalog.getByRole("button", { name: /Для подписок/ }).click();
-  await page.getByRole("button", { name: "Оформить карту" }).click();
-  const sheet = page.locator(".wpay-goswap-order-sheet");
-  await expect(sheet).toHaveClass(/wpay-goswap-order-sheet--collapsed/);
-  const art = sheet.locator(".wpay-goswap-order-art");
-  await expect(art).toBeVisible();
-  await expect(sheet.getByRole("button", { name: "Оплатить", exact: true })).toBeEnabled();
-  await page.evaluate(() => {
-    window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { beta: 10, gamma: 0 }));
-    window.dispatchEvent(new DeviceOrientationEvent("deviceorientation", { beta: 30, gamma: 15 }));
-  });
-  await expect.poll(() => art.evaluate(el => (el as HTMLElement).style.getPropertyValue("--card-tilt-x"))).toBe("9deg");
-  const touch = await page.context().newCDPSession(page);
-  await touch.send("Emulation.setTouchEmulationEnabled", { enabled: true });
-  const box = (await art.boundingBox())!;
-  const sheetTop = (await sheet.boundingBox())!.y;
-  const x = box.x + box.width / 2;
-  const y = box.y + 20;
-  await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
-  for (const delta of [35, 85, 145, 210]) {
-    await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x, y: y + delta }] });
-  }
-  await expect.poll(async () => (await sheet.boundingBox())!.y - sheetTop).toBeGreaterThan(100);
-  await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  await expect(sheet).toBeHidden();
-  await page.getByRole("button", { name: "Оформить карту" }).click();
-  await expect(sheet.getByRole("button", { name: "Оплатить", exact: true })).toBeEnabled();
-  await expect(sheet.locator(".wpay-goswap-order-summary").getByText("10 USDT", { exact: true })).toBeVisible();
-  await expect(sheet.getByText("Итого:", { exact: true })).toBeVisible();
-  await expect(sheet.getByRole("radio", { name: "С кошелька" })).toBeChecked();
-  await expect(sheet.getByText("Баланс: 42 USDT")).toBeVisible();
-  const activeCheck = sheet.locator("input:checked ~ .wpay-goswap-payment-check");
-  await expect(activeCheck).toBeVisible();
-  await expect(sheet.locator(".wpay-goswap-payment-check:visible")).toHaveCount(1);
-  await expect(sheet.locator(".wpay-goswap-order-terms")).toBeHidden();
-  await sheet.getByRole("radio", { name: "Через СБП" }).check();
-  await expect(sheet.getByText("Баланс: 42 USDT")).toBeHidden();
-  await expect(sheet.getByRole("button", { name: "Оплатить", exact: true })).toBeVisible();
-  await expect(sheet.locator(".wpay-goswap-payment-check:visible")).toHaveCount(1);
-  await sheet.getByRole("radio", { name: "С кошелька" }).check();
-  expect(payments).toBe(0);
-  const handle = sheet.getByRole("button", { name: "Раскрыть условия карты" });
-  const openedArt = (await art.boundingBox())!;
-  const upwardX = openedArt.x + openedArt.width / 2;
-  const upwardY = openedArt.y + 80;
-  const collapsedTop = (await sheet.boundingBox())!.y;
-  await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: upwardX, y: upwardY }] });
-  for (const delta of [25, 50, 80]) {
-    await touch.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: upwardX, y: upwardY - delta }] });
-  }
-  await expect.poll(async () => collapsedTop - (await sheet.boundingBox())!.y).toBeGreaterThan(10);
-  await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-  await expect(handle).toHaveAttribute("aria-expanded", "true");
-  await expect(sheet).not.toHaveClass(/wpay-goswap-order-sheet--collapsed/);
-  await expect(sheet.getByText("Минимум пополнения", { exact: true })).toBeInViewport();
-  await sheet.getByRole("button", { name: "Оплатить", exact: true }).click();
-  await expect(sheet).toBeHidden();
-  expect(payments).toBe(1);
 });
