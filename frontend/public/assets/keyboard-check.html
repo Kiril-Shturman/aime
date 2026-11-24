@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Проверка клавиатуры</title>
+  <style>
+    html { color-scheme: light dark; }
+    body { margin: 0; font: 17px system-ui; }
+    header { padding: max(60px, env(safe-area-inset-top)) 16px 12px; border-bottom: 2px solid #007aff; }
+    main { padding: 16px; }
+    textarea { position: fixed; inset: auto 16px max(12px, env(safe-area-inset-bottom)); width: calc(100% - 32px); box-sizing: border-box; font: inherit; }
+  </style>
+</head>
+<body>
+  <header><a href="/wallet/support">Назад в поддержку</a></header>
+  <main><p>Открой клавиатуру и проверь, смещается ли синяя линия.</p></main>
+  <textarea rows="2" aria-label="Проверка клавиатуры" placeholder="Нажми сюда"></textarea>
+</body>
+</html>

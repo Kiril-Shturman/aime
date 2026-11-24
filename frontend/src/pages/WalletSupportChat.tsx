@@ -462,7 +462,7 @@ export default function SupportChatPushView({
       )}
       {plainKeyboardTest ? (
         <div className="support-keyboard-test-baseline">
-          <p>Контрольная страница</p>
+          <a href="/assets/keyboard-check.html" className="text-[#007aff] underline">Открыть отдельный HTML-тест</a>
           <textarea className="support-keyboard-test-input" aria-label="Тестовое поле HTML" placeholder="Проверка клавиатуры…" />
         </div>
       ) : chat}
